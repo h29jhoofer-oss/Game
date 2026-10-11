@@ -181,6 +181,28 @@ canvas{display:block;max-width:100%;max-height:100%;touch-action:manipulation;
 @media (prefers-reduced-motion:reduce){
   .chargrid.fan .charcard{transition:none}
 }
+/* level-up hand: the same old cards, with a pixel emblem in place of a portrait */
+.lvlcard .cport{padding:14px}
+.lvlcard .cport svg{display:block;color:#e9d9a8}
+.lvlcard .cname{font-size:16px}
+.lvlcard .cgain{font-size:14px;font-weight:700;color:var(--ink);margin:0 0 8px}
+.lvlcard .ckey{margin-top:auto;padding-top:10px;font-size:10.5px;color:var(--rule);letter-spacing:.08em}
+/* black cards: rare dark gifts, special abilities rather than plain stats */
+.charcard.black{
+  --ink:#e9e1c8;--ink2:#bdb39a;--rule:#6d5a8a;--red:#c9a2ff;--gold-d:#7d5fb0;
+  color:var(--ink);background-color:#101218;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%23181b24' d='M1 1h1v1h-1zM3 3h1v1h-1z'/%3E%3C/svg%3E");
+}
+.charcard.black::before{box-shadow:inset 0 0 0 2px #101218,inset 0 0 0 4px var(--rule)}
+.charcard.black::after{background:#232636;box-shadow:150px 30px 0 #232636,100px 190px 0 #1d2030,170px 250px 0 #232636,30px 300px 0 #1d2030}
+.charcard.black .cname{color:#f0e6c8;text-shadow:2px 2px 0 #000}
+.charcard.black .cgain{color:#d8c4ff}
+.charcard.black .cport{background-color:#05060a}
+.charcard.black .cport svg{color:#c9a2ff;filter:drop-shadow(0 0 6px rgba(160,110,255,.55))}
+.chargrid.fan .charcard.black.lift{box-shadow:
+    0 -4px 0 0 #b48cff,0 4px 0 0 #b48cff,-4px 0 0 0 #b48cff,4px 0 0 0 #b48cff,
+    0 -6px 0 0 #0a0c10,0 6px 0 0 #0a0c10,-6px 0 0 0 #0a0c10,6px 0 0 0 #0a0c10,
+    10px 14px 0 0 rgba(0,0,0,.55)}
 .cpip{ /* corner rank + pixel suit */
   position:absolute;z-index:1;display:flex;flex-direction:column;align-items:center;gap:3px;line-height:1;
   font-weight:700;font-size:15px;color:var(--ink);pointer-events:none;
@@ -485,6 +507,7 @@ body.inbattle #hint{display:none}
 .gr-tx em{font-style:normal;font-size:11px;color:var(--torch)}
 .gr-stats{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:8px;padding-top:8px;border-top:1px solid #1d232c;font-size:11.5px;color:var(--slate)}
 .gr-stats b{color:var(--bone);font-weight:500}
+.gr-perks{margin-top:10px}.gr-perks>div{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--bone);padding:2px 0}.gr-perks svg{color:#c9a2ff;flex:none}
 .pk-tip{position:fixed;z-index:60;display:none;width:240px;padding:10px 12px;pointer-events:none;
   background:#0d1118;border:1px solid #3a4454;border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.6);font-size:12.5px;line-height:1.45;color:var(--bone)}
 .pk-tip.show{display:block}
@@ -1388,6 +1411,7 @@ function gearMod(k){
   let v=0;
   if(S.amulet&&S.amulet.mods[k])v+=S.amulet.mods[k];
   for(const r of S.rings||[])if(r&&r.mods[k])v+=r.mods[k];
+  for(const id in S.perks||{}){const pm=PERKS[id]&&PERKS[id].mods;if(pm&&pm[k])v+=pm[k];}
   return v;
 }
 function applyMods(mods,sign){
@@ -1609,7 +1633,7 @@ function autoParry(sp){
   queue(.28,()=>{
     if(!B)return;
     pSwing();
-    const r=pDamage({id:"riposte",mult:.8,poise:8},{noMiss:true});
+    const r=pDamage({id:"riposte",mult:hasPerk("riposte")?1.3:.8,poise:8},{noMiss:true});
     hitFx(r,x=>x.crit?`A brutal riposte — ${x.dmg} damage!`:`Riposte — ${x.dmg} damage.`);
     sparry();
   });
@@ -1632,7 +1656,7 @@ function kill(m){
   if(m.t.boss){quake(15);ring(m.x,m.y,"rgba(240,192,96,.95)",7,1.3);}
   mons=mons.filter(o=>o!==m);
   say(`The ${m.t.name} falls.`,"c-good");
-  gainXp(m.t.xp);
+  gainXp(m.t.xp);feastHeal();
   if(m.t.boss){win();return;}
   if(Math.random()<.22){
     const it=Object.assign(rollItem(S.depth),{x:m.x,y:m.y});
@@ -1645,11 +1669,10 @@ function gainXp(n){
   while(S.lvl<XPTABLE.length-1&&S.xp>=XPTABLE[S.lvl]){
     S.lvl++;
     for(const mv of newMovesAt(S.lvl))say(`You learn ${mv.name}.`,"c-lvl");
-    const hpl=CHAR().hpLevel||9;S.maxhp+=hpl;S.hp=Math.min(S.maxhp,S.hp+hpl);
-    // Level up also increases max stamina slightly
-    S.maxstam+=5;S.stam=Math.min(S.maxstam,S.stam+10);
-    S.maxmana+=5;S.mana=Math.min(S.maxmana,S.mana+12);
-    if(S.lvl%2===0)S.str++;
+    // Levelling no longer raises every stat a little: it heals a bit, then deals a hand of
+    // upgrade cards to choose from (see openLevelUp).
+    S.hp=Math.min(S.maxhp,S.hp+(CHAR().hpLevel||9));
+    S.pendLvl=(S.pendLvl||0)+1;S.lvlWait=.9;
     ring(S.px,S.py,"rgba(240,192,96,.95)",3.4,.8);
     burst(S.px,S.py,"#f0c060",18,3.4);
     num(S.px,S.py-.55,"LEVEL "+S.lvl,"#f0c060",true);
@@ -1823,7 +1846,7 @@ const FLAME_LOW = 25;          // threshold — at or below this = dimming
 const FLAME_OUT = 0;           // when flame reaches 0, light goes out completely
 
 function drainStamina(cost){
-  S.stam = Math.max(0, S.stam - (cost===undefined?STAM_MOVE_COST:cost));
+  S.stam = Math.max(0, S.stam - (cost===undefined?(hasPerk("fleet")?5:STAM_MOVE_COST):cost));
   if(S.stam === 0 && !S.exhausted){
     S.exhausted = true;
     say("You are winded. Stand still a moment.","c-hit");
@@ -2488,6 +2511,8 @@ function drawPack(){
     const sub=it.kind==="weapon"?`${a.min}-${a.max}`:it.kind==="armor"?`${armorDef()} guard`:it.kind==="offhand"?offhandLabel(it.ref):"";
     return `<button type="button" class="gr-slot${sel?" sel":""}" data-gs="${slot}"><span class="gr-ic">${icon(packIcon(it),32)}</span><span class="gr-tx"><i>${label}${slot==="offhand"?" (in hand)":""}</i><b>${it.name}</b>${sub?`<em>${sub}</em>`:""}</span></button>`;
   }).join("");
+  const owned=Object.keys(S.perks||{}).filter(id=>PERKS[id]);
+  const perks=owned.length?`<div class="gr-perks"><h4>Dark gifts</h4>${owned.map(id=>`<div title="${PERKS[id].gain}. ${PERKS[id].text}">${glyphSvg(PERKS[id].glyph,1.4)}<span>${PERKS[id].name}</span></div>`).join("")}</div>`:"";
   const stats=`<div class="gr-stats"><span>Strike <b>${a.min}-${a.max}</b></span><span>Guard <b>${guardVal()}</b></span><span>Parry <b>${packPct(parryChance(false))}</b></span><span>Dodge <b>${packPct(S.dodge||0)}</b></span></div>`;
   overlay(`<div class="pack pk">
     <div class="pk-head"><h3>Pack <span>${S.pack.length}/${PACK_SLOTS}</span></h3><span class="pk-gold">${icon("gold",16)} ${S.gold} gold</span></div>
@@ -2497,7 +2522,7 @@ function drawPack(){
         <div class="pk-detail">${det}</div>
         ${bookHtml}${combHtml}
       </div>
-      <div class="pk-gear"><h4>Gear</h4>${gear}${stats}</div>
+      <div class="pk-gear"><h4>Gear</h4>${gear}${stats}${perks}</div>
     </div>
     <button class="close" id="closePack">Close [I]</button>
     <div class="pk-tip" id="pkTip"></div>
@@ -2557,7 +2582,7 @@ function drawPack(){
   });
 }
 function togglePack(){
-  if(S.over||descentT>0)return;
+  if(S.over||descentT>0||levelOpen)return;
   if(shrineOpen){shrineOpen=false;hideOverlay();}
   if(codexOpen){codexOpen=false;hideOverlay();}
   if(editorOpen){editorOpen=false;document.getElementById("se-overlay").classList.remove("open");}
@@ -2835,6 +2860,10 @@ function flash(x,y,col){burst(x,y,cssv(col),5,3);}
 /* ============================ frame ============================ */
 function tick(dt){
   tclock+=dt;
+  if(S&&S.pendLvl>0&&!levelOpen){
+    S.lvlWait=Math.max(0,(S.lvlWait||0)-dt);
+    if(S.lvlWait<=0&&!S.over&&S.mode==="map"&&!packOpen&&!shrineOpen&&!codexOpen&&!editorOpen&&descentT<=0)openLevelUp();
+  }
   torch=RM?1:1+Math.sin(tclock*7.1)*.045+Math.sin(tclock*17.7)*.022;
   const k=RM?1:1-Math.pow(1e-5,dt);
   const kc=RM?1:1-Math.pow(1e-3,dt);
@@ -3327,7 +3356,7 @@ function newState(id){
   const C=charById(id);
   const st={depth:1,hp:40,maxhp:40,lvl:1,xp:0,str:0,gold:0,steps:0,
      stam:100,maxstam:100,exhausted:false,flame:100,maxflame:100,flameout:false,mana:40,maxmana:40,
-     dodge:0, upgrades:{str:0,hp:0,stam:0,dodge:0,mana:0}, facingLeft:false,
+     dodge:0, upgrades:{str:0,hp:0,stam:0,dodge:0,mana:0}, perks:{}, pendLvl:0, lvlWait:0, blackPity:0, facingLeft:false,
      offhand:OFFHANDS.torch,altOffhand:null,amulet:null,rings:[null,null],regenAcc:0,weapon:WEAPONS[0],armor:ARMORS[0],pack:[],log:[],over:false,mode:"map",cds:{},lore:new Set(),char:C.id};
   if(C.init)C.init(st);
   return st;
@@ -3428,15 +3457,19 @@ function chooseHero(){
   layoutFan(grid);
   requestAnimationFrame(()=>layoutFan(grid));
   if(window.ResizeObserver){if(fanRO)fanRO.disconnect();fanRO=new ResizeObserver(()=>layoutFan(grid));fanRO.observe($("card"));}
-  const all=[...document.querySelectorAll("#card .charcard")];
+  wireHand(grid,()=>heroPicked,el=>{if(!el.classList.contains("locked"))pickHero(el);});
+}
+// Shared by the hero select and the level-up draft. Lifting is tracked here rather than with CSS
+// :hover, so it behaves the same on every device. done() says the hand has already been played.
+function wireHand(grid,done,pick){
+  const all=[...grid.querySelectorAll(".charcard")];
   let lastType="mouse";
-  // Lifting is tracked here rather than with CSS :hover, so it behaves the same on every device.
   const lift=el=>{
-    if(heroPicked||el.classList.contains("lift"))return;
+    if(done()||el.classList.contains("lift"))return;
     all.forEach(c=>c.classList.remove("lift"));el.classList.add("lift");grid.classList.add("lifting");
     playCardSound(false);
   };
-  const drop=()=>{if(heroPicked)return;all.forEach(c=>c.classList.remove("lift"));grid.classList.remove("lifting");};
+  const drop=()=>{if(done())return;all.forEach(c=>c.classList.remove("lift"));grid.classList.remove("lifting");};
   grid.addEventListener("pointerleave",e=>{if(e.pointerType==="mouse"||e.pointerType==="pen")drop();});
   all.forEach(el=>{
     el.addEventListener("pointerdown",e=>{lastType=e.pointerType;});
@@ -3444,11 +3477,11 @@ function chooseHero(){
     el.addEventListener("focus",()=>lift(el));
     // touch: the first tap lifts a card so it can be read, the second picks it
     el.addEventListener("click",()=>{
-      if(heroPicked)return;
+      if(done())return;
       if(lastType!=="mouse"&&!el.classList.contains("lift")){lift(el);return;}
-      if(!el.classList.contains("locked"))pickHero(el);
+      pick(el);
     });
-    if(!el.classList.contains("locked"))el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();pickHero(el);}};
+    if(!el.classList.contains("locked"))el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();pick(el);}};
   });
   grid.addEventListener("click",e=>{if(!e.target.closest(".charcard"))drop();});
 }
@@ -3457,9 +3490,10 @@ function chooseHero(){
 let fanRO=null;
 function layoutFan(grid){
   if(!grid||!grid.isConnected)return;
-  const n=grid.children.length,W=206,spread=330;   // spread: extra width the tilt adds at the edges
+  // spread: extra width the tilt adds at the edges. A small hand (the level-up draft) barely overlaps.
+  const n=grid.children.length,W=206,spread=n<=3?120:330,maxStep=n<=3?214:132;
   const cw=Math.max(200,grid.parentElement.clientWidth);
-  let step=Math.min(132,Math.max(52,(cw-24-spread-W)/Math.max(1,n-1)));
+  let step=Math.min(maxStep,Math.max(52,(cw-24-spread-W)/Math.max(1,n-1)));
   const natural=W+(n-1)*step+spread+24;
   const sc=Math.min(1,cw/natural);
   grid.style.setProperty("--step",step.toFixed(1)+"px");
@@ -3750,6 +3784,7 @@ function pDamage(mv,opts){
   if(!offAtk&&B.turn===1&&w.opener)base=Math.round(base*w.opener);
   if(mv.exec)base=Math.round(base*(1+1.5*(1-B.mhp/B.mmax)));
   if(B.pStat.atkUp>0)base=Math.round(base*1.25);
+  if(hasPerk("mercy")&&B.mhp<=B.mmax*.3)base=Math.round(base*1.5);
   // combo: every clean hit in the chain adds 10% damage and 4% crit chance
   const stacks=Math.min(COMBO_MAX,B.combo||0);
   const finisher=(B.combo||0)>=COMBO_MAX;
@@ -3812,6 +3847,11 @@ function triggerPhase2(){
 }
 function hurtPlayer(dmg,crit){
   S.hp-=dmg;B.pFlash=1;
+  if(hasPerk("second")&&!B.secondWind&&S.hp>0&&S.hp<=S.maxhp*.25){
+    B.secondWind=true;const h=Math.round(S.maxhp*.35);S.hp=Math.min(S.maxhp,S.hp+h);
+    blog(`Second Wind! You catch your breath and recover ${h} HP.`,"c-good");
+    if(B.layout)snum(B.layout.px,B.layout.py-B.layout.psz*.8,"+"+h,"#7fd08a");
+  }
   comboHurt(dmg,crit);
   if(crit){B.hitstop=Math.max(B.hitstop||0,.09);}
   const L=B.layout;
@@ -4457,6 +4497,7 @@ function winBattle(){
       items.push(Object.assign(rollItem(S.depth),{x:m.x,y:m.y}));
     }
     gainXp(m.t.xp);
+    feastHeal();
     endBattle();
     if(boss){win();return;}
     endTurn();
@@ -5061,6 +5102,117 @@ const FLAVOR={
  9:"Armour that hasn't rusted in three years falls into step somewhere behind him.",
  10:"The stair ends in a vaulted hall. The crown at the far end is still lit."
 };
+/* ============================ level-up draft ============================ */
+// Each level deals three cards. White cards are plain stat gains; now and then one is a black card,
+// a one-time special ability. Black cards with "mods" feed gearMod(); the rest are checked with
+// hasPerk() where they apply.
+const LVL_GLYPH={
+  sword:["..........#",".........##","........##.",".......##..","..#...##...","...#.##....","....##.....","...##.#....","..##...#...",".##........","##........."],
+  heart:[".###...###.","#####.#####","###########","###########",".#########.","..#######..","...#####...","....###....",".....#....."],
+  bolt:["......###..",".....###...","....###....","...#######.","......###..",".....###...","....###....","...##......","..#........"],
+  star:[".....#.....","....###....","....###....","###########",".#########.","..#######..","..###.###..",".##.....##.","#.........#"],
+  wind:["......###..",".........#.","#########..","...........","###########","...........","#######....","........#..","......##..."],
+  shield:["###########","#####.#####","#####.#####","#.........#","#####.#####",".####.####.",".####.####.","..###.###..","...##.##...","....#.#....",".....#....."],
+  eye:["...........","...#####...",".##.....##.","#...###...#","#..#####..#","#...###...#",".##.....##.","...#####...","..........."],
+  coin:["...#####...",".##.....##.",".#..###..#.","#..#...#..#","#..#......#","#..#...#..#",".#..###..#.",".##.....##.","...#####..."],
+  flame:[".....#.....","....##.....","....###....","...####.#..","..#####.##.","..########.",".####.####.",".###...###.",".###...###.","..##...##..","...#####..."],
+  drop:[".....#.....",".....#.....","....###....","....###....","...#####...","..#######..","..##.####..","..#.#####..","..#######..","...#####..."],
+  cross:["#.........#",".#.......#.","..#.....#..","...#...#...","....#.#....",".....#.....","....#.#....","..##...##..",".#.......#.","#.........#"],
+  skull:["...#####...","..#######..",".#########.",".##..#..##.",".##..#..##.",".#########.","..###.###..","...#####...","...#.#.#..."]
+};
+function glyphSvg(name,px){
+  const rows=LVL_GLYPH[name]||LVL_GLYPH.star,w=rows[0].length;let d="";
+  rows.forEach((r,y)=>{for(let x=0;x<r.length;x++)if(r[x]==="#")d+=`M${x} ${y}h1v1h-1z`;});
+  return `<svg width="${Math.round(w*px)}" height="${Math.round(rows.length*px)}" viewBox="0 0 ${w} ${rows.length}" shape-rendering="crispEdges" fill="currentColor"><path d="${d}"/></svg>`;
+}
+const vitAmt=()=>(CHAR().hpLevel||9)+4;
+const LVL_CARDS=[
+ {id:"might", name:"Might",     glyph:"sword", gain:()=>"+2 Strike",          text:"Every swing and stab lands harder.", apply(){S.str+=2;}},
+ {id:"vit",   name:"Vitality",  glyph:"heart", gain:()=>`+${vitAmt()} max HP`, text:"Tougher, and healed by the same amount.", apply(){const a=vitAmt();S.maxhp+=a;S.hp=Math.min(S.maxhp,S.hp+a);}},
+ {id:"endure",name:"Endurance", glyph:"bolt",  gain:()=>"+20 max stamina",    text:"Walk and dash further before you're winded.", apply(){S.maxstam+=20;S.stam=Math.min(S.maxstam,S.stam+20);}},
+ {id:"arcana",name:"Arcana",    glyph:"star",  gain:()=>"+15 max mana",       text:"A deeper well for scrolls and spells.", ok:()=>!CHAR().noMana, apply(){S.maxmana+=15;S.mana=Math.min(S.maxmana,S.mana+15);}},
+ {id:"evade", name:"Evasion",   glyph:"wind",  gain:()=>"+3% dodge",          text:"Slip more blows, and parry more of the rest.", ok:()=>(S.dodge||0)<.36, apply(){S.dodge=Math.round(((S.dodge||0)+.03)*1000)/1000;}}
+];
+const PERKS={
+ keen:   {name:"Keen Edge",    glyph:"sword", gain:"+8% crit chance",        text:"You see the gaps in their guard.", mods:{crit:.08}},
+ iron:   {name:"Iron Hide",    glyph:"shield",gain:"+2 Guard",               text:"Blows that would bruise now glance off.", mods:{def:2}},
+ study:  {name:"Quick Study",  glyph:"eye",   gain:"+25% XP",                text:"Every fight teaches you a little more.", mods:{xp:.25}},
+ gilded: {name:"Gilded Palm",  glyph:"coin",  gain:"+35% gold",              text:"Coin finds its way into your hands.", mods:{gold:.35}},
+ ember:  {name:"Ember Heart",  glyph:"flame", gain:"Torch burns 40% slower", text:"Your light reaches further, too.", mods:{flameSave:.4,light:.5}},
+ troll:  {name:"Troll Blood",  glyph:"drop",  gain:"Mend 1 HP every 3 steps",text:"Wounds close while you explore.", mods:{regen:.34}},
+ riposte:{name:"Riposte",      glyph:"cross", gain:"+10% parry",             text:"Your counters after a parry hit far harder.", mods:{parry:.05}},
+ second: {name:"Second Wind",  glyph:"heart", gain:"Once per fight",         text:"When you drop below 25% health, recover 35% of it."},
+ feast:  {name:"Bloodfeast",   glyph:"skull", gain:"Heal after each kill",   text:"Every foe you finish restores 15% of your health."},
+ fleet:  {name:"Fleetfoot",    glyph:"bolt",  gain:"Lighter steps",          text:"Walking costs less stamina, and it returns twice as fast."},
+ mercy:  {name:"Mercy Stroke", glyph:"skull", gain:"+50% vs the weak",       text:"Foes below 30% health take half again as much damage."}
+};
+function hasPerk(id){return !!(S&&S.perks&&S.perks[id]);}
+function feastHeal(){
+  if(!hasPerk("feast")||S.hp<=0||S.hp>=S.maxhp)return;
+  const h=Math.max(1,Math.round(S.maxhp*.15));
+  S.hp=Math.min(S.maxhp,S.hp+h);say(`Bloodfeast: you recover ${h} HP.`,"c-good");
+}
+let levelOpen=false,levelPicked=false;
+// Three different white cards, and sometimes a black one in a random slot. The chance grows with each
+// level that goes by without one, so a black card turns up at least every few levels.
+function dealLevelHand(){
+  const pool=LVL_CARDS.filter(c=>!c.ok||c.ok()).map(c=>({kind:"white",c}));
+  for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+  const hand=pool.slice(0,3);
+  const left=Object.keys(PERKS).filter(id=>!S.perks[id]);
+  if(left.length&&Math.random()<.3+.25*(S.blackPity||0)){
+    const id=left[Math.floor(Math.random()*left.length)];
+    hand[Math.floor(Math.random()*hand.length)]={kind:"black",id,c:PERKS[id]};
+    S.blackPity=0;
+  }else S.blackPity=(S.blackPity||0)+1;
+  return hand;
+}
+function openLevelUp(){
+  levelOpen=true;levelPicked=false;
+  S.pendLvl--;
+  const lvl=S.lvl-S.pendLvl;
+  const hand=dealLevelHand();
+  const mid=(hand.length-1)/2;
+  const cards=hand.map((h,i)=>{
+    const c=h.c,black=h.kind==="black";
+    const pip=`<b>${lvl}</b>${glyphSvg(c.glyph,1.3)}`;
+    return `<div class="charcard lvlcard${black?" black":""}" data-kind="${h.kind}" data-id="${black?h.id:c.id}" role="button" tabindex="0" style="--i:${i};--t:${(i-mid).toFixed(2)}">
+      <div class="cpip tl${black?"":" red"}">${pip}</div><div class="cpip br${black?"":" red"}">${pip}</div>
+      <div class="cport">${glyphSvg(c.glyph,6)}</div>
+      <div class="cname">${c.name}</div>
+      <div class="ctitle">${black?"Dark gift":"Blessing"}</div>
+      <div class="cbody"><div class="cgain">${typeof c.gain==="function"?c.gain():c.gain}</div>
+        <div class="cblurb">${c.text}</div><div class="ckey">PRESS ${i+1}</div></div></div>`;
+  }).join("");
+  overlay(`<h3>Level ${lvl}</h3>
+    <p class="lede">Choose one card.${hand.some(h=>h.kind==="black")?" A black card has been dealt.":""}</p>
+    <div class="chargrid fan lvlhand">${cards}</div>`);
+  $("card").classList.add("wide");
+  playCardSound(false);
+  const grid=document.querySelector("#card .chargrid");
+  layoutFan(grid);requestAnimationFrame(()=>layoutFan(grid));
+  if(window.ResizeObserver){if(fanRO)fanRO.disconnect();fanRO=new ResizeObserver(()=>layoutFan(grid));fanRO.observe($("card"));}
+  wireHand(grid,()=>levelPicked,pickLevelCard);
+}
+function pickLevelCard(el){
+  if(levelPicked||!levelOpen)return;
+  levelPicked=true;
+  playCardSound(true);
+  el.classList.add("chosen");el.closest(".chargrid").classList.add("picked");
+  const id=el.dataset.id;
+  if(el.dataset.kind==="black"){
+    S.perks[id]=true;const p=PERKS[id];
+    say(`Dark gift: ${p.name}. ${p.text}`,"c-lvl");
+  }else{
+    const c=LVL_CARDS.find(x=>x.id===id);c.apply();
+    say(`${c.name}: ${c.gain()}.`,"c-lvl");
+  }
+  refresh();
+  setTimeout(()=>{
+    if(fanRO){fanRO.disconnect();fanRO=null;}
+    levelOpen=false;S.lvlWait=.35;hideOverlay();refresh();
+  },RM?200:650);
+}
 /* ============================ shrine ============================ */
 let shrineOpen=false;
 let shrineTab="str"; // active tab: str | hp | stam | dodge
@@ -5211,7 +5363,7 @@ function drawShrine(){
 }
 
 function toggleShrine(){
-  if(packOpen||codexOpen)return;
+  if(packOpen||codexOpen||levelOpen)return;
   if(S.over)return;
   if(!shrineOpen){
     if(S.mode!=="map")return;
@@ -5235,7 +5387,7 @@ function drawCodex(){
 }
 let codexOpen=false;
 function toggleCodex(){
-  if(packOpen||shrineOpen)return;
+  if(packOpen||shrineOpen||levelOpen)return;
   if(S.over&&!codexOpen)return;   // don't cover the title / hero-select / game-over card
   codexOpen=!codexOpen;
   if(codexOpen)drawCodex();else hideOverlay();
@@ -5663,7 +5815,7 @@ for(const k in KEYS){
 const held=new Set();
 let freeClock=0,freeBumpT=0,freeWindedT=0;
 function freeMode(){return !!S;}   // every hero walks freely now; the grid code stays for "." (rest) and as a fallback
-function freePaused(){return S.over||S.mode!=="map"||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
+function freePaused(){return S.over||S.mode!=="map"||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
 // What a box of half-width r centred on (cx,cy) overlaps: {wall:true}, {chasm:[x,y]}, or null.
 function boxHit(cx,cy,r){
   const e=1e-6;
@@ -5848,7 +6000,7 @@ function freeTick(dt){
   if(S.dashT>0||S.fx!==fx0||S.fy!==fy0)S.stillT=0;
   else{
     S.stillT=(S.stillT||0)+dt;
-    if(S.stillT>=STAM_STILL_DELAY&&S.stam<S.maxstam)gainStamina(STAM_STILL_RATE*dt*(CHAR().noRegen?.5:1));
+    if(S.stillT>=STAM_STILL_DELAY&&S.stam<S.maxstam)gainStamina(STAM_STILL_RATE*dt*(CHAR().noRegen?.5:1)*(hasPerk("fleet")?2:1));
   }
   freeMonsters(dt);
   if(freePaused())return;
@@ -6259,6 +6411,11 @@ window.addEventListener("keydown",ev=>{
     return;
   }
   if(descentT>0&&S&&!S.over&&S.mode==="map"){ev.preventDefault();return;}   // still on the way down
+  if(levelOpen){
+    const cards=[...document.querySelectorAll("#card .lvlcard")];
+    if(/^[1-9]$/.test(k)&&cards[+k-1])pickLevelCard(cards[+k-1]);
+    ev.preventDefault();return;
+  }
   if(packOpen){
     if(k==="Escape"||k==="i"||k==="I")togglePack();
     else if(/^[1-9]$/.test(k)){packSel=null;useItem(parseInt(k,10)-1);if(packOpen)drawPack();}
@@ -6746,7 +6903,7 @@ function toggleEditor(){
 
 /* ============================ boot ============================ */
 function start(id){
-  descentT=0;
+  descentT=0;levelOpen=false;levelPicked=false;
   menuQuiet=false;setMusicVolume();
   hideOverlay();packOpen=false;codexOpen=false;
   ensureAudio();
