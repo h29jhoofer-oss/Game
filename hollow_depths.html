@@ -169,18 +169,12 @@ canvas{display:block;max-width:100%;max-height:100%;touch-action:manipulation;
   z-index:40;outline:0;
   transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px - 34px));
 }
-@media (hover:hover){
-  .chargrid.fan .charcard:hover{z-index:40;transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px - 34px))}
-  .chargrid.fan:has(.charcard:hover) .charcard:not(:hover):not(.chosen){opacity:.35}
-}
-.chargrid.fan .charcard:focus-visible{z-index:40;outline:0;transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px - 34px))}
-.chargrid.fan:has(.charcard.lift,.charcard:focus-visible) .charcard:not(.lift):not(:focus-visible):not(.chosen){opacity:.35}
+.chargrid.fan .charcard:focus-visible{outline:0}
+/* .lifting is set by script whenever a card is lifted (pointer over it, focus, or a tap) */
+.chargrid.fan.lifting .charcard:not(.lift):not(.chosen){opacity:.35}
 /* small screens: the lifted card straightens up and grows back to full size */
-.chargrid.fan.small .charcard.lift,.chargrid.fan.small .charcard:focus-visible{
+.chargrid.fan.small .charcard.lift{
   transform-origin:50% 100%;transform:translateY(-30px) scale(var(--lift,1))}
-@media (hover:hover){
-  .chargrid.fan.small .charcard:hover{transform-origin:50% 100%;transform:translateY(-30px) scale(var(--lift,1))}
-}
 .chargrid.fan.picked .charcard:not(.chosen){transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px + 90px))!important}
 .chargrid.fan.picked .charcard.chosen{z-index:40;transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px - 34px))}
 .chargrid.fan.small.picked .charcard.chosen{transform-origin:50% 100%;transform:translateY(-30px) scale(var(--lift,1))}
@@ -3333,11 +3327,18 @@ function chooseHero(){
   if(window.ResizeObserver){if(fanRO)fanRO.disconnect();fanRO=new ResizeObserver(()=>layoutFan(grid));fanRO.observe($("card"));}
   const all=[...document.querySelectorAll("#card .charcard")];
   let lastType="mouse";
-  const lift=el=>{if(el.classList.contains("lift"))return;all.forEach(c=>c.classList.remove("lift"));el.classList.add("lift");playCardSound(false);};
+  // Lifting is tracked here rather than with CSS :hover, so it behaves the same on every device.
+  const lift=el=>{
+    if(heroPicked||el.classList.contains("lift"))return;
+    all.forEach(c=>c.classList.remove("lift"));el.classList.add("lift");grid.classList.add("lifting");
+    playCardSound(false);
+  };
+  const drop=()=>{if(heroPicked)return;all.forEach(c=>c.classList.remove("lift"));grid.classList.remove("lifting");};
+  grid.addEventListener("pointerleave",e=>{if(e.pointerType==="mouse"||e.pointerType==="pen")drop();});
   all.forEach(el=>{
     el.addEventListener("pointerdown",e=>{lastType=e.pointerType;});
-    el.addEventListener("pointerenter",e=>{if(!heroPicked&&e.pointerType==="mouse")playCardSound(false);});
-    el.addEventListener("focus",()=>{if(!heroPicked&&!el.matches(":hover"))playCardSound(false);});
+    el.addEventListener("pointerover",e=>{if(e.pointerType==="mouse"||e.pointerType==="pen")lift(el);});
+    el.addEventListener("focus",()=>lift(el));
     // touch: the first tap lifts a card so it can be read, the second picks it
     el.addEventListener("click",()=>{
       if(heroPicked)return;
@@ -3346,7 +3347,7 @@ function chooseHero(){
     });
     if(!el.classList.contains("locked"))el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();pickHero(el);}};
   });
-  grid.addEventListener("click",e=>{if(!e.target.closest(".charcard"))all.forEach(c=>c.classList.remove("lift"));});
+  grid.addEventListener("click",e=>{if(!e.target.closest(".charcard"))drop();});
 }
 // Fit the hand to the overlay: overlap the cards more on narrow screens, then shrink the whole hand
 // if it still doesn't fit. A lifted card grows back toward full size so its text stays readable.
