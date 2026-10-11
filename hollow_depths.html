@@ -837,6 +837,7 @@ function newFloor(depth){
   S.gen=0;
   S.rooms=rooms;
   S.px=rooms[0].cx;S.py=rooms[0].cy;
+  S.fx=S.px+.5;S.fy=S.py+.5;   // continuous position (tile units, centre) for free movement
 
   if(depth<10){
     const last=rooms[rooms.length-1];
@@ -1753,8 +1754,8 @@ const FLAME_ATTACK_COST = 12;  // drained per torch HIT
 const FLAME_LOW = 25;          // threshold — at or below this = dimming
 const FLAME_OUT = 0;           // when flame reaches 0, light goes out completely
 
-function drainStamina(){
-  S.stam = Math.max(0, S.stam - STAM_MOVE_COST);
+function drainStamina(cost){
+  S.stam = Math.max(0, S.stam - (cost===undefined?STAM_MOVE_COST:cost));
   if(S.stam === 0 && !S.exhausted){
     S.exhausted = true;
     say("You are winded — rest a moment.","c-hit");
@@ -2546,6 +2547,8 @@ function tick(dt){
     if(e.lunge&&e.lunge.t>0){e.lunge.t-=dt*6.5;if(e.lunge.t<0)e.lunge.t=0;}
   };
   ease(S,S.px,S.py);
+  if(freeMode()&&S.mode==="map"){S.vx=S.fx-.5;S.vy=S.fy-.5;}   // free movement: draw exactly where you are
+  freeTick(dt);
   for(const m of mons)ease(m,m.x,m.y);
 
   for(let i=corpses.length-1;i>=0;i--){
@@ -2882,12 +2885,13 @@ const CHARACTERS=[
   buffs:["Leechcraft: every blow you land drinks 35% of its damage back as health",
          "Plague Bearer: poison and bleeding you inflict heal you for half of every tick",
          "Ichor: healing past full is bottled (up to 40). Resting (.) sips it back; Transfusion hurls it at the foe",
+         "TEST: moves freely instead of square by square, and the dungeon moves in real time around him",
          "Carries the Bloodletter: +20% lifesteal, opens wounds like a dagger, and grows sharper with every 50 HP it drinks"],
   weak:["Gaunt: starts with 20% less health",
         "Feeble hands: deals 30% less damage",
         "No draught can heal him: healing potions do nothing",
         "No Rally and no Last Light. Outside a fight, he only heals from his Ichor"],
-  lifesteal:.35,dotLeech:.5,dmgMult:.7,ichor:true,noPotions:true,hpLevel:8,
+  lifesteal:.35,dotLeech:.5,dmgMult:.7,ichor:true,noPotions:true,hpLevel:8,freeMove:true,
   moves:[["strike"],["leech"],["miasma"],["break",4],["letting"],["sunder",6],["transfuse"],["execute"],["blackdeath"]],
   init:function(st){
     st.maxhp=32;st.hp=32;
@@ -4833,6 +4837,83 @@ function refresh(){
 const KEYS={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],
   w:[0,-1],s:[0,1],a:[-1,0],d:[1,0],W:[0,-1],S:[0,1],A:[-1,0],D:[1,0],
   q:[-1,-1],z:[-1,1],c:[1,1],y:[-1,-1],u:[1,-1],b:[-1,1],n:[1,1]};   // no "e": E is interact (shrine / lever)
+/* ============================ free movement (test: Vell only) ============================ */
+// Heroes with freeMove walk smoothly instead of square by square. The dungeon then runs on a clock:
+// every FREE_TURN seconds the monsters, cooldowns and regen take one turn, whether you move or not.
+const FREE_SPEED=4.2;       // tiles per second
+const FREE_R=.3;            // half-width of the hero's collision box, in tiles
+const FREE_TURN=.45;        // seconds per dungeon turn
+const FREE_STEP_STAM=3;     // stamina per tile walked (cheaper than a grid step: you walk a lot more)
+const FREE_CODES={};        // physical key / pad button -> direction
+for(const k in KEYS){
+  if(/^Arrow/.test(k))FREE_CODES[k]=KEYS[k];
+  else if(k.length===1&&k===k.toLowerCase())FREE_CODES["Key"+k.toUpperCase()]=KEYS[k];
+}
+const held=new Set();
+let freeClock=0,freeBumpT=0,freeWindedT=0;
+function freeMode(){return !!(S&&CHAR().freeMove);}
+function freePaused(){return S.over||S.mode!=="map"||packOpen||shrineOpen||codexOpen||editorOpen;}
+// What the hero's box would touch at centre (cx,cy): a wall tile, a monster, or nothing.
+function freeHit(cx,cy){
+  const e=1e-6;
+  const x0=Math.floor(cx-FREE_R),x1=Math.floor(cx+FREE_R-e),y0=Math.floor(cy-FREE_R),y1=Math.floor(cy+FREE_R-e);
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    if(x<0||y<0||x>=W||y>=H||map[y][x]===WALL)return{wall:true};
+    const m=mons.find(o=>o.x===x&&o.y===y);
+    if(m)return{mon:m};
+  }
+  return null;
+}
+function freeStep(dx,dy,dt){
+  const sp=FREE_SPEED*dt;
+  for(const axis of [0,1]){
+    const d=axis?dy:dx;if(!d)continue;
+    const nx=axis?S.fx:S.fx+d*sp,ny=axis?S.fy+d*sp:S.fy;
+    const hit=freeHit(nx,ny);
+    if(!hit){S.fx=nx;S.fy=ny;continue;}
+    if(hit.mon){held.clear();computeFOV();startBattle(hit.mon);return;}
+    // Blocked. The tile straight ahead of the one we stand on:
+    const ax=Math.floor(S.fx)+(axis?0:Math.sign(d)),ay=Math.floor(S.fy)+(axis?Math.sign(d):0);
+    const o=DL.get(ax+","+ay);
+    if(o&&freeBumpT<=0){freeBumpT=.7;bumpObject(o);if(S.mode!=="map"||S.over)return;}
+    // ...if it is open, slide toward our tile's centre line so doorways and corridors are easy to enter.
+    if(ax>=0&&ay>=0&&ax<W&&ay<H&&map[ay][ax]!==WALL){
+      if(axis===0){const c=Math.floor(S.fy)+.5;S.fy+=Math.sign(c-S.fy)*Math.min(Math.abs(c-S.fy),sp);}
+      else{const c=Math.floor(S.fx)+.5;S.fx+=Math.sign(c-S.fx)*Math.min(Math.abs(c-S.fx),sp);}
+    }
+  }
+  // Entering a new tile counts as a step: traps, pickups, shrine and lever hints.
+  const tx=Math.floor(S.fx),ty=Math.floor(S.fy);
+  if(tx===S.px&&ty===S.py)return;
+  S.px=tx;S.py=ty;S.steps++;
+  drainStamina(FREE_STEP_STAM);
+  playFootstep();
+  springTrap();
+  if(S.over)return;
+  computeFOV();stepOn();shrineHint();objHint();refresh();
+}
+function freeTick(dt){
+  if(!freeMode()||freePaused())return;
+  if(freeBumpT>0)freeBumpT-=dt;
+  if(freeWindedT>0)freeWindedT-=dt;
+  let dx=0,dy=0;
+  for(const c of held){const d=FREE_CODES[c];if(d){dx+=d[0];dy+=d[1];}}
+  dx=Math.sign(dx);dy=Math.sign(dy);
+  if(dx||dy){
+    if(S.exhausted){
+      if(freeWindedT<=0){freeWindedT=2;say("You are too winded to move — you gasp for breath.","c-hit");}
+    }else{
+      if(dx)S.facingLeft=dx<0;
+      const n=dx&&dy?Math.SQRT1_2:1;
+      freeStep(dx*n,dy*n,dt);
+      if(freePaused())return;
+    }
+  }
+  freeClock+=dt;
+  if(freeClock>=FREE_TURN){freeClock-=FREE_TURN;endTurn();}
+}
+window.addEventListener("keyup",ev=>held.delete(ev.code));
+window.addEventListener("blur",()=>held.clear());
 window.addEventListener("keydown",ev=>{
   if(ev.metaKey||ev.ctrlKey||ev.altKey)return;
   const k=ev.key;
@@ -4876,6 +4957,7 @@ window.addEventListener("keydown",ev=>{
     if(k==="i"||k==="I"){if(S.pack.length&&B&&B.phase==="choose")togglePack();ev.preventDefault();return;}
     return;
   }
+  if(freeMode()&&FREE_CODES[ev.code]){held.add(ev.code);ev.preventDefault();return;}
   if(KEYS[k]){tryMove(KEYS[k][0],KEYS[k][1]);ev.preventDefault();return;}
   if(k==="."||k===" "){tryMove(0,0);ev.preventDefault();return;}
   if(k==="f"||k==="F"){rekindle();ev.preventDefault();return;}
@@ -4888,7 +4970,11 @@ window.addEventListener("keydown",ev=>{
   if(k==="Enter"||k===">"){descend();ev.preventDefault();}
 });
 document.querySelectorAll(".pad button").forEach(b=>{
-  b.addEventListener("click",()=>tryMove(+b.dataset.dx,+b.dataset.dy));
+  const dx=+b.dataset.dx,dy=+b.dataset.dy,code="pad:"+dx+":"+dy,dir=dx||dy;
+  if(dir)FREE_CODES[code]=[dx,dy];
+  b.addEventListener("click",()=>{if(freeMode()&&dir)return;tryMove(dx,dy);});
+  b.addEventListener("pointerdown",e=>{if(freeMode()&&dir){e.preventDefault();held.add(code);}});
+  for(const t of ["pointerup","pointerleave","pointercancel"])b.addEventListener(t,()=>held.delete(code));
 });
 $("btnPack").onclick=togglePack;
 $("btnCodex").onclick=toggleCodex;
