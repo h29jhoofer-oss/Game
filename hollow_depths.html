@@ -366,25 +366,6 @@ body.inchasm .dice-tray{display:none}
 .qte-timerbar-wrap{width:min(220px,60vw);height:8px;background:rgba(22,10,10,.85);
   border-radius:4px;overflow:hidden;border:1px solid #5a2a22}
 .qte-timerbar{height:100%;background:linear-gradient(90deg,#f0c060,#c94a3c);width:100%}
-.parry-overlay{
-  position:absolute;inset:0;z-index:9;display:none;
-  align-items:center;justify-content:flex-end;flex-direction:column;gap:10px;padding-bottom:9%;
-  background:radial-gradient(ellipse at center,rgba(20,60,90,.18),rgba(6,8,13,.42));
-  pointer-events:none;
-}
-.parry-overlay.show{display:flex}
-.parry-title{font-size:clamp(14px,3vw,22px);font-weight:800;color:#8fd8f0;letter-spacing:.16em;
-  text-shadow:0 0 14px rgba(95,168,196,.9);animation:qteWarnPulse .35s infinite alternate}
-.parry-track{position:relative;width:min(300px,76vw);height:18px;background:rgba(10,16,24,.92);
-  border:2px solid #3d5566;border-radius:9px;overflow:hidden}
-.parry-zone{position:absolute;top:0;bottom:0;background:linear-gradient(180deg,#a8f0ff,#3f9ab8);
-  box-shadow:0 0 12px 3px rgba(143,216,240,.8)}
-.parry-marker{position:absolute;top:-2px;bottom:-2px;width:5px;margin-left:-2px;background:#fff;
-  box-shadow:0 0 8px 2px rgba(255,255,255,.9)}
-.parry-btn{pointer-events:auto;font-family:inherit;font-weight:800;letter-spacing:.14em;font-size:clamp(13px,2.8vw,17px);
-  padding:10px 26px;border-radius:8px;background:rgba(30,70,95,.92);border:2px solid #8fd8f0;color:#e8fbff;cursor:pointer;
-  box-shadow:0 4px 0 rgba(0,0,0,.5)}
-.parry-btn:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.5)}
 @keyframes qteWarnPulse{0%{opacity:.75;transform:scale(1)}100%{opacity:1;transform:scale(1.07)}}
 @keyframes qteShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
 
@@ -601,6 +582,7 @@ body.inbattle #hint{display:none}
           <div class="stat"><span>Strike</span><span id="atk">2-4</span></div>
           <div class="stat"><span>Guard</span><span id="def">0</span></div>
           <div class="stat"><span>Dodge</span><span id="dodgestat">0%</span></div>
+          <div class="stat"><span>Parry</span><span id="parrystat">0%</span></div>
           <div class="stat"><span>Gold</span><span id="gold">0</span></div>
         </div>
       </div>
@@ -636,11 +618,6 @@ body.inbattle #hint{display:none}
           <div class="qte-keys" id="qteKeys"></div>
           <div class="qte-timerbar-wrap"><div class="qte-timerbar" id="qteTimerBar"></div></div>
         </div>
-        <div class="parry-overlay" id="parryOverlay">
-          <div class="parry-title">⚔ PARRY — press SPACE in the glow!</div>
-          <div class="parry-track" id="parryTrack"><div class="parry-zone" id="parryZone"></div><div class="parry-marker" id="parryMarker"></div></div>
-          <button class="parry-btn" id="parryBtn" type="button">PARRY</button>
-        </div>
         <div class="veil" id="veil">
           <div class="card" id="card"></div>
         </div>
@@ -650,7 +627,6 @@ body.inbattle #hint{display:none}
         <div class="moves" id="moves"></div>
         <div class="brow">
           <button id="btnItem">Item</button>
-          <button id="btnParry" title="Parry stance (Q)">Parry [Q]</button>
           <button id="btnTorch" title="Off-hand attack (X)">Torch</button>
           <button id="btnSwap" title="Swap off-hand (T)" style="display:none">Swap [T]</button>
           <button id="btnFlee">Flee</button>
@@ -758,15 +734,15 @@ const OFFHANDS={
 };
 // Off-hand items: daggers (Quick Stab) and shields (damage reduction + Shield Bash). Swap with T.
 const OFFHAND_ITEMS=[
- {id:"pdagger", type:"dagger",name:"Parrying Dagger",min:3,max:5, crit:.20,acc:.83,pierce:0,d:1,note:"Quick Stab [X]. +5% crit, 45% bleed chance."},
- {id:"stiletto",type:"dagger",name:"Main-Gauche",    min:5,max:8, crit:.24,acc:.86,pierce:1,d:4,note:"Quick Stab [X]. +5% crit, 45% bleed chance."},
- {id:"fang",    type:"dagger",name:"Shadowfang",     min:8,max:12,crit:.28,acc:.89,pierce:2,d:7,note:"Quick Stab [X]. +5% crit, 45% bleed chance."},
+ {id:"pdagger", type:"dagger",name:"Parrying Dagger",min:3,max:5, crit:.20,acc:.83,pierce:0,pc:0.1,d:1,note:"Quick Stab [X]. +5% crit, 45% bleed chance, parries often."},
+ {id:"stiletto",type:"dagger",name:"Main-Gauche",    min:5,max:8, crit:.24,acc:.86,pierce:1,pc:0.12,d:4,note:"Quick Stab [X]. +5% crit, 45% bleed chance, parries often."},
+ {id:"fang",    type:"dagger",name:"Shadowfang",     min:8,max:12,crit:.28,acc:.89,pierce:2,pc:0.1,d:7,note:"Quick Stab [X]. +5% crit, 45% bleed chance, parries often."},
  // Edric's quill-knife: counts as a dagger for bleeding. d:99 keeps it out of loot.
- {id:"quill",   type:"dagger",name:"Quill-Knife",    min:2,max:4, crit:.18,acc:.88,pierce:0,d:99,note:"Quick Stab [X]. A notary's penknife, sharpened past what a pen needs. 45% bleed chance."},
- {id:"buckler", type:"shield",name:"Wooden Buckler", min:3,max:6, crit:.05,acc:.92,pierce:0,block:.12,stun:.30,parry:.03,d:0,note:"Blocks 12% of damage. Shield Bash [X]."},
- {id:"round",   type:"shield",name:"Iron Roundshield",min:4,max:8,crit:.05,acc:.92,pierce:0,block:.20,stun:.35,parry:.04,d:2,note:"Blocks 20% of damage. Shield Bash [X]."},
- {id:"tower",   type:"shield",name:"Tower Shield",   min:5,max:10,crit:.05,acc:.90,pierce:0,block:.30,stun:.40,parry:.05,d:5,note:"Blocks 30% of damage. Shield Bash [X]."},
- {id:"aegis",   type:"shield",name:"Warden's Aegis", min:7,max:13,crit:.05,acc:.92,pierce:0,block:.38,stun:.45,parry:.06,d:8,note:"Blocks 38% of damage. Shield Bash [X]."}
+ {id:"quill",   type:"dagger",name:"Quill-Knife",    min:2,max:4, crit:.18,acc:.88,pierce:0,pc:0.02,d:99,note:"Quick Stab [X]. A notary's penknife, sharpened past what a pen needs. 45% bleed chance."},
+ {id:"buckler", type:"shield",name:"Wooden Buckler", min:3,max:6, crit:.05,acc:.92,pierce:0,block:.12,stun:.30,parry:.03,pc:0.08,d:0,note:"Blocks 12% of damage. Shield Bash [X]."},
+ {id:"round",   type:"shield",name:"Iron Roundshield",min:4,max:8,crit:.05,acc:.92,pierce:0,block:.20,stun:.35,parry:.04,pc:0.07,d:2,note:"Blocks 20% of damage. Shield Bash [X]."},
+ {id:"tower",   type:"shield",name:"Tower Shield",   min:5,max:10,crit:.05,acc:.90,pierce:0,block:.30,stun:.40,parry:.05,pc:0.05,d:5,note:"Blocks 30% of damage. Shield Bash [X]."},
+ {id:"aegis",   type:"shield",name:"Warden's Aegis", min:7,max:13,crit:.05,acc:.92,pierce:0,block:.38,stun:.45,parry:.06,pc:0.09,d:8,note:"Blocks 38% of damage. Shield Bash [X]."}
 ];
 const AMULETS=[
  {id:"vigor", name:"Amulet of Vigor",    mods:{hp:12},                 d:0,note:"+12 max HP."},
@@ -785,7 +761,7 @@ const RINGS=[
  {id:"warding",name:"Ring of Warding",   mods:{def:1},            d:3,note:"+1 guard."},
  {id:"insight",name:"Ring of Insight",   mods:{xp:.25},           d:3,note:"+25% experience."},
  {id:"mending",name:"Ring of Mending",   mods:{regen:.25},        d:4,note:"Mend 1 HP every 4 steps."},
- {id:"parry",  name:"Duelist's Band",    mods:{parry:.05},        d:6,note:"Wider parry window."},
+ {id:"parry",  name:"Duelist's Band",    mods:{parry:.05},        d:6,note:"+10% chance to parry."},
  {id:"storm",  name:"Ring of the Storm", mods:{str:2,crit:.04},   d:8,note:"+2 Strike, +4% crit chance."}
 ];
 const ARMORS=[
@@ -1540,85 +1516,45 @@ function triggerStagger(){
 }
 
 /* ----- parry ----- */
-function chooseParry(){
-  if(!B||B.phase!=="choose")return;
-  if((S.cds.parry||0)>0)return;
-  S.cds.parry=3;
+// Parrying is no longer chosen: every incoming blow has a chance to be turned aside on its own.
+// The chance comes from the off-hand you hold, how quick your hero is, parry gear, and dodge
+// (shrine Evasion and rings of swiftness). Bosses are harder to read.
+const PARRY_BASE=.08,PARRY_MAX=.5;
+function parryChance(boss){
+  const oh=S.offhand||{};
+  let c=PARRY_BASE+(oh.pc||0)+(CHAR().parry||0)*2+gearMod("parry")*2+(S.dodge||0);
+  if(B&&hasClause("unsteady"))c-=.12;
+  if(boss)c*=.6;
+  return Math.max(0,Math.min(PARRY_MAX,c));
+}
+function autoParry(sp){
+  const m=B.mon;
   B.phase="anim";
-  B.pStat.parry=true;
-  drawMoves();
-  const L=B.layout;
-  if(L)sring(L.px,L.py,"rgba(143,216,240,.9)",L.psz*.8);
-  blog("You raise your guard and watch for the blow.","c-lvl");
-  queue(.45,enemyTurn);
-}
-function startParryWindow(sp){
-  const m=B.mon,boss=!!m.t.boss;
-  const dur=boss?900:1050,w=(boss?.15:.22)+gearMod("parry")+((S.offhand&&S.offhand.parry)||0)+(CHAR().parry||0)-(hasClause("unsteady")?.06:0),z0=.56+Math.random()*.2;
-  B.phase="parry";
-  B.parry={t0:performance.now(),dur:dur,z0:z0,z1:z0+w,sp:sp,done:false,timer:null};
-  const L=B.layout;
-  if(L)sring(L.ex,L.ey,"rgba(240,90,70,.85)",L.esz*.7);
-  blog(sp?`The ${m.t.name} winds up ${sp.name}!`:`The ${m.t.name} winds up a blow!`,"c-hit");
-  const ov=$("parryOverlay"),zone=$("parryZone"),mk=$("parryMarker");
-  if(zone){zone.style.left=(z0*100)+"%";zone.style.width=(w*100)+"%";}
-  if(mk)mk.style.left="0%";
-  if(ov)ov.classList.add("show");
-  B.parry.timer=setInterval(()=>{
-    if(!B||!B.parry||B.parry.done)return;
-    const p=(performance.now()-B.parry.t0)/B.parry.dur;
-    const mk2=$("parryMarker");if(mk2)mk2.style.left=Math.min(100,p*100)+"%";
-    if(p>=1)resolveParry("none");
-  },16);
-}
-function parryPress(){
-  if(!B||B.phase!=="parry"||!B.parry||B.parry.done)return;
-  const p=(performance.now()-B.parry.t0)/B.parry.dur;
-  resolveParry(p>=B.parry.z0&&p<=B.parry.z1?"perfect":"mistimed");
-}
-function hideParryOverlay(){const ov=$("parryOverlay");if(ov)ov.classList.remove("show");}
-function clearParry(){
-  if(B&&B.parry){B.parry.done=true;if(B.parry.timer)clearInterval(B.parry.timer);B.parry=null;}
-  hideParryOverlay();
-}
-function resolveParry(result){
-  if(!B||!B.parry||B.parry.done)return;
-  const sp=B.parry.sp;
-  clearParry();
-  B.pStat.parry=false;
-  B.phase="anim";
-  const L=B.layout;
-  if(result==="perfect"){
-    B.lunge=1;B.lungeSide=1;
+  B.pStat.parry=true;                 // hold the parry pose
+  B.lunge=1;B.lungeSide=-1;
+  blog(sp?`The ${m.t.name} uses ${sp.name}!`:`The ${m.t.name} attacks.`);
+  queue(.2,()=>{
+    const L=B.layout;
     if(L){
       const mx=(L.px+L.ex)/2,my=(L.py+L.ey)/2-L.psz*.25;
       sring(mx,my,"rgba(180,240,255,.95)",L.psz*.9);sburst(mx,my,"#a8f0ff",22,300);
       snum(L.px,L.py-L.psz*.95,"PARRIED!","#8fd8f0",true);
     }
-    quake(7);
+    quake(6);
     gainMana(3);
-    blog("PARRY! You turn the blow aside and riposte!","c-lvl");
-    queue(.22,()=>{
-      const r=pDamage({id:"riposte",mult:1,poise:6},{forceCrit:true,noMiss:true});
-      hitFx(r,x=>`Riposte — ${x.dmg} damage!`);
-      sparry();
-      if(B.mhp>0){B.staggerImm=0;if(B.mStat.broken<=0)triggerStagger();}
-    });
-    queue(.7,()=>{
-      refresh();
-      if(B.mhp<=0){winBattle();return;}
-      endRound();
-    });
-    return;
-  }
-  const blocked=result==="mistimed";
-  const scale=blocked?.6:.8;
-  B.lunge=1;B.lungeSide=-1;
-  blog(blocked?"Mistimed! You only half-block it.":"You hesitate — the blow lands.","c-hit");
-  queue(.2,()=>enemyStrike(sp,scale,blocked));
-  queue(.5,()=>{
+    blog("PARRY! You turn the blow aside and riposte.","c-lvl");
+  });
+  queue(.28,()=>{
+    if(!B)return;
+    pSwing();
+    const r=pDamage({id:"riposte",mult:.8,poise:8},{noMiss:true});
+    hitFx(r,x=>x.crit?`A brutal riposte — ${x.dmg} damage!`:`Riposte — ${x.dmg} damage.`);
+    sparry();
+  });
+  queue(.6,()=>{
+    B.pStat.parry=false;
     refresh();
-    if(S.hp<=0){loseBattle(B.mon.t.name);return;}
+    if(B.mhp<=0){winBattle();return;}
     endRound();
   });
 }
@@ -3130,7 +3066,7 @@ const CHARACTERS=[
  {id:"rook",name:"Rook",title:"The Knife-Dancer",spr:"rook",
   blurb:"A cutpurse from the King's market who now robs whatever lives below. Quick, cruel, and made of paper.",
   buffs:["Bloodletter: wounds open 60% more often, last a turn longer and cut 1 deeper",
-         "Duelist: a wider parry window",
+         "Duelist: parries far more often",
          "Starts with a Parrying Dagger in his off-hand (the torch rides in his pack slot to swap with T)"],
   weak:["Frail: 20% less health, and gains less per level",
         "Armour only protects him at 60% strength",
@@ -3189,8 +3125,8 @@ const CHARACTERS=[
         "No natural healing: no passive stamina regen, and healing draughts turn to ink in his hands",
         "No mana: scrolls are paid for in blood, 1 health per 2 mana",
         "Every clause has a cost, and opening a flask in a fight costs his next turn",
-        "A narrow parry window"],
-  pact:true,noMana:true,noRegen:true,quill:true,notaryEye:true,parry:-.05,hpLevel:8,
+        "Parries less often"],
+  pact:true,noMana:true,noRegen:true,quill:true,notaryEye:true,parry:-.03,hpLevel:8,
   moves:[["strike"],["sign"],["bind"],["forfeit"],["seize"],["stagger",6],["sunder",7],["execute",8],["terms"]],
   init:function(st){
     st.maxhp=36;st.hp=36;st.mana=0;st.maxmana=0;
@@ -3637,7 +3573,7 @@ function startBattle(m){
   if(!S.combatTips){
     S.combatTips=true;
     blog("Tip: chain hits for a combo; 4 in a row sets up a guaranteed-crit finisher.","c-cold");
-    blog("Tip: wear down the yellow poise bar to stagger a foe. Q raises a parry stance.","c-cold");
+    blog("Tip: wear down the yellow poise bar to stagger a foe. Blows are sometimes parried on their own: off-hands, quick hands and dodge make it likelier.","c-cold");
   }
   refresh();
   queue(.75,()=>{B.phase="choose";drawMoves();});
@@ -3646,7 +3582,6 @@ function endBattle(){
   setTension(false);
   if(qte){if(qte.timer)clearInterval(qte.timer);qte=null;}
   hideQteOverlay();
-  clearParry();
   S.mode="map";B=null;seq=[];sfx=[];
   document.body.classList.remove("inbattle");
   requestAnimationFrame(resize);
@@ -3821,7 +3756,7 @@ const CLAUSES={
   blood:    {name:"Blood Price",chip:"PRICE",    turns:3,col:"#c94a3c",cost:"2 damage a turn"},
   brittle:  {name:"Brittle Ink",chip:"BRITTLE",  turns:3,col:"#8e9aad",cost:"armour 2 lower"},
   sleepless:{name:"Sleepless",  chip:"SLEEPLESS",turns:4,col:"#6fa0e8",cost:"6 stamina a turn"},
-  unsteady: {name:"Unsteady",   chip:"UNSTEADY", turns:2,col:"#d9d24a",cost:"parry window narrower"}
+  unsteady: {name:"Unsteady",   chip:"UNSTEADY", turns:2,col:"#d9d24a",cost:"parries less often"}
 };
 function clauses(){return (B&&B.pStat.clauses)||[];}
 function hasClause(id){return clauses().some(c=>c.id===id);}
@@ -4015,7 +3950,7 @@ function enemyTurn(){
   if(pool.length&&B.mcd<=0&&Math.random()<.72)sp=pick(pool);
   if(sp)B.mcd=sp.cd;
   // A raised guard turns the incoming blow into a timing test.
-  if(B.pStat.parry&&!(sp&&sp.heal)){startParryWindow(sp);return;}
+  if(!(sp&&sp.heal)&&Math.random()<parryChance(!!m.t.boss)){autoParry(sp);return;}
   B.lunge=1;B.lungeSide=-1;
   blog(sp?`The ${m.t.name} uses ${sp.name}!`:`The ${m.t.name} attacks.`);
   queue(.2,()=>enemyStrike(sp,1,false));
@@ -4592,8 +4527,6 @@ function drawMoves(){
   const ready=B.phase==="choose";
   $("btnItem").disabled=!ready||!S.pack.length;
   $("btnFlee").disabled=!ready||B.mon.t.boss;
-  $("btnParry").disabled=!ready||(S.cds.parry||0)>0;
-  $("btnParry").textContent=(S.cds.parry||0)>0?"Parry ("+S.cds.parry+")":"Parry [Q]";
   {
     const oh=S.offhand,bt=$("btnTorch");
     if(oh.type==="shield"){const cd=S.cds.bash||0;bt.disabled=!ready||cd>0;bt.textContent=cd>0?"Bash ("+cd+")":"Bash [X]";}
@@ -4711,7 +4644,7 @@ function drawBattle(vw,vh){
   const poffX=(B.lungeSide>0?(ranged?-lunge*psz*.05:lunge*dash):0)-pRecoil-intro*vw*.35;
   const pBob=RM?0:Math.sin(tclock*2.4+1)*psz*.02;
   let pSpr=(B.lungeSide>0&&B.lunge>0&&SPR[pspr("_atk")])?pspr("_atk"):pspr("");
-  if((B.pStat.parry||B.phase==="parry")&&!(B.lungeSide>0&&B.lunge>0)&&SPR[pspr("_parry")])pSpr=pspr("_parry");
+  if(B.pStat.parry&&!(B.lungeSide>0&&B.lunge>0)&&SPR[pspr("_parry")])pSpr=pspr("_parry");
   drawArenaSprite(pSpr,px+poffX,py+pBob,psz,1,B.pFlash);
   if(B.pStat.bleed>0){
     const fr=FX_BLEED.drip;
@@ -4865,7 +4798,7 @@ function statusText(st,who){
   if(st.frozen>0)out.push(["FROZEN "+st.frozen,"#a8e0f0"]);
   if(st.broken>0)out.push(["STAGGERED","#d9d24a"]);
   if(st.exposed>0&&!(st.broken>0))out.push(["EXPOSED","#e87aa0"]);
-  if(st.parry)out.push(["GUARDING","#8fd8f0"]);
+  if(st.parry)out.push(["PARRY","#8fd8f0"]);
   if(st.burn>0)out.push(["BURN "+st.burn,"#f0902a"]);
   if(st.poison>0)out.push(["POISON "+st.poison,"#6fa844"]);
   if(st.bleed>0)out.push(["BLEED "+st.bleed,"#c94a3c"]);
@@ -5022,7 +4955,7 @@ const SHRINE_UPGRADES={
   },
   dodge:{
     label:"Evasion",icon:"◎",
-    desc:"Chance to sidestep incoming attacks entirely. Each rank adds 4%.",
+    desc:"Chance to sidestep incoming attacks entirely, and to parry them. Each rank adds 4% to both.",
     max:6,
     cost:r=>30+r*28,
     effect:r=>`${r*4}% Dodge`,
@@ -5525,6 +5458,8 @@ function refresh(){
   $("gold").textContent=S.gold;
   const dodgeEl=$("dodgestat");
   if(dodgeEl) dodgeEl.textContent=Math.round((S.dodge||0)*100)+"%";
+  const parryEl=$("parrystat");
+  if(parryEl) parryEl.textContent=Math.round(parryChance(false)*100)+"%";
   $("wname").innerHTML=icon("weapon",15)+" "+S.weapon.name;
   $("wval").textContent=`${a.min}-${a.max}`;
   $("aname").innerHTML=icon("armor",15)+" "+S.armor.name;
@@ -6198,10 +6133,6 @@ window.addEventListener("keydown",ev=>{
     ev.preventDefault();return;
   }
   if(S.mode==="battle"){
-    if(B&&B.phase==="parry"){
-      if(!ev.repeat&&(k===" "||k==="q"||k==="Q"||k==="Enter"))parryPress();
-      ev.preventDefault();return;
-    }
     if(B&&B.phase==="qte"){
       if(!ev.repeat)handleQteKey(k);
       ev.preventDefault();return;
@@ -6214,7 +6145,6 @@ window.addEventListener("keydown",ev=>{
     if(k===" "||k==="Enter"){chooseMove("strike");ev.preventDefault();return;}
     if(k==="x"||k==="X"){offhandAttack();ev.preventDefault();return;}
     if(k==="t"||k==="T"){toggleOffhand();ev.preventDefault();return;}
-    if(k==="q"||k==="Q"){chooseParry();ev.preventDefault();return;}
     if(k==="f"||k==="F"){tryFlee();ev.preventDefault();return;}
     if(k==="i"||k==="I"){if(S.pack.length&&B&&B.phase==="choose")togglePack();ev.preventDefault();return;}
     return;
@@ -6250,8 +6180,6 @@ $("btnItem").onclick=()=>{if(B&&B.phase==="choose"&&S.pack.length)togglePack();}
 $("btnFlee").onclick=tryFlee;
 $("btnTorch").onclick=offhandAttack;
 $("btnSwap").onclick=toggleOffhand;
-$("btnParry").onclick=chooseParry;
-$("parryBtn").onpointerdown=e=>{e.preventDefault();parryPress();};
 // Touch players have no keyboard: tapping the runes in order dodges the King's slam too.
 $("qteKeys").addEventListener("pointerdown",e=>{
   const el=e.target.closest(".qte-key");if(!el||!qte)return;
@@ -6691,7 +6619,7 @@ function title(){
     <p class="lede">${lede}</p>
     <p>Ten floors below, something that used to be King Aldric is still wearing the crown. Walk into a creature and the floor falls away into a duel. <b>Strike</b> is always ready, and every level teaches an ability. Watch your <span style="color:var(--stam)">Stamina</span> — moving drains it, and you'll be forced to rest when it runs out. Press <b>.</b> to deliberately rest and recover faster. Look for the <span style="color:var(--torch)">&gt;</span> to go deeper.</p>
     <p class="keys"><b>Arrows / WASD</b> move &nbsp; <b>Q Z C</b> or <b>Y U B N</b> diagonals &nbsp; <b>I</b> pack &nbsp; <b>E</b> shrine / lever &nbsp; <b>L</b> codex &nbsp; <b>Space</b> dash &nbsp; <b>.</b> rest &amp; recover stamina &nbsp; <b>Enter</b> descend<br>
-    In a duel: <b>1-9</b> abilities &nbsp; <b>Space</b> strike &nbsp; <b>Q</b> parry &nbsp; <b>X</b> off-hand &nbsp; <b>I</b> item &nbsp; <b>F</b> flee</p>
+    In a duel: <b>1-9</b> abilities &nbsp; <b>Space</b> strike &nbsp; <b>X</b> off-hand &nbsp; <b>I</b> item &nbsp; <b>F</b> flee</p>
     <button id="go">Choose your hero</button>`);
   $("go").onclick=()=>{ensureAudio();chooseHero();};
 }
