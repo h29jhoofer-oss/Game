@@ -648,11 +648,12 @@ body.inbattle #hint{display:none}
           <button data-dx="1" data-dy="1">&#9700;</button>
         </div>
         <div class="actions">
+          <button id="btnDash" title="Dash (Space)">Dash</button>
           <button id="btnPack">Pack</button>
           <button id="btnStairs" disabled>Descend</button>
         </div>
       </div>
-      <p class="hint" id="hint">Move with arrows or WASD. Walk into a creature to duel it. <b>I</b> pack, <b>E</b> pray at a shrine / pull a lever, <b>T</b> swap off-hand, <b>F</b> use lamp oil, <b>L</b> codex, <b>P</b> sprites, <b>.</b> waits &amp; restores stamina.</p>
+      <p class="hint" id="hint">Move with arrows or WASD. Walk into a creature to duel it. <b>I</b> pack, <b>E</b> pray at a shrine / pull a lever, <b>T</b> swap off-hand, <b>F</b> use lamp oil, <b>L</b> codex, <b>P</b> sprites, <b>Space</b> dashes, <b>.</b> waits &amp; restores stamina.</p>
     </div>
   </div>
 </div>
@@ -2873,6 +2874,7 @@ function render(){
     // Heroes with a <spr>_walk_0..3 cycle use it while walking freely; the passing frames rise a pixel.
     const wk=CHAR().spr+"_walk_",walking=freeMode()&&S.walkT>0&&SPR[wk+"0"];
     const wf=walking?Math.floor(S.walkPhase||0)%4:0;
+    for(const g of S.ghosts||[])blit(SPR[g.spr]?g.spr:pspr(""),g.x,g.y,Math.max(0,g.t/.22)*.32,.12,1,1,g.flip);
     blit(walking?wk+wf:pspr(""),S.vx+o[0],S.vy+o[1]+(walking?(wf%2?-1/16:0):bob),1,S.flash||0,1,1,!!S.facingLeft);
   }
 
@@ -5049,7 +5051,7 @@ function refresh(){
   $("btnStairs").disabled=!onStairs||S.over;
   $("hint").innerHTML=onStairs
     ? `Stairs down. Press <b>Enter</b> or tap Descend.`
-    : `Move with arrows or WASD. Walk into a creature to duel it. <b>I</b> pack, <b>E</b> pray at a shrine / pull a lever, <b>T</b> swap off-hand, <b>F</b> use lamp oil, <b>L</b> codex, <b>P</b> sprites, <b>.</b> waits &amp; restores stamina.`;
+    : `Move with arrows or WASD. Walk into a creature to duel it. <b>I</b> pack, <b>E</b> pray at a shrine / pull a lever, <b>T</b> swap off-hand, <b>F</b> use lamp oil, <b>L</b> codex, <b>P</b> sprites, <b>Space</b> dashes, <b>.</b> waits &amp; restores stamina.`;
   refreshStamina();
   refreshFlame();
   refreshMana();
@@ -5176,8 +5178,8 @@ function freeMonsters(dt){
     m.x=Math.floor(m.fx);m.y=Math.floor(m.fy);
   }
 }
-function freeStep(dx,dy,dt){
-  const sp=FREE_SPEED*dt,ox=S.fx,oy=S.fy;
+function freeStep(dx,dy,dt,speed){
+  const sp=(speed||FREE_SPEED)*dt,ox=S.fx,oy=S.fy;
   for(const axis of [0,1]){
     const d=axis?dy:dx;if(!d)continue;
     const nx=axis?S.fx:S.fx+d*sp,ny=axis?S.fy+d*sp:S.fy;
@@ -5211,7 +5213,25 @@ function freeStep(dx,dy,dt){
   if(S.over)return;
   computeFOV();stepOn();shrineHint();objHint();chasmHint();refresh();
 }
+// Space on the map: a quick dash in the direction you're moving (or facing). Costs stamina, short cooldown.
+const DASH_SPEED=13,DASH_TIME=.2,DASH_COST=14,DASH_CD=.55;
+function dash(){
+  if(!S||S.over||S.mode!=="map"||freePaused())return;
+  if(S.dashT>0||S.dashCD>0)return;
+  if(S.exhausted||S.stam<DASH_COST){if(freeWindedT<=0){freeWindedT=1.2;say("You're too winded to dash.","c-hit");}return;}
+  let dx=0,dy=0;
+  for(const c of held){const d=FREE_CODES[c];if(d){dx+=d[0];dy+=d[1];}}
+  dx=Math.sign(dx);dy=Math.sign(dy);
+  if(!dx&&!dy){const l=S.lastDir||[S.facingLeft?-1:1,0];dx=l[0];dy=l[1];}
+  if(dx)S.facingLeft=dx<0;
+  const n=dx&&dy?Math.SQRT1_2:1;
+  S.dashDir=[dx*n,dy*n];S.dashT=DASH_TIME;S.dashCD=DASH_CD;S.ghostT=0;
+  S.stam-=DASH_COST;refreshStamina();
+  burst(S.px,S.py+.3,"#8e9aad",8,2.2);
+  playFootstep();
+}
 function freeTick(dt){
+  if(S&&S.ghosts&&S.ghosts.length){for(const g of S.ghosts)g.t-=dt;S.ghosts=S.ghosts.filter(g=>g.t>0);}
   if(!freeMode()||freePaused())return;
   if(S.walkT>0)S.walkT-=dt;
   if(freeBumpT>0)freeBumpT-=dt;
@@ -5219,7 +5239,16 @@ function freeTick(dt){
   let dx=0,dy=0;
   for(const c of held){const d=FREE_CODES[c];if(d){dx+=d[0];dy+=d[1];}}
   dx=Math.sign(dx);dy=Math.sign(dy);
-  if(dx||dy){
+  if(S.dashCD>0)S.dashCD-=dt;
+  if(S.dashT>0){
+    // mid-dash: the burst carries you, whatever you're holding
+    S.dashT-=dt;
+    S.ghostT=(S.ghostT||0)-dt;
+    if(S.ghostT<=0){S.ghostT=.03;(S.ghosts=S.ghosts||[]).push({x:S.vx,y:S.vy,spr:CHAR().spr+"_walk_"+Math.floor(S.walkPhase||0)%4,flip:!!S.facingLeft,t:.22});}
+    freeStep(S.dashDir[0],S.dashDir[1],dt,DASH_SPEED);
+    if(freePaused())return;
+  }else if(dx||dy){
+    S.lastDir=[dx,dy];
     if(S.exhausted){
       if(freeWindedT<=0){freeWindedT=2;say("You are too winded to move — you gasp for breath.","c-hit");}
     }else{
@@ -5680,7 +5709,8 @@ window.addEventListener("keydown",ev=>{
   }
   if(freeMode()&&FREE_CODES[ev.code]){held.add(ev.code);ev.preventDefault();return;}
   if(KEYS[k]){tryMove(KEYS[k][0],KEYS[k][1]);ev.preventDefault();return;}
-  if(k==="."||k===" "){tryMove(0,0);ev.preventDefault();return;}
+  if(k==="."){tryMove(0,0);ev.preventDefault();return;}
+  if(k===" "){if(!ev.repeat)dash();ev.preventDefault();return;}
   if(k==="f"||k==="F"){rekindle();ev.preventDefault();return;}
   if(k==="i"||k==="I"){togglePack();ev.preventDefault();return;}
   if(k==="l"||k==="L"){toggleCodex();ev.preventDefault();return;}
@@ -5698,6 +5728,7 @@ document.querySelectorAll(".pad button").forEach(b=>{
   for(const t of ["pointerup","pointerleave","pointercancel"])b.addEventListener(t,()=>held.delete(code));
 });
 $("btnPack").onclick=togglePack;
+$("btnDash").onpointerdown=e=>{e.preventDefault();dash();};
 $("btnCodex").onclick=toggleCodex;
 $("btnShrine").onclick=toggleShrine;
 $("btnEditor").onclick=toggleEditor;
@@ -6142,7 +6173,7 @@ function title(){
     <h3>The Hollow Depths</h3>
     <p class="lede">${lede}</p>
     <p>Ten floors below, something that used to be King Aldric is still wearing the crown. Walk into a creature and the floor falls away into a duel. <b>Strike</b> is always ready, and every level teaches an ability. Watch your <span style="color:var(--stam)">Stamina</span> — moving drains it, and you'll be forced to rest when it runs out. Press <b>.</b> to deliberately rest and recover faster. Look for the <span style="color:var(--torch)">&gt;</span> to go deeper.</p>
-    <p class="keys"><b>Arrows / WASD</b> move &nbsp; <b>Q Z C</b> or <b>Y U B N</b> diagonals &nbsp; <b>I</b> pack &nbsp; <b>E</b> shrine / lever &nbsp; <b>L</b> codex &nbsp; <b>.</b> rest &amp; recover stamina &nbsp; <b>Enter</b> descend<br>
+    <p class="keys"><b>Arrows / WASD</b> move &nbsp; <b>Q Z C</b> or <b>Y U B N</b> diagonals &nbsp; <b>I</b> pack &nbsp; <b>E</b> shrine / lever &nbsp; <b>L</b> codex &nbsp; <b>Space</b> dash &nbsp; <b>.</b> rest &amp; recover stamina &nbsp; <b>Enter</b> descend<br>
     In a duel: <b>1-9</b> abilities &nbsp; <b>Space</b> strike &nbsp; <b>Q</b> parry &nbsp; <b>X</b> off-hand &nbsp; <b>I</b> item &nbsp; <b>F</b> flee</p>
     <button id="go">Choose your hero</button>`);
   $("go").onclick=chooseHero;
