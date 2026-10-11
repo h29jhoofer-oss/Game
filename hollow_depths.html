@@ -437,6 +437,68 @@ body.inbattle #hint{display:none}
 .forge li:last-child{border-bottom:none}
 .forge li button{width:auto;flex:none;padding:5px 11px;font-size:12px;background:var(--ember);color:#160d06;border-color:#d97a3d;font-weight:600}
 .pack .empty{color:var(--slate);font-size:13px;margin-bottom:12px}
+/* ---------- pack: icon grid + gear column ---------- */
+.card.packcard{max-width:900px}
+.pk-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.pk-head h3{margin:0}.pk-head h3 span{color:var(--slate);font-size:12px;font-weight:400;letter-spacing:0}
+.pk-gold{color:var(--gold);font-size:13px;display:flex;align-items:center;gap:5px}
+.pk-cols{display:grid;grid-template-columns:2fr 1fr;gap:16px;align-items:start;margin-bottom:12px}
+.pk h4{margin:0 0 8px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate);font-weight:600}
+.pk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:8px}
+.card .pk-slot{position:relative;aspect-ratio:1;width:auto;padding:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(14,18,25,.9);border:1px solid #2a323e;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.6);color:var(--bone);font-weight:400;cursor:pointer;
+  transition:border-color .12s,transform .12s,background .12s}
+.card .pk-slot img{width:62%;height:62%;image-rendering:pixelated;filter:drop-shadow(0 2px 2px rgba(0,0,0,.7))}
+.card .pk-slot:hover{border-color:#5a6678;background:rgba(30,36,46,.95);transform:translateY(-1px)}
+.card .pk-slot.sel{border-color:var(--torch);box-shadow:0 0 0 1px var(--torch),inset 0 0 12px rgba(240,144,42,.18)}
+.card .pk-slot:active{background:rgba(30,36,46,.95)}
+.pk-slot.empty{cursor:default;background:rgba(10,13,18,.6);border-style:dashed;border-color:#1d232c}
+.pk-key{position:absolute;left:4px;top:2px;font-size:10px;color:var(--slate)}
+.pk-badge{position:absolute;right:3px;bottom:2px;font-size:10px;color:var(--mana);font-weight:600}
+.pk-slot.spell{border-color:rgba(138,95,196,.45)}
+.pk-detail{margin:12px 0;min-height:64px;padding:10px 12px;background:rgba(14,18,25,.7);border:1px solid #1d232c;border-radius:4px}
+.pk-det{display:flex;gap:12px;align-items:flex-start}
+.pk-det-ic img{width:48px;height:48px;image-rendering:pixelated}
+.pk-det-tx{flex:1;min-width:0}
+.pk-acts{display:flex;gap:8px;margin-top:10px}
+.card .pk-acts button{width:auto;padding:7px 14px;font-size:12.5px}
+.card .pk-acts button.sell{background:rgba(90,74,26,.3);border-color:#5a4a1a;color:var(--gold)}
+.card .pk-acts button.ghost{background:var(--stone-lit);border-color:#333d4a;color:var(--bone)}
+.pk-acts .k{opacity:.6;font-size:11px;margin-left:3px}
+.pk-empty{color:var(--slate);font-size:12.5px;margin:0}
+.pk-sec{margin-top:12px}
+.pk-comb{display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid #1d232c;font-size:12.5px;color:var(--bone)}
+.pk-comb span{flex:1;min-width:0}.pk-comb em{display:block;font-style:normal;color:var(--slate);font-size:11.5px}
+.card .pk-comb button{width:auto;padding:5px 11px;font-size:12px}
+.pk-gear{padding:10px;background:rgba(95,168,196,.05);border:1px solid rgba(95,168,196,.25);border-radius:4px}
+.pk-gear h4{color:var(--rime)}
+.card .gr-slot{display:flex;align-items:center;gap:9px;width:100%;padding:6px 7px;margin:0 0 6px;text-align:left;font-weight:400;
+  background:rgba(14,18,25,.85);border:1px solid #2a323e;border-radius:4px;color:var(--bone);cursor:pointer}
+.card .gr-slot:hover{border-color:#5a6678}
+.card .gr-slot.sel{border-color:var(--rime);box-shadow:0 0 0 1px var(--rime)}
+.gr-slot.empty{cursor:default;opacity:.5;border-style:dashed}
+.gr-ic{flex:none;width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);border-radius:3px}
+.gr-slot.empty .gr-ic img{filter:grayscale(1) brightness(.5)}
+.gr-tx{min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.gr-tx i{font-style:normal;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate)}
+.gr-tx b{font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gr-tx em{font-style:normal;font-size:11px;color:var(--torch)}
+.gr-stats{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:8px;padding-top:8px;border-top:1px solid #1d232c;font-size:11.5px;color:var(--slate)}
+.gr-stats b{color:var(--bone);font-weight:500}
+.pk-tip{position:fixed;z-index:60;display:none;width:240px;padding:10px 12px;pointer-events:none;
+  background:#0d1118;border:1px solid #3a4454;border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.6);font-size:12.5px;line-height:1.45;color:var(--bone)}
+.pk-tip.show{display:block}
+.tip-name{font-weight:600;font-size:13.5px;color:var(--torch)}
+.tip-kind{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);margin-bottom:5px}
+.tip-line{margin-bottom:2px}.tip-line b{color:var(--torch);font-weight:600}
+.tip-line .up{color:#8fcf6a}.tip-line .dn{color:#e8685a}
+.tip-note{color:#9aa5b1;font-size:12px;margin-top:5px}
+.tip-hint{color:var(--rime);font-size:11.5px;margin-top:6px}
+.tip-sell{color:var(--gold);font-size:11.5px;margin-top:2px}
+@media (max-width:640px){
+  .pk-cols{grid-template-columns:1fr}
+  .pk-grid{grid-template-columns:repeat(5,1fr)}
+}
 .pack .close{background:var(--stone-lit);color:var(--bone);border-color:#333d4a}
 /* sprite editor */
 #se-overlay{position:fixed;inset:0;background:rgba(6,8,13,.96);z-index:60;
@@ -2135,7 +2197,7 @@ function win(){
     <button id="again">Descend again</button>`);
   $("again").onclick=chooseHero;
 }
-function overlay(html){$("card").classList.remove("wide");$("card").innerHTML=html;$("veil").classList.remove("hide");}
+function overlay(html){$("card").classList.remove("wide","packcard");$("card").innerHTML=html;$("veil").classList.remove("hide");}
 function hideOverlay(){$("veil").classList.add("hide");}
 
 /* ============================ pack ui ============================ */
@@ -2308,114 +2370,190 @@ function tryCombine(kind,id,tier){
   refresh();
   return true;
 }
+// ── The pack: item icons on the left (two thirds), gear slots on the right (one third). ──
+// Hover any icon for a tooltip saying what it is and does. Click to select it (its details and
+// buttons show under the grid; this is also how touch screens see the details); double-click,
+// or a number key 1-9, does its main action.
+let packSel=null;   // {at:"pack",i} | {at:"gear",slot} | {at:"spell",id}
+const PACK_SLOTS=9;
+function packPct(v){return Math.round(v*100)+"%";}
+function gearSlotItem(slot){
+  const oh=S.offhand,alt=S.altOffhand,torch=OFFHANDS.torch;
+  if(slot==="weapon")return{kind:"weapon",ref:S.weapon,name:S.weapon.name,note:S.weapon.note};
+  if(slot==="armor")return{kind:"armor",ref:S.armor,name:S.armor.name,note:S.armor.note};
+  if(slot==="offhand")return{kind:"offhand",ref:oh,name:oh.name,note:oh.note};
+  if(slot==="belt"){const b=alt?(oh===alt?torch:alt):null;return b?{kind:"offhand",ref:b,name:b.name,note:b.note}:null;}
+  if(slot==="amulet")return S.amulet?gearItem("amulet",S.amulet):null;
+  if(slot==="ring0"||slot==="ring1"){const r=S.rings[slot==="ring0"?0:1];return r?gearItem("ring",r):null;}
+  return null;
+}
+function packIcon(it){
+  if(it.kind==="offhand"&&it.ref.type==="torch")return"weapon_torch";
+  return itemSpr(it);
+}
+// What an item is, in a few lines: used by the hover tooltip and the selected-item panel.
+function itemInfo(it){
+  const r=it.ref,lines=[];let kind="";
+  if(it.kind==="weapon"){
+    const w=weaponRange(r);kind=r.special?"Signature weapon":"Weapon";
+    lines.push(`<b>${w.min}-${w.max}</b> damage &middot; ${packPct(r.crit)} crit &middot; ${packPct(r.acc)} accuracy${r.pierce?` &middot; pierces ${r.pierce}`:""}`);
+    if(r!==S.weapon){const c=weaponRange(S.weapon),d=(w.min+w.max-c.min-c.max)/2;lines.push(`<span class="${d>0?"up":d<0?"dn":""}">${d>0?"+":""}${d} average damage vs your ${S.weapon.name}</span>`);}
+  }else if(it.kind==="armor"){
+    kind="Armour";lines.push(`<b>${r.def}</b> guard${CHAR().armorMult&&CHAR().armorMult!==1?` (${Math.floor(r.def*CHAR().armorMult)} on ${CHAR().name})`:""}`);
+    if(r!==S.armor){const d=r.def-S.armor.def;lines.push(`<span class="${d>0?"up":d<0?"dn":""}">${d>0?"+":""}${d} guard vs your ${S.armor.name}</span>`);}
+  }else if(it.kind==="offhand"){
+    kind=r.type==="torch"?"Off-hand: torch":r.type==="shield"?"Off-hand: shield":"Off-hand: dagger";
+    lines.push(`${offhandLabel(r)}${r.pc?` &middot; +${packPct(r.pc)} parry`:""}${r.type==="shield"?` &middot; Bash stuns ${packPct(r.stun)}`:""}`);
+  }else if(it.kind==="amulet"){kind="Pendant";}
+  else if(it.kind==="ring"){kind="Ring";}
+  else if(it.kind==="use"){
+    const id=r.id,t=r.tier||0;
+    if(spellOf(it)){kind=it.learned?"Spell (learned)":"Scroll";if(id!=="wisp"&&CONS_DESC[id])lines.push(CONS_DESC[id][t]);lines.push(`Costs ${costLabel(spellCost(it))}`);}
+    else if(id==="heal"){kind="Potion";lines.push(CHAR().noPotions?"Useless to "+CHAR().name:CONS_DESC.heal[t]);}
+    else if(id==="ink"){kind="Ink flask";lines.push(`Heals ${inkHeal()} right now`);}
+    else if(id==="oil"){kind="Lamp oil";lines.push(`Torch at ${Math.ceil(S.flame)}/${S.maxflame}`);}
+    else kind="Elixir";
+    if(isWisp(it))lines.push(`Wisp: ${wispInit(it).whp}/${it.wmax} health`);
+  }
+  return{kind:kind,lines:lines};
+}
+// sellable: the item is in the pack (not worn, not a learned spell), so show what it sells for
+function itemTipHtml(it,extra,sellable){
+  const inf=itemInfo(it),sv=sellable&&!(it.kind==="weapon"&&it.ref.special)?sellValue(it):0;
+  return `<div class="tip-name">${it.name}</div><div class="tip-kind">${inf.kind}</div>`
+    +inf.lines.map(l=>`<div class="tip-line">${l}</div>`).join("")
+    +(it.note?`<div class="tip-note">${it.note}</div>`:"")
+    +(extra?`<div class="tip-hint">${extra}</div>`:"")
+    +(sv?`<div class="tip-sell">Sells for ${sv} gold</div>`:"");
+}
+function packVerb(it){
+  if(it.kind==="weapon"||it.kind==="armor"||it.kind==="offhand"||it.kind==="amulet"||it.kind==="ring")return"Equip";
+  if(spellOf(it))return"Cast";
+  if(it.ref.id==="heal"||it.ref.id==="ink"||it.ref.id==="might")return"Drink";
+  return"Use";
+}
+function gearActions(slot){
+  const b=[];
+  if((slot==="offhand"||slot==="belt")&&S.altOffhand)b.push(`<button data-act="swap">Swap hands [T]</button>`);
+  if(slot==="belt"&&S.altOffhand)b.push(`<button data-act="unequip:alt" class="ghost">Take off</button>`);
+  if(slot==="amulet"&&S.amulet)b.push(`<button data-act="unequip:amulet" class="ghost">Take off</button>`);
+  if((slot==="ring0"||slot==="ring1")&&S.rings[slot==="ring0"?0:1])b.push(`<button data-act="unequip:${slot}" class="ghost">Take off</button>`);
+  return b.join("");
+}
+const GEAR_SLOTS=[["weapon","Weapon"],["armor","Armour"],["offhand","Off-hand"],["belt","Belt"],["amulet","Pendant"],["ring0","Ring"],["ring1","Ring"]];
+const GEAR_EMPTY={belt:["weapon_torch","Find a dagger or shield to carry a second off-hand."],amulet:["amulet_vigor","Pendants turn up in chests and on the floor."],ring0:["ring_might","You can wear two rings."],ring1:["ring_might","You can wear two rings."]};
 function drawPack(){
   if(!packOpen)return;
   const a=playerAtk();
-
-  // ── item rows with Use/Equip + Sell ──────────────────────────────────────
-  const rows=S.pack.length?S.pack.map((it,i)=>{
-    const label=it.kind==="weapon"?`${weaponRange(it.ref).min}-${weaponRange(it.ref).max} dmg`
-      :it.kind==="armor"?`${it.ref.def} guard`:it.kind==="offhand"?offhandLabel(it.ref):spellOf(it)?costLabel(spellCost(it)):it.kind==="use"&&it.ref.id==="ink"?`heals ${inkHeal()}`
-      :it.kind==="use"&&it.ref.id==="heal"&&CHAR().noPotions?"useless to you":"";
-    const wlabel=isWisp(it)?`${wispInit(it).whp}/${it.wmax} hp · `:"";
-    const verb=it.kind==="weapon"||it.kind==="armor"||it.kind==="offhand"||it.kind==="amulet"||it.kind==="ring"?"Equip":spellOf(it)?"Cast":"Use";
-    const val=sellValue(it);
-    return `<li><span class="g">${icon(itemSpr(it),20)}</span>
-      <span class="t"><b>${it.name}${label?`  <span style="color:${it.kind==="use"?"var(--mana)":"var(--torch)"}">${wlabel}${label}</span>`:""}</b><em>${it.note}</em></span>
-      <span style="display:flex;gap:5px;flex:none">
-        <button data-use="${i}">${verb}</button>
-        ${it.kind==="weapon"&&it.ref.special?"":`<button data-sell="${i}" style="color:var(--gold);border-color:#5a4a1a;background:rgba(90,74,26,.25)">Sell ${val}g</button>`}
-      </span></li>`;
-  }).join(""):`<p class="empty">Nothing but lint. Walk over items to pick them up.</p>`;
-
-  // ── gear forge (weapons & armour) ────────────────────────────────────────
-  const forge=combineGroups();
-  const forgeHtml=forge.length?`<div class="forge"><h4>Forge — Weapons &amp; Armour</h4><ul>${forge.map(g=>{
-    const next=g.kind==="weapon"?upgradeWeapon(g.id,g.tier+1):upgradeArmor(g.id,g.tier+1);
-    const curLabel=g.kind==="weapon"?`${g.base.min}-${g.base.max} dmg`:`${g.base.def} guard`;
-    const nextLabel=g.kind==="weapon"?`${next.min}-${next.max} dmg`:`${next.def} guard`;
-    return `<li><span class="g">${icon(gearSpr(g.kind,g.id),20)}</span>
-      <span class="t"><b>${g.base.name} <span style="color:var(--slate)">x${g.count}</span> &rarr; ${next.name}</b>
-      <em style="white-space:normal">${curLabel} &rarr; <span style="color:var(--torch)">${nextLabel}</span></em></span>
-      <button data-combine="${g.kind}:${g.id}:${g.tier}">Combine</button></li>`;
-  }).join("")}</ul></div>`:"";
-
-  // ── consumable combine (potions & scrolls) ────────────────────────────────
-  const cGroups=consumableGroups();
-  const consumeHtml=cGroups.length?`<div class="forge" style="border-color:rgba(180,67,58,.4);background:rgba(180,67,58,.06)">
-    <h4 style="color:var(--blood)">Alchemise — Potions &amp; Scrolls</h4><ul>${cGroups.map(g=>{
-      const nextTier=g.tier+1;
-      const defs=UPGRADED_CONSUMABLES[g.id];
-      const next=defs&&defs[nextTier];
-      if(!next)return"";
-      const dd=CONS_DESC[g.id]||[];
-      const curDesc=dd[g.tier]||"";
-      const nextDesc=dd[nextTier]||"";
-      const spr=consSpr(g.id,g.tier);
-      return `<li><span class="g">${icon(spr,20)}</span>
-        <span class="t"><b>${g.ref.name||g.ref.id} <span style="color:var(--slate)">x${g.count}</span> &rarr; ${next.name}</b>
-        <em style="white-space:normal">${curDesc} &rarr; <span style="color:var(--blood)">${nextDesc}</span></em></span>
-        <button data-consume="${g.id}:${g.tier}" style="background:rgba(180,67,58,.35);border-color:#8f2f28;color:var(--bone)">Combine</button></li>`;
-  }).join("")}</ul></div>`:"";
-
-  const slotRow=(spr,title,desc,btns)=>`<li><span class="g">${icon(spr,20)}</span>
-      <span class="t"><b>${title}</b><em style="white-space:normal">${desc}</em></span>
-      <span style="display:flex;gap:5px;flex:none">${btns||""}</span></li>`;
-  const oh=S.offhand;
-  const eqRows=[
-    slotRow(oh.type==="torch"?"weapon_torch":"offhand_"+oh.id,`Off-hand: ${oh.name} <span style="color:var(--torch)">${offhandLabel(oh)}</span>`,oh.note,
-      S.altOffhand?`<button data-swap="1">${S.offhand===S.altOffhand?"Torch [T]":"Swap [T]"}</button>`:""),
-    S.altOffhand?slotRow("offhand_"+S.altOffhand.id,`Belt: ${S.altOffhand.name}`,S.altOffhand.note,`<button data-unequip="alt">Unequip</button>`):"",
-    slotRow(S.amulet?"amulet_"+S.amulet.id:"amulet_vigor",S.amulet?`Amulet: ${S.amulet.name}`:`<span style="color:var(--slate)">Amulet: empty</span>`,S.amulet?S.amulet.note:"Found in chests and on the floor.",S.amulet?`<button data-unequip="amulet">Unequip</button>`:""),
-    ...[0,1].map(n=>{const r=S.rings[n];return slotRow(r?"ring_"+r.id:"ring_might",r?`Ring ${n+1}: ${r.name}`:`<span style="color:var(--slate)">Ring ${n+1}: empty</span>`,r?r.note:"Rings stack. You can wear two.",r?`<button data-unequip="ring${n}">Unequip</button>`:"");})
-  ].join("");
+  if(packSel&&packSel.at==="pack"&&!S.pack[packSel.i])packSel=null;
+  if(packSel&&packSel.at==="spell"&&!(S.spells&&S.spells[packSel.id]!==undefined))packSel=null;
+  // item grid
+  const cells=[];
+  for(let i=0;i<PACK_SLOTS;i++){
+    const it=S.pack[i];
+    if(!it){cells.push(`<div class="pk-slot empty"></div>`);continue;}
+    const sel=packSel&&packSel.at==="pack"&&packSel.i===i;
+    const badge=spellOf(it)?`<span class="pk-badge">${CHAR().noMana?bloodCost(spellCost(it)):spellCost(it)}</span>`:"";
+    cells.push(`<button type="button" class="pk-slot${sel?" sel":""}" data-pk="${i}" aria-label="${it.name}">${icon(packIcon(it),40)}<span class="pk-key">${i+1}</span>${badge}</button>`);
+  }
+  // Orrin's spellbook
   const book=CHAR().learns?LEARNABLE.filter(id=>S.spells[id]!==undefined):null;
-  const bookHtml=book?`<div class="forge" style="border-color:rgba(138,95,196,.45);background:rgba(138,95,196,.07)"><h4 style="color:#c8a8f0">Spellbook</h4><ul>${
-    book.length?book.map(id=>{const g=grimoireItem(id);return slotRow(itemSpr(g),`${g.name} <span style="color:var(--mana)">${spellCost(g)} mana</span>`,g.note,`<button data-cast="${id}">Cast</button>`);}).join("")
-    :`<p class="empty">No spells yet. Walk over a scroll to learn it for good.</p>`}</ul></div>`:"";
-  const equipHtml=`<div class="forge" style="border-color:rgba(95,168,196,.4);background:rgba(95,168,196,.06)"><h4 style="color:var(--rime)">Equipment</h4><ul>${eqRows}</ul></div>`;
-
-  overlay(`<div class="pack">
-    <h3 style="font-size:15px;margin-bottom:4px">Pack &nbsp;<span style="color:var(--slate);font-size:12px">${S.pack.length}/9</span></h3>
-    <p style="font-size:12px;margin-bottom:8px">
-      Holding <span style="color:var(--bone)">${S.weapon.name}</span> <span style="color:var(--torch)">${a.min}-${a.max}</span>
-      &nbsp;&middot;&nbsp; wearing <span style="color:var(--bone)">${S.armor.name}</span> <span style="color:var(--torch)">${S.armor.def}</span>
-      &nbsp;&middot;&nbsp; <span style="color:var(--gold)">${S.gold} gold</span>
-    </p>
-    ${bookHtml}${equipHtml}${consumeHtml}${forgeHtml}
-    <ul>${rows}</ul>
-    <button class="close" id="closePack">Close</button>
+  const bookHtml=book?`<div class="pk-sec"><h4>Spellbook</h4><div class="pk-grid">${book.length?book.map(id=>{const g=grimoireItem(id),sel=packSel&&packSel.at==="spell"&&packSel.id===id;
+      return `<button type="button" class="pk-slot spell${sel?" sel":""}" data-sp="${id}" aria-label="${g.name}">${icon(itemSpr(g),40)}<span class="pk-badge">${spellCost(g)}</span></button>`;}).join("")
+    :`<p class="pk-empty">No spells yet. Walk over a scroll to learn it for good.</p>`}</div></div>`:"";
+  // selected item details
+  const canHover=window.matchMedia&&matchMedia("(hover:hover)").matches;
+  let det=`<p class="pk-empty">${canHover?"Hover an item to see what it does. Click to select it, double-click (or press its number) to use it.":"Tap an item to see what it does and use it."}</p>`;
+  if(packSel){
+    let it=null,btns="";
+    if(packSel.at==="pack"){
+      it=S.pack[packSel.i];
+      const sv=sellValue(it),noSell=it.kind==="weapon"&&it.ref.special;
+      btns=`<button data-act="use">${packVerb(it)} <span class="k">${packSel.i+1}</span></button>`+(noSell?"":`<button data-act="sell" class="sell">Sell ${sv}g</button>`);
+    }else if(packSel.at==="spell"){it=grimoireItem(packSel.id);btns=`<button data-act="cast">Cast</button>`;}
+    else{it=gearSlotItem(packSel.slot);btns=gearActions(packSel.slot);}
+    if(it)det=`<div class="pk-det"><div class="pk-det-ic">${icon(packIcon(it),48)}</div><div class="pk-det-tx">${itemTipHtml(it,"",packSel.at==="pack")}</div></div>${btns?`<div class="pk-acts">${btns}</div>`:""}`;
+  }
+  // combining
+  const forge=combineGroups(),cg=consumableGroups();
+  const comb=[...forge.map(g=>{const next=g.kind==="weapon"?upgradeWeapon(g.id,g.tier+1):upgradeArmor(g.id,g.tier+1);
+      return `<div class="pk-comb">${icon(gearSpr(g.kind,g.id),24)}<span>${g.count}&times; ${g.base.name} &rarr; <b>${next.name}</b></span><button data-combine="${g.kind}:${g.id}:${g.tier}">Forge</button></div>`;}),
+    ...cg.map(g=>{const next=UPGRADED_CONSUMABLES[g.id]&&UPGRADED_CONSUMABLES[g.id][g.tier+1];if(!next)return"";
+      return `<div class="pk-comb">${icon(consSpr(g.id,g.tier),24)}<span>${g.count}&times; ${g.ref.name||g.ref.id} &rarr; <b>${next.name}</b> <em>${(CONS_DESC[g.id]||[])[g.tier+1]||""}</em></span><button data-consume="${g.id}:${g.tier}">Combine</button></div>`;})].join("");
+  const combHtml=comb?`<div class="pk-sec"><h4>Combine</h4>${comb}</div>`:"";
+  // gear column
+  const gear=GEAR_SLOTS.map(([slot,label])=>{
+    const it=gearSlotItem(slot),sel=packSel&&packSel.at==="gear"&&packSel.slot===slot;
+    if(!it){const e=GEAR_EMPTY[slot];return `<div class="gr-slot empty" data-gs="${slot}"><span class="gr-ic">${icon(e[0],32)}</span><span class="gr-tx"><i>${label}</i><b>empty</b></span></div>`;}
+    const sub=it.kind==="weapon"?`${a.min}-${a.max}`:it.kind==="armor"?`${armorDef()} guard`:it.kind==="offhand"?offhandLabel(it.ref):"";
+    return `<button type="button" class="gr-slot${sel?" sel":""}" data-gs="${slot}"><span class="gr-ic">${icon(packIcon(it),32)}</span><span class="gr-tx"><i>${label}${slot==="offhand"?" (in hand)":""}</i><b>${it.name}</b>${sub?`<em>${sub}</em>`:""}</span></button>`;
+  }).join("");
+  const stats=`<div class="gr-stats"><span>Strike <b>${a.min}-${a.max}</b></span><span>Guard <b>${guardVal()}</b></span><span>Parry <b>${packPct(parryChance(false))}</b></span><span>Dodge <b>${packPct(S.dodge||0)}</b></span></div>`;
+  overlay(`<div class="pack pk">
+    <div class="pk-head"><h3>Pack <span>${S.pack.length}/${PACK_SLOTS}</span></h3><span class="pk-gold">${icon("gold",16)} ${S.gold} gold</span></div>
+    <div class="pk-cols">
+      <div class="pk-left">
+        <div class="pk-grid">${cells.join("")}</div>
+        <div class="pk-detail">${det}</div>
+        ${bookHtml}${combHtml}
+      </div>
+      <div class="pk-gear"><h4>Gear</h4>${gear}${stats}</div>
+    </div>
+    <button class="close" id="closePack">Close [I]</button>
+    <div class="pk-tip" id="pkTip"></div>
   </div>`);
-
+  $("card").classList.add("wide","packcard");
   $("closePack").onclick=togglePack;
-  document.querySelectorAll("[data-unequip]").forEach(b=>{
-    b.onclick=()=>{unequipSlot(b.dataset.unequip);if(packOpen)drawPack();};
+  const tip=$("pkTip");
+  const showTip=(el,html)=>{
+    tip.innerHTML=html;tip.classList.add("show");
+    const r=el.getBoundingClientRect(),tw=tip.offsetWidth,th=tip.offsetHeight;
+    let x=r.right+10,y=r.top;
+    if(x+tw>innerWidth-8)x=r.left-tw-10;
+    if(x<8)x=Math.max(8,Math.min(innerWidth-tw-8,r.left));
+    if(y+th>innerHeight-8)y=Math.max(8,innerHeight-th-8);
+    tip.style.left=x+"px";tip.style.top=y+"px";
+  };
+  const hideTip=()=>tip.classList.remove("show");
+  const hover=(el,fn)=>{
+    el.addEventListener("pointerenter",e=>{if(e.pointerType==="mouse")showTip(el,fn());});
+    el.addEventListener("pointerleave",hideTip);
+  };
+  const pick=sel=>{packSel=sel;hideTip();drawPack();};
+  document.querySelectorAll("#card [data-pk]").forEach(el=>{
+    const i=+el.dataset.pk,it=S.pack[i];
+    hover(el,()=>itemTipHtml(it,`Double-click to ${packVerb(it).toLowerCase()}`,true));
+    el.onclick=()=>pick({at:"pack",i});
+    el.ondblclick=()=>{hideTip();packSel=null;useItem(i);if(packOpen)drawPack();};
   });
-  document.querySelectorAll("[data-swap]").forEach(b=>{
-    b.onclick=()=>{toggleOffhand();if(packOpen)drawPack();};
+  document.querySelectorAll("#card [data-sp]").forEach(el=>{
+    const id=el.dataset.sp;
+    hover(el,()=>itemTipHtml(grimoireItem(id),"Double-click to cast"));
+    el.onclick=()=>pick({at:"spell",id});
+    el.ondblclick=()=>{hideTip();useItem("g:"+id);if(packOpen)drawPack();};
   });
-  document.querySelectorAll("[data-use]").forEach(b=>{
-    b.onclick=()=>{useItem(parseInt(b.dataset.use,10));if(packOpen)drawPack();};
+  document.querySelectorAll("#card [data-gs]").forEach(el=>{
+    const slot=el.dataset.gs,it=gearSlotItem(slot);
+    const hint=slot==="weapon"||slot==="armor"?"Equip another from your pack to change it":slot==="offhand"||slot==="belt"?(S.altOffhand?"Press T to swap hands":""):"Click to take it off";
+    hover(el,()=>it?itemTipHtml(it,hint):`<div class="tip-name">${GEAR_SLOTS.find(g=>g[0]===slot)[1]}</div><div class="tip-note">${GEAR_EMPTY[slot][1]}</div>`);
+    if(it)el.onclick=()=>pick({at:"gear",slot});
   });
-  document.querySelectorAll("[data-cast]").forEach(b=>{
-    b.onclick=()=>{useItem("g:"+b.dataset.cast);if(packOpen)drawPack();};
-  });
-  document.querySelectorAll("[data-sell]").forEach(b=>{
-    b.onclick=()=>{sellItem(parseInt(b.dataset.sell,10));if(packOpen)drawPack();};
-  });
-  document.querySelectorAll("[data-combine]").forEach(b=>{
+  document.querySelectorAll("#card [data-act]").forEach(b=>{
     b.onclick=()=>{
-      const [kind,id,tier]=b.dataset.combine.split(":");
-      tryCombine(kind,id,parseInt(tier,10));
+      const act=b.dataset.act,s=packSel;
+      if(act==="use"&&s){packSel=null;useItem(s.i);}
+      else if(act==="sell"&&s){packSel=null;sellItem(s.i);}
+      else if(act==="cast"&&s)useItem("g:"+s.id);
+      else if(act==="swap")toggleOffhand();
+      else if(act.startsWith("unequip:")){unequipSlot(act.slice(8));packSel=null;}
       if(packOpen)drawPack();
     };
   });
-  document.querySelectorAll("[data-consume]").forEach(b=>{
-    b.onclick=()=>{
-      const [id,tier]=b.dataset.consume.split(":");
-      tryConsumableCombine(id,parseInt(tier,10));
-      if(packOpen)drawPack();
-    };
+  document.querySelectorAll("#card [data-combine]").forEach(b=>{
+    b.onclick=()=>{const [kind,id,tier]=b.dataset.combine.split(":");packSel=null;tryCombine(kind,id,parseInt(tier,10));if(packOpen)drawPack();};
+  });
+  document.querySelectorAll("#card [data-consume]").forEach(b=>{
+    b.onclick=()=>{const [id,tier]=b.dataset.consume.split(":");packSel=null;tryConsumableCombine(id,parseInt(tier,10));if(packOpen)drawPack();};
   });
 }
 function togglePack(){
@@ -2424,7 +2562,8 @@ function togglePack(){
   if(codexOpen){codexOpen=false;hideOverlay();}
   if(editorOpen){editorOpen=false;document.getElementById("se-overlay").classList.remove("open");}
   packOpen=!packOpen;
-  if(packOpen)drawPack();else hideOverlay();
+  packSel=null;
+  if(packOpen)drawPack();else{hideOverlay();$("card").classList.remove("packcard");}
 }
 
 const PAL={"z":"#000000","x":"#12161d","k":"#0b0d12","s":"#171c26","f":"#1e242e","F":"#262e3a","d":"#2b3243","q":"#39414f","g":"#566173","Q":"#525c6e","G":"#8e9aad","l":"#b9c2cf","w":"#e9e5d9","Z":"#ffffff","a":"#4a1713","0":"#8a1f3a","r":"#8f2f28","R":"#c94a3c","A":"#e8685a","B":"#ff8f80","i":"#a8456b","I":"#e87aa0","j":"#f5b5c8","u":"#5e3a24","T":"#8a5a3c","p":"#c98a6a","P":"#e8b08a","t":"#f4d2b0","b":"#241810","n":"#3d2a1c","N":"#6b4a2f","D":"#8c6a43","L":"#c9a56a","H":"#7a2a10","e":"#b8431f","E":"#f0902a","J":"#ffb860","K":"#7a5418","o":"#a8762c","O":"#f0c060","y":"#d9d24a","Y":"#fff27a","h":"#fff0b8","S":"#1f3b1a","m":"#3f6b2e","M":"#6fa844","W":"#a8e063","X":"#d4f5a0","U":"#2f8a5a","1":"#14283f","5":"#1f7a8a","c":"#2f5c6b","C":"#5fa8c4","4":"#a8e0f0","2":"#2f5fa8","3":"#6fa0e8","6":"#2a1a45","v":"#4a2f6b","V":"#8a5fc4","7":"#c8a8f0","8":"#6a2f8a","9":"#3a2a52"};
@@ -6122,7 +6261,7 @@ window.addEventListener("keydown",ev=>{
   if(descentT>0&&S&&!S.over&&S.mode==="map"){ev.preventDefault();return;}   // still on the way down
   if(packOpen){
     if(k==="Escape"||k==="i"||k==="I")togglePack();
-    else if(/^[1-9]$/.test(k)){useItem(parseInt(k,10)-1);if(packOpen)drawPack();}
+    else if(/^[1-9]$/.test(k)){packSel=null;useItem(parseInt(k,10)-1);if(packOpen)drawPack();}
     ev.preventDefault();return;
   }
   if(shrineOpen){
