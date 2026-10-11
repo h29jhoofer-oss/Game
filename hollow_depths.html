@@ -3018,6 +3018,7 @@ function resize(){
 }
 function loop(now){
   const dt=Math.min(.05,(now-last)/1000||0);last=now;
+  lastFrameAt=performance.now();if(audioHidden)updateAudioVisibility();
   tick(dt);render();
   requestAnimationFrame(loop);
 }
@@ -5082,8 +5083,27 @@ function setTension(inCombat){
 function ensureAudio(){
   if(!AUDIO_OK)return;
   if(!actx)initAudio();
-  if(actx&&actx.state==="suspended")actx.resume().catch(()=>{});
+  if(actx&&actx.state==="suspended"&&!audioHidden)actx.resume().catch(()=>{});
 }
+// Silence the game whenever it can't be seen. Closing the panel or tab can leave this page alive
+// in the background, and a Web Audio drone keeps playing until it is told to stop. Three signals,
+// because hosts differ in which one they fire: the page is hidden, the frame is out of view
+// (collapsed or display:none), or the render loop has stopped getting frames.
+let audioHidden=false,inView=true,lastFrameAt=performance.now();
+function updateAudioVisibility(){
+  const hidden=document.hidden||!inView||performance.now()-lastFrameAt>800;
+  if(hidden===audioHidden)return;
+  audioHidden=hidden;
+  if(!actx)return;
+  if(hidden)actx.suspend().catch(()=>{});
+  else actx.resume().catch(()=>{});
+}
+document.addEventListener("visibilitychange",updateAudioVisibility);
+window.addEventListener("pagehide",()=>{audioHidden=true;if(actx)actx.suspend().catch(()=>{});});
+window.addEventListener("pageshow",()=>{lastFrameAt=performance.now();audioHidden=true;updateAudioVisibility();});
+if(window.IntersectionObserver)
+  new IntersectionObserver(es=>{inView=es[es.length-1].isIntersecting;updateAudioVisibility();}).observe(document.documentElement);
+setInterval(updateAudioVisibility,400);
 function setMusicVolume(){
   if(!amb)return;
   const t=actx.currentTime;
