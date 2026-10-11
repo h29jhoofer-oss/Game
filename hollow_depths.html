@@ -152,26 +152,39 @@ canvas{display:block;max-width:100%;max-height:100%;touch-action:manipulation;
 .chargrid.picked .charcard:not(.chosen){opacity:0!important;transform:translateY(60px)!important;transition:transform .6s ease-in,opacity .55s ease-in;pointer-events:none}
 .chargrid.picked .charcard.chosen{z-index:40}
 .chargrid.picked ~ *,#card:has(.chargrid.picked) h3,#card:has(.chargrid.picked) .lede{opacity:0;transition:opacity .5s}
-/* Desktop: the heroes are held like a hand of cards. --t is each card's offset from the middle.
-   Hovering (or focusing) a card lifts it out of the hand; the rest fade so it can be read. */
-@media (min-width:761px) and (hover:hover){
-  .chargrid.fan{display:flex;justify-content:center;align-items:stretch;gap:0;padding:56px 12px 60px}
-  .chargrid.fan .charcard{
-    flex:0 0 206px;width:206px;margin-left:-74px;z-index:calc(10 + var(--i));
-    transform-origin:50% 140%;
-    transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px));
-    transition:transform .2s ease-out,opacity .2s ease-out,box-shadow .2s;
-  }
-  .chargrid.fan .charcard:first-child{margin-left:0}
-  .chargrid.fan .charcard:hover,.chargrid.fan .charcard:focus-visible{
-    z-index:40;outline:0;
-    transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px - 34px));
-  }
-  .chargrid.fan:has(.charcard:hover,.charcard:focus-visible) .charcard:not(:hover):not(:focus-visible){opacity:.35}
-  .chargrid.fan.picked .charcard:not(.chosen){transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px + 90px))!important}
-  .chargrid.fan.picked .charcard.chosen{transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px - 34px))}
+/* The heroes are held like a hand of cards, at every screen size. --t is each card's offset from
+   the middle; layoutFan() sets --step (how much of each card shows) and --sc (whole-hand scale on
+   small screens). A lifted card (hover, keyboard focus, or a first tap on touch) rises out of the
+   hand and the rest fade so it can be read; on small screens it also grows back to full size. */
+.chargrid.fan{display:flex;justify-content:center;align-items:stretch;gap:0;padding:56px 12px 60px;
+  transform-origin:50% 0;transform:scale(var(--sc,1))}
+.chargrid.fan .charcard{
+  flex:0 0 206px;width:206px;margin-left:calc(var(--step,132px) - 206px);z-index:calc(10 + var(--i));
+  transform-origin:50% 140%;
+  transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px));
+  transition:transform .2s ease-out,opacity .2s ease-out,box-shadow .2s;
 }
-@media (min-width:761px) and (hover:hover) and (prefers-reduced-motion:reduce){
+.chargrid.fan .charcard:first-child{margin-left:0}
+.chargrid.fan .charcard.lift{
+  z-index:40;outline:0;
+  transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px - 34px));
+}
+@media (hover:hover){
+  .chargrid.fan .charcard:hover{z-index:40;transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px - 34px))}
+  .chargrid.fan:has(.charcard:hover) .charcard:not(:hover):not(.chosen){opacity:.35}
+}
+.chargrid.fan .charcard:focus-visible{z-index:40;outline:0;transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px - 34px))}
+.chargrid.fan:has(.charcard.lift,.charcard:focus-visible) .charcard:not(.lift):not(:focus-visible):not(.chosen){opacity:.35}
+/* small screens: the lifted card straightens up and grows back to full size */
+.chargrid.fan.small .charcard.lift,.chargrid.fan.small .charcard:focus-visible{
+  transform-origin:50% 100%;transform:translateY(-30px) scale(var(--lift,1))}
+@media (hover:hover){
+  .chargrid.fan.small .charcard:hover{transform-origin:50% 100%;transform:translateY(-30px) scale(var(--lift,1))}
+}
+.chargrid.fan.picked .charcard:not(.chosen){transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px + 90px))!important}
+.chargrid.fan.picked .charcard.chosen{z-index:40;transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px - 34px))}
+.chargrid.fan.small.picked .charcard.chosen{transform-origin:50% 100%;transform:translateY(-30px) scale(var(--lift,1))}
+@media (prefers-reduced-motion:reduce){
   .chargrid.fan .charcard{transition:none}
 }
 .cpip{ /* corner rank + pixel suit */
@@ -3314,14 +3327,46 @@ function chooseHero(){
   $("card").classList.add("wide");
   menuQuiet=true;setMusicVolume();
   heroPicked=false;
-  document.querySelectorAll("#card .charcard").forEach(el=>{
-    el.addEventListener("pointerenter",()=>{if(!heroPicked)playCardSound(false);});
+  const grid=document.querySelector("#card .chargrid");
+  layoutFan(grid);
+  requestAnimationFrame(()=>layoutFan(grid));
+  if(window.ResizeObserver){if(fanRO)fanRO.disconnect();fanRO=new ResizeObserver(()=>layoutFan(grid));fanRO.observe($("card"));}
+  const all=[...document.querySelectorAll("#card .charcard")];
+  let lastType="mouse";
+  const lift=el=>{if(el.classList.contains("lift"))return;all.forEach(c=>c.classList.remove("lift"));el.classList.add("lift");playCardSound(false);};
+  all.forEach(el=>{
+    el.addEventListener("pointerdown",e=>{lastType=e.pointerType;});
+    el.addEventListener("pointerenter",e=>{if(!heroPicked&&e.pointerType==="mouse")playCardSound(false);});
     el.addEventListener("focus",()=>{if(!heroPicked&&!el.matches(":hover"))playCardSound(false);});
+    // touch: the first tap lifts a card so it can be read, the second picks it
+    el.addEventListener("click",()=>{
+      if(heroPicked)return;
+      if(lastType!=="mouse"&&!el.classList.contains("lift")){lift(el);return;}
+      if(!el.classList.contains("locked"))pickHero(el);
+    });
+    if(!el.classList.contains("locked"))el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();pickHero(el);}};
   });
-  document.querySelectorAll("#card .charcard:not(.locked)").forEach(el=>{
-    el.onclick=()=>pickHero(el);
-    el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();pickHero(el);}};
-  });
+  grid.addEventListener("click",e=>{if(!e.target.closest(".charcard"))all.forEach(c=>c.classList.remove("lift"));});
+}
+// Fit the hand to the overlay: overlap the cards more on narrow screens, then shrink the whole hand
+// if it still doesn't fit. A lifted card grows back toward full size so its text stays readable.
+let fanRO=null;
+function layoutFan(grid){
+  if(!grid||!grid.isConnected)return;
+  const n=grid.children.length,W=206,spread=330;   // spread: extra width the tilt adds at the edges
+  const cw=Math.max(200,grid.parentElement.clientWidth);
+  let step=Math.min(132,Math.max(52,(cw-24-spread-W)/Math.max(1,n-1)));
+  const natural=W+(n-1)*step+spread+24;
+  const sc=Math.min(1,cw/natural);
+  grid.style.setProperty("--step",step.toFixed(1)+"px");
+  grid.style.setProperty("--sc",sc.toFixed(3));
+  grid.style.setProperty("--lift",Math.min(1.6,1/sc).toFixed(3));
+  grid.classList.toggle("small",sc<.97);
+  // room above the hand for a lifted card to grow into
+  const H=grid.firstElementChild?grid.firstElementChild.offsetHeight:500,lift=Math.min(1.6,1/sc);
+  grid.style.paddingTop=sc<.97?Math.round((lift-1)*H+70)+"px":"";
+  // transform:scale doesn't shrink the layout box, so pull the space back in below
+  grid.style.marginBottom=sc<1?(-(grid.offsetHeight*(1-sc))).toFixed(0)+"px":"";
 }
 // The chosen card stays up while the rest of the hand sinks away, the music swells in, then the run begins.
 let heroPicked=false;
@@ -5331,6 +5376,10 @@ window.addEventListener("pagehide",()=>{audioHidden=true;if(actx)actx.suspend().
 window.addEventListener("pageshow",()=>{lastFrameAt=performance.now();audioHidden=true;updateAudioVisibility();});
 if(window.IntersectionObserver)
   new IntersectionObserver(es=>{inView=es[es.length-1].isIntersecting;updateAudioVisibility();}).observe(document.documentElement);
+// Any input means the page is in front of someone, whatever the other signals say. This runs before
+// the element's own handlers (capture), so a click or hover sound is never swallowed by a stale signal.
+for(const evName of ["pointerdown","pointermove","keydown"])
+  window.addEventListener(evName,()=>{lastFrameAt=performance.now();inView=true;if(audioHidden)updateAudioVisibility();},{capture:true,passive:true});
 setInterval(updateAudioVisibility,400);
 // The title and hero-select screens are quiet; the music swells in when a hero is picked.
 let menuQuiet=true;
@@ -5341,15 +5390,15 @@ function setMusicVolume(){
   amb.master.gain.setTargetAtTime(musicOn&&!menuQuiet?0.32:0.0001,t,0.9);
 }
 // A card being dealt: a papery flick (noise swept down through a bandpass) and a soft tap as it lands.
-// loud=true is the press: a harder flick with a snap. Goes straight to the speakers, so the
-// menu's silenced music doesn't mute it; the Music button still turns it off.
+// loud=true is the press: a harder flick with a snap. Goes straight to the speakers, so neither
+// the menu's silenced music nor the Music button mutes it.
 let lastCardSnd=0;
 function playCardSound(loud){
-  if(!AUDIO_OK||!musicOn)return;
-  if(!actx)ensureAudio();
-  if(!actx||audioHidden)return;
+  if(!AUDIO_OK)return;
+  ensureAudio();
+  if(!actx)return;
   const now=performance.now();if(!loud&&now-lastCardSnd<70)return;lastCardSnd=now;
-  const t=actx.currentTime+.005,vol=loud?.55:.16,dur=loud?.16:.12;
+  const t=actx.currentTime+.005,vol=loud?.9:.42,dur=loud?.16:.12;
   const noise=(len,shape)=>{const b=actx.createBuffer(1,Math.floor(actx.sampleRate*len),actx.sampleRate),d=b.getChannelData(0);
     for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,shape);
     const s=actx.createBufferSource();s.buffer=b;return s;};
