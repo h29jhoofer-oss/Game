@@ -109,9 +109,9 @@ canvas{display:block;max-width:100%;max-height:100%;touch-action:manipulation;
   image-rendering:pixelated;image-rendering:crisp-edges}
 
 /* ---------- hero select: pixel-art old cards ---------- */
-.card.wide{max-width:860px}
+.card.wide{max-width:1120px}
 .chargrid{
-  display:grid;grid-template-columns:repeat(auto-fill,minmax(224px,252px));justify-content:center;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(206px,236px));justify-content:center;
   gap:26px 22px;padding:14px 12px 20px;margin:6px 0 0;
 }
 .charcard{
@@ -704,6 +704,9 @@ const WEAPONS=[
  {id:"great",   name:"Moonlit Greatsword",min:8, max:15, crit:.12,acc:.86,reach:1,pierce:2,d:7, note:"Two hands. Worth it."},
  {id:"ember",   name:"Emberfang",         min:7, max:11, crit:.34,acc:.96,reach:1,pierce:3,d:8, note:"The edge never cools."},
  // Vell's signature weapon. Never dropped as loot. leech: extra lifesteal; thirst: +1 damage per that much HP drained, up to thirstMax.
+ // Orrin's signature staff. Never dropped as loot.
+ {id:"staff",   name:"The Ashwood Staff", min:3, max:6,  crit:.08,acc:.97,reach:1,pierce:1,d:0, special:true,
+  note:"Thirty years of the court mage's hand worn into the grip. The stone at its head still glows when it is pointed at something that should not be alive."},
  {id:"cane",    name:"The Bloodletter",   min:3, max:5,  crit:.10,acc:.96,reach:1,pierce:1,d:0, special:true,bleeds:true,leech:.2,thirst:50,thirstMax:8,
   note:"A physician's cane with a hollow lancet tip. It drinks a fifth of every wound, and grows sharper with every 50 HP it drinks."}
 ];
@@ -1125,6 +1128,16 @@ const CHEST_TIERS={
   rare:    {items:5, goldMin:40, goldMax:110,weaponChance:.5,  armorChance:.45, potionChance:.45}
 };
 
+function useDrop(id,depth,boost){
+  let t=0;
+  if(LEARNABLE.includes(id)){
+    const r=Math.random(),b=boost||0;
+    if(depth>=6&&r<.06+b)t=2;
+    else if(depth>=3&&r<.18+(depth-3)*.02+b*2)t=1;
+  }
+  const it=t?Object.assign({},UPGRADED_CONSUMABLES[id][t]):POTIONS.find(p=>p.id===id);
+  return{kind:"use",ref:it,glyph:it.glyph,col:it.col,name:it.name,note:it.note};
+}
 function rollChestLoot(depth, tier){
   const cfg=CHEST_TIERS[tier]||CHEST_TIERS.common;
   const results=[];
@@ -1150,8 +1163,7 @@ function rollChestLoot(depth, tier){
       const w=[{p:"heal",n:26},{p:"wisp",n:4},{p:"might",n:16},{p:"flame",n:13},{p:"poison",n:11},{p:"dark",n:9},{p:"bolt",n:11},{p:"ice",n:10}];
       let t=rnd(100),acc=0,id="heal";
       for(const o of w){acc+=o.n;if(t<acc){id=o.p;break;}}
-      const it=POTIONS.find(p=>p.id===id);
-      results.push({kind:"use",ref:it,glyph:it.glyph,col:it.col,name:it.name,note:it.note});
+      results.push(useDrop(id,depth,{uncommon:.04,rare:.1}[tier]||0));
     }
   }
   return results;
@@ -1214,8 +1226,7 @@ function rollItem(depth){
     const w=[{p:"heal",n:38},{p:"wisp",n:4},{p:"flame",n:11},{p:"poison",n:9},{p:"dark",n:8},{p:"bolt",n:9},{p:"ice",n:9},{p:"might",n:12}];
     let t=rnd(100),acc=0,id="heal";
     for(const o of w){acc+=o.n;if(t<acc){id=o.p;break;}}
-    const it=POTIONS.find(p=>p.id===id);
-    return{kind:"use",ref:it,glyph:it.glyph,col:it.col,name:it.name,note:it.note};
+    return useDrop(id,depth);
   }
   if(r<.62){
     const n=rint(6+depth*3,18+depth*9);
@@ -1618,12 +1629,13 @@ function stepOn(){
     return;
   }
   if(it.kind==="gold"){const g=Math.round(it.amount*(1+gearMod("gold")));S.gold+=g;items.splice(idx,1);say(`You pocket ${g} gold.`,"c-item");return;}
+  if(CHAR().learns&&it.kind==="use"&&LEARNABLE.includes(it.ref.id)){items.splice(idx,1);learnSpell(it);return;}
   if(S.pack.length>=9){say(`Your pack is full. ${it.name} stays put.`,"");return;}
   items.splice(idx,1);S.pack.push(it);
   say(`You pick up the ${it.name}.`,"c-item");
 }
 function useItem(i){
-  const it=S.pack[i];if(!it)return;
+  const it=itemAt(i);if(!it)return;
   if(S.mode==="battle"){if(packOpen)togglePack();useItemBattle(i);return;}
   if(it.kind==="use"&&it.ref.id==="oil"){
     if(S.flame>=S.maxflame){say("The torch is already burning full.","c-cold");return;}
@@ -1652,8 +1664,8 @@ function useItem(i){
     if(it.ref.id==="wisp"){say("The wisp bobs at your shoulder. It will only be loosed at a foe you are fighting.","c-cold");return;}
     const cost=spellCost(it);
     if(cost&&S.mana<cost){say(`Not enough mana — the ${it.name} needs ${cost}.`,"c-hit");return;}
-    S.pack.splice(i,1);
-    if(cost)spendMana(cost);
+    if(!it.learned)S.pack.splice(i,1);
+    if(cost){spendMana(cost);bumpStat("casts");}
     const id=it.ref.id;
     const tier=it.ref.tier||0;
     if(id==="heal"){
@@ -1803,6 +1815,33 @@ const SPELL_FX={
   bolt:  {min:[14,22,32],max:[22,34,48],stun:[1,2,3]},           // big hit + stun
   ice:   {min:[10,17,26],max:[16,26,38],freeze:[1,2,3]}          // damage + frozen solid (+25% damage taken while frozen)
 };
+// Orrin's grimoire: spell id -> the highest tier he has learned. Learned spells are cast as often as mana allows.
+const LEARNABLE=["flame","poison","dark","bolt","ice"];
+function spellName(id,t){
+  const r=t?UPGRADED_CONSUMABLES[id][t]:POTIONS.find(p=>p.id===id);
+  return r.name.replace(/^Scroll of (the )?/,"").replace(/ Scroll$/,"");
+}
+function grimoireItem(id){
+  const t=S.spells[id]||0;
+  const ref=t?Object.assign({},UPGRADED_CONSUMABLES[id][t]):POTIONS.find(p=>p.id===id);
+  return{kind:"use",ref:ref,glyph:"?",col:ref.col,name:spellName(id,t),note:`Tier ${t+1} of 3: ${CONS_DESC[id][t]}.`,learned:true};
+}
+// Resolve a pack index, or "g:<id>" for a learned spell.
+function itemAt(i){return typeof i==="string"?(i.startsWith("g:")&&S.spells&&S.spells[i.slice(2)]!==undefined?grimoireItem(i.slice(2)):null):S.pack[i];}
+function learnSpell(it){
+  const id=it.ref.id,t=it.ref.tier||0,had=S.spells[id];
+  ring(S.px,S.py,"rgba(200,168,240,.9)",2.4,.6);burst(S.px,S.py,"#c8a8f0",14,3);
+  if(had===undefined||t>had){
+    S.spells[id]=t;
+    num(S.px,S.py-.55,"NEW SPELL","#c8a8f0",true);
+    if(had===undefined)say(`You read the ${it.name} aloud, and the words stay with you. You know ${spellName(id,t)} now (${spellCost(grimoireItem(id))} mana).`,"c-lvl");
+    else say(`The ${it.name} rewrites what you knew. ${spellName(id,had)} becomes ${spellName(id,t)}, and you can't go back.`,"c-lvl");
+  }else{
+    gainMana(10);
+    say(`You already know ${spellName(id,had)}${had>t?", and better than this":""}. The ink fades into you (+10 mana).`,"c-cold");
+  }
+  if(packOpen)drawPack();
+}
 function spellOf(it){return it&&it.kind==="use"&&SPELLS[it.ref.id]?SPELLS[it.ref.id]:null;}
 function spellCost(it){const sp=spellOf(it);return sp?sp.cost[Math.min(2,it.ref.tier||0)]:0;}
 function gainMana(amount){
@@ -1825,6 +1864,11 @@ function renderSpellBar(){
       if(!spellOf(it))continue;
       list.push({i:i,spr:itemSpr(it),name:it.name,id:it.ref.id,poor:S.mana<spellCost(it)});
     }
+    if(S.spells)for(const id of LEARNABLE){
+      if(S.spells[id]===undefined)continue;
+      const g=grimoireItem(id);
+      list.push({i:"g:"+id,spr:itemSpr(g),name:g.name+" ("+spellCost(g)+" mana)",id:id,poor:S.mana<spellCost(g)});
+    }
   }
   const sig=list.map(o=>o.i+":"+o.spr+(o.poor?"!":"")).join("|");
   if(el.dataset.sig===sig)return;          // nothing changed: leave the buttons alone
@@ -1835,7 +1879,8 @@ $("spellbar").addEventListener("mousedown",e=>{if(e.target.closest(".spellslot")
 $("spellbar").addEventListener("click",e=>{
   const b=e.target.closest(".spellslot");if(!b)return;
   e.stopPropagation();
-  useItemBattle(+b.dataset.i);
+  const v=b.dataset.i;
+  useItemBattle(v.startsWith("g:")?v:+v);
 });
 
 /* ============================ move icons ============================ */
@@ -2319,6 +2364,10 @@ function drawPack(){
     slotRow(S.amulet?"amulet_"+S.amulet.id:"amulet_vigor",S.amulet?`Amulet: ${S.amulet.name}`:`<span style="color:var(--slate)">Amulet: empty</span>`,S.amulet?S.amulet.note:"Found in chests and on the floor.",S.amulet?`<button data-unequip="amulet">Unequip</button>`:""),
     ...[0,1].map(n=>{const r=S.rings[n];return slotRow(r?"ring_"+r.id:"ring_might",r?`Ring ${n+1}: ${r.name}`:`<span style="color:var(--slate)">Ring ${n+1}: empty</span>`,r?r.note:"Rings stack. You can wear two.",r?`<button data-unequip="ring${n}">Unequip</button>`:"");})
   ].join("");
+  const book=CHAR().learns?LEARNABLE.filter(id=>S.spells[id]!==undefined):null;
+  const bookHtml=book?`<div class="forge" style="border-color:rgba(138,95,196,.45);background:rgba(138,95,196,.07)"><h4 style="color:#c8a8f0">Spellbook</h4><ul>${
+    book.length?book.map(id=>{const g=grimoireItem(id);return slotRow(itemSpr(g),`${g.name} <span style="color:var(--mana)">${spellCost(g)} mana</span>`,g.note,`<button data-cast="${id}">Cast</button>`);}).join("")
+    :`<p class="empty">No spells yet. Walk over a scroll to learn it for good.</p>`}</ul></div>`:"";
   const equipHtml=`<div class="forge" style="border-color:rgba(95,168,196,.4);background:rgba(95,168,196,.06)"><h4 style="color:var(--rime)">Equipment</h4><ul>${eqRows}</ul></div>`;
 
   overlay(`<div class="pack">
@@ -2328,7 +2377,7 @@ function drawPack(){
       &nbsp;&middot;&nbsp; wearing <span style="color:var(--bone)">${S.armor.name}</span> <span style="color:var(--torch)">${S.armor.def}</span>
       &nbsp;&middot;&nbsp; <span style="color:var(--gold)">${S.gold} gold</span>
     </p>
-    ${equipHtml}${consumeHtml}${forgeHtml}
+    ${bookHtml}${equipHtml}${consumeHtml}${forgeHtml}
     <ul>${rows}</ul>
     <button class="close" id="closePack">Close</button>
   </div>`);
@@ -2342,6 +2391,9 @@ function drawPack(){
   });
   document.querySelectorAll("[data-use]").forEach(b=>{
     b.onclick=()=>{useItem(parseInt(b.dataset.use,10));if(packOpen)drawPack();};
+  });
+  document.querySelectorAll("[data-cast]").forEach(b=>{
+    b.onclick=()=>{useItem("g:"+b.dataset.cast);if(packOpen)drawPack();};
   });
   document.querySelectorAll("[data-sell]").forEach(b=>{
     b.onclick=()=>{sellItem(parseInt(b.dataset.sell,10));if(packOpen)drawPack();};
@@ -2441,6 +2493,18 @@ const ART={"rook":["............kk..","...........kZlk.",".....kkkk..kwGk.","...
 "doctor_walk_3":[".....kkkkkk.....",".....kqsssk.....",".....kqsssk.....",".....krrrrk.....","..kkqqqqqqqqkk..","...kkwwwwwkk....","....kwkMkwlk....","....kwwkwwwllkk.","....klwwwlllllGk","....kGlwkkkkkkk.","...kqddddqk..kO.","..kqdgdddddqknN.","..kqdgdddddqk.N.","..kqdgddddddk.N.","...kqdddddddqkN.","....kNNknnk...N."],
 "doctor":[".....kkkkkk.....",".....kqsssk.....",".....kqsssk.....",".....krrrrk.....","..kkqqqqqqqqkk..","...kkwwwwwkk....","....kwkMkwlk....","....kwwkwwwllkk.","....klwwwlllllGk","....kGlwkkkkkkk.","...kqddddqk..kO.","..kqdgdddddqknN.","..kqdgdddddqk.N.","..kqdgddddddk.N.","..kqddddddddqkN.","...kNNk..kNNk.N."],
 "doctor_atk":["...kkkkkk.......","...kqsssk.......","...kqsssk.......","...krrrrk.......","kkqqqqqqqqkk....",".kkwwwwwkk......","..kwkMkwlk......","..kwwkwwwllkk...","..klwwwlllllGk..","..kGlwkkkkkkk...",".kqddddqkk......","kqdgdddqknONNNGw","kqdgdddddqk.....","kqdgddddddk.....","kqddddddddqk....",".kNNk..kNNk....."],
+"mage":[".......k....kkk.","......kvk..k34Zk",".....kvvVk.k344k","....kvvvVVk.kok.","....kOOOOOk.kNk.","..kkvvvvvvvkkNk.","....kPPPkPk.kNk.","....kwwwwwwk.kNk","...kvwwlwwwvkNk.","..kvVvwwlwvVPNk.","..kvVvvwlvvVkNk.","..kvVOOOOOOVkNk.","..kvVvvvvvvVkNk.",".kvVvvvvvvvvVkN.",".k888888888888N.","..kNNk...kNNk.N."],
+"mage_atk":[".....k..........","....kvk.........","...kvvVk........","..kvvvVVk.......","..kOOOOOk.......","kkvvvvvvvkk.kkk.","..kPPPkPk..k34Zk","..kwwwwwwkPNk4Zk",".kvwwlwwvPNk.kk.","kvVvwwlwvNk.....","kvVvvwlvNk......","kvVOOOONk.......","kvVvvvvvVk......","kvVvvvvvvVk.....","k8888888888k....",".kNNk...kNNk...."],
+"mage_parry":[".......k........","......kvk.......",".....kvvVk...kk.","....kvvvVVk.k34k","....kOOOOOk.k4Zk","..kkvvvvvvvkkN4k","....kPPPkPk.kNk.","....kwwwwwwkPNk.","...kvwwlwwwvkNk.","..kvVvwwlwvVkNk.","..kvVvvwlvvVkNk.","..kvVOOOOOOVkNk.","..kvVvvvvvvVkNk.",".kvVvvvvvvvvVkN.",".k888888888888N.","..kNNk...kNNk.N."],
+"mage_walk_0":[".......k....kkk.","......kvk..k34Zk",".....kvvVk.k344k","....kvvvVVk.kok.","....kOOOOOk.kNk.","..kkvvvvvvvkkNk.","....kPPPkPk.kNk.","....kwwwwwwk.kNk","...kvwwlwwwvkNk.","..kvVvwwlwvVPNk.","..kvVvvwlvvVkNk.","..kvVOOOOOOVkNk.","..kvVvvvvvvVkNk.",".kvVvvvvvvvvVkN.",".k888888888888N.","kNNk......kNNkN."],
+"mage_walk_1":[".......k....kkk.","......kvk..k34Zk",".....kvvVk.k344k","....kvvvVVk.kok.","....kOOOOOk.kNk.","..kkvvvvvvvkkNk.","....kPPPkPk.kNk.","....kwwwwwwk.kNk","...kvwwlwwwvkNk.","..kvVvwwlwvVPNk.","..kvVvvwlvvVkNk.","..kvVOOOOOOVkNk.","..kvVvvvvvvVkNk.",".kvVvvvvvvvvVkN.","..k88888888888N.","...kNNkkNNk...N."],
+"mage_walk_2":[".......k....kkk.","......kvk..k34Zk",".....kvvVk.k344k","....kvvvVVk.kok.","....kOOOOOk.kNk.","..kkvvvvvvvkkNk.","....kPPPkPk.kNk.","....kwwwwwwk.kNk","...kvwwlwwwvkNk.","..kvVvwwlwvVPNk.","..kvVvvwlvvVkNk.","..kvVOOOOOOVkNk.","..kvVvvvvvvVkNk.",".kvVvvvvvvvvVkN.",".k888888888888N.","..kNNk....kNNkN."],
+"mage_walk_3":[".......k....kkk.","......kvk..k34Zk",".....kvvVk.k344k","....kvvvVVk.kok.","....kOOOOOk.kNk.","..kkvvvvvvvkkNk.","....kPPPkPk.kNk.","....kwwwwwwk.kNk","...kvwwlwwwvkNk.","..kvVvwwlwvVPNk.","..kvVvvwlvvVkNk.","..kvVOOOOOOVkNk.","..kvVvvvvvvVkNk.",".kvVvvvvvvvvVkN.","..k88888888888N.","....kNNkNNk...N."],
+"weapon_staff":["...........kkk..","..........k34Zk.","..........k344k.","...........kok..","..........kNk...",".........kNk....","........kNk.....",".......kNk......","......kNk.......",".....kNk........","....kNk.........","...kNk..........","..kNk...........",".kNk............",".kk.............","................"],
+"magic_orb_0":["................","................","......7777......","....77VVVV77....","...7VV3333VV7...","...7V344443V7...","..7V34ZZZZ43V7..","..7V34ZZZZ43V7..","..7V34ZZZZ43V7..","..7V34ZZZZ43V7..","...7V344443V7...","...7VV3333VV7...","....77VVVV77....","......7777......","................","................"],
+"magic_orb_1":["................",".......7........","......7777..7...","....77VVVV77....","..77VV3333VV7...","...7V344443V7...","..7V34ZZZZ43V77.",".7V34ZZZZZZ43V7.",".7V34ZZZZZZ43V7.","..7V34ZZZZ43V7..","...7V344443V77..","...7VV3333VV7...","....77VVVV77....","..7...7777......","........7.......","................"],
+"move_channel":["................",".......kk.......","......k34k......",".....k34Z4k.....","......k44k......",".......kk.......","...7...Nk...7...","..7V7..Nk..7V7..","...7...Nk...7...","..7....Nk....7..",".7V7...Nk...7V7.","..7....Nk....7..",".......Nk.......","....7..Nk..7....","...7V7.Nk.7V7...","....7..kk..7...."],
+"move_arcane":["................","......kkkk......","....kk7777kk....","...k77VVVV77k...","..k7VV3333VV7k..","..k7V344443V7k..",".k7V34ZZZZ43V7k.",".k7V34ZZZZ43V7k.",".k7V34ZZZZ43V7k.",".k7V34ZZZZ43V7k.","..k7V344443V7k..","..k7VV3333VV7k..","...k77VVVV77k...","....kk7777kk....","......kkkk......","................"],
 "doctor_parry":[".....kkkkkk.kOk.",".....kqsssk.kNk.",".....kqsssk..N..",".....krrrrk..N..","..kkqqqqqqqqkN..","...kkwwwwwkk.N..","....kwkMkwlk.N..","....kwwkwwwllNk.","....klwwwllllNGk","....kGlwkkkkknk.","...kqddddqk..N..","..kqdgdddddqkN..","..kqdgdddddqkN..","..kqdgddddddkN..","..kqddddddddqN..","...kNNk..kNNkN.."],
 "weapon_cane":["..............k.",".............kwk","............kGwk","...........kGGk.","..........kNnk..",".........kNnk...","........kNnk....",".......kNnk.....","......kNnk......",".....kNnk.......","..kkkNnk........",".kOOOnk.........","kOhkOOk.........","kOOOOk..........",".kkOOOk.........","....kk.........."],
 "move_leech":["................","......kkkk......",".....kNNNNk.....","....kkkkkkkk....","...kGxxxxxxlk...","...kGxxxxxxlk...","...kGxxrrxxlk...","...kGxrRRrxlk...","...kGrRAARrlk...","...kGrRRRRrlk...","...kGxrrrrxlk...","...kGxxxxxxlk...","...kGRRRRRRlk...","...kGrrrrrrlk...","....kkkkkkkk....","................"],
@@ -2658,6 +2722,15 @@ function tick(dt){
     if(B.iceFlash>0)B.iceFlash=Math.max(0,B.iceFlash-dt*2.6);
     if(B.intro>0)B.intro=Math.max(0,B.intro-dt*3.2);
     if(B.lunge>0)B.lunge=Math.max(0,B.lunge-dt*3.4);
+    if(B.orbs&&B.orbs.length){
+      for(const o of B.orbs){
+        o.t+=dt;
+        const L=B.layout;
+        if(o.t>=ORB_T&&!o.done&&L){o.done=true;const hx=L.ex-L.esz*.1,hy=L.ey-L.esz*.45;
+          sburst(hx,hy,o.fire?"#f0902a":"#8fd8f0",12,200);sburst(hx,hy,o.fire?"#f0c060":"#c8a8f0",8,140);sring(hx,hy,o.fire?"rgba(240,144,42,.85)":"rgba(200,168,240,.85)",L.esz*.45);}
+      }
+      B.orbs=B.orbs.filter(o=>!o.done);
+    }
     if(B.mFlash>0)B.mFlash=Math.max(0,B.mFlash-dt*4.5);
     if(B.pFlash>0)B.pFlash=Math.max(0,B.pFlash-dt*4.5);
     if(B.wispFlash>0)B.wispFlash=Math.max(0,B.wispFlash-dt*3);
@@ -2993,11 +3066,29 @@ const CHARACTERS=[
     st.ichor=0;st.drained=0;
   },
   intro:"You descend into the first floor beak-first. The herbs packed in the mask smell of cloves, and under the cloves, of old blood.",
-  win:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Vell kneels in the ash and takes a sample, because that is what doctors do. Then he finishes the last line on the slate: it was never a sickness. It was a bargain. He climbs back toward the light to burn his notes."}
+  win:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Vell kneels in the ash and takes a sample, because that is what doctors do. Then he finishes the last line on the slate: it was never a sickness. It was a bargain. He climbs back toward the light to burn his notes."},
+ {id:"mage",name:"Orrin",title:"The Court Mage",spr:"mage",
+  blurb:"King Aldric's court mage, summoned when the doctors failed. He failed too. Every scroll he finds now, he keeps.",
+  buffs:["Spellbound: he never lunges in. Every attack is a bolt of magic from his staff",
+         "Deep well: 55 mana instead of 40",
+         "Grimoire: picking up a scroll teaches him the spell for good. He can cast it as often as his mana allows",
+         "Higher tiers replace lower ones: once he learns Inferno, he only ever casts Inferno"],
+  weak:["Scrolls are never carried, so they can't be sold or combined",
+        "No healing moves: no Rally and no Last Light"],
+  ranged:true,learns:true,
+  moves:[["strike",0,{name:"Magic Bolt",desc:"A bolt of light from the staff. Always ready."}],["channel"],["ember",3],["arcane"],["stagger",6],["sunder",7],["execute",8]],
+  init:function(st){
+    st.maxmana=55;st.mana=55;st.spells={};
+    st.weapon=WEAPONS.find(w=>w.id==="staff");
+  },
+  intro:"You descend into the first floor with the staff lit. The light it gives is thin and blue, and it does not flicker.",
+  win:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Orrin speaks one last word over the ash. It is not a spell, only the King's name. Then he climbs back toward the light, and for the first time in three years he does not reach for a book."}
 ];
 const QUESTS=[
  {id:"blood",name:"First Blood",stat:"wounds",goal:20,unit:"wounds opened",unlock:"rook",
   text:"Someone is watching from the dark. Open 20 wounds and he'll step out."},
+ {id:"spells",name:"Words of Power",stat:"casts",goal:12,unit:"spells cast",unlock:"mage",
+  text:"An old voice lingers in the scroll-ink. Cast 12 spells and he'll answer."},
  {id:"alembic",name:"Notes Unfinished",stat:"alembic",goal:1,unit:"visits to floor 5",unlock:"doctor",
   text:"Something in a long white beak is still taking notes. Reach floor 5 and he'll follow you out."}
 ];
@@ -3028,7 +3119,7 @@ function charById(id){return CHARACTERS.find(c=>c.id===id)||CHARACTERS[0];}
 function CHAR(){return charById(S&&S.char);}
 function moveListFor(c){
   if(!c.moves)return MOVES.filter(m=>!m.only||m.only===c.id);
-  return c.moves.map(o=>{const m=MOVES.find(x=>x.id===o[0]);return o[1]?Object.assign({},m,{lvl:o[1]}):m;});
+  return c.moves.map(o=>{const m=MOVES.find(x=>x.id===o[0]);return o[1]||o[2]?Object.assign({},m,o[1]?{lvl:o[1]}:{},o[2]||{}):m;});
 }
 function moveList(){return moveListFor(CHAR());}
 function armorDef(){return Math.floor(S.armor.def*(CHAR().armorMult||1));}
@@ -3059,16 +3150,21 @@ const LORE_ALT={
 // Vell, the plague doctor.
 Object.assign(LORE_ALT.cade,{doctor:{title:"Vell",body:"Doctor Corvin Vell was the youngest of the royal physicians, the one sent up the stair for fresh leeches on the night the castle sank. He was halfway to the courtyard when the steps behind him fell away. For three years he has worn the beak and the waxed coat, bled the fevers out of the lower town, and told no one that he knows the name of the sickness the King kept secret."}});
 Object.assign(LORE_ALT.floor1,{doctor:{title:"The Frostless Stair",body:"Vell climbed these steps with an empty leech jar the night everything dropped. He counts them going down, the way he counted them going up, and stops at the same one. The jar is still in his coat. It has not been empty for a long time."}});
-LORE_ALT.floor5={doctor:{title:"The Alembic Wing",body:"His own handwriting is still on the slate by the door: dosage tables, and a list of names crossed out one by one. The last line is his, and it stops mid-word. Vell picks up the chalk, weighs it, and puts it in his pocket. He'll finish the sentence when he knows how it ends."}};
+LORE_ALT.floor5={mage:{title:"The Alembic Wing",body:"Orrin remembers the night these notes stopped. The physicians filed out of the King's chamber grey-faced, and the steward came up the tower stair looking for him. He was the last cure anyone tried. At the bottom of the slate, under the crossed-out names, someone has written his. It is crossed out too."},doctor:{title:"The Alembic Wing",body:"His own handwriting is still on the slate by the door: dosage tables, and a list of names crossed out one by one. The last line is his, and it stops mid-word. Vell picks up the chalk, weighs it, and puts it in his pocket. He'll finish the sentence when he knows how it ends."}};
 Object.assign(LORE_ALT.floor7,{doctor:{title:"The Menagerie",body:"The King's beasts were the first to sicken, and Vell was the one who wrote it down. Bloated, fevered, then calm. Too calm. Whatever walks these cages now is what the calm turned into, and it still flinches at the smell of his herbs."}});
 Object.assign(LORE_ALT.floor8,{doctor:{title:"The Vault",body:"Behind the twelve locks lies the Queen, the first patient. Vell wrote her chart himself, every entry, up to the night the entries stopped making sense. He knows what is in the vault better than the trolls guarding it, and he would very much like to be wrong."}});
 Object.assign(LORE_ALT.end,{doctor:{title:"After",body:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Vell kneels in the ash and finishes the last line on the slate: it was never a sickness. It was a bargain. Some patients cannot be bled clean."}});
+Object.assign(LORE_ALT.cade,{mage:{title:"Orrin",body:"Orrin Hale was court mage to King Aldric for thirty years. When the King fell sick and the physicians' leeches and draughts failed one after another, Aldric sent for him at midnight. Orrin read every book in the tower and spoke every word of mending he knew. None of them took. Three nights later the King stopped asking for him, and started listening to something under the hill instead."}});
+LORE_ALT.floor10={mage:{title:"The Hollow King",body:"When his mage could not save him, King Aldric struck a bargain with something under the hill, and paid for it with everything a king is supposed to have on the inside. Orrin has spent three years wondering which word he got wrong. He suspects, now, that there was never a right one."}};
+Object.assign(LORE_ALT.end,{mage:{title:"After",body:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Orrin speaks one last word over the ash. It is not a spell, only the King's name. It is the first thing he has said to Aldric in three years that did not need to work."}});
 function loreView(l){
   const a=LORE_ALT[l.id]&&LORE_ALT[l.id][CHAR().id];
   const n=CHAR().name;
   return a||{title:l.title,body:l.body.replace(/\bCade\b/g,n)};
 }
-const FLAVOR_ALT={rook:{8:"A door with twelve locks, and none of them turning. Rook tries it anyway. Twice."},
+const FLAVOR_ALT={mage:{5:"The air turns sharp, like a struck match. Orrin knows this smell. It is the night the doctors gave up and sent for him.",
+          8:"A door with twelve locks, and none of them turning. Orrin knows a word for doors. He decides not to say it here.",
+          10:"The stair ends in a vaulted hall. The King is still sitting up, the way he was the last time Orrin failed him."},rook:{8:"A door with twelve locks, and none of them turning. Rook tries it anyway. Twice."},
   doctor:{2:"The bunks are still made. Vell checks each one for fever out of habit, and finds only dust.",
           5:"The air turns sharp, like a struck match. Vell knows this smell. He mixed it.",
           8:"A door with twelve locks, and none of them turning. Vell signed the order to seal it.",
@@ -3146,6 +3242,8 @@ const MOVES=[
  {id:"miasma",    only:"doctor", name:"Miasma",         lvl:3, cd:5, desc:"A puff from the beak. Can't miss; poisons the foe for 5 turns.", mult:.45, poison:5, sure:true},
  {id:"letting",   only:"doctor", name:"Bloodletting",   lvl:5, cd:3, desc:"Opens a vein. Always draws blood, and every drop feeds you.", mult:.75, bleed:true},
  {id:"transfuse", only:"doctor", name:"Transfusion",    lvl:7, cd:5, desc:"Empty every vial of Ichor into the foe: 2 damage per Ichor, ignoring armour.", transfuse:true},
+ {id:"channel",   only:"mage",   name:"Channel",        lvl:2, cd:3, desc:"A slow, sure bolt that pulls 12 mana back in with it.", mult:.6, sure:true, mana:12},
+ {id:"arcane",    only:"mage",   name:"Arcane Lance",   lvl:5, cd:4, desc:"A spear of pure force. Can't miss and ignores armour.", mult:1.3, sure:true, pierce:99},
  {id:"blackdeath",only:"doctor", name:"The Black Death",lvl:9, cd:8, desc:"Can't miss. Drinks its full damage and poisons the foe for 6 turns.", mult:1.3, drain:1, poison:6, sure:true}
 ];
 function unlocked(){return moveList().filter(m=>S.lvl>=m.lvl);}
@@ -3490,6 +3588,7 @@ function strikeOnce(mv){
             blog(CHAR().ichor?`You drink deep from the wound (+${h}).`:`The light knits your wounds (+${h}).`,"c-good");}
   }
   if(mv.waltz&&B.mhp>0)cashOutBleed();
+  if(mv.mana){gainMana(mv.mana);const L=B.layout;if(L)snum(L.px,L.py-L.psz*.5,"+"+mv.mana+" mana","#6fa0e8");blog(`The bolt pulls ${mv.mana} mana back with it.`,"c-cold");}
 }
 // Crimson Waltz: make sure the foe is bleeding, then collect every remaining turn of it at once.
 function cashOutBleed(){
@@ -3517,6 +3616,13 @@ function transfuse(){
   quake(10);B.critFlash=.5;
   blog(`Transfusion: ${ich} Ichor of stolen blood turns to poison in the ${B.mon.t.name}'s veins (${d}).`,"c-lvl");
 }
+// The player's attack swing. Orrin stays put and fires a bolt from his staff instead of lunging in;
+// it takes ORB_T to fly, which is when the hit lands.
+const ORB_T=.2;
+function pSwing(fire){
+  B.lunge=1;B.lungeSide=1;
+  if(CHAR().ranged)(B.orbs=B.orbs||[]).push({t:0,fire:!!fire});
+}
 function chooseMove(id){
   if(!B||B.phase!=="choose")return;
   const mv=moveList().find(m=>m.id===id);
@@ -3525,7 +3631,7 @@ function chooseMove(id){
   B.phase="anim";
   if(mv.cd)S.cds[mv.id]=mv.cd+1;
   drawMoves();
-  if(mv.kind!=="buff"){B.lunge=1;B.lungeSide=1;}   // buffs like Rally are not an attack swing
+  if(mv.kind!=="buff")pSwing();   // buffs like Rally are not an attack swing
   blog(`You use ${mv.name}.`,"c-lvl");
   queue(.2,()=>{
     if(mv.kind==="buff"){
@@ -3541,7 +3647,7 @@ function chooseMove(id){
     if(mv.transfuse){transfuse();return;}
     strikeOnce(mv);
   });
-  for(let k=1;k<(mv.hits||1);k++)queue(.17,()=>{if(B&&B.mhp>0){B.lunge=1;B.lungeSide=1;strikeOnce(mv);}});
+  for(let k=1;k<(mv.hits||1);k++)queue(.17,()=>{if(B&&B.mhp>0){pSwing();strikeOnce(mv);}});
   queue(.55,()=>{
     refresh();
     if(B.mhp<=0){winBattle();return;}
@@ -3557,7 +3663,7 @@ function offhandAttack(){
   if(oh.type==="torch"&&S.flame<=0){blog("Your torch is out. Lamp oil (F on the map) will relight it.","c-hit");return;}
   B.phase="anim";
   drawMoves();
-  B.lunge=1;B.lungeSide=1;
+  pSwing(oh.type==="torch");
   blog(oh.type==="torch"?"You thrust the torch.":oh.type==="shield"?"You drive your shield forward.":"Your off-hand blade darts out.","c-lvl");
   if(oh.type==="shield")S.cds.bash=2;
   queue(.2,()=>{
@@ -4031,7 +4137,7 @@ function tryFlee(){
 
 /* ============================ items in battle ============================ */
 function useItemBattle(i){
-  const it=S.pack[i];
+  const it=itemAt(i);
   if(!it||!B||B.phase!=="choose")return;
   if(it.kind==="use"&&it.ref.id==="oil"){
     if(S.flame>=S.maxflame){blog("The torch is already burning full.","c-cold");return;}
@@ -4065,8 +4171,8 @@ function useItemBattle(i){
     queue(.4,enemyTurn);
     return;
   }
-  S.pack.splice(i,1);
-  if(cost)spendMana(cost);
+  if(!it.learned)S.pack.splice(i,1);
+  if(cost){spendMana(cost);bumpStat("casts");}
   const id=it.ref.id;
   const tier=it.ref.tier||0;
   if(id==="wisp"){castWisp(it);return;}
@@ -4304,7 +4410,8 @@ function drawBattle(vw,vh){
     drawArenaSprite(fr[Math.floor(tclock*FX_BURN.lingerFps)%fr.length],ex+eoffX,ey+eBob+esz*.04,esz*1.2,.95,0,bossScaleW,bossScaleH);
   }
 
-  const poffX=(B.lungeSide>0?lunge*dash:0)-pRecoil-intro*vw*.35;
+  const ranged=!!CHAR().ranged;
+  const poffX=(B.lungeSide>0?(ranged?-lunge*psz*.05:lunge*dash):0)-pRecoil-intro*vw*.35;
   const pBob=RM?0:Math.sin(tclock*2.4+1)*psz*.02;
   let pSpr=(B.lungeSide>0&&B.lunge>0&&SPR[pspr("_atk")])?pspr("_atk"):pspr("");
   if((B.pStat.parry||B.phase==="parry")&&!(B.lungeSide>0&&B.lunge>0)&&SPR[pspr("_parry")])pSpr=pspr("_parry");
@@ -4314,9 +4421,25 @@ function drawBattle(vw,vh){
     drawArenaSprite(fr[Math.floor(tclock*FX_BLEED.lingerFps)%fr.length],px+poffX,py+pBob,psz*1.1,Math.min(.95,.55+.15*B.pStat.bleed),0);
   }
   drawWispBattle(px+poffX,py,psz,ex,ey,esz,intro,vw);
+  // Orrin's bolts: fly from the stone on his staff to the middle of the foe, with a short fading trail.
+  if(B.orbs&&B.orbs.length){
+    const sx=px+poffX+psz*.34,sy=py-psz*.59,tx=ex+eoffX-ew*.1,ty=ey-esz*bossScaleH*.5,os=psz*.42;
+    for(const o of B.orbs){
+      const fr=SPR["magic_orb_"+(Math.floor(tclock*16)%2)];if(!fr)continue;
+      for(let k=3;k>=0;k--){
+        const q=Math.max(0,Math.min(1,o.t/ORB_T-k*.09));
+        const x=sx+(tx-sx)*q,y=sy+(ty-sy)*q-Math.sin(q*Math.PI)*psz*.06,sz=os*(1-k*.18);
+        ctx.globalAlpha=k?.28/k:1;
+        if(o.fire)ctx.filter="hue-rotate(150deg) saturate(1.6)";
+        ctx.drawImage(fr,x-sz/2,y-sz/2,sz,sz);
+        ctx.filter="none";
+      }
+      ctx.globalAlpha=1;
+    }
+  }
 
   // Impact slash on whoever is being struck, strongest at the moment of contact.
-  if(lunge>.55&&B.faint<=0){
+  if(lunge>.55&&B.faint<=0&&!(ranged&&B.lungeSide>0)){
     const pl=B.lungeSide>0;
     const hx=pl?ex+eRecoil-ew*.26:px+poffX+psz*.26;
     const hy=(pl?ey:py)-(pl?esz*bossScaleH:psz)*.5;
@@ -5014,6 +5137,11 @@ function refresh(){
     if(S.amulet)parts.push(`<div><span class="nm">${icon("amulet_"+S.amulet.id,15)} ${S.amulet.name}</span></div>`);
     for(const r of S.rings)if(r)parts.push(`<div><span class="nm">${icon("ring_"+r.id,15)} ${r.name}</span></div>`);
     if(CHAR().ichor)parts.push(`<div><span class="nm" style="color:#e8685a">${icon("move_transfuse",15)} Ichor</span><span class="vl" style="color:#e8685a">${S.ichor||0} / ${ICHOR_MAX}</span></div>`);
+    if(CHAR().learns){
+      const known=LEARNABLE.filter(id=>S.spells[id]!==undefined);
+      parts.push(known.length?known.map(id=>{const g=grimoireItem(id);return `<div><span class="nm" style="color:#c8a8f0">${icon(itemSpr(g),15)} ${g.name}</span><span class="vl" style="color:var(--mana)">${spellCost(g)} mp</span></div>`;}).join("")
+        :`<div><span class="nm" style="color:var(--slate)">no spells learned</span></div>`);
+    }
     const tb=thirstBonus(S.weapon);
     if(tb>0)parts.push(`<div><span class="nm" style="color:var(--slate)">&nbsp;&nbsp;${S.weapon.name}: +${tb} from blood drunk</span></div>`);
     gl.innerHTML=parts.join("");
@@ -5738,16 +5866,17 @@ const SE_SIZE=16;
 
 // Sprite categories for the dropdown
 const SE_CATS={
-  "Characters":["player","rook","doctor","rat","bat","goblin","skeleton","orc","slime","wraith","ogre","troll","knight","king","guardian"],
+  "Characters":["player","rook","doctor","mage","rat","bat","goblin","skeleton","orc","slime","wraith","ogre","troll","knight","king","guardian"],
   "Wisp":["wisp_0","wisp_1","wisp_orb"],
-  "Walk Cycles":["player_walk_0", "player_walk_1", "player_walk_2", "player_walk_3", "rook_walk_0", "rook_walk_1", "rook_walk_2", "rook_walk_3", "doctor_walk_0", "doctor_walk_1", "doctor_walk_2", "doctor_walk_3", "rat_walk_0", "rat_walk_1", "rat_walk_2", "rat_walk_3", "bat_walk_0", "bat_walk_1", "bat_walk_2", "bat_walk_3", "goblin_walk_0", "goblin_walk_1", "goblin_walk_2", "goblin_walk_3", "skeleton_walk_0", "skeleton_walk_1", "skeleton_walk_2", "skeleton_walk_3", "orc_walk_0", "orc_walk_1", "orc_walk_2", "orc_walk_3", "slime_walk_0", "slime_walk_1", "slime_walk_2", "slime_walk_3", "wraith_walk_0", "wraith_walk_1", "wraith_walk_2", "wraith_walk_3", "ogre_walk_0", "ogre_walk_1", "ogre_walk_2", "ogre_walk_3", "troll_walk_0", "troll_walk_1", "troll_walk_2", "troll_walk_3", "knight_walk_0", "knight_walk_1", "knight_walk_2", "knight_walk_3", "king_walk_0", "king_walk_1", "king_walk_2", "king_walk_3", "guardian_walk_0", "guardian_walk_1", "guardian_walk_2", "guardian_walk_3"],
-  "Attack Poses":["player_atk","player_parry","rook_atk","rook_parry","doctor_atk","doctor_parry","rat_atk","bat_atk","goblin_atk","skeleton_atk","orc_atk","slime_atk","wraith_atk","ogre_atk","troll_atk","knight_atk","king_atk","guardian_atk"],
-  "Weapons":["weapon_dagger","weapon_sword","weapon_axe","weapon_spear","weapon_rapier","weapon_hammer","weapon_great","weapon_ember","weapon_cane"],
+  "Orrin's Bolt":["magic_orb_0","magic_orb_1"],
+  "Walk Cycles":["player_walk_0", "player_walk_1", "player_walk_2", "player_walk_3", "rook_walk_0", "rook_walk_1", "rook_walk_2", "rook_walk_3", "doctor_walk_0", "doctor_walk_1", "doctor_walk_2", "doctor_walk_3", "mage_walk_0", "mage_walk_1", "mage_walk_2", "mage_walk_3", "rat_walk_0", "rat_walk_1", "rat_walk_2", "rat_walk_3", "bat_walk_0", "bat_walk_1", "bat_walk_2", "bat_walk_3", "goblin_walk_0", "goblin_walk_1", "goblin_walk_2", "goblin_walk_3", "skeleton_walk_0", "skeleton_walk_1", "skeleton_walk_2", "skeleton_walk_3", "orc_walk_0", "orc_walk_1", "orc_walk_2", "orc_walk_3", "slime_walk_0", "slime_walk_1", "slime_walk_2", "slime_walk_3", "wraith_walk_0", "wraith_walk_1", "wraith_walk_2", "wraith_walk_3", "ogre_walk_0", "ogre_walk_1", "ogre_walk_2", "ogre_walk_3", "troll_walk_0", "troll_walk_1", "troll_walk_2", "troll_walk_3", "knight_walk_0", "knight_walk_1", "knight_walk_2", "knight_walk_3", "king_walk_0", "king_walk_1", "king_walk_2", "king_walk_3", "guardian_walk_0", "guardian_walk_1", "guardian_walk_2", "guardian_walk_3"],
+  "Attack Poses":["player_atk","player_parry","rook_atk","rook_parry","doctor_atk","doctor_parry","mage_atk","mage_parry","rat_atk","bat_atk","goblin_atk","skeleton_atk","orc_atk","slime_atk","wraith_atk","ogre_atk","troll_atk","knight_atk","king_atk","guardian_atk"],
+  "Weapons":["weapon_dagger","weapon_sword","weapon_axe","weapon_spear","weapon_rapier","weapon_hammer","weapon_great","weapon_ember","weapon_cane","weapon_staff"],
   "Armor":["armor_rags","armor_pad","armor_leath","armor_chain","armor_scale","armor_plate"],
   "Potions":["potion_heal","potion_heal1","potion_heal2","potion_might"],
   "Scrolls":["scroll_flame","scroll_flame1","scroll_flame2","scroll_poison","scroll_poison1","scroll_poison2","scroll_dark","scroll_dark1","scroll_dark2","scroll_bolt","scroll_bolt1","scroll_bolt2","scroll_ice","scroll_ice1","scroll_ice2","scroll_wisp"],
   "Spell FX":["fireball_fall_0","fireball_fall_1","fireball_fall_2","fireball_fall_3","fireball_hit_0","fireball_hit_1","fireball_hit_2","fireball_hit_3","lightning_bolt_0","lightning_bolt_1","lightning_bolt_2","lightning_bolt_3","lightning_hit_0","lightning_hit_1","lightning_hit_2","lightning_hit_3","poison_fall_0","poison_fall_1","poison_fall_2","poison_fall_3","poison_hit_0","poison_hit_1","poison_hit_2","poison_hit_3","poison_cloud_0","poison_cloud_1","poison_cloud_2","poison_cloud_3","darkness_spike_0","darkness_spike_1","darkness_spike_2","darkness_spike_3","darkness_hit_0","darkness_hit_1","darkness_hit_2","darkness_hit_3","ice_spike_0","ice_spike_1","ice_spike_2","ice_spike_3","ice_hit_0","ice_hit_1","ice_hit_2","ice_hit_3","ice_frozen_0","ice_frozen_1","ice_frozen_2","ice_frozen_3","bleed_slash_0","bleed_hit_0","bleed_drip_0","bleed_slash_1","bleed_hit_1","bleed_drip_1","bleed_slash_2","bleed_hit_2","bleed_drip_2","bleed_slash_3","bleed_hit_3","bleed_drip_3","blunt_impact_0","blunt_impact_1","blunt_impact_2","blunt_impact_3","rally_ring_0","rally_ring_1","rally_ring_2","rally_ring_3","rally_ring_4","rally_ring_5","parry_slash_0","parry_slash_1","parry_slash_2","parry_slash_3","burn_ignite_0","burn_ignite_1","burn_ignite_2","burn_ignite_3","burn_flame_0","burn_flame_1","burn_flame_2","burn_flame_3","smoke_puff_0","smoke_puff_1","smoke_puff_2","smoke_puff_3","smoke_puff_4","smoke_puff_5"],
-  "Moves":["move_strike","move_break","move_rally","move_whirl","move_ember","move_stagger","move_sunder","move_execute","move_last","move_vein","move_flurry","move_waltz","move_leech","move_miasma","move_letting","move_transfuse","move_blackdeath"],
+  "Moves":["move_strike","move_break","move_rally","move_whirl","move_ember","move_stagger","move_sunder","move_execute","move_last","move_vein","move_flurry","move_waltz","move_leech","move_miasma","move_letting","move_transfuse","move_blackdeath","move_channel","move_arcane"],
   "Offhand":["weapon_torch","offhand_buckler","offhand_round","offhand_tower","offhand_aegis","offhand_pdagger","offhand_stiletto","offhand_fang"],
   "Jewelry":["amulet_vigor","amulet_ward","amulet_ember","amulet_locket","amulet_charm","amulet_coin","amulet_heart","ring_might","ring_swift","ring_focus","ring_fort","ring_warding","ring_insight","ring_mending","ring_parry","ring_storm"],
   "Items":["gold","oil","weapon","armor"],
@@ -5845,6 +5974,7 @@ Object.assign(SE_LABELS,{chasm:"chasm (pit)",bridge_h:"rope bridge (across)",bri
 Object.assign(SE_LABELS,{wisp_0:"wisp 1",wisp_1:"wisp 2",wisp_orb:"wisp orb",scroll_wisp:"scroll of the wisp"});
 for(const k of SE_CATS["Walk Cycles"]){const m=/^(.+)_walk_(\d)$/.exec(k);if(m&&!SE_LABELS[k])SE_LABELS[k]=(m[1]==="player"?"Cade":m[1])+" walk "+(+m[2]+1);}
 Object.assign(SE_LABELS,{doctor_walk_0:"Vell walk 1",doctor_walk_1:"Vell walk 2",doctor_walk_2:"Vell walk 3",doctor_walk_3:"Vell walk 4"});
+Object.assign(SE_LABELS,{mage:"Orrin",mage_atk:"Orrin strike",mage_parry:"Orrin parry",weapon_staff:"the Ashwood Staff",magic_orb_0:"bolt frame 1",magic_orb_1:"bolt frame 2",move_channel:"Channel icon",move_arcane:"Arcane Lance icon"});
 Object.assign(SE_LABELS,{doctor:"Vell",doctor_atk:"Vell strike",doctor_parry:"Vell parry",weapon_cane:"the Bloodletter",move_leech:"Leech icon",move_miasma:"Miasma icon",move_letting:"Bloodletting icon",move_transfuse:"Transfusion icon",move_blackdeath:"Black Death icon"});
 Object.assign(SE_LABELS,{rook:"Rook",rook_atk:"Rook strike",rook_parry:"Rook parry",move_vein:"Open Vein icon",move_flurry:"Flurry icon",move_waltz:"Crimson Waltz icon"});
 function seDrawThumb(cv,key){
