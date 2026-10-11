@@ -1989,6 +1989,7 @@ function endTurn(){
     }
     if(m.freezeT>0){m.freezeT--;continue;}
     if(m.stunT>0){m.stunT--;continue;}
+    if(freeMode()){if(m.blindT>0)m.blindT--;continue;}   // free mode: freeMonsters() moves them every frame
     if(m.blindT>0){m.blindT--;nudge(m,rnd(3)-1,rnd(3)-1);continue;}
     if(m.t.slow){m.skip=!m.skip;if(m.skip)continue;}
     const canSee=visible.has(m.x+","+m.y);
@@ -2549,7 +2550,7 @@ function tick(dt){
   ease(S,S.px,S.py);
   if(freeMode()&&S.mode==="map"){S.vx=S.fx-.5;S.vy=S.fy-.5;}   // free movement: draw exactly where you are
   freeTick(dt);
-  for(const m of mons)ease(m,m.x,m.y);
+  for(const m of mons){ease(m,m.x,m.y);if(freeMode()&&S.mode==="map"&&m.fx!==undefined){m.vx=m.fx-.5;m.vy=m.fy-.5;}}
 
   for(let i=corpses.length-1;i>=0;i--){
     corpses[i].t+=dt;
@@ -4853,16 +4854,97 @@ const held=new Set();
 let freeClock=0,freeBumpT=0,freeWindedT=0;
 function freeMode(){return !!(S&&CHAR().freeMove);}
 function freePaused(){return S.over||S.mode!=="map"||packOpen||shrineOpen||codexOpen||editorOpen;}
-// What the hero's box would touch at centre (cx,cy): a wall tile, a monster, or nothing.
-function freeHit(cx,cy){
+// Does a box of half-width r centred on (cx,cy) overlap a wall?
+function boxWall(cx,cy,r){
   const e=1e-6;
-  const x0=Math.floor(cx-FREE_R),x1=Math.floor(cx+FREE_R-e),y0=Math.floor(cy-FREE_R),y1=Math.floor(cy+FREE_R-e);
-  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
-    if(x<0||y<0||x>=W||y>=H||map[y][x]===WALL)return{wall:true};
-    const m=mons.find(o=>o.x===x&&o.y===y);
-    if(m)return{mon:m};
+  const x0=Math.floor(cx-r),x1=Math.floor(cx+r-e),y0=Math.floor(cy-r),y1=Math.floor(cy+r-e);
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)
+    if(x<0||y<0||x>=W||y>=H||map[y][x]===WALL)return true;
+  return false;
+}
+const MEET=.78;             // centre-to-centre distance at which hero and monster clash
+function monPos(m){if(m.fx===undefined){m.fx=m.x+.5;m.fy=m.y+.5;}return m;}
+// What the hero would touch moving to (cx,cy): a wall, a monster it is walking into, or nothing.
+function freeHit(cx,cy){
+  if(boxWall(cx,cy,FREE_R))return{wall:true};
+  for(const m of mons){
+    monPos(m);
+    const dNew=Math.hypot(m.fx-cx,m.fy-cy);
+    if(dNew<MEET&&dNew<Math.hypot(m.fx-S.fx,m.fy-S.fy))return{mon:m};   // only when closing in, so you can back away
   }
   return null;
+}
+
+/* ----- real-time monsters ----- */
+// Monsters glide continuously and path around walls using a distance map flooded out from the hero's tile.
+const MON_SPEED=2.0;        // tiles per second (hero walks 4.2); slow foes go half speed, bats a bit faster
+const MON_R=.32;
+let PATH=null,pathKey="";
+function pathField(){
+  const key=S.px+","+S.py+":"+DOORS.filter(d=>d.open).length;
+  if(PATH&&key===pathKey)return PATH;
+  pathKey=key;
+  PATH=new Int16Array(W*H).fill(-1);
+  const q=[S.px+S.py*W];PATH[q[0]]=0;
+  for(let h=0;h<q.length;h++){
+    const i=q[h],x=i%W,y=(i-x)/W;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      if(!dx&&!dy)continue;
+      const nx=x+dx,ny=y+dy;
+      if(nx<0||ny<0||nx>=W||ny>=H||map[ny][nx]===WALL)continue;
+      if(dx&&dy&&(map[y][nx]===WALL||map[ny][x]===WALL))continue;   // no cutting corners
+      const j=nx+ny*W;if(PATH[j]>=0)continue;
+      PATH[j]=PATH[i]+1;q.push(j);
+    }
+  }
+  return PATH;
+}
+// Where a chasing monster should head next: straight at the hero when close, else the next tile downhill.
+function chaseDir(m){
+  const P=pathField(),here=P[m.x+m.y*W];
+  if(here<0)return null;                                   // no route (sealed door): give up
+  if(here<=1)return[S.fx-m.fx,S.fy-m.fy];
+  let best=null,bd=here;
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+    const nx=m.x+dx,ny=m.y+dy;
+    if(nx<0||ny<0||nx>=W||ny>=H)continue;
+    const v=P[nx+ny*W];
+    if(v>=0&&v<bd){bd=v;best=[nx+.5-m.fx,ny+.5-m.fy];}
+  }
+  return best;
+}
+function monBlocked(m,cx,cy){
+  if(boxWall(cx,cy,MON_R))return true;
+  for(const o of mons)if(o!==m&&o.fx!==undefined&&Math.hypot(o.fx-cx,o.fy-cy)<.62&&Math.hypot(o.fx-cx,o.fy-cy)<Math.hypot(o.fx-m.fx,o.fy-m.fy))return true;
+  return false;
+}
+function freeMonsters(dt){
+  for(const m of mons){
+    monPos(m);
+    if(m.freezeT>0||m.stunT>0)continue;                    // frozen / stunned by a scroll: stand still
+    if(visible.has(m.x+","+m.y)&&!(m.blindT>0))m.seenYou=true;
+    const hunting=m.seenYou&&!(m.cool>0)&&!(m.blindT>0);
+    if(hunting&&Math.hypot(S.fx-m.fx,S.fy-m.fy)<MEET){held.clear();computeFOV();startBattle(m);return;}
+    let dir=null;
+    if(hunting){
+      dir=chaseDir(m);
+      if(dir&&m.t.erratic){const a=Math.sin(tclock*9+m.ph)*1.1,c=Math.cos(a),s2=Math.sin(a);dir=[dir[0]*c-dir[1]*s2,dir[0]*s2+dir[1]*c];}
+    }else if(!m.t.still||m.blindT>0){
+      // wander: pick a new heading now and then
+      m.wanderT=(m.wanderT||0)-dt;
+      if(m.wanderT<=0){m.wanderT=.8+Math.random()*1.6;const a=Math.random()*6.283;m.wander=Math.random()<.35?null:[Math.cos(a),Math.sin(a)];}
+      dir=m.wander;
+    }
+    if(!dir)continue;
+    const len=Math.hypot(dir[0],dir[1]);if(len<1e-4)continue;
+    const sp=MON_SPEED*(m.t.slow?.5:m.t.erratic?1.3:1)*(hunting?1:.45)*dt;
+    const vx=dir[0]/len*sp,vy=dir[1]/len*sp;
+    let moved=false;
+    if(vx&&!monBlocked(m,m.fx+vx,m.fy)){m.fx+=vx;moved=true;}
+    if(vy&&!monBlocked(m,m.fx,m.fy+vy)){m.fy+=vy;moved=true;}
+    if(!moved&&!hunting)m.wanderT=0;                        // bumped a wall while wandering: turn
+    m.x=Math.floor(m.fx);m.y=Math.floor(m.fy);
+  }
 }
 function freeStep(dx,dy,dt){
   const sp=FREE_SPEED*dt;
@@ -4909,6 +4991,8 @@ function freeTick(dt){
       if(freePaused())return;
     }
   }
+  freeMonsters(dt);
+  if(freePaused())return;
   freeClock+=dt;
   if(freeClock>=FREE_TURN){freeClock-=FREE_TURN;endTurn();}
 }
