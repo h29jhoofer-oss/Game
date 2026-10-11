@@ -2883,12 +2883,14 @@ const CHARACTERS=[
          "Plague Bearer: poison and bleeding you inflict heal you for half of every tick",
          "Ichor: healing past full is bottled (up to 40). Resting (.) sips it back; Transfusion hurls it at the foe",
          "Carries the Bloodletter: +20% lifesteal, opens wounds like a dagger, and grows sharper with every 50 HP it drinks"],
-  weak:["Feeble hands: deals 30% less damage",
+  weak:["Gaunt: starts with 20% less health",
+        "Feeble hands: deals 30% less damage",
         "No draught can heal him: healing potions do nothing",
         "No Rally and no Last Light. Outside a fight, he only heals from his Ichor"],
   lifesteal:.35,dotLeech:.5,dmgMult:.7,ichor:true,noPotions:true,hpLevel:8,
   moves:[["strike"],["leech"],["miasma"],["break",4],["letting"],["sunder",6],["transfuse"],["execute"],["blackdeath"]],
   init:function(st){
+    st.maxhp=32;st.hp=32;
     st.weapon=WEAPONS.find(w=>w.id==="cane");
     st.ichor=0;st.drained=0;
   },
