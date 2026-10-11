@@ -650,7 +650,7 @@ body.inbattle #hint{display:none}
           <button id="btnStairs" disabled>Descend</button>
         </div>
       </div>
-      <p class="hint" id="hint">Move with arrows or WASD. Walk into a creature to duel it. <b>I</b> pack, <b>E</b> pray at a shrine / pull a lever, <b>T</b> swap off-hand, <b>F</b> use lamp oil, <b>L</b> codex, <b>P</b> sprites, <b>Space</b> dashes, <b>.</b> waits &amp; restores stamina.</p>
+      <p class="hint" id="hint">Move with arrows or WASD. Walk into a creature to duel it. <b>I</b> pack, <b>E</b> pray at a shrine / pull a lever, <b>T</b> swap off-hand, <b>F</b> use lamp oil, <b>L</b> codex, <b>P</b> sprites, <b>Space</b> dashes, <b>.</b> waits. Stand still to regain stamina.</p>
     </div>
   </div>
 </div>
@@ -1748,8 +1748,11 @@ function useItem(i){
 const NO_POTION_MSG="You uncork the draught and smell the rot in it. You brewed this once, and it never worked. Sell it instead.";
 /* ============================ stamina ============================ */
 const STAM_MOVE_COST = 8;    // drained per step
-const STAM_REST_GAIN = 22;   // gained from deliberate wait (.)
-const STAM_PASSIVE_GAIN = 3; // gained per enemy-turn tick (passive regen)
+const STAM_PASSIVE_GAIN = 3; // old grid mode only: the forced rest when too winded to step
+// Stamina only comes back while you stand still: after STAM_STILL_DELAY seconds without moving,
+// it refills at STAM_STILL_RATE per second. Walking, dashing and waiting with "." don't restore it.
+const STAM_STILL_DELAY = .35;
+const STAM_STILL_RATE = 16;
 const STAM_LOW = 20;         // threshold — at or below this = exhausted
 
 /* ============================ flame ============================ */
@@ -1761,7 +1764,7 @@ function drainStamina(cost){
   S.stam = Math.max(0, S.stam - (cost===undefined?STAM_MOVE_COST:cost));
   if(S.stam === 0 && !S.exhausted){
     S.exhausted = true;
-    say("You are winded — rest a moment.","c-hit");
+    say("You are winded. Stand still a moment.","c-hit");
   }
   refreshStamina();
 }
@@ -1958,8 +1961,7 @@ function refreshFlame(){
 function tryMove(dx,dy){
   if(S.over||S.mode!=="map")return;
   if(dx===0&&dy===0){
-    // Deliberate wait: big stamina bonus
-    gainStamina(STAM_REST_GAIN);
+    // Deliberate wait: no stamina (that only comes from standing still), but a little mana
     gainMana(MANA_REST_GAIN);
     // Vell's only healing outside a fight: a sip from his vials of stolen blood.
     const sip=CHAR().ichor?Math.min(ICHOR_SIP,S.ichor||0,S.maxhp-S.hp):0;
@@ -2011,8 +2013,6 @@ function springTrap(){
 }
 function endTurn(){
   if(S.over||S.mode!=="map")return;
-  // Passive stamina regen each turn (the Notary gets none: he has to stop and rest)
-  if(!CHAR().noRegen)gainStamina(STAM_PASSIVE_GAIN);
   gainMana(MANA_PASSIVE_GAIN+gearMod("manaRegen"));
   S.regenAcc=(S.regenAcc||0)+gearMod("regen");
   wispRest();
@@ -3122,7 +3122,7 @@ const CHARACTERS=[
          "Ink Reserve: an Ink Flask heals more for every clause he carries",
          "His quill-knife opens wounds like a dagger, on his Strikes too"],
   weak:["Frail: 36 health, and 8 more per level",
-        "No natural healing: no passive stamina regen, and healing draughts turn to ink in his hands",
+        "No natural healing: he gets his breath back at half speed, and healing draughts turn to ink in his hands",
         "No mana: scrolls are paid for in blood, 1 health per 2 mana",
         "Every clause has a cost, and opening a flask in a fight costs his next turn",
         "Parries less often"],
@@ -5497,7 +5497,7 @@ function refresh(){
   $("btnStairs").disabled=!onStairs||S.over;
   $("hint").innerHTML=onStairs
     ? `Stairs down. Press <b>Enter</b> or tap Descend.`
-    : `Move with arrows or WASD. Walk into a creature to duel it. <b>I</b> pack, <b>E</b> pray at a shrine / pull a lever, <b>T</b> swap off-hand, <b>F</b> use lamp oil, <b>L</b> codex, <b>P</b> sprites, <b>Space</b> dashes, <b>.</b> waits &amp; restores stamina.`;
+    : `Move with arrows or WASD. Walk into a creature to duel it. <b>I</b> pack, <b>E</b> pray at a shrine / pull a lever, <b>T</b> swap off-hand, <b>F</b> use lamp oil, <b>L</b> codex, <b>P</b> sprites, <b>Space</b> dashes, <b>.</b> waits. Stand still to regain stamina.`;
   refreshStamina();
   refreshFlame();
   refreshMana();
@@ -5685,6 +5685,7 @@ function freeTick(dt){
   let dx=0,dy=0;
   for(const c of held){const d=FREE_CODES[c];if(d){dx+=d[0];dy+=d[1];}}
   dx=Math.sign(dx);dy=Math.sign(dy);
+  const fx0=S.fx,fy0=S.fy;
   if(S.dashCD>0)S.dashCD-=dt;
   if(S.dashT>0){
     // mid-dash: the burst carries you, whatever you're holding
@@ -5696,13 +5697,19 @@ function freeTick(dt){
   }else if(dx||dy){
     S.lastDir=[dx,dy];
     if(S.exhausted){
-      if(freeWindedT<=0){freeWindedT=2;say("You are too winded to move — you gasp for breath.","c-hit");}
+      if(freeWindedT<=0){freeWindedT=2;say("You are too winded to move. Stand still and catch your breath.","c-hit");}
     }else{
       if(dx)S.facingLeft=dx<0;
       const n=dx&&dy?Math.SQRT1_2:1;
       freeStep(dx*n,dy*n,dt);
       if(freePaused())return;
     }
+  }
+  // standing still is the only way to get your breath back
+  if(S.dashT>0||S.fx!==fx0||S.fy!==fy0)S.stillT=0;
+  else{
+    S.stillT=(S.stillT||0)+dt;
+    if(S.stillT>=STAM_STILL_DELAY&&S.stam<S.maxstam)gainStamina(STAM_STILL_RATE*dt*(CHAR().noRegen?.5:1));
   }
   freeMonsters(dt);
   if(freePaused())return;
@@ -6617,8 +6624,8 @@ function title(){
   overlay(`
     <h3>The Hollow Depths</h3>
     <p class="lede">${lede}</p>
-    <p>Ten floors below, something that used to be King Aldric is still wearing the crown. Walk into a creature and the floor falls away into a duel. <b>Strike</b> is always ready, and every level teaches an ability. Watch your <span style="color:var(--stam)">Stamina</span> — moving drains it, and you'll be forced to rest when it runs out. Press <b>.</b> to deliberately rest and recover faster. Look for the <span style="color:var(--torch)">&gt;</span> to go deeper.</p>
-    <p class="keys"><b>Arrows / WASD</b> move &nbsp; <b>Q Z C</b> or <b>Y U B N</b> diagonals &nbsp; <b>I</b> pack &nbsp; <b>E</b> shrine / lever &nbsp; <b>L</b> codex &nbsp; <b>Space</b> dash &nbsp; <b>.</b> rest &amp; recover stamina &nbsp; <b>Enter</b> descend<br>
+    <p>Ten floors below, something that used to be King Aldric is still wearing the crown. Walk into a creature and the floor falls away into a duel. <b>Strike</b> is always ready, and every level teaches an ability. Watch your <span style="color:var(--stam)">Stamina</span> — moving drains it, and you'll be forced to rest when it runs out. Stand still to get it back. Look for the <span style="color:var(--torch)">&gt;</span> to go deeper.</p>
+    <p class="keys"><b>Arrows / WASD</b> move &nbsp; <b>Q Z C</b> or <b>Y U B N</b> diagonals &nbsp; <b>I</b> pack &nbsp; <b>E</b> shrine / lever &nbsp; <b>L</b> codex &nbsp; <b>Space</b> dash &nbsp; <b>.</b> wait &nbsp; stand still to recover stamina &nbsp; <b>Enter</b> descend<br>
     In a duel: <b>1-9</b> abilities &nbsp; <b>Space</b> strike &nbsp; <b>X</b> off-hand &nbsp; <b>I</b> item &nbsp; <b>F</b> flee</p>
     <button id="go">Choose your hero</button>`);
   $("go").onclick=()=>{ensureAudio();chooseHero();};
