@@ -1986,7 +1986,9 @@ function endTurn(){
   S.regenAcc=(S.regenAcc||0)+gearMod("regen");
   wispRest();
   if(S.regenAcc>=1){S.regenAcc-=1;if(S.hp<S.maxhp){S.hp++;refresh();}}
-  tickCooldowns();
+  // On the map, ability cooldowns only recover on dungeon turns in which you actually walked.
+  if(!freeMode()||S.walkedThisTurn)tickCooldowns();
+  S.walkedThisTurn=false;
   for(const m of [...mons]){
     if(m.cool>0)m.cool--;
     if(m.t.regen&&m.hp<m.max)m.hp=Math.min(m.max,m.hp+m.t.regen);
@@ -5174,7 +5176,7 @@ function freeStep(dx,dy,dt){
   }
   // Walk cycle: advance by distance covered, so pushing against a wall doesn't run on the spot.
   const moved=Math.hypot(S.fx-ox,S.fy-oy);
-  if(moved>1e-4){S.walkPhase=((S.walkPhase||0)+moved*WALK_FRAMES_PER_TILE)%4;S.walkT=.1;}
+  if(moved>1e-4){S.walkPhase=((S.walkPhase||0)+moved*WALK_FRAMES_PER_TILE)%4;S.walkT=.1;S.walkedThisTurn=true;}
   // Entering a new tile counts as a step: traps, pickups, shrine and lever hints.
   const tx=Math.floor(S.fx),ty=Math.floor(S.fy);
   if(tx===S.px&&ty===S.py)return;
