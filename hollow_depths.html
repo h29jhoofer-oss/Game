@@ -147,6 +147,11 @@ canvas{display:block;max-width:100%;max-height:100%;touch-action:manipulation;
     10px 14px 0 0 rgba(0,0,0,.55);
 }
 .charcard:not(.locked):active{transform:translateY(0)}
+/* Picking a hero: the other cards sink and fade away; the chosen one stays up. */
+.chargrid .charcard{transition:transform .2s ease-out,opacity .2s ease-out,box-shadow .2s}
+.chargrid.picked .charcard:not(.chosen){opacity:0!important;transform:translateY(60px)!important;transition:transform .6s ease-in,opacity .55s ease-in;pointer-events:none}
+.chargrid.picked .charcard.chosen{z-index:40}
+.chargrid.picked ~ *,#card:has(.chargrid.picked) h3,#card:has(.chargrid.picked) .lede{opacity:0;transition:opacity .5s}
 /* Desktop: the heroes are held like a hand of cards. --t is each card's offset from the middle.
    Hovering (or focusing) a card lifts it out of the hand; the rest fade so it can be read. */
 @media (min-width:761px) and (hover:hover){
@@ -163,6 +168,8 @@ canvas{display:block;max-width:100%;max-height:100%;touch-action:manipulation;
     transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px - 34px));
   }
   .chargrid.fan:has(.charcard:hover,.charcard:focus-visible) .charcard:not(:hover):not(:focus-visible){opacity:.35}
+  .chargrid.fan.picked .charcard:not(.chosen){transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px + 90px))!important}
+  .chargrid.fan.picked .charcard.chosen{transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px - 34px))}
 }
 @media (min-width:761px) and (hover:hover) and (prefers-reduced-motion:reduce){
   .chargrid.fan .charcard{transition:none}
@@ -3305,10 +3312,27 @@ function chooseHero(){
     <p class="lede">Each one fights differently. Complete quests to meet more of them.</p>
     <div class="chargrid fan">${cards}</div>`);
   $("card").classList.add("wide");
-  document.querySelectorAll("#card .charcard:not(.locked)").forEach(el=>{
-    el.onclick=()=>start(el.dataset.id);
-    el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();start(el.dataset.id);}};
+  menuQuiet=true;setMusicVolume();
+  heroPicked=false;
+  document.querySelectorAll("#card .charcard").forEach(el=>{
+    el.addEventListener("pointerenter",()=>{if(!heroPicked)playCardSound(false);});
+    el.addEventListener("focus",()=>{if(!heroPicked&&!el.matches(":hover"))playCardSound(false);});
   });
+  document.querySelectorAll("#card .charcard:not(.locked)").forEach(el=>{
+    el.onclick=()=>pickHero(el);
+    el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();pickHero(el);}};
+  });
+}
+// The chosen card stays up while the rest of the hand sinks away, the music swells in, then the run begins.
+let heroPicked=false;
+function pickHero(el){
+  if(heroPicked)return;
+  heroPicked=true;
+  playCardSound(true);
+  menuQuiet=false;ensureAudio();setMusicVolume();
+  el.classList.add("chosen");
+  el.closest(".chargrid").classList.add("picked");
+  setTimeout(()=>start(el.dataset.id),RM?250:750);
 }
 
 const MOVES=[
@@ -5308,11 +5332,40 @@ window.addEventListener("pageshow",()=>{lastFrameAt=performance.now();audioHidde
 if(window.IntersectionObserver)
   new IntersectionObserver(es=>{inView=es[es.length-1].isIntersecting;updateAudioVisibility();}).observe(document.documentElement);
 setInterval(updateAudioVisibility,400);
+// The title and hero-select screens are quiet; the music swells in when a hero is picked.
+let menuQuiet=true;
 function setMusicVolume(){
   if(!amb)return;
   const t=actx.currentTime;
   amb.master.gain.cancelScheduledValues(t);
-  amb.master.gain.setTargetAtTime(musicOn?0.32:0.0001,t,0.9);
+  amb.master.gain.setTargetAtTime(musicOn&&!menuQuiet?0.32:0.0001,t,0.9);
+}
+// A card being dealt: a papery flick (noise swept down through a bandpass) and a soft tap as it lands.
+// loud=true is the press: a harder flick with a snap. Goes straight to the speakers, so the
+// menu's silenced music doesn't mute it; the Music button still turns it off.
+let lastCardSnd=0;
+function playCardSound(loud){
+  if(!AUDIO_OK||!musicOn)return;
+  if(!actx)ensureAudio();
+  if(!actx||audioHidden)return;
+  const now=performance.now();if(!loud&&now-lastCardSnd<70)return;lastCardSnd=now;
+  const t=actx.currentTime+.005,vol=loud?.55:.16,dur=loud?.16:.12;
+  const noise=(len,shape)=>{const b=actx.createBuffer(1,Math.floor(actx.sampleRate*len),actx.sampleRate),d=b.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,shape);
+    const s=actx.createBufferSource();s.buffer=b;return s;};
+  const out=actx.createGain();out.gain.value=vol;out.connect(actx.destination);
+  const flick=noise(dur,1.6),bp=actx.createBiquadFilter();bp.type="bandpass";bp.Q.value=.9;
+  bp.frequency.setValueAtTime(loud?5200:4200,t);bp.frequency.exponentialRampToValueAtTime(loud?900:1300,t+dur);
+  const fg=actx.createGain();fg.gain.setValueAtTime(.0001,t);fg.gain.linearRampToValueAtTime(1,t+.012);fg.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  flick.connect(bp);bp.connect(fg);fg.connect(out);flick.start(t);
+  const tap=noise(.03,3),lp=actx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=loud?2600:1800;
+  const tg=actx.createGain();tg.gain.value=loud?.9:.5;
+  tap.connect(lp);lp.connect(tg);tg.connect(out);tap.start(t+dur*.75);
+  if(loud){
+    const o=actx.createOscillator();o.type="sine";o.frequency.setValueAtTime(190,t+dur*.75);o.frequency.exponentialRampToValueAtTime(70,t+dur*.75+.09);
+    const og=actx.createGain();og.gain.setValueAtTime(.0001,t+dur*.75);og.gain.linearRampToValueAtTime(.7,t+dur*.75+.005);og.gain.exponentialRampToValueAtTime(.0001,t+dur*.75+.11);
+    o.connect(og);og.connect(out);o.start(t+dur*.75);o.stop(t+dur+.2);
+  }
 }
 function toggleMusic(){
   if(!AUDIO_OK)return;
@@ -6494,6 +6547,7 @@ function toggleEditor(){
 
 /* ============================ boot ============================ */
 function start(id){
+  menuQuiet=false;setMusicVolume();
   hideOverlay();packOpen=false;codexOpen=false;
   ensureAudio();
   B=null;seq=[];sfx=[];PK=null;document.body.classList.remove("inbattle","inchasm");requestAnimationFrame(resize);
@@ -6513,7 +6567,7 @@ function title(){
     <p class="keys"><b>Arrows / WASD</b> move &nbsp; <b>Q Z C</b> or <b>Y U B N</b> diagonals &nbsp; <b>I</b> pack &nbsp; <b>E</b> shrine / lever &nbsp; <b>L</b> codex &nbsp; <b>Space</b> dash &nbsp; <b>.</b> rest &amp; recover stamina &nbsp; <b>Enter</b> descend<br>
     In a duel: <b>1-9</b> abilities &nbsp; <b>Space</b> strike &nbsp; <b>Q</b> parry &nbsp; <b>X</b> off-hand &nbsp; <b>I</b> item &nbsp; <b>F</b> flee</p>
     <button id="go">Choose your hero</button>`);
-  $("go").onclick=chooseHero;
+  $("go").onclick=()=>{ensureAudio();chooseHero();};
 }
 seLoadSavedSprites();
 buildSprites();
