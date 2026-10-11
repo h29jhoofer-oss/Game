@@ -5241,15 +5241,15 @@ function freeTick(dt){
 // ledge; Esc backs away. Finish once and a rope bridge spans that chasm for good.
 function placeChasms(depth,rooms){
   if(depth>=10)return;
-  const want=1+(depth>=4?1:0)+(depth>=7?1:0);
+  const want=Math.min(6,2+Math.floor(depth/2));
   const inRoom=(x,y)=>rooms.some(r=>x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h);
   const near=(x,y)=>{for(const o of DL.values())if(Math.abs(o.x-x)<=2&&Math.abs(o.y-y)<=2)return true;return false;};
   const cand=[];
   for(let y=2;y<H-2;y++)for(let x=2;x<W-2;x++){
     if(map[y][x]!==FLOOR||inRoom(x,y)||near(x,y))continue;
     const f=(a,b)=>map[b][a]===FLOOR;
-    const h=f(x-1,y)&&f(x+1,y)&&map[y-1][x]===WALL&&map[y+1][x]===WALL&&f(x-2,y)&&f(x+2,y);
-    const v=f(x,y-1)&&f(x,y+1)&&map[y][x-1]===WALL&&map[y][x+1]===WALL&&f(x,y-2)&&f(x,y+2);
+    const h=f(x-1,y)&&f(x+1,y)&&map[y-1][x]===WALL&&map[y+1][x]===WALL;
+    const v=f(x,y-1)&&f(x,y+1)&&map[y][x-1]===WALL&&map[y][x+1]===WALL;
     if(!h&&!v)continue;
     if(Math.abs(x-S.px)+Math.abs(y-S.py)<5)continue;
     if(S.sx>=0&&Math.abs(x-S.sx)+Math.abs(y-S.sy)<3)continue;
@@ -5263,7 +5263,7 @@ function placeChasms(depth,rooms){
   cand.sort((a,b)=>a.k-b.k);
   for(const c of cand){
     if(CHASMS.length>=want)break;
-    if(CHASMS.some(o=>Math.abs(o.x-c.x)+Math.abs(o.y-c.y)<8))continue;
+    if(CHASMS.some(o=>Math.abs(o.x-c.x)+Math.abs(o.y-c.y)<5))continue;
     const ch={x:c.x,y:c.y,ori:c.ori,bridged:false,hinted:false};
     CHASMS.push(ch);CHM.set(c.x+","+c.y,ch);map[c.y][c.x]=CHASM;
   }
@@ -5280,40 +5280,50 @@ function chasmHint(){
 const PK_G=32,PK_JUMP=11.2,PK_RUN=5.2,PK_FALL_Y=12.5,PK_BASE_Y=8;
 function buildCourse(depth){
   const plats=[],vines=[];
-  const solid=(x,y,w)=>{const p={x,y,w,kind:"solid"};plats.push(p);return p;};
-  solid(-6,PK_BASE_Y,10);                                  // the near ledge
+  const solid=(x,y,w,flag)=>{const p={x,y,w,kind:"solid",flag:!!flag};plats.push(p);return p;};
+  solid(-6,PK_BASE_Y,10,true);                             // the near ledge (a checkpoint)
   let cx=4,cy=PK_BASE_Y;
-  const pool=["gap","vine","vine"];
-  if(depth>=3)pool.push("move");
-  if(depth>=5)pool.push("crumble","vine");
-  const n=Math.min(7,3+Math.floor(depth/3));
-  const plan=depth<=1?["gap","vine","gap"]:Array.from({length:n},()=>pick(pool));
-  if(!plan.includes("vine"))plan[Math.floor(plan.length/2)]="vine";
-  const clampY=y=>Math.max(5.5,Math.min(9,y));
-  for(const seg of plan){
+  const R=(a,b)=>a+Math.random()*(b-a);
+  const clampY=y=>Math.max(5,Math.min(9.2,y));
+  const pool=["gap","gap","vine","vine","chain","steps"];
+  if(depth>=2)pool.push("move","crumble");
+  if(depth>=5)pool.push("chain","crumble","move");
+  const n=Math.min(10,6+Math.floor(depth/2));
+  const plan=Array.from({length:n},()=>pick(pool));
+  if(!plan.includes("vine")&&!plan.includes("chain"))plan[1]="vine";
+  if(depth<=1&&!plan.includes("chain"))plan[3]="chain";
+  const land=(g,ny,w,flag)=>{const pl=solid(cx+g,ny,w,flag);cx=cx+g+w;cy=ny;return pl;};
+  plan.forEach((seg,i)=>{
+    const flag=i>0&&i%3===2;                               // a rest ledge (checkpoint) every third section
+    const lw=flag?2.6:R(1.2,2.2);
     if(seg==="gap"){
-      const ny=clampY(cy+(Math.random()*2.6-1.3));
-      const g=ny<cy-.4?1.4+Math.random()*.8:1.8+Math.random()*1.1;
-      solid(cx+g,ny,2+Math.random()*2.2);cx=cx+g+plats[plats.length-1].w;cy=ny;
+      const ny=clampY(cy+R(-1.4,1.4));
+      const g=ny<cy-.4?R(1.7,2.4):R(2.2,3.1);
+      land(g,ny,lw,flag);
+    }else if(seg==="steps"){
+      for(let k=0;k<3;k++){const ny=clampY(cy-R(1.1,1.5));land(R(1.3,1.9),ny,k<2?R(1,1.4):lw,flag&&k===2);}
     }else if(seg==="vine"){
-      const g=5+Math.random()*1.4;
+      const g=R(5.6,6.6);
       vines.push({ax:cx+g/2,ay:cy-5.2,len:4.6,ph:Math.random()*6.28,theta:0});
-      const ny=clampY(cy+Math.random()*1.1);
-      solid(cx+g,ny,2.4+Math.random()*1.6);cx=cx+g+plats[plats.length-1].w;cy=ny;
+      land(g,clampY(cy+R(0,1.1)),lw,flag);
+    }else if(seg==="chain"){                               // vine to vine with nothing to stand on between
+      const k=depth>=6?3:2,step=R(4.4,5);
+      for(let j=0;j<k;j++)vines.push({ax:cx+2.9+j*step,ay:cy-5.2,len:4.6,ph:Math.random()*6.28,theta:0});
+      land(2.9+(k-1)*step+2.9,clampY(cy+R(0,1)),lw,flag);
     }else if(seg==="move"){
-      const g=6+Math.random()*1.2;
-      plats.push({x:cx+.6,y:cy+.4,w:2,kind:"move",x0:cx+.6,x1:cx+g-2.6,sp:.9+Math.random()*.4,ph:Math.random()*6.28});
-      solid(cx+g,cy,2.4+Math.random()*1.4);cx=cx+g+plats[plats.length-1].w;
-    }else{ // crumble: a run of small ledges that fall away once you've stood on them
-      for(let i=0;i<3;i++){const g=1.5+Math.random()*.5;plats.push({x:cx+g,y:cy,w:1.4,kind:"crumble",y0:cy});cx+=g+1.4;}
-      const g=1.6;solid(cx+g,cy,2.6);cx+=g+2.6;
+      const g=R(6.4,7.6);
+      plats.push({x:cx+.6,y:cy+.4,w:1.7,kind:"move",x0:cx+.6,x1:cx+g-2.3,sp:R(1,1.5),ph:Math.random()*6.28});
+      land(g,cy,lw,flag);
+    }else{ // crumble: small ledges that fall away soon after you land
+      const m=depth>=5?4:3;
+      for(let j=0;j<m;j++){const g=R(1.8,2.4);plats.push({x:cx+g,y:cy,w:R(1.1,1.3),kind:"crumble",y0:cy});cx+=g+plats[plats.length-1].w;}
+      land(R(1.8,2.2),cy,lw,flag);
     }
-  }
-  const endX=cx+1.6;
-  const end=solid(endX,PK_BASE_Y,12);end.goal=true;
+  });
+  const endX=cx+R(2,2.6);
+  const end=solid(endX,clampY(cy+R(-.8,.8)),12,true);end.goal=true;
   return{plats,vines,endX,startY:PK_BASE_Y};
 }
-
 /* ----- entering / leaving ----- */
 function startChasm(x,y,dx,dy){
   const ch=CHM.get(x+","+y);if(!ch||ch.bridged||S.over)return;
@@ -5458,8 +5468,8 @@ function courseStep(h){
   if(landed){
     p.y=landed.y;p.vy=0;
     if(!p.ground){
-      if(landed.kind==="crumble"&&!(landed.crumbleT>0))landed.crumbleT=.45;
-      if(landed.kind==="solid")K.check={x:Math.max(landed.x+.5,Math.min(landed.x+landed.w-.5,p.x)),y:landed.y};
+      if(landed.kind==="crumble"&&!(landed.crumbleT>0))landed.crumbleT=.32;
+      if(landed.flag&&!landed.goal)K.check={x:Math.max(landed.x+.5,Math.min(landed.x+landed.w-.5,p.x)),y:landed.y};
     }
     p.ground=true;p.ride=landed.kind==="move"?landed:null;
     if(landed.goal&&p.x>landed.x+1){K.state="done";K.timer=.8;quake(4);return;}
@@ -5513,8 +5523,8 @@ function drawCourse(vw,vh){
     const x=sx(pl.x),w=pl.w*U,y=sy(pl.y);
     if(x>vw||x+w<0)continue;
     if(pl.kind==="move"){
-      ctx.strokeStyle="rgba(140,106,67,.55)";ctx.lineWidth=Math.max(1,U*.05);
-      ctx.beginPath();ctx.moveTo(x+w*.15,y);ctx.lineTo(x+w*.15,0);ctx.moveTo(x+w*.85,y);ctx.lineTo(x+w*.85,0);ctx.stroke();
+      const ps=U/16;
+      for(const rx of [x+w*.15,x+w*.85])for(let ry=0;ry<y;ry+=ps)ctx.fillStyle=(Math.floor(ry/ps)%3?"#6b4a2f":"#8c6a43"),ctx.fillRect(Math.floor(rx/ps)*ps,ry,ps,ps);
       ctx.fillStyle="#6b4a2f";ctx.fillRect(x,y,w,U*.32);
       ctx.fillStyle="#c9a56a";ctx.fillRect(x,y,w,U*.08);
       ctx.fillStyle="#3d2a1c";ctx.fillRect(x,y+U*.26,w,U*.06);
@@ -5540,6 +5550,13 @@ function drawCourse(vw,vh){
       ctx.beginPath();ctx.moveTo(x+jx+w*.3,y);ctx.lineTo(x+jx+w*.45,y+U*.5);ctx.lineTo(x+jx+w*.35,y+U*.9);
       ctx.moveTo(x+jx+w*.7,y);ctx.lineTo(x+jx+w*.62,y+U*.6);ctx.stroke();
     }
+    if(pl.flag&&!pl.goal&&pl.x>-1){
+      const fx=x+w*.5,fy=y,ps2=U/16;
+      ctx.fillStyle="#8c6a43";ctx.fillRect(Math.floor(fx/ps2)*ps2,fy-ps2*14,ps2,ps2*14);
+      const reached=K.check&&Math.abs(K.check.y-pl.y)<.01&&K.check.x>=pl.x&&K.check.x<=pl.x+pl.w;
+      ctx.fillStyle=reached?"#6fa844":"#c94a3c";
+      for(let r=0;r<5;r++)ctx.fillRect(Math.floor(fx/ps2)*ps2+ps2,fy-ps2*14+r*ps2,ps2*(6-r),ps2);
+    }
     if(pl.goal){
       const fx=x+U*1.3,fy=y;
       const gg=ctx.createRadialGradient(fx,fy-U,0,fx,fy-U,U*2.4);
@@ -5549,21 +5566,27 @@ function drawCourse(vw,vh){
       const fl=SPR.weapon_torch;if(fl)ctx.drawImage(fl,fx-U*.4,fy-U*1.75,U*.8,U*.8);
     }
   }
-  // vines
+  // vines, drawn on the same pixel grid as the sprites
+  const ps=U/16,snap=v=>Math.floor(v/ps)*ps;
+  const dot=(x,y,c,wd,ht)=>{ctx.fillStyle=c;ctx.fillRect(snap(x),snap(y),ps*(wd||1),ps*(ht||1));};
   for(const v of K.vines){
     const ax=sx(v.ax),ay=sy(v.ay);
     if(ax<-U*6||ax>vw+U*6)continue;
-    ctx.fillStyle="#39414f";ctx.beginPath();ctx.moveTo(ax-U*.5,0);ctx.lineTo(ax+U*.5,0);ctx.lineTo(ax+U*.15,ay+U*.1);ctx.lineTo(ax-U*.15,ay+U*.1);ctx.fill();
+    // rocky knot the vine hangs from
+    const AN=["..kqqqqqqk..","..kqGgggqk..","...kqggqk...","...kqgqqk...","....kqqk....","....kmMk...."];
+    const AC={k:"#0b0d12",q:"#39414f",g:"#566173",G:"#8e9aad",m:"#3f6b2e",M:"#6fa844"};
+    for(let r=0;r<AN.length;r++)for(let c=0;c<AN[r].length;c++){const ch=AN[r][c];if(ch!==".")dot(ax-6*ps+c*ps,ay-(AN.length-1)*ps+r*ps,AC[ch]);}
+    for(let yy=snap(ay-(AN.length-1)*ps)-ps;yy>-ps;yy-=ps*2)dot(ax-ps,yy,"#2b3243",2,2);   // root cord up into the dark
     const len=K.p.vine===v?K.p.rl+.25:v.len;
-    const tx=ax+Math.sin(v.theta)*len*U,ty=ay+Math.cos(v.theta)*len*U;
-    ctx.strokeStyle="#3f6b2e";ctx.lineWidth=Math.max(2,U*.1);ctx.lineCap="round";
-    ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(tx,ty);ctx.stroke();
-    ctx.strokeStyle="#6fa844";ctx.lineWidth=Math.max(1,U*.04);
-    ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(tx,ty);ctx.stroke();
-    for(let i=1;i<len*1.6;i++){
-      const q=i/(len*1.6),lx=ax+(tx-ax)*q,ly=ay+(ty-ay)*q,sd=i%2?1:-1;
-      ctx.fillStyle=i%3?"#6fa844":"#a8e063";
-      ctx.beginPath();ctx.ellipse(lx+sd*U*.14,ly,U*.13,U*.06,sd*.6,0,Math.PI*2);ctx.fill();
+    const n=Math.ceil(len*16);
+    let last=null;
+    for(let i=0;i<=n;i++){
+      const q=i/n,bend=K.p.vine===v?0:Math.sin(q*Math.PI)*.18*Math.sin(K.t*2+v.ph);   // idle vines sway along their length; a held one pulls straight
+      const lx=ax+Math.sin(v.theta)*len*U*q+bend*U*.15,ly=ay+Math.cos(v.theta)*len*U*q;
+      const key=snap(lx)+","+snap(ly);if(key===last)continue;last=key;
+      dot(lx-ps,ly,"#2e4f22",2,1);dot(lx,ly,i%5===0?"#a8e063":"#6fa844");
+      if(i%7===3){const sd=(i%14===3)?1:-1;dot(lx+sd*ps*2,ly-ps,"#6fa844",2,1);dot(lx+sd*ps*3,ly,"#a8e063");dot(lx+sd*ps*2,ly,"#3f6b2e");}
+      if(i===n){dot(lx-ps,ly+ps,"#6fa844",2,1);dot(lx,ly+ps*2,"#a8e063");}
     }
   }
   // the hero
@@ -5583,6 +5606,9 @@ function drawCourse(vw,vh){
   // text
   const fs=Math.max(11,Math.round(U*.34));
   ctx.textAlign="left";ctx.textBaseline="top";
+  ctx.font=Math.round(fs*.82)+'px "IBM Plex Mono", monospace';
+  const tw=ctx.measureText("\u2190 \u2192 run   \u2191 / Space jump   on a vine: \u2190 \u2192 swing, jump to let go   Esc back away").width;
+  ctx.fillStyle="rgba(6,8,13,.72)";ctx.fillRect(U*.2,U*.2,tw+U*.4,fs*3.85);
   ctx.font="600 "+fs+'px "IBM Plex Mono", monospace';
   ctx.fillStyle="#f0c060";ctx.fillText("THE CHASM",U*.4,U*.35);
   ctx.font=Math.round(fs*.82)+'px "IBM Plex Mono", monospace';
