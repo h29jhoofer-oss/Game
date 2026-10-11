@@ -5588,8 +5588,8 @@ function drawCourse(vw,vh){
   ctx.font=Math.round(fs*.82)+'px "IBM Plex Mono", monospace';
   ctx.fillStyle="#9aa5b1";
   ctx.fillText("Reach the torch on the far ledge"+(K.falls?`   ·   falls: ${K.falls}`:""),U*.4,U*.35+fs*1.4);
-  ctx.textBaseline="bottom";ctx.fillStyle="#8e9aad";
-  ctx.fillText("← → run   ↑ / Space jump   on a vine: ← → swing, jump to let go   Esc back away",U*.4,vh-U*.25);
+  ctx.fillStyle="#6c7686";
+  ctx.fillText("← → run   ↑ / Space jump   on a vine: ← → swing, jump to let go   Esc back away",U*.4,U*.35+fs*2.6);
   if(K.state==="intro"||K.state==="done"){
     const a=K.state==="intro"?Math.min(1,K.timer*1.6):Math.min(1,(.8-K.timer)*2);
     ctx.fillStyle="rgba(6,8,13,"+(a*.6).toFixed(3)+")";ctx.fillRect(0,0,vw,vh);
