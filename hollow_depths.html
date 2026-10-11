@@ -147,6 +147,26 @@ canvas{display:block;max-width:100%;max-height:100%;touch-action:manipulation;
     10px 14px 0 0 rgba(0,0,0,.55);
 }
 .charcard:not(.locked):active{transform:translateY(0)}
+/* Desktop: the heroes are held like a hand of cards. --t is each card's offset from the middle.
+   Hovering (or focusing) a card lifts it out of the hand; the rest fade so it can be read. */
+@media (min-width:761px) and (hover:hover){
+  .chargrid.fan{display:flex;justify-content:center;align-items:stretch;gap:0;padding:56px 12px 60px}
+  .chargrid.fan .charcard{
+    flex:0 0 206px;width:206px;margin-left:-74px;z-index:calc(10 + var(--i));
+    transform-origin:50% 140%;
+    transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px));
+    transition:transform .2s ease-out,opacity .2s ease-out,box-shadow .2s;
+  }
+  .chargrid.fan .charcard:first-child{margin-left:0}
+  .chargrid.fan .charcard:hover,.chargrid.fan .charcard:focus-visible{
+    z-index:40;outline:0;
+    transform:rotate(calc(var(--t) * 7deg)) translateY(calc(var(--t) * var(--t) * 5px - 34px));
+  }
+  .chargrid.fan:has(.charcard:hover,.charcard:focus-visible) .charcard:not(:hover):not(:focus-visible){opacity:.35}
+}
+@media (min-width:761px) and (hover:hover) and (prefers-reduced-motion:reduce){
+  .chargrid.fan .charcard{transition:none}
+}
 .cpip{ /* corner rank + pixel suit */
   position:absolute;z-index:1;display:flex;flex-direction:column;align-items:center;gap:3px;line-height:1;
   font-weight:700;font-size:15px;color:var(--ink);pointer-events:none;
@@ -3257,9 +3277,11 @@ function chooseHero(){
     const m=`<b>${r}</b>${suitSvg(SUITS[i%4],2)}`;
     return `<div class="cpip tl${red}">${m}</div><div class="cpip br${red}">${m}</div>`;
   };
+  const mid=(CHARACTERS.length-1)/2;
+  const fan=i=>`style="--i:${i};--t:${(i-mid).toFixed(2)}"`;
   const cards=CHARACTERS.map((c,i)=>{
     if(isUnlocked(c.id)){
-      return `<div class="charcard" data-id="${c.id}" role="button" tabindex="0">
+      return `<div class="charcard" data-id="${c.id}" role="button" tabindex="0" ${fan(i)}>
         ${pips(i,false)}
         <div class="cport">${icon(c.spr,96)}</div>
         <div class="cname">${c.name}</div>
@@ -3269,7 +3291,7 @@ function chooseHero(){
     }
     const q=QUESTS.find(x=>x.unlock===c.id);
     const n=q?Math.min(q.goal,META.stats[q.stat]||0):0;
-    return `<div class="charcard locked">
+    return `<div class="charcard locked" tabindex="0" ${fan(i)}>
       ${pips(i,true)}
       <div class="cport">${icon(c.spr,80)}</div>
       <div class="cname">???</div>
@@ -3281,7 +3303,7 @@ function chooseHero(){
   }).join("");
   overlay(`<h3>Choose your hero</h3>
     <p class="lede">Each one fights differently. Complete quests to meet more of them.</p>
-    <div class="chargrid">${cards}</div>`);
+    <div class="chargrid fan">${cards}</div>`);
   $("card").classList.add("wide");
   document.querySelectorAll("#card .charcard:not(.locked)").forEach(el=>{
     el.onclick=()=>start(el.dataset.id);
