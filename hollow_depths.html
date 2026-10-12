@@ -881,10 +881,19 @@ const MONSTERS=[
  {id:"troll", g:"T",name:"troll",        hp:102,min:10,max:17, def:4,acc:.85,xp:66,lo:7,hi:10,col:"--moss",regen:3,sp:{name:"Knit Flesh",cd:4,heal:.2}},
  {id:"knight",g:"K",name:"dark knight",  hp:125,min:12,max:20, def:5,acc:.90,xp:78,lo:8,hi:10,col:"--blood",sp:{name:"Shield Bash",mult:.9,cd:5,stun:1}},
  {id:"guardian",g:"G",name:"gilded guardian",hp:40,min:5,max:9,def:2,acc:.80,xp:30,lo:99,hi:99,col:"--torch",slow:true,still:true,guardian:true,sp:{name:"Gilded Fist",mult:1.5,cd:4,acc:.75}},
- {id:"king",  g:"\u2126",name:"the Hollow King",hp:260,min:13,max:22,def:5,acc:.92,xp:400,lo:99,hi:99,col:"--torch",pierce:3,boss:true,sps:[{name:"Hollow Roar",mult:1.35,cd:3},{name:"Crown of Ash",mult:.95,burn:3,cd:4},{name:"Devour",mult:1.15,drain:.5,cd:4}],qteSp:{name:"Reckoning Slam",qte:true,mult:2.5,cd:5}}
+ {id:"king",  g:"\u2126",name:"the Hollow King",hp:260,min:13,max:22,def:5,acc:.92,xp:400,lo:99,hi:99,col:"--torch",pierce:3,boss:true,sps:[{name:"Hollow Roar",mult:1.35,cd:3},{name:"Crown of Ash",mult:.95,burn:3,cd:4},{name:"Devour",mult:1.15,drain:.5,cd:4}],qteSp:{name:"Reckoning Slam",qte:true,mult:2.5,cd:5}},
+ // The final foe, on floor 20. Beating its first shape reveals the second; beating that only makes it angry,
+ // and the third phase is a chase across the floor (see startChase).
+ {id:"thing", g:"\u03A8",name:"Thing Under the Hill",title:"The Thing Under the Hill",hp:480,min:14,max:23,def:5,acc:.9,xp:0,lo:99,hi:99,col:"--rime",pierce:3,boss:true,thing:1,
+  phaseLabel:"\u269C PHASE 1 \u2014 WEARING A SHAPE",intro:"Every eye in the dark opens at once.",
+  sps:[{name:"Grasping Roots",mult:1.1,cd:3,guardDown:2},{name:"Fine Print",mult:.9,drain:.5,cd:4},{name:"Weight of the Hill",mult:1.5,cd:4,acc:.78}]},
+ {id:"thing2",g:"\u03A8",name:"Thing Under the Hill",title:"The Thing Under the Hill",hp:560,min:18,max:28,def:6,acc:.93,xp:0,lo:99,hi:99,col:"--blood",pierce:4,boss:true,thing:2,
+  phaseLabel:"\u2694 PHASE 2 \u2014 UNVEILED",
+  sps:[{name:"Grasping Roots",mult:1.2,cd:3,guardDown:3},{name:"Swallowing Dark",mult:1.1,drain:.6,cd:3},{name:"Ember of the Deep",mult:1,burn:3,cd:4},{name:"Feed on the Hill",cd:6,heal:.06}],
+  qteSp:{name:"The Hill Comes Down",qte:true,mult:2.4,cd:4}}
 ];
 const PLAYTEST=false;   // playtest builds flip this on: every hero unlocked, test items on floor 1
-const XPTABLE=[0,22,55,105,180,285,425,610,850,1150,1520,2000];
+const XPTABLE=[0,22,55,105,180,285,425,610,850,1150,1520,2000,2550,3150,3800,4500,5250,6050,6900,7800,8750,9750];
 
 /* ============================ state ============================ */
 let DL=new Map(),DOORS=[],LEVERS=[]; // interactive dungeon: doors blocking corridors, levers that open them
@@ -911,7 +920,7 @@ function newFloor(depth){
   map=[];seen=new Set();visible=new Set();mons=[];items=[];traps=[];SHR=null;S.atShrine=false;DL=new Map();DOORS=[];LEVERS=[];CHASMS=[];CHM=new Map();PK=null;
   for(let y=0;y<H;y++){map.push(new Array(W).fill(WALL));}
   const rooms=[];
-  const tries=depth>=10?14:22;
+  const tries=depth===10||depth===20?14:22;   // the two boss floors are smaller
   for(let i=0;i<tries;i++){
     const w=rint(6,12),h=rint(4,8);
     const x=rint(1,W-w-2),y=rint(1,H-h-2);
@@ -933,7 +942,8 @@ function newFloor(depth){
   S.wisp=null;                 // the follower snaps back to you on a new floor
   S.fx=S.px+.5;S.fy=S.py+.5;   // continuous position (tile units, centre) for free movement
 
-  if(depth<10){
+  // Floor 10's stair only opens once the King falls; floor 20 has no stair down at all.
+  if(depth!==10&&depth<20){
     const last=rooms[rooms.length-1];
     S.sx=last.cx;S.sy=last.cy;map[S.sy][S.sx]=STAIRS;
   }else{S.sx=-1;S.sy=-1;}
@@ -942,12 +952,16 @@ function newFloor(depth){
   placeDoors(depth,rooms);
   placeChasms(depth,rooms);
 
-  if(depth>=10){
+  if(depth===10){
     const r=rooms[rooms.length-1];
     spawnMon("king",r.cx,r.cy);
     for(let i=0;i<4;i++)placeMon(depth,"knight");
+  }else if(depth>=20){
+    const r=rooms[rooms.length-1];
+    spawnMon("thing",r.cx,r.cy);
+    for(let i=0;i<4;i++)placeMon(depth,pick(["knight","wraith"]));
   }else{
-    let n=3+depth+rnd(2);
+    let n=depth>10?7+rnd(3):3+depth+rnd(2);
     if(S&&S.flameout)n*=2; // dark floors teem with monsters
     for(let i=0;i<n;i++)placeMon(depth);
   }
@@ -986,7 +1000,7 @@ function placeShrine(depth,rooms){
     for(let j=y-1;j<=y+2;j++)for(let i=x-1;i<=x+2;i++){
       if(i===S.px&&j===S.py)return false;
       if(i===S.sx&&j===S.sy)return false;
-      if(depth>=10&&i===rooms[last].cx&&j===rooms[last].cy)return false;
+      if((depth===10||depth>=20)&&i===rooms[last].cx&&j===rooms[last].cy)return false;
     }
     for(let j=y;j<=y+1;j++)for(let i=x;i<=x+1;i++)if(map[j][i]!==FLOOR)return false;
     return true;
@@ -1039,7 +1053,7 @@ function floodFrom(sx,sy){
 function placeDoors(depth,rooms){
   DL=new Map();DOORS=[];LEVERS=[];
   const last=rooms[rooms.length-1];
-  const tx=depth<10?S.sx:last.cx,ty=depth<10?S.sy:last.cy;
+  const tx=S.sx>=0?S.sx:last.cx,ty=S.sx>=0?S.sy:last.cy;
   const inRoom=(x,y)=>rooms.some(r=>x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h);
   const cand=[];
   for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){
@@ -1182,13 +1196,23 @@ function openSpot(avoidStart){
   return null;
 }
 function spawnMon(id,x,y){
-  const t=MONSTERS.find(m=>m.id===id);
+  let t=MONSTERS.find(m=>m.id===id);
+  if(S&&S.depth>10&&!t.boss&&!t.guardian)t=deepType(t,S.depth);
   mons.push({t,x,y,vx:x,vy:y,hp:t.hp,max:t.hp,seenYou:false,skip:false,
     ph:Math.random()*6.283,flash:0,lunge:null});
 }
+// Below the throne (floors 11-20) the old monsters come back stronger, with the Thing's roots in them.
+const DEEP_T={};
+function deepType(t,depth){
+  const k=depth-10,key=t.id+":"+depth;
+  if(!DEEP_T[key])DEEP_T[key]=Object.assign({},t,{name:"rooted "+t.name,deep:k,
+    hp:Math.round(t.hp*(1+.09*k)),min:Math.round(t.min*(1+.045*k)),max:Math.round(t.max*(1+.045*k)),
+    def:t.def+Math.floor(k/3),xp:Math.round(t.xp*(1+.1*k))});
+  return DEEP_T[key];
+}
 function placeMon(depth,forceId){
   const pool=forceId?[MONSTERS.find(m=>m.id===forceId)]
-    :MONSTERS.filter(m=>!m.boss&&depth>=m.lo&&depth<=m.hi);
+    :MONSTERS.filter(m=>!m.boss&&(depth>10?m.hi>=8&&m.lo<=10:depth>=m.lo&&depth<=m.hi));
   if(!pool.length)return;
   const s=openSpot(true);if(!s)return;
   spawnMon(pick(pool).id,s.x,s.y);
@@ -1650,6 +1674,7 @@ function playerAtk(){
   return{min:r.min,max:r.max,crit:w.crit,acc:w.acc,pierce:w.pierce,reach:w.reach};
 }
 function kill(m){
+  if(m.t.thing){m.hp=Math.max(1,m.hp);say("The thing under the hill will not be killed from a distance. Go to it.","c-hit");return;}
   if(m.t.guardian)dropGuardianGold(m);
   corpses.push({spr:MONSPR[m.t.id],x:m.vx,y:m.vy,t:0});
   burst(m.x,m.y,cssv("--blood"),m.t.boss?44:13,m.t.boss?6.5:3.6);
@@ -1657,7 +1682,7 @@ function kill(m){
   mons=mons.filter(o=>o!==m);
   say(`The ${m.t.name} falls.`,"c-good");
   gainXp(m.t.xp);feastHeal();
-  if(m.t.boss){win();return;}
+  if(m.t.boss){bossDown(m);return;}
   if(Math.random()<.22){
     const it=Object.assign(rollItem(S.depth),{x:m.x,y:m.y});
     items.push(it);
@@ -2150,7 +2175,7 @@ function nudge(m,dx,dy){
 let descentT=0,descentLen=0;
 const DESCENT_FADE=.6;   // the last part of the blackout fades back in
 function descend(){
-  if(S.mode!=="map"||S.px!==S.sx||S.py!==S.sy||descentT>0)return;
+  if(S.mode!=="map"||S.px!==S.sx||S.py!==S.sy||descentT>0||S.chase)return;
   playGateSound();
   descentLen=descentT=gateLen();
   held.clear();
@@ -2160,6 +2185,8 @@ function descend(){
   const fl=flavorFor(S.depth);
   if(fl)say(fl,"c-cold");
   if(S.depth===10)say("Something enormous stirs at the far end of the hall.","c-lvl");
+  if(S.depth===11)say("The stair under the throne goes on, far further than any stair should.","c-lvl");
+  if(S.depth===20)say("The roots all run one way here. Something at the end of them is waiting.","c-lvl");
   if(S.depth===5)bumpStat("alembic");
   refresh();
 }
@@ -2187,6 +2214,8 @@ function die(by){
     ? `${CHAR().name} misses the far ledge. The dark at the bottom of the chasm is very patient.`
     : by==="the terms"
     ? `The ink takes its last payment from ${CHAR().name}. The terms are satisfied, and the dungeon goes back to being quiet.`
+    : by==="thing"
+    ? `The thing under the hill closes over ${CHAR().name} like a tide. Far above, the hill settles, and is quiet.`
     : by==="blood loss"
     ? `${CHAR().name} bleeds out on the cold stone. The torch gutters out, and the dungeon goes back to being quiet.`
     : `The ${by} stands over him. The torch gutters out, and the dungeon goes back to being quiet.`;
@@ -2194,7 +2223,7 @@ function die(by){
     <h3>${CHAR().name} falls</h3>
     <p class="lede">${lede}</p>
     <div class="tally">
-      <div><span>Floor reached</span><span>${S.depth} of 10</span></div>
+      <div><span>Floor reached</span><span>${S.depth} of ${S.depth>10||S.kingSlain?20:10}</span></div>
       <div><span>Level</span><span>${S.lvl}</span></div>
       <div><span>Gold</span><span>${S.gold}</span></div>
       <div><span>Score</span><span>${sc}</span></div>
@@ -2204,11 +2233,11 @@ function die(by){
   $("again").onclick=chooseHero;
 }
 function win(){
-  S.over=true;packOpen=false;codexOpen=false;shrineOpen=false;unlockLore(11);refresh();
-  const sc=score()+800,b=saveBest(sc);showBest();
-  const wlede=CHAR().win||"The Hollow King comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Cade climbs back toward the light, because someone should tell the wall guard it's finally over.".replace(/\bCade\b/g,CHAR().name);
+  S.over=true;S.chase=null;setTension(false);packOpen=false;codexOpen=false;shrineOpen=false;unlockLore(21);refresh();
+  const sc=score()+2800,b=saveBest(sc);showBest();
+  const wlede=ESCAPE_END[CHAR().id]||ESCAPE_END.cade.replace(/\bCade\b/g,CHAR().name);
   overlay(`
-    <h3>The crown is quiet</h3>
+    <h3>Out from under the hill</h3>
     <p class="lede">${wlede}</p>
     <div class="tally">
       <div><span>Level</span><span>${S.lvl}</span></div>
@@ -2707,6 +2736,9 @@ const ART={"rook":["............kk..","...........kZlk.",".....kkkk..kwGk.","...
 "troll":["................","................",".....mmmmmm.....","....mMMMMMMm....","....mMyMMyMm....","....mMMMMMMm....","....mMwMMwMm....","...mmMMMMMMmm...","..mMMMMMMMMMMm..",".mMMMMMMMMMMMMm.",".mMmMMMMMMMMmMm.",".mMmMMMMMMMMmMm.",".mMm.mMMMMm.mMm.",".mMm.mMMMMm.mMm.",".mmm..mmmm..mmm.","......mm.mm....."],
 "knight":["................","................","....dddddddd....","...dgggggggggd..","...dgRgggggRgd..","...dggggggggd...","....dgggggd.....","..ddddddddddd...",".dgggrrrrrgggd..",".dgggrRRRrgggd..",".dgggrrrrrgggd..",".ddd.dddddd.ddd.",".....dddddd.....","....ddd..ddd....","....dkd..dkd....","...ddd....ddd..."],
 "king":["................","................","..O..OO..OO..O..","..OoOooOOooOoO..","...OOOOOOOOOO...","...dwwwwwwwwd...","...dwEwwwwEwd...","...dwwwwwwwwd...","...dwEEEEEEwd...","..ddwwwwwwwwdd..",".dveeeeeeeeevd..",".dveEEEEEEEevd..",".dveeeeeeeeevd..","..dvvvvvvvvvd...","...dvv....vvd...","..ddd......ddd.."],
+"thing":["................",".......kk.......",".....k9999k.....","....k966669k....","...k96666669k...","...k6Y6666Y6k...","...k67666676k...","..k966kkkk669k..","..k66v6666v66k..",".k966vv66vv669k.",".k66v66Y66v666k.","k966v666666v669k","k66vv666666vv66k","k6uu66666666uu6k",".uu.uu6666uu.uu.","uu..u..uu..u..uu"],
+"thing2":["..u..u.uu.u..u..","..uu.uu99uu.uu..","...k99999999k...","..k9666666669k..","..k6RR6666RR6k..","..k6RA6666AR6k..",".kk6666666666kk.","k96k0Z0Z0Z0k69k.","k96k00000000k69k","kv6vkk6666kkv6vk","v66v66v66v66v66v","k6vv666RR666vv6k",".k66v666666v66k.",".kuu66666666uuk.","uu.uuu6666uuu.uu","u..u..uuuu..u..u"],
+"thing3":["..A....AA....A..","..0...k00k...0..","..0k.k9999k.k0..","...k99666699k...","..k9RA6666AR9k..",".k966666666669k.","k96000000000069k","k60Z0Z0ZZ0Z0Z06k","k600a0a00a0a006k","k60aaaaaaaaaa06k","k60Z0Z0ZZ0Z0Z06k","vk600000000006kv","v6k6666666666k6v","vv.k66666666k.vv","v..vv6vvvv6vv..v","v...v..vv..v...v"],
 "potion_heal":["................","................","................","......kkkk......","......kNNk......","......kNNk......",".....kkNNkk.....",".....kRRRRk.....","....kRRRRRRk....","....kRrRRRRk....","....kRrRRRRk....","....kRrRRRRk....","....kRRRRRRk....",".....kkkkkk.....","................","................"],
 "potion_might":["................","................","................","......kkkk......","......kNNk......","......kNNk......",".....kkNNkk.....",".....kOOOOk.....","....kOOOOOOk....","....kOoOOOOk....","....kOoOOOOk....","....kOoOOOOk....","....kOOOOOOk....",".....kkkkkk.....","................","................"],
 "scroll_flame":["................","................","................","...kkkkkkkkkk...","...kwwwwwwwwk...","...kwEEwwEEwk...","...kwwwwwwwwk...","...kwEEEEEEwk...","...kwwwwwwwwk...","...kwEEwwEEwk...","...kwwwwwwwwk...","...kkkkkkkkkk...","....NNNNNNNN....","................","................","................"],
@@ -2804,7 +2836,7 @@ function icon(name,sz){
     +'style="image-rendering:pixelated;vertical-align:middle;flex:none">';
 }
 const MONSPR={rat:"rat",bat:"bat",gob:"goblin",skel:"skeleton",orc:"orc",slime:"slime",
-  wraith:"wraith",ogre:"ogre",troll:"troll",knight:"knight",king:"king",guardian:"guardian"};
+  wraith:"wraith",ogre:"ogre",troll:"troll",knight:"knight",king:"king",guardian:"guardian",thing:"thing",thing2:"thing2",thing3:"thing3"};
 // Sprite names: weapon_<id>, armor_<id>, and tiered potion/scroll variants.
 function consSpr(id,tier){
   tier=Math.min(2,tier||0);
@@ -3117,6 +3149,8 @@ function render(){
     }
   }
 
+  if(S.chase)drawChase();
+
   if(!S.over||S.hp>0){
     const o=off(S);
     const bob=RM?0:Math.sin(tclock*2.4)*.035;
@@ -3176,6 +3210,14 @@ function render(){
     ctx.fillStyle=rg;ctx.fillRect(0,0,vw,vh);
   }
 
+  if(S.chase&&!S.over){
+    const d=Math.hypot(S.fx-S.chase.fx,S.fy-S.chase.fy),a=Math.max(0,Math.min(.6,(1-d/11)*.65))*(RM?1:.8+.2*Math.sin(tclock*7));
+    if(a>0){
+      const cg=ctx.createRadialGradient(vw/2,vh/2,Math.min(vw,vh)*.22,vw/2,vh/2,Math.max(vw,vh)*.62);
+      cg.addColorStop(0,"rgba(120,10,30,0)");cg.addColorStop(1,"rgba(120,10,30,"+a.toFixed(3)+")");
+      ctx.fillStyle=cg;ctx.fillRect(0,0,vw,vh);
+    }
+  }
   // Stamina-low vignette: amber pulse when exhausted
   if(S.exhausted && !S.over){
     const ea=.35+.25*Math.sin(tclock*6);
@@ -3548,7 +3590,7 @@ function unlocked(){return moveList().filter(m=>S.lvl>=m.lvl);}
 function tickCooldowns(){
   for(const k in S.cds)if(S.cds[k]>0)S.cds[k]--;
 }
-function aName(t){return t.boss?"The Hollow King":(/^[aeiou]/i.test(t.name)?"An ":"A ")+t.name;}
+function aName(t){return t.boss?(t.title||"The Hollow King"):(/^[aeiou]/i.test(t.name)?"An ":"A ")+t.name;}
 function cap(str){return str.charAt(0).toUpperCase()+str.slice(1);}
 function newMovesAt(lvl){return moveList().filter(m=>m.lvl===lvl);}
 
@@ -3742,7 +3784,7 @@ function startBattle(m){
   requestAnimationFrame(resize);
   $("log").innerHTML="";
   blog(`${aName(m.t)} blocks the way!`,"c-lvl");
-  if(m.t.boss)blog("The crown turns toward you.","c-lvl");
+  if(m.t.boss)blog(m.t.intro||"The crown turns toward you.","c-lvl");
   if(!S.combatTips){
     S.combatTips=true;
     blog("Tip: chain hits for a combo; 4 in a row sets up a guaranteed-crit finisher.","c-cold");
@@ -3833,7 +3875,7 @@ function hurtMon(dmg,crit){
   checkBossPhase();
 }
 function checkBossPhase(){
-  if(!B||!B.mon.t.boss||B.phaseNum!==1)return;
+  if(!B||!B.mon.t.boss||B.mon.t.thing||B.phaseNum!==1)return;
   if(B.mhp<=B.mmax*.5) triggerPhase2();
 }
 function triggerPhase2(){
@@ -4481,6 +4523,8 @@ function endRound(){
 function lowHpCheck(){if(B&&S.hp>0&&S.hp<=S.maxhp*.15)B.lowHp=true;}
 function winBattle(){
   if(!B||B.phase==="over")return;
+  if(B.mon.t.thing===1){thingUnveils();return;}
+  if(B.mon.t.thing===2){thingEnrages();return;}
   lowHpCheck();if(B.lowHp)bumpStat("lowhp");
   B.phase="over";B.faint=0.0001;
   const m=B.mon;
@@ -4499,7 +4543,7 @@ function winBattle(){
     gainXp(m.t.xp);
     feastHeal();
     endBattle();
-    if(boss){win();return;}
+    if(boss){bossDown(m);return;}
     endTurn();
   });
 }
@@ -5020,7 +5064,7 @@ function plate(x,y,w,title,ratio,sub,chips,fs,boss,phaseNum,poise){
     ctx.font="600 "+Math.round(fs*.8)+'px "IBM Plex Mono", monospace';
     const p2=phaseNum===2;
     ctx.fillStyle=p2?"#ff6a52":"#c9a24a";
-    ctx.fillText(p2?"⚔ PHASE 2 — WRATHFUL":"⚜ PHASE 1 — THE CROWNED",x+fs*.9,y+fs*2.35);
+    ctx.fillText(B&&B.mon.t.phaseLabel||(p2?"⚔ PHASE 2 — WRATHFUL":"⚜ PHASE 1 — THE CROWNED"),x+fs*.9,y+fs*2.35);
     barY=fs*3.05;
   }
   const bx=x+fs*.9,by=y+barY,bw=w-fs*1.8,bh=Math.max(5,fs*.55);
@@ -5084,7 +5128,7 @@ const LORE=[
   body:"King Aldric struck a bargain with something under the hill to save his Queen, and paid for it with everything a king is supposed to have on the inside. She died anyway. He has been down here since, hollow and crowned, holding a court that will not let him go."},
  {id:"ledger", at:11, title:"The Ledger",
   body:"Beside the broken throne lies a notary's ledger, its clasp undone. Every page is full of terms in a careful, courteous hand, every clause witnessed and initialled. The final page is blank, as if whoever kept it is still looking for the right words."},
- {id:"end",    at:11, title:"After",
+ {id:"end",    at:21, title:"After",
   body:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Cade doesn't know if that counts as mercy. He climbs back toward the light anyway, because someone should tell the wall guard it's finally over."}
 ];
 function unlockLore(depth){
@@ -5102,6 +5146,166 @@ const FLAVOR={
  9:"Armour that hasn't rusted in three years falls into step somewhere behind him.",
  10:"The stair ends in a vaulted hall. The crown at the far end is still lit."
 };
+/* ============================ the deep & the thing under the hill ============================ */
+// Killing the Hollow King no longer ends the run: a stair opens under the throne and ten more floors lead
+// down to the Thing Under the Hill. It fights in two shapes, then gives up fighting and chases you; the
+// only way to win is to reach the crack of daylight that opens somewhere on the floor.
+Object.assign(FLAVOR,{
+ 11:"Below the throne the stone gives way to packed earth, and the earth to roots as thick as a man.",
+ 12:"The roots are warm. Cade tries not to touch them, and touches them anyway.",
+ 13:"Faces in the clay walls, pressed in like seals. Some of them are still being made.",
+ 14:"Every root on this floor bends the same way, like grass in a current. Down.",
+ 15:"Somewhere below, something breathes out, and the torch leans toward it.",
+ 16:"A garrison's worth of boots, lined up neatly. No sign of the garrison.",
+ 17:"Writing scratched into the roots, in a fair notary's hand. Clause after clause.",
+ 18:"The dark here has weight. Cade can feel it settle on his shoulders.",
+ 19:"The roots begin to move when he is not looking at them.",
+ 20:"The roots end in a hollow the size of a cathedral. In the middle of it, something wearing a shape."
+});
+LORE.push(
+ {id:"deep",  at:11,title:"Beneath the Throne",
+  body:"The Hollow King was never the bottom of it. He was the part of the bargain that could sit on a chair. The rest of it goes down, past the cellars and the crypts, into the hill itself, along the roots of whatever he made his terms with."},
+ {id:"roots", at:14,title:"The Roots",
+  body:"Everything the castle lost when it sank is down here somewhere, tangled in the roots: the garrison, the household, the names on the rolls. The roots do not eat. They keep. That is what the terms said, and the terms were very carefully written."},
+ {id:"terms", at:17,title:"The Original Terms",
+  body:"Clause one: the Queen shall live. Clause two: the price shall be the hill and all that stands upon it. There is no clause three. The King did not ask what would happen if she died anyway, and the thing under the hill did not tell him."},
+ {id:"thing", at:20,title:"The Thing Under the Hill",
+  body:"Nobody has ever seen its own shape. It wears shapes the way a hand wears a glove, and when one splits it simply reaches for another. It cannot be killed, only refused: walk out from under the hill and the bargain loses its grip on you."},
+ {id:"out",   at:21,title:"Daylight",
+  body:"The hill is only a hill from the outside. Grass, sheep, a crooked stile. Whatever is underneath it is still there, and will be for a long time, but nobody is bound to it any more. That will have to be enough."}
+);
+const ESCAPE_END={
+ cade:"Cade bursts out of the hillside into a grey, ordinary morning. Behind him the hill groans, and settles, and is only a hill again. Whatever lives under it is still down there, but the bargain that fed it is broken, and nothing follows him up. He walks to the outer wall, where a guard he doesn't know is yawning at his post, and tells him it's over.",
+ rook:"Rook bursts out of the hillside into a grey, ordinary morning. Behind him the hill groans, and settles, and is only a hill again. Nothing follows him up. He counts what is left in his purse, decides it is plenty, and laughs until he has to sit down in the wet grass.",
+ doctor:"Vell bursts out of the hillside into a grey, ordinary morning. Behind him the hill groans, and settles, and is only a hill again. He sits on the stile and writes the last lines on the slate. Cause of the sickness: a contract. Recommended treatment: leave. Then he walks to the nearest village to wash his hands for a very long time.",
+ mage:"Orrin bursts out of the hillside into a grey, ordinary morning. Behind him the hill groans, and settles, and is only a hill again. He says the King's name once, to the open sky. Nothing answers. For once, that is the right answer.",
+ pact_maker:"Edric bursts out of the hillside into a grey, ordinary morning. Behind him the hill groans, and settles, and is only a hill again. He opens the ledger to the last page and finds it blank: the terms are void, every clause discharged. He tears the page out anyway, folds it once, and lets the wind have it."
+};
+function bossDown(m){
+  if(m.t.id!=="king"){win();return;}
+  // The King's fall opens the way down instead of ending the run.
+  S.kingSlain=true;
+  const x=m.x,y=m.y;
+  items=items.filter(i=>!(i.x===x&&i.y===y));
+  map[y][x]=STAIRS;S.sx=x;S.sy=y;seen.add(x+","+y);
+  quake(18);ring(x,y,"rgba(240,192,96,.95)",5,1.2);
+  say("The Hollow King comes apart like old plaster, and for a moment the dark under the hill is just dark.","c-good");
+  say("Then the floor beneath the throne splits open, and a stair goes down. Whatever he bargained with is still under the hill.","c-lvl");
+  dirty=true;computeFOV();refresh();
+}
+// Phase 1 -> 2: the shape it was wearing splits, and what is underneath comes up at full health.
+function thingUnveils(){
+  B.phase="anim";
+  const m=B.mon,L=B.layout;
+  blog("The shape it was wearing splits down the middle like a seed husk.","c-lvl");
+  quake(20);
+  if(L){sburst(L.ex,L.ey,"#c94a3c",40,420);sring(L.ex,L.ey,"rgba(200,60,60,.95)",L.esz*1.4);}
+  queue(1.3,()=>{
+    if(!B)return;
+    const t=MONSTERS.find(x=>x.id==="thing2");
+    m.t=t;m.hp=m.max=t.hp;B.mhp=B.mmax=B.mShown=t.hp;B.phaseNum=2;B.qcd=1;B.mcd=0;
+    for(const k in B.mStat)B.mStat[k]=0;
+    B.maxPoise=70;B.poise=B.maxPoise;B.combo=0;
+    blog("What was underneath has too many eyes and no patience left.","c-hit");
+    refresh();B.phase="choose";drawMoves();
+  });
+}
+// Phase 2 -> 3: it will not die, so it stops fighting fair. The battle ends and the chase begins.
+function thingEnrages(){
+  B.phase="over";
+  const m=B.mon,L=B.layout;
+  blog("It does not die. It gets angry.","c-hit");
+  quake(24);
+  if(L){sburst(L.ex,L.ey,"#8a1f3a",50,460);sring(L.ex,L.ey,"rgba(160,20,40,.95)",L.esz*1.6);}
+  queue(1.6,()=>{endBattle();startChase(m);});
+}
+function distFrom(sx,sy){
+  const D=new Int16Array(W*H).fill(-1),q=[sx+sy*W];D[q[0]]=0;
+  for(let h=0;h<q.length;h++){
+    const i=q[h],x=i%W,y=(i-x)/W;
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+dx,ny=y+dy;
+      if(nx<0||ny<0||nx>=W||ny>=H||map[ny][nx]===WALL||map[ny][nx]===CHASM)continue;
+      const j=nx+ny*W;if(D[j]>=0)continue;D[j]=D[i]+1;q.push(j);
+    }
+  }
+  return D;
+}
+const CHASE_WAIT=2.2,CHASE_SPEED=3.8,CHASE_RAMP=.07,CHASE_MAX=4.8,CHASE_CATCH=.8,CHASE_PATH=60;
+function startChase(m){
+  const bx=m.x,by=m.y;
+  mons=[];   // it swallows everything else on the floor as it grows
+  for(const d of DOORS){d.open=true;map[d.y][d.x]=FLOOR;}   // and the hill shakes every door open
+  for(const l of LEVERS)l.on=true;
+  S.chase={x:bx,y:by,fx:bx+.5,fy:by+.5,t:0,wait:CHASE_WAIT,pulse:0,growl:3.5,stuck:0};
+  // The way out: a room about CHASE_PATH steps away from where it rose, so the run is long but fair.
+  const D=distFrom(bx,by);
+  let best=null,bs=1e9;
+  for(const r of S.rooms){
+    const d=D[r.cx+r.cy*W];
+    if(d<0||map[r.cy][r.cx]!==FLOOR)continue;
+    const sc=Math.abs(d-CHASE_PATH)+(d<30?1000:0);
+    if(sc<bs){bs=sc;best=r;}
+  }
+  if(!best)best=S.rooms[0];
+  S.sx=best.cx;S.sy=best.cy;map[S.sy][S.sx]=STAIRS;seen.add(S.sx+","+S.sy);
+  items=items.filter(i=>!(i.x===S.sx&&i.y===S.sy));
+  // Its swelling hurls you a few steps along the way out, so it is always behind you, never in the way.
+  const DE=distFrom(S.sx,S.sy);let hx=bx,hy=by;
+  for(let n=0;n<5;n++){
+    let nb=null;
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const v=DE[hx+dx+(hy+dy)*W];if(v>=0&&v<DE[hx+hy*W]&&!(hx+dx===S.sx&&hy+dy===S.sy))nb=[hx+dx,hy+dy];}
+    if(!nb)break;[hx,hy]=nb;
+  }
+  if(hx!==bx||hy!==by){S.px=hx;S.py=hy;S.fx=hx+.5;S.fy=hy+.5;S.vx=hx;S.vy=hy;burst(hx,hy,"#8e9aad",14,3);}
+  setTension(true);quake(22);
+  say("It swells to fill the hall, and the walls bow outward around it. The blast throws you clear.","c-hit");
+  say(`Daylight! A crack has opened in the hill to the ${compass(S.sx-S.px,S.sy-S.py)}. Run for it, and don't stop. Fear carries you: walking costs no stamina.`,"c-lvl");
+  dirty=true;computeFOV();refresh();
+}
+const CHASE_LINES=["The roots tear up behind you.","It is right behind you.","You hear it filling the corridor.","Something wet brushes the back of your neck.","The hill groans with it."];
+function chaseTick(dt){
+  const C=S.chase;if(!C)return;
+  C.t+=dt;
+  if(C.wait>0)C.wait-=dt;
+  else{
+    const spd=Math.min(CHASE_MAX,CHASE_SPEED+CHASE_RAMP*Math.max(0,C.t-CHASE_WAIT));
+    const dir=chaseDir(C)||[S.fx-C.fx,S.fy-C.fy];
+    const len=Math.hypot(dir[0],dir[1]);
+    if(len>1e-4){
+      const sp=spd*dt,vx=dir[0]/len*sp,vy=dir[1]/len*sp,ox=C.fx,oy=C.fy;
+      if(!boxWall(C.fx+vx,C.fy,MON_R))C.fx+=vx;
+      if(!boxWall(C.fx,C.fy+vy,MON_R))C.fy+=vy;
+      // caught on a corner: slide back to the middle of its tile and carry on
+      if(Math.hypot(C.fx-ox,C.fy-oy)<sp*.3){C.stuck+=dt;if(C.stuck>.35){C.fx=C.x+.5;C.fy=C.y+.5;C.stuck=0;}}else C.stuck=0;
+      C.x=Math.floor(C.fx);C.y=Math.floor(C.fy);
+    }
+  }
+  const d=Math.hypot(S.fx-C.fx,S.fy-C.fy);
+  if(d<CHASE_CATCH){S.chase=null;setTension(false);quake(24);held.clear();die("thing");return;}
+  if(S.px===S.sx&&S.py===S.sy){
+    S.chase=null;held.clear();
+    say("You throw yourself through the crack and into the light.","c-good");
+    win();return;
+  }
+  C.pulse-=dt;
+  if(C.pulse<=0){C.pulse=1.1;ring(S.sx,S.sy,"rgba(255,240,184,.85)",2.2,.9);if(d<7)quake(3+(7-d));}
+  C.growl-=dt;
+  if(C.growl<=0){C.growl=4+Math.random()*3;if(d<10)say(pick(CHASE_LINES),"c-hit");}
+}
+function drawChase(){
+  const C=S.chase;
+  const sc=RM?2:2+Math.sin(tclock*5)*.08;
+  blit("thing3",C.fx-.5,C.fy-.5,visible.has(C.x+","+C.y)?1:.4,C.wait>0?.25:0,sc,sc);
+  // an arrow at your feet points at the way out
+  const o=off(S),px=(S.vx+o[0]+.5-cam.x)*cell,py=(S.vy+o[1]+.5-cam.y)*cell;
+  const a=Math.atan2(S.sy+.5-S.fy,S.sx+.5-S.fx),r=cell*1.15;
+  ctx.save();ctx.translate(px+Math.cos(a)*r,py+Math.sin(a)*r);ctx.rotate(a);
+  ctx.globalAlpha=RM?.9:.65+.35*Math.sin(tclock*6);
+  ctx.fillStyle="#fff0b8";ctx.strokeStyle="rgba(6,8,13,.9)";ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(cell*.32,0);ctx.lineTo(-cell*.18,-cell*.2);ctx.lineTo(-cell*.18,cell*.2);ctx.closePath();ctx.stroke();ctx.fill();
+  ctx.restore();ctx.globalAlpha=1;
+}
 /* ============================ level-up draft ============================ */
 // Each level deals three cards. White cards are plain stat gains; now and then one is a black card,
 // a one-time special ability. Black cards with "mods" feed gearMod(); the rest are checked with
@@ -5743,7 +5947,7 @@ function refresh(){
   $("xptxt").textContent=`${S.xp} / ${need}`;
   $("xpbar").style.width=Math.min(100,100*(S.xp-prev)/(need-prev))+"%";
   $("lvl").textContent=S.lvl;
-  $("depth").textContent=`${S.depth} / 10`;
+  $("depth").textContent=`${S.depth} / ${S.depth>10||S.kingSlain?20:10}`;
   $("atk").textContent=`${a.min}-${a.max}`;
   $("def").textContent=guardVal();
   $("gold").textContent=S.gold;
@@ -5944,7 +6148,7 @@ function freeStep(dx,dy,dt,speed){
   const tx=Math.floor(S.fx),ty=Math.floor(S.fy);
   if(tx===S.px&&ty===S.py)return;
   S.px=tx;S.py=ty;S.steps++;
-  drainStamina(FREE_STEP_STAM);
+  if(!S.chase)drainStamina(FREE_STEP_STAM);   // during the escape, terror carries you
   playFootstep();
   springTrap();
   if(S.over)return;
@@ -6003,6 +6207,7 @@ function freeTick(dt){
     if(S.stillT>=STAM_STILL_DELAY&&S.stam<S.maxstam)gainStamina(STAM_STILL_RATE*dt*(CHAR().noRegen?.5:1)*(hasPerk("fleet")?2:1));
   }
   freeMonsters(dt);
+  if(S.chase)chaseTick(dt);
   if(freePaused())return;
   freeClock+=dt;
   if(freeClock>=FREE_TURN){freeClock-=FREE_TURN;endTurn();}
@@ -6013,7 +6218,7 @@ function freeTick(dt){
 // swing on vines to the far ledge. Fall and you lose a little health and try again from your last safe
 // ledge; Esc backs away. Finish once and a rope bridge spans that chasm for good.
 function placeChasms(depth,rooms){
-  if(depth>=10)return;
+  if(depth===10||depth>=20)return;
   const want=Math.min(6,2+Math.floor(depth/2));
   const inRoom=(x,y)=>rooms.some(r=>x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h);
   const near=(x,y)=>{for(const o of DL.values())if(Math.abs(o.x-x)<=2&&Math.abs(o.y-y)<=2)return true;return false;};
@@ -6464,6 +6669,7 @@ window.addEventListener("keydown",ev=>{
   if(k==="p"||k==="P"){toggleEditor();ev.preventDefault();return;}
   if(k==="v"||k==="V"){toggleMusic();ev.preventDefault();return;}
   if(k==="Enter"||k===">"){descend();ev.preventDefault();}
+  if(PLAYTEST&&(k==="n"||k==="N")&&S.mode==="map"&&!S.chase&&S.depth<20){S.depth++;if(S.depth>10)S.kingSlain=true;newFloor(S.depth);say(`Playtest: skipped to floor ${S.depth}.`,"c-cold");refresh();ev.preventDefault();}
 });
 document.querySelectorAll(".pad button").forEach(b=>{
   const dx=+b.dataset.dx,dy=+b.dataset.dy,code="pad:"+dx+":"+dy,dir=dx||dy;
@@ -6500,7 +6706,7 @@ const SE_SIZE=16;
 
 // Sprite categories for the dropdown
 const SE_CATS={
-  "Characters":["player","rook","doctor","mage","pact_maker","rat","bat","goblin","skeleton","orc","slime","wraith","ogre","troll","knight","king","guardian"],
+  "Characters":["player","rook","doctor","mage","pact_maker","rat","bat","goblin","skeleton","orc","slime","wraith","ogre","troll","knight","king","guardian","thing","thing2","thing3"],
   "Wisp":["wisp_0","wisp_1","wisp_orb"],
   "Orrin's Bolt":["magic_orb_0","magic_orb_1"],
   "Walk Cycles":["player_walk_0", "player_walk_1", "player_walk_2", "player_walk_3", "rook_walk_0", "rook_walk_1", "rook_walk_2", "rook_walk_3", "doctor_walk_0", "doctor_walk_1", "doctor_walk_2", "doctor_walk_3", "mage_walk_0", "mage_walk_1", "mage_walk_2", "mage_walk_3", "pact_maker_walk_0", "pact_maker_walk_1", "pact_maker_walk_2", "pact_maker_walk_3", "rat_walk_0", "rat_walk_1", "rat_walk_2", "rat_walk_3", "bat_walk_0", "bat_walk_1", "bat_walk_2", "bat_walk_3", "goblin_walk_0", "goblin_walk_1", "goblin_walk_2", "goblin_walk_3", "skeleton_walk_0", "skeleton_walk_1", "skeleton_walk_2", "skeleton_walk_3", "orc_walk_0", "orc_walk_1", "orc_walk_2", "orc_walk_3", "slime_walk_0", "slime_walk_1", "slime_walk_2", "slime_walk_3", "wraith_walk_0", "wraith_walk_1", "wraith_walk_2", "wraith_walk_3", "ogre_walk_0", "ogre_walk_1", "ogre_walk_2", "ogre_walk_3", "troll_walk_0", "troll_walk_1", "troll_walk_2", "troll_walk_3", "knight_walk_0", "knight_walk_1", "knight_walk_2", "knight_walk_3", "king_walk_0", "king_walk_1", "king_walk_2", "king_walk_3", "guardian_walk_0", "guardian_walk_1", "guardian_walk_2", "guardian_walk_3"],
