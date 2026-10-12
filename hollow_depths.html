@@ -5310,10 +5310,10 @@ function chaseTick(dt){
 // Phase 2 and the chase draw the Thing by hand instead of from a 16x16 sprite: a swollen blood-red head
 // with hollow eyes and a grin full of teeth, carried on two long jointed arms. It is painted at sprite
 // resolution (16 art pixels to a tile) on a small canvas, its edges snapped to hard pixels, then scaled up.
-const HZ={N:112,c:null,g:null};
+const HZ={N:112,K:.5,c:null,g:null};   // N: logical size; K: art pixels per logical unit (lower = chunkier)
 const HZ_COL={line:"#160304",skin:"#8a1a17",hi:"#c0413a",lo:"#3f0808",eye:"#020101",tooth:"#ece3cc",toothLo:"#9c8e74",maw:"#0b0203",gum:"#5a0c10"};
 function hzCtx(){
-  if(!HZ.c){HZ.c=document.createElement("canvas");HZ.c.width=HZ.c.height=HZ.N;HZ.g=HZ.c.getContext("2d",{willReadFrequently:true});}
+  if(!HZ.c){HZ.c=document.createElement("canvas");HZ.c.width=HZ.c.height=Math.round(HZ.N*HZ.K);HZ.g=HZ.c.getContext("2d",{willReadFrequently:true});}
   return HZ.g;
 }
 // Two-bone arm from shoulder (sx,sy) toward (tx,ty). The elbow always bends upward, high and spidery.
@@ -5329,24 +5329,41 @@ function hzArm(g,sx,sy,tx,ty,L1,L2){
     g.lineWidth=4+add;g.beginPath();g.moveTo(sx,sy);g.lineTo(ex,ey);g.stroke();
     g.lineWidth=3+add;g.beginPath();g.moveTo(ex,ey);g.lineTo(hx,hy);g.stroke();
     g.beginPath();g.arc(hx,hy,2.6+add/2,0,7);g.fill();
-    g.lineWidth=1.3+add;
+    g.lineWidth=2+add;
     for(let f=-1.5;f<=1.5;f++){
       const a=fa+f*.45,a2=a+f*.3,mx=hx+Math.cos(a)*4.5,my=hy+Math.sin(a)*4.5,qx=mx+Math.cos(a2)*4,qy=my+Math.sin(a2)*4;
       g.beginPath();g.moveTo(hx,hy);g.lineTo(mx,my);g.lineTo(qx,qy);g.stroke();
       if(!add)tips.push([qx,qy]);
     }
   }
-  g.strokeStyle=HZ_COL.hi;g.lineWidth=1;g.beginPath();g.moveTo(sx,sy-1.3);g.lineTo(ex,ey-1.3);g.stroke();
-  g.fillStyle=HZ_COL.tooth;for(const [x,y] of tips)g.fillRect(Math.round(x)-.5,Math.round(y)-.5,1,1);
+  g.strokeStyle=HZ_COL.hi;g.lineWidth=2;g.beginPath();g.moveTo(sx,sy-1.6);g.lineTo(ex,ey-1.6);g.stroke();
+  g.fillStyle=HZ_COL.tooth;for(const [x,y] of tips)g.fillRect(Math.round(x/2)*2-1,Math.round(y/2)*2-1,2,2);
 }
 function hzHead(g,P){
   const {hx,hy,r}=P,jaw=Math.max(0,Math.min(1,P.jaw));
-  g.fillStyle=HZ_COL.line;g.beginPath();g.ellipse(hx,hy,r+1.3,r*1.06+1.3,0,0,7);g.fill();
-  const gr=g.createRadialGradient(hx-r*.35,hy-r*.45,r*.1,hx,hy,r*1.08);
-  gr.addColorStop(0,HZ_COL.hi);gr.addColorStop(.5,HZ_COL.skin);gr.addColorStop(1,HZ_COL.lo);
-  g.fillStyle=gr;g.beginPath();g.ellipse(hx,hy,r,r*1.06,0,0,7);g.fill();
+  const skull=grow=>{
+    g.beginPath();
+    for(let i=0;i<=30;i++){
+      const a=i/30*Math.PI*2,sn=Math.sin(a),cs=Math.cos(a);
+      const lump=1+.09*Math.sin(a*3+1.3)+.05*Math.sin(a*5+.4);
+      const wx=sn<0?1-.2*Math.pow(-sn,3):1.1-.3*Math.pow(sn,4);   // narrow crown, wide cheekbones, tapering jaw
+      const hf=sn<0?.98:1.34;                                        // the jaw hangs long
+      const x=hx+cs*(r*wx*lump+grow),y=hy+sn*(r*hf*lump+grow);
+      i?g.lineTo(x,y):g.moveTo(x,y);
+    }
+    g.closePath();
+  };
+  g.fillStyle=HZ_COL.line;skull(1.6);g.fill();
+  const gr=g.createRadialGradient(hx-r*.35,hy-r*.5,r*.1,hx,hy+r*.1,r*1.3);
+  gr.addColorStop(0,HZ_COL.hi);gr.addColorStop(.45,HZ_COL.skin);gr.addColorStop(1,HZ_COL.lo);
+  g.fillStyle=gr;skull(0);g.fill();
+  // sunken cheeks and a heavy, scowling brow
+  g.fillStyle=HZ_COL.lo;
+  for(const s of [-1,1]){g.beginPath();g.ellipse(hx+s*r*.66,hy+r*.28,r*.18,r*.34,s*.2,0,7);g.fill();}
+  g.strokeStyle=HZ_COL.line;g.lineWidth=2.4;g.lineCap="round";
+  for(const s of [-1,1]){g.beginPath();g.moveTo(hx+s*r*.78,hy-r*.62);g.lineTo(hx+s*r*.14,hy-r*.34);g.stroke();}
   // veins over the scalp
-  g.strokeStyle=HZ_COL.lo;g.lineWidth=.9;
+  g.strokeStyle=HZ_COL.lo;g.lineWidth=1.8;
   for(const [a,b] of [[-.5,.2],[.15,-.3],[.55,.25]]){g.beginPath();g.moveTo(hx+a*r,hy-r*.95);g.quadraticCurveTo(hx+(a+b)*r,hy-r*.7,hx+(a+b*.4)*r,hy-r*.5);g.stroke();}
   // hollow eyes, slanted in, with a pinprick of light that follows you
   for(const s of [-1,1]){
@@ -5354,42 +5371,45 @@ function hzHead(g,P){
     g.fillStyle=HZ_COL.eye;g.beginPath();g.ellipse(0,0,r*.29,r*.36,0,0,7);g.fill();
     // black runs down from each socket
     g.strokeStyle=HZ_COL.eye;g.lineCap="round";
-    for(const [x,l] of [[-.12,.55],[.1,.8],[.2,.4]]){g.lineWidth=1.1;g.beginPath();g.moveTo(x*r*s,r*.2);g.lineTo(x*r*s,r*(.2+l));g.stroke();}
+    for(const [x,l] of [[-.12,.55],[.1,.8],[.2,.4]]){g.lineWidth=2;g.beginPath();g.moveTo(x*r*s,r*.2);g.lineTo(x*r*s,r*(.2+l));g.stroke();}
     g.restore();
     // a single pinprick of light deep in each socket, following you
-    const px=Math.round(hx+s*r*.4+P.look[0]*r*.1),py=Math.round(hy-r*.16+P.look[1]*r*.1);
-    g.fillStyle=P.pupil||"#ffe2c8";g.fillRect(px,py,1,1);
-    if(P.pupil){g.fillStyle="#c01810";g.fillRect(px-1,py,1,1);g.fillRect(px+1,py,1,1);g.fillRect(px,py-1,1,1);g.fillRect(px,py+1,1,1);}
+    const q=1/HZ.K,px=Math.round((hx+s*r*.4+P.look[0]*r*.1)/q)*q,py=Math.round((hy-r*.16+P.look[1]*r*.1)/q)*q;
+    g.fillStyle=P.pupil||"#ffe2c8";g.fillRect(px,py,q,q);
+    if(P.pupil){g.fillStyle="#c01810";g.fillRect(px-q,py,q,q);g.fillRect(px+q,py,q,q);g.fillRect(px,py-q,q,q);g.fillRect(px,py+q,q,q);}
   }
   // the grin: runs nearly ear to ear, and the jaw drops when it is hungry
-  const mw=r*.8,my=hy+r*.24,X=t=>hx-mw+2*mw*t;
+  const mw=r*.8,my=hy+r*.36,X=t=>hx-mw+2*mw*t;
   const up=t=>my+Math.sin(Math.PI*t)*r*.15-Math.pow(1-Math.sin(Math.PI*t),2)*r*.22,lo=t=>my+r*(.14+jaw*.52)*Math.sin(Math.PI*t)+Math.sin(Math.PI*t)*r*(.2+jaw*.16)-Math.pow(1-Math.sin(Math.PI*t),2)*r*.18;
-  g.beginPath();g.moveTo(X(0),up(0));
-  for(let i=1;i<=12;i++)g.lineTo(X(i/12),up(i/12));
-  for(let i=12;i>=0;i--)g.lineTo(X(i/12),lo(i/12));
-  g.closePath();g.fillStyle=HZ_COL.maw;g.fill();g.strokeStyle=HZ_COL.line;g.lineWidth=1.3;g.stroke();
-  const tooth=(ax,ay,bx,by,cx,cy)=>{
-    g.fillStyle=HZ_COL.tooth;g.beginPath();g.moveTo(ax,ay);g.lineTo(bx,by);g.lineTo(cx,cy);g.closePath();g.fill();
-    g.fillStyle=HZ_COL.toothLo;g.beginPath();g.moveTo((ax+bx)/2,(ay+by)/2);g.lineTo(bx,by);g.lineTo(cx,cy);g.closePath();g.fill();
-  };
-  const n=10,jag=i=>.65+.7*((Math.sin(i*12.9898)*43758.5453)%1+1)%1;
-  for(let i=0;i<n;i++){const a=i/n,b=(i+1)/n,m=(a+b)/2,th=r*(.2+.14*Math.sin(Math.PI*m))*jag(i);
-    tooth(X(a),up(a),X(b),up(b),X(m),Math.min(up(m)+th,lo(m)-1));}
-  for(let i=0;i<n-1;i++){const a=(i+.5)/n,b=(i+1.5)/n,m=(a+b)/2,th=r*(.17+.12*Math.sin(Math.PI*m))*jag(i+7);
-    tooth(X(a),lo(a),X(b),lo(b),X(m),Math.max(lo(m)-th,up(m)+1));}
-  g.strokeStyle=HZ_COL.gum;g.lineWidth=.8;g.beginPath();g.moveTo(X(0),up(0));for(let i=1;i<=12;i++)g.lineTo(X(i/12),up(i/12));g.stroke();
+  P._mouth={x0:X(0),x1:X(1),up,lo};   // painted pixel by pixel after the edges are snapped (see paintHorror)
 }
 // P: {hx,hy,r,jaw,look:[x,y],arms:[[shoulderX,shoulderY,handX,handY],...],clipY?}
 function paintHorror(P){
-  const g=hzCtx(),N=HZ.N;
-  g.clearRect(0,0,N,N);g.save();
+  const g=hzCtx(),N=HZ.N,Q=HZ.c.width;
+  g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,Q,Q);g.save();g.setTransform(HZ.K,0,0,HZ.K,0,0);
   if(P.clipY!==undefined){g.beginPath();g.rect(0,0,N,P.clipY);g.clip();}
   for(const a of P.arms)hzArm(g,a[0],a[1],a[2],a[3],P.l1||20,P.l2||21);
   hzHead(g,P);
   g.restore();
-  const id=g.getImageData(0,0,N,N),d=id.data;
+  const id=g.getImageData(0,0,Q,Q),d=id.data;
   for(let i=3;i<d.length;i+=4)d[i]=d[i]>100?255:0;   // hard pixel edges, like every other sprite
   g.putImageData(id,0,0);
+  // The mouth goes on last, one art pixel at a time: lips, a black maw, a picket of teeth with longer fangs.
+  const M=P._mouth,K=HZ.K;
+  if(M){
+    g.setTransform(1,0,0,1,0,0);
+    const x0=Math.round(M.x0*K),x1=Math.round(M.x1*K),px=(x,y,c)=>{g.fillStyle=c;g.fillRect(x,y,1,1);};
+    for(let x=x0;x<=x1;x++){
+      const t=(x/K-M.x0)/(M.x1-M.x0),yu=Math.round(M.up(t)*K),yl=Math.max(yu,Math.round(M.lo(t)*K));
+      px(x,yu-1,HZ_COL.line);px(x,yl+1,HZ_COL.line);
+      g.fillStyle=HZ_COL.maw;g.fillRect(x,yu,1,yl-yu+1);
+      if(t<.07||t>.93)continue;
+      const gap=yl-yu+1,i=x-x0,fang=i%4===1&&t>.18&&t<.82;
+      const nu=Math.min(gap,(i%2?2:1)+(fang?1:0)),nl=Math.min(Math.max(0,gap-nu),(i%2?1:2)+(i%4===3&&t>.25&&t<.75?1:0));
+      for(let k=0;k<nu;k++)px(x,yu+k,k===nu-1&&nu>1?HZ_COL.toothLo:HZ_COL.tooth);
+      for(let k=0;k<nl;k++)px(x,yl-k,k===nl-1&&nl>1?HZ_COL.toothLo:HZ_COL.tooth);
+    }
+  }
   return HZ.c;
 }
 const ease=t=>t<=0?0:t>=1?1:1-Math.pow(1-t,3);
@@ -5426,12 +5446,19 @@ function drawThingArena(eSpr,cx,cy,esz,sw,shh,alpha){
     const img=SPR.thing,w=esz*sw,h=esz*shh;
     if(p<.45){
       // the husk shudders, and a red seam opens down its middle
-      const k=p/.45,j=RM?0:(Math.random()-.5)*esz*.07*k;
+      // drawn on the sprite's own 16x16 grid: a jagged crack of hot pixels, one row at a time
+      const k=p/.45,pw=w/16,ph=h/16,j=RM?0:Math.round((Math.random()-.5)*1.6*k)*pw;
       drawArenaSprite("thing",cx+j,cy,esz,1,k*.4,sw,shh);
-      ctx.save();ctx.strokeStyle="#ff4a2a";ctx.shadowColor="#ff2a10";ctx.shadowBlur=12;ctx.lineWidth=Math.max(2,esz*.03);
-      ctx.beginPath();let y=cy-h;ctx.moveTo(cx+j,y);
-      while(y<cy-h+h*k){y+=h*.08;ctx.lineTo(cx+j+(Math.random()-.5)*esz*.06,y);}
-      ctx.stroke();ctx.restore();
+      const x0=cx+j-w/2,y0=cy-h,rows=Math.ceil(16*k),flick=RM?1:.75+.25*Math.random();
+      const SEAM=[0,0,1,1,0,-1,-1,0,1,0,0,-1,0,1,1,0],BR={5:-2,11:2};
+      const blk=(c,r,col)=>{ctx.fillStyle=col;ctx.fillRect(Math.round(x0+c*pw),Math.round(y0+r*ph),Math.ceil(pw),Math.ceil(ph));};
+      for(let r=0;r<rows;r++){
+        const c=8+SEAM[r];
+        blk(c-1,r,`rgba(140,20,30,${.8*flick})`);blk(c+1,r,`rgba(140,20,30,${.8*flick})`);
+        blk(c,r,"#ff5a2a");
+        if(r<rows-2)blk(c,r,`rgba(255,226,150,${flick})`);
+        if(BR[r]&&r<rows-1){const d=Math.sign(BR[r]);blk(c+d,r+1,"#ff5a2a");blk(c+2*d,r+1,"#c8301e");}
+      }
       return;
     }
     const k=(p-.45)/.55;
