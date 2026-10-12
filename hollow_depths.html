@@ -2892,6 +2892,7 @@ function flash(x,y,col){burst(x,y,cssv(col),5,3);}
 /* ============================ frame ============================ */
 function tick(dt){
   tclock+=dt;
+  if(S&&S.jump){S.jump.t+=dt;if(S.jump.t>=JUMP_LEN){S.jump=null;die("thing");}}
   if(S&&S.pendLvl>0&&!levelOpen){
     S.lvlWait=Math.max(0,(S.lvlWait||0)-dt);
     if(S.lvlWait<=0&&!S.over&&S.mode==="map"&&!packOpen&&!shrineOpen&&!codexOpen&&!editorOpen&&descentT<=0)openLevelUp();
@@ -3240,6 +3241,7 @@ function render(){
     ctx.fillStyle="rgba(6,8,13,"+Math.min(1,fade).toFixed(3)+")";
     ctx.fillRect(0,0,vw,vh);
   }
+  if(S.jump)drawJumpscare(vw,vh);
   if(descentT>0&&S.mode==="map"){
     // the floor number surfaces out of the dark while the gate grinds
     const age=descentLen-descentT,a=Math.min(1,age/1.2,fade);
@@ -5329,7 +5331,7 @@ function chaseTick(dt){
   }
   chaseArms(C,dt);
   const d=Math.hypot(S.fx-C.fx,S.fy-C.fy);
-  if(C.wait<=0&&d<CHASE_CATCH){S.chase=null;setTension(false);quake(24);held.clear();die("thing");return;}
+  if(C.wait<=0&&d<CHASE_CATCH){caughtByThing();return;}
   if(S.px===S.sx&&S.py===S.sy){
     if(S.depth>1){ascend();return;}
     S.chase=null;held.clear();
@@ -5565,6 +5567,27 @@ function chaseArms(C,dt){
     const other=C.arms.find(o=>o!==a);
     if(Math.hypot(a.x-tx,a.y-ty)>(moving?.95:.45)&&other.t>=1){a.fx=a.x;a.fy=a.y;a.tx=tx;a.ty=ty;a.t=0;}
   }
+}
+// Caught: the roar again, and its face fills the screen before the end card.
+const JUMP_LEN=1.6;
+function caughtByThing(){
+  S.chase=null;held.clear();setTension(false);
+  S.jump={t:0};
+  playRoarSound();quake(30);
+}
+function drawJumpscare(vw,vh){
+  const t=S.jump.t,G=96,MX=HZ.N/2,r=14;
+  // it lunges in from the dark, far too close, and shakes
+  const zoom=t<.16?.45+.65*ease(t/.16):1.1-.1*ease((t-.16)/.3)+(RM?0:.03*Math.sin(t*40));
+  const sc=vh*.86/(r*2.35)*zoom,j=RM?0:(Math.random()-.5)*vh*.05*Math.max(.25,1-t/JUMP_LEN);
+  ctx.fillStyle="#000";ctx.fillRect(0,0,vw,vh);
+  const hy=G,img=paintHorror({hx:MX,hy,r,jaw:RM?1:.85+.15*Math.sin(t*30),look:[0,.2],pupil:"#fff4e0",
+    arms:[[MX-r*.85,hy+r*.3,MX-70,hy-30,40,40],[MX+r*.85,hy+r*.3,MX+70,hy-30,40,40]]});
+  ctx.drawImage(img,vw/2-MX*sc+j,vh*.5-(hy+r*.18)*sc+j*.6,HZ.N*sc,HZ.N*sc);
+  // a white flash on contact, then the light flickers red
+  if(t<.07){ctx.fillStyle="rgba(255,255,255,.9)";ctx.fillRect(0,0,vw,vh);}
+  else if(!RM&&Math.sin(t*37)>.3){ctx.fillStyle="rgba(160,10,20,.35)";ctx.fillRect(0,0,vw,vh);}
+  if(t>JUMP_LEN-.35){ctx.fillStyle=`rgba(0,0,0,${(t-(JUMP_LEN-.35))/.35})`;ctx.fillRect(0,0,vw,vh);}
 }
 function drawChase(){
   const C=S.chase,N=HZ.N,G=64,MX=HZ.N/2,r=14,s=cell/16,t=tclock;
@@ -6359,7 +6382,7 @@ for(const k in KEYS){
 const held=new Set();
 let freeClock=0,freeBumpT=0,freeWindedT=0;
 function freeMode(){return !!S;}   // every hero walks freely now; the grid code stays for "." (rest) and as a fallback
-function freePaused(){return S.over||S.mode!=="map"||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
+function freePaused(){return S.over||S.mode!=="map"||!!S.jump||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
 // What a box of half-width r centred on (cx,cy) overlaps: {wall:true}, {chasm:[x,y]}, or null.
 function boxHit(cx,cy,r){
   const e=1e-6;
@@ -6956,6 +6979,7 @@ window.addEventListener("keydown",ev=>{
     return;
   }
   if(descentT>0&&S&&!S.over&&S.mode==="map"){ev.preventDefault();return;}   // still on the way down
+  if(S&&S.jump){ev.preventDefault();return;}                                // being caught
   if(levelOpen){
     const cards=[...document.querySelectorAll("#card .lvlcard")];
     if(/^[1-9]$/.test(k)&&cards[+k-1])pickLevelCard(cards[+k-1]);

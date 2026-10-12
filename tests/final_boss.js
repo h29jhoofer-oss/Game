@@ -50,7 +50,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await ev('B.mhp=0;winBattle()'); await step(2.2);
   check('beating phase 2 starts the chase', await ev('S.mode==="map"&&!!S.chase&&mons.length===0&&!S.over'));
   check('a way out opens on the floor', await ev('S.sx>=0&&map[S.sy][S.sx]===STAIRS&&distFrom(S.px,S.py)[S.sx+S.sy*W]>0'));
-  await step(5);
+  await step(7);
   check('standing still gets you caught', await ev('S.over&&!S.chase&&/falls/.test(document.querySelector("#card h3").textContent)'));
 
   // 4. Running for it: each stair up leads to a fresh floor with it climbing after you, all the way to floor 1.
