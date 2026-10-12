@@ -6657,7 +6657,7 @@ window.addEventListener("keydown",ev=>{
     if(k==="i"||k==="I"){if(S.pack.length&&B&&B.phase==="choose")togglePack();ev.preventDefault();return;}
     return;
   }
-  if(PLAYTEST&&(k==="n"||k==="N")&&S.mode==="map"&&!S.chase&&S.depth<20){S.depth++;if(S.depth>10)S.kingSlain=true;newFloor(S.depth);say(`Playtest: skipped to floor ${S.depth}.`,"c-cold");refresh();ev.preventDefault();return;}
+  if(PLAYTEST&&(k==="n"||k==="N")&&S.mode==="map"&&!S.chase&&S.depth<20){playtestSkip();ev.preventDefault();return;}
   if(freeMode()&&FREE_CODES[ev.code]){held.add(ev.code);ev.preventDefault();return;}
   if(KEYS[k]){tryMove(KEYS[k][0],KEYS[k][1]);ev.preventDefault();return;}
   if(k==="."){tryMove(0,0);ev.preventDefault();return;}
@@ -7117,8 +7117,33 @@ function start(id){
   S=newState(typeof id==="string"?id:"cade");
   $("log").innerHTML="";
   newFloor(1);
+  if(PLAYTEST&&S.char==="cade")playtestKit();
   resize();refresh();
   say(CHAR().intro||"You climb down into the first floor. The torch holds.","c-cold");
+}
+// Playtest builds only. N skips a floor and grants a level (its cards come up as usual), and Cade starts
+// with the best gear, a stack of top-tier scrolls and healing, so the deep floors can be tried quickly.
+function playtestSkip(){
+  S.depth++;if(S.depth>10)S.kingSlain=true;
+  newFloor(S.depth);
+  say(`Playtest: skipped to floor ${S.depth}.`,"c-cold");
+  if(S.lvl<XPTABLE.length-1){S.xp=Math.max(S.xp,XPTABLE[S.lvl]-1);gainXp(1);S.lvlWait=.2;}
+  refresh();
+}
+function playtestKit(){
+  const cons=(id,t)=>{const r=t?Object.assign({},UPGRADED_CONSUMABLES[id][t]):POTIONS.find(p=>p.id===id);
+    return{kind:"use",ref:r,glyph:r.glyph,col:r.col,name:r.name,note:r.note};};
+  S.weapon=upgradeWeapon("great",3);
+  S.armor=upgradeArmor("plate",3);
+  S.altOffhand=S.offhand;                                 // the torch goes on the belt (T swaps)
+  S.offhand=OFFHAND_ITEMS.find(o=>o.id==="aegis");
+  S.amulet=AMULETS.find(a=>a.id==="heart");applyMods(S.amulet.mods,1);
+  S.rings=[RINGS.find(r=>r.id==="storm"),RINGS.find(r=>r.id==="mending")];
+  for(const r of S.rings)applyMods(r.mods,1);
+  S.hp=S.maxhp;
+  S.pack=[cons("heal",2),cons("heal",2),cons("heal",2),cons("heal",1),cons("heal",1),
+    cons("flame",2),cons("bolt",2),cons("ice",2),cons("dark",2)];
+  say("Playtest kit: the best gear, scrolls and healing. Press N to skip a floor and gain a level.","c-cold");
 }
 function title(){
   S.over=true;   // keys and buttons must not play the demo floor behind the title card
