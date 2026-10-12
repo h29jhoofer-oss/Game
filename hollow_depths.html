@@ -3210,6 +3210,14 @@ function render(){
     ctx.fillStyle=rg;ctx.fillRect(0,0,vw,vh);
   }
 
+  if(S.chase&&S.chase.banner>0&&!S.over){
+    const a=Math.min(1,S.chase.banner/.5);
+    ctx.save();ctx.globalAlpha=a;ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.font="700 "+Math.round(Math.min(vw,vh)*.05)+"px 'IBM Plex Mono',monospace";
+    ctx.lineWidth=4;ctx.strokeStyle="rgba(6,8,13,.9)";ctx.fillStyle="#e8685a";
+    const tx=S.depth===1?"FLOOR 1 \u2014 DAYLIGHT ABOVE":"FLOOR "+S.depth+" \u2014 RUN";
+    ctx.strokeText(tx,vw/2,vh*.16);ctx.fillText(tx,vw/2,vh*.16);ctx.restore();
+  }
   if(S.chase&&S.chase.flash>0){ctx.fillStyle=`rgba(120,8,18,${(S.chase.flash*.75).toFixed(3)})`;ctx.fillRect(0,0,vw,vh);}
   if(S.chase&&!S.over){
     const d=Math.hypot(S.fx-S.chase.fx,S.fy-S.chase.fy),a=Math.max(0,Math.min(.6,(1-d/11)*.65))*(RM?1:.8+.2*Math.sin(tclock*7));
@@ -4822,7 +4830,7 @@ function drawBattle(vw,vh){
   const eFade=B.faint>0?(B.faint<.18?1:Math.max(0,1-(B.faint-.18)*4.5)):1;
   const eRecoil=B.mFlash>0?Math.min(1,B.mFlash)*esz*.09:0;   // knocked back when struck
   const pRecoil=B.pFlash>0?Math.min(1,B.pFlash)*psz*.09:0;
-  const eoffX=(B.lungeSide<0?-lunge*dash:0)+eRecoil+intro*vw*.35;
+  const eoffX=(B.lungeSide<0&&m.t.thing!==2?-lunge*dash:0)+eRecoil+intro*vw*.35;   // the unveiled Thing reaches instead
   const eBob=RM?0:Math.sin(tclock*2.1)*esz*.02;
   // Strike poses: the attacker swaps to its "_atk" sprite for the duration of its lunge.
   const eBase=MONSPR[m.t.id];
@@ -4895,7 +4903,7 @@ function drawBattle(vw,vh){
   }
 
   // Impact slash on whoever is being struck, strongest at the moment of contact.
-  if(lunge>.55&&B.faint<=0&&!(ranged&&B.lungeSide>0)){
+  if(lunge>.55&&B.faint<=0&&!(ranged&&B.lungeSide>0)&&!(B.lungeSide<0&&m.t.thing===2)){   // the Thing leaves its own pixel claw marks
     const pl=B.lungeSide>0;
     const hx=pl?ex+eRecoil-ew*.26:px+poffX+psz*.26;
     const hy=(pl?ey:py)-(pl?esz*bossScaleH:psz)*.5;
@@ -5236,25 +5244,14 @@ function distFrom(sx,sy){
   }
   return D;
 }
-const CHASE_WAIT=2.2,CHASE_SPEED=3.8,CHASE_RAMP=.07,CHASE_MAX=4.8,CHASE_CATCH=.8,CHASE_PATH=55;
+const CHASE_WAIT=2.2,CHASE_SPEED=3.8,CHASE_RAMP=.07,CHASE_MAX=4.7,CHASE_CATCH=.8,CHASE_PATH=48;
 function startChase(m){
   const bx=m.x,by=m.y;
   mons=[];   // it swallows everything else on the floor as it grows
   for(const d of DOORS){d.open=true;map[d.y][d.x]=FLOOR;}   // and the hill shakes every door open
   for(const l of LEVERS)l.on=true;
-  S.chase={x:bx,y:by,fx:bx+.5,fy:by+.5,t:0,wait:CHASE_WAIT,pulse:0,growl:3.5,stuck:0,flash:1,roared:false,dir:null,speedNow:0};
-  // The way out: a room about CHASE_PATH steps away from where it rose, so the run is long but fair.
-  const D=distFrom(bx,by);
-  let best=null,bs=1e9;
-  for(const r of S.rooms){
-    const d=D[r.cx+r.cy*W];
-    if(d<0||map[r.cy][r.cx]!==FLOOR)continue;
-    const sc=Math.abs(d-CHASE_PATH)+(d<30?1000:0)+(d>CHASE_PATH+8?300:0);   // much longer runs are too long to outpace it
-    if(sc<bs){bs=sc;best=r;}
-  }
-  if(!best)best=S.rooms[0];
-  S.sx=best.cx;S.sy=best.cy;map[S.sy][S.sx]=STAIRS;seen.add(S.sx+","+S.sy);
-  items=items.filter(i=>!(i.x===S.sx&&i.y===S.sy));
+  S.chase=newChase(bx,by,CHASE_WAIT);S.chase.flash=1;
+  placeWayUp(bx,by);
   // Its swelling hurls you a few steps along the way out, so it is always behind you, never in the way.
   const DE=distFrom(S.sx,S.sy);let hx=bx,hy=by;
   for(let n=0;n<5;n++){
@@ -5265,20 +5262,57 @@ function startChase(m){
   if(hx!==bx||hy!==by){S.px=hx;S.py=hy;S.fx=hx+.5;S.fy=hy+.5;S.vx=hx;S.vy=hy;burst(hx,hy,"#8e9aad",14,3);}
   setTension(true);quake(22);
   say("It swells to fill the hall, and the walls bow outward around it. The blast throws you clear.","c-hit");
-  say(`Daylight! A crack has opened in the hill to the ${compass(S.sx-S.px,S.sy-S.py)}. Run for it, and don't stop. Fear carries you: walking costs no stamina.`,"c-lvl");
+  say(`A stair up has opened to the ${compass(S.sx-S.px,S.sy-S.py)}. Run for it, all twenty floors back to daylight, and don't stop. Fear carries you: walking costs no stamina.`,"c-lvl");
   dirty=true;computeFOV();refresh();
+}
+function newChase(x,y,wait){
+  return{x,y,fx:x+.5,fy:y+.5,t:0,wait,wait0:wait,pulse:0,growl:3.5,stuck:0,flash:0,roared:false,dir:null,speedNow:0,banner:2.2};
+}
+// The way up on each floor: a room about CHASE_PATH steps away, so every run is long but can be won.
+function placeWayUp(fx,fy){
+  const D=distFrom(fx,fy);
+  let best=null,bs=1e9;
+  for(const r of S.rooms){
+    const d=D[r.cx+r.cy*W];
+    if(d<0||map[r.cy][r.cx]!==FLOOR)continue;
+    const sc=Math.abs(d-CHASE_PATH)+(d<30?1000:0)+(d>CHASE_PATH+6?300:0);   // much longer runs are too long to outpace it
+    if(sc<bs){bs=sc;best=r;}
+  }
+  if(!best)best=S.rooms[0];
+  S.sx=best.cx;S.sy=best.cy;map[S.sy][S.sx]=STAIRS;seen.add(S.sx+","+S.sy);
+  items=items.filter(i=>!(i.x===S.sx&&i.y===S.sy));
+}
+// Up one floor with it on your heels. Every floor on the way is new, emptied (everything else has fled),
+// with its doors open and its chasms bridged; it climbs out of the stair a moment after you do.
+function ascend(){
+  S.depth--;held.clear();
+  newFloor(S.depth);
+  mons=[];
+  for(const d of DOORS){d.open=true;map[d.y][d.x]=FLOOR;}
+  for(const l of LEVERS)l.on=true;
+  for(const c of CHASMS){c.bridged=true;map[c.y][c.x]=FLOOR;}
+  const last=S.rooms[S.rooms.length-1],ax=last.cx,ay=last.cy;
+  map[ay][ax]=FLOOR;
+  S.px=ax;S.py=ay;S.fx=ax+.5;S.fy=ay+.5;S.vx=ax;S.vy=ay;S.wisp=null;
+  placeWayUp(ax,ay);
+  S.chase=newChase(ax,ay,CHASE_WAIT+1.2);   // the same head start as on floor 20, where its blast throws you clear
+  playFootstep();
+  say(S.depth===1?`Floor 1. The last stair, and above it, daylight. It is coming up behind you.`
+    :`Floor ${S.depth}. ${S.depth} floors to the surface. The stair up is to the ${compass(S.sx-S.px,S.sy-S.py)}, and it is climbing after you.`,S.depth===1?"c-lvl":"c-hit");
+  computeFOV();refresh();
 }
 const CHASE_LINES=["The roots tear up behind you.","It is right behind you.","You hear it filling the corridor.","Something wet brushes the back of your neck.","The hill groans with it."];
 function chaseTick(dt){
   const C=S.chase;if(!C)return;
   C.t+=dt;
   if(C.flash>0)C.flash=Math.max(0,C.flash-dt*1.4);
+  if(C.banner>0)C.banner-=dt;
   C.speedNow=0;
   if(C.wait>0){
     C.wait-=dt;
-    if(!C.roared&&C.wait<CHASE_WAIT*.28){C.roared=true;quake(26);say("It opens its mouth, and keeps opening it.","c-hit");}
+    if(!C.roared&&C.wait<C.wait0*.28){C.roared=true;quake(26);say("It opens its mouth, and keeps opening it.","c-hit");}
   }else{
-    const spd=Math.min(CHASE_MAX,CHASE_SPEED+CHASE_RAMP*Math.max(0,C.t-CHASE_WAIT));
+    const spd=Math.min(CHASE_MAX,CHASE_SPEED+CHASE_RAMP*Math.max(0,C.t-C.wait0));
     const dir=chaseDir(C)||[S.fx-C.fx,S.fy-C.fy];
     const len=Math.hypot(dir[0],dir[1]);
     if(len>1e-4){
@@ -5295,10 +5329,11 @@ function chaseTick(dt){
   }
   chaseArms(C,dt);
   const d=Math.hypot(S.fx-C.fx,S.fy-C.fy);
-  if(d<CHASE_CATCH){S.chase=null;setTension(false);quake(24);held.clear();die("thing");return;}
+  if(C.wait<=0&&d<CHASE_CATCH){S.chase=null;setTension(false);quake(24);held.clear();die("thing");return;}
   if(S.px===S.sx&&S.py===S.sy){
+    if(S.depth>1){ascend();return;}
     S.chase=null;held.clear();
-    say("You throw yourself through the crack and into the light.","c-good");
+    say("You throw yourself up the last stair and out into the light.","c-good");
     win();return;
   }
   C.pulse-=dt;
@@ -5310,7 +5345,7 @@ function chaseTick(dt){
 // Phase 2 and the chase draw the Thing by hand instead of from a 16x16 sprite: a swollen blood-red head
 // with hollow eyes and a grin full of teeth, carried on two long jointed arms. It is painted at sprite
 // resolution (16 art pixels to a tile) on a small canvas, its edges snapped to hard pixels, then scaled up.
-const HZ={N:112,K:.5,c:null,g:null};   // N: logical size; K: art pixels per logical unit (lower = chunkier)
+const HZ={N:192,K:.5,c:null,g:null};   // N: logical size; K: art pixels per logical unit (lower = chunkier)
 const HZ_COL={line:"#160304",skin:"#8a1a17",hi:"#c0413a",lo:"#3f0808",eye:"#020101",tooth:"#ece3cc",toothLo:"#9c8e74",maw:"#0b0203",gum:"#5a0c10"};
 function hzCtx(){
   if(!HZ.c){HZ.c=document.createElement("canvas");HZ.c.width=HZ.c.height=Math.round(HZ.N*HZ.K);HZ.g=HZ.c.getContext("2d",{willReadFrequently:true});}
@@ -5388,7 +5423,7 @@ function paintHorror(P){
   const g=hzCtx(),N=HZ.N,Q=HZ.c.width;
   g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,Q,Q);g.save();g.setTransform(HZ.K,0,0,HZ.K,0,0);
   if(P.clipY!==undefined){g.beginPath();g.rect(0,0,N,P.clipY);g.clip();}
-  for(const a of P.arms)hzArm(g,a[0],a[1],a[2],a[3],P.l1||20,P.l2||21);
+  for(const a of P.arms)hzArm(g,a[0],a[1],a[2],a[3],a[4]||P.l1||20,a[5]||P.l2||21);
   hzHead(g,P);
   g.restore();
   const id=g.getImageData(0,0,Q,Q),d=id.data;
@@ -5418,27 +5453,52 @@ const ease=t=>t<=0?0:t>=1?1:1-Math.pow(1-t,3);
 // rise lifts it out of the floor (0 = fully up), open unfolds its arms, grow scales it.
 function drawHorrorArena(cx,cy,s,o){
   o=o||{};
-  const G=88,MX=56,r=14,t=tclock,rise=o.rise||0,open=o.open===undefined?1:o.open;
+  const G=88,MX=HZ.N/2,r=14,t=tclock,rise=o.rise||0,open=o.open===undefined?1:o.open;
   const bob=RM?0:Math.sin(t*2.2)*1.5;
   const hx=MX+(o.jit||0),hy=G-31+bob+rise*44;
   const sh=[[hx-r*.85,hy+r*.3],[hx+r*.85,hy+r*.3]];
   const sway=k=>RM?0:Math.sin(t*1.7+k)*2;
   let hands=[[MX-27+sway(0),G],[MX+27+sway(2),G]];
-  if(o.attack)hands[0]=[MX-50,hy+6];
   hands=hands.map((h,i)=>[sh[i][0]+(h[0]-sh[i][0])*open,sh[i][1]+(h[1]-sh[i][1])*open-(1-open)*6]);
-  const img=paintHorror({hx,hy,r,jaw:o.jaw===undefined?.28+(RM?0:.18*Math.sin(t*2.6)):o.jaw,look:[-1,.25],pupil:o.grow>1.2?"#fff4e0":undefined,
-    arms:open>.05?sh.map((p,i)=>[p[0],p[1],hands[i][0],hands[i][1]]):[],clipY:rise>0?G+2:undefined});
+  const arms=open>.05?sh.map((p,i)=>[p[0],p[1],hands[i][0],hands[i][1]]):[];
+  // the slash: the near arm stretches out over you, winds up high, rakes down through you, and draws back
+  if(o.slash!==undefined&&arms.length){
+    const q=o.slash,tx=MX+o.tx/s,ty=G+o.ty/s,[sx0,sy0]=sh[0];
+    const keys=[[hands[0][0],hands[0][1]],[tx+14,ty-34],[tx+6,ty-18],[tx-10,ty+18],[hands[0][0],hands[0][1]]],at=[0,.3,.42,.7,1];
+    let k=0;while(k<3&&q>at[k+1])k++;
+    const f=ease((q-at[k])/(at[k+1]-at[k])),hxa=keys[k][0]+(keys[k+1][0]-keys[k][0])*f,hya=keys[k][1]+(keys[k+1][1]-keys[k][1])*f;
+    const L=Math.max(20,Math.hypot(hxa-sx0,hya-sy0)*.56);
+    arms[0]=[sx0,sy0,hxa,hya,L,L+1];
+  }
+  const img=paintHorror({hx,hy,r,jaw:o.jaw===undefined?(o.slash!==undefined?.75:.28+(RM?0:.18*Math.sin(t*2.6))):o.jaw,look:[-1,.25],pupil:o.grow>1.2||o.slash!==undefined?"#fff4e0":undefined,
+    arms,clipY:rise>0?G+2:undefined});
   const S2=s*(o.grow||1);
   ctx.globalAlpha=o.alpha===undefined?1:o.alpha;
   ctx.drawImage(img,cx-MX*S2,cy-G*S2,HZ.N*S2,HZ.N*S2);
   ctx.globalAlpha=1;
+}
+// Three claw marks raked across the hero, laid down in chunky art pixels.
+function drawClawMarks(x,y,size,q){
+  if(q<.42)return;
+  const a=Math.max(0,1-(q-.42)/.58),bs=Math.max(2,Math.round(size/14)),n=Math.round(Math.min(1,(q-.42)/.2)*9);
+  for(let m=-1;m<=1;m++){
+    for(let i=0;i<n;i++){
+      const px=Math.round((x+size*.28-i*bs*1.1+m*bs*2.2)/bs)*bs,py=Math.round((y-size*.42+i*bs*1.1+m*bs*.6)/bs)*bs;
+      ctx.fillStyle=`rgba(140,16,24,${a})`;ctx.fillRect(px-bs,py,bs*3,bs);
+      ctx.fillStyle=`rgba(255,236,214,${a})`;ctx.fillRect(px,py,bs,bs);
+    }
+  }
 }
 // Draws the foe in a duel against the Thing, including the two transitions between its shapes.
 function drawThingArena(eSpr,cx,cy,esz,sw,shh,alpha){
   const T=B.trans,s=esz*shh/50;
   if(!T){
     if(B.mon.t.id==="thing")drawArenaSprite(eSpr,cx,cy,esz,alpha,B.mFlash,sw,shh);
-    else drawHorrorArena(cx,cy,s,{attack:B.lungeSide<0&&B.lunge>0,alpha});
+    else{
+      const L=B.layout,atk=B.lungeSide<0&&B.lunge>0&&L;
+      drawHorrorArena(cx,cy,s,atk?{alpha,slash:1-B.lunge,tx:L.px-cx,ty:L.py-cy}:{alpha});
+      if(atk)drawClawMarks(L.px,L.py,L.psz,1-B.lunge);
+    }
     return;
   }
   const p=Math.min(1,(tclock-T.t0)/T.dur),L=B.layout,vw=L?L.vw:0,vh=L?L.vh:0;
@@ -5501,15 +5561,25 @@ function chaseArms(C,dt){
   }
 }
 function drawChase(){
-  const C=S.chase,N=HZ.N,G=64,MX=56,r=14,s=cell/16,t=tclock;
+  const C=S.chase,N=HZ.N,G=64,MX=HZ.N/2,r=14,s=cell/16,t=tclock;
   const sx=(C.fx-cam.x)*cell,sy=(C.fy-cam.y)*cell;
   const dx=S.fx-C.fx,dy=S.fy-C.fy,dl=Math.hypot(dx,dy)||1;
-  const e=C.wait>0?1-C.wait/CHASE_WAIT:1;             // 0..1 while it climbs out of the floor
-  // a stain of red light pools under it
-  const gl=ctx.createRadialGradient(sx,sy,0,sx,sy,cell*2.6);
-  gl.addColorStop(0,"rgba(150,12,20,.45)");gl.addColorStop(1,"rgba(150,12,20,0)");
-  ctx.fillStyle=gl;ctx.fillRect(sx-cell*3,sy-cell*3,cell*6,cell*6);
-  if(e<1){ctx.fillStyle="rgba(4,2,3,.85)";ctx.beginPath();ctx.ellipse(sx,sy,cell*1.3*ease(e*2),cell*.45*ease(e*2),0,0,7);ctx.fill();}
+  const e=C.wait>0?1-C.wait/C.wait0:1;             // 0..1 while it climbs out of the floor
+  // red light pools under it, and while it climbs out there is a pit: both drawn in its own chunky pixels
+  const bs=cell/16/HZ.K;                               // one art pixel on screen
+  const pixOval=(rx,ry,col)=>{
+    if(rx<bs||ry<bs*.5)return;
+    ctx.fillStyle=col;const X=Math.round(sx/bs)*bs,Y=Math.round(sy/bs)*bs,n=Math.ceil(ry/bs);
+    for(let i=-n;i<=n;i++){const k=1-(i*bs/ry)**2;if(k<=0)continue;const hw=Math.round(rx*Math.sqrt(k)/bs)*bs;if(hw>0)ctx.fillRect(X-hw,Y+i*bs,hw*2,bs);}
+  };
+  pixOval(cell*2.6,cell*1.3,"rgba(150,12,20,.14)");pixOval(cell*1.9,cell*.95,"rgba(150,12,20,.16)");pixOval(cell*1.2,cell*.6,"rgba(170,16,24,.18)");
+  if(e<1){
+    const k=ease(e*2);
+    pixOval(cell*1.45*k,cell*.55*k,"#5a0c10");pixOval(cell*1.3*k,cell*.45*k,"#0a0405");pixOval(cell*.7*k,cell*.22*k,"#000");
+    ctx.fillStyle="#3a0a0c";
+    for(const [dx,dy,l] of [[-1,0,4],[1,0,5],[-.6,.5,3],[.7,-.5,3]])for(let i=0;i<l*k;i++)
+      ctx.fillRect(Math.round((sx+dx*cell*1.35*k+dx*i*bs)/bs)*bs,Math.round((sy+dy*cell*.4*k+dy*i*bs*.6)/bs)*bs,bs,bs);
+  }
   const close=dl<4.5,rise=1-ease(e/.6);
   const bob=RM?0:Math.sin(t*(close?9:4))*1.5;
   const hx=MX+(RM?0:(e<1?(Math.random()-.5)*2:0)),hy=G-17+bob+rise*36;

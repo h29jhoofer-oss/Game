@@ -53,20 +53,30 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await step(5);
   check('standing still gets you caught', await ev('S.over&&!S.chase&&/falls/.test(document.querySelector("#card h3").textContent)'));
 
-  // 4. Running for the exit wins.
+  // 4. Running for it: each stair up leads to a fresh floor with it climbing after you, all the way to floor 1.
   await fresh(20);
   await duelBoss('thing');
   await ev('B.mhp=0;winBattle()'); await step(2); await ev('B.mhp=0;winBattle()'); await step(2.2);
-  await ev('window._D=distFrom(S.sx,S.sy)');
-  let end = null;
-  for (let i = 0; i < 1500 && !end; i++) {
-    end = await ev(`(()=>{if(S.over)return document.querySelector("#card h3").textContent;
-      const D=_D,x=S.px,y=S.py;let bx=null,bd=D[x+y*W];
-      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const v=D[x+dx+(y+dy)*W];if(v>=0&&v<bd){bd=v;bx=[x+dx+.5-S.fx,y+dy+.5-S.fy];}}
-      if(!bx)bx=[S.sx+.5-S.fx,S.sy+.5-S.fy];const l=Math.hypot(bx[0],bx[1])||1;
-      freeStep(bx[0]/l,bx[1]/l,.05);tick(.05);return null;})()`);
-  }
-  check('reaching the daylight wins the run', end === 'Out from under the hill', end);
+  const run = async (stopDepth) => {
+    for (let i = 0; i < 2000; i++) {
+      const r = await ev(`(()=>{if(S.over)return document.querySelector("#card h3").textContent;
+        if(S.depth<=${stopDepth})return "floor "+S.depth;
+        if(window._dd!==S.depth){window._D=distFrom(S.sx,S.sy);window._dd=S.depth;}
+        const D=_D,x=S.px,y=S.py;let bx=null,bd=D[x+y*W];
+        for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const v=D[x+dx+(y+dy)*W];if(v>=0&&v<bd){bd=v;bx=[x+dx+.5-S.fx,y+dy+.5-S.fy];}}
+        if(!bx)bx=[S.sx+.5-S.fx,S.sy+.5-S.fy];const l=Math.hypot(bx[0],bx[1])||1;
+        freeStep(bx[0]/l,bx[1]/l,.05);tick(.05);return null;})()`);
+      if (r) return r;
+    }
+    return 'timeout';
+  };
+  const up2 = await run(18);
+  check('the stair up leads to floor 19, then 18, with it still chasing', up2 === 'floor 18' && await ev('!!S.chase&&mons.length===0&&S.sx>=0&&map[S.sy][S.sx]===STAIRS'), up2);
+  check('escape floors are open: no chasms left unbridged', await ev('CHASMS.every(c=>c.bridged)&&DOORS.every(d=>d.open)'));
+  await ev('S.depth=2;ascend()');
+  check('floor 1 is the last floor', (await ev('S.depth')) === 1);
+  const end = await run(0);
+  check('reaching daylight from floor 1 wins the run', end === 'Out from under the hill', end);
 
   check('no page errors', errors.length === 0, errors);
   await browser.close();
