@@ -3210,6 +3210,7 @@ function render(){
     ctx.fillStyle=rg;ctx.fillRect(0,0,vw,vh);
   }
 
+  if(S.chase&&S.chase.flash>0){ctx.fillStyle=`rgba(120,8,18,${(S.chase.flash*.75).toFixed(3)})`;ctx.fillRect(0,0,vw,vh);}
   if(S.chase&&!S.over){
     const d=Math.hypot(S.fx-S.chase.fx,S.fy-S.chase.fy),a=Math.max(0,Math.min(.6,(1-d/11)*.65))*(RM?1:.8+.2*Math.sin(tclock*7));
     if(a>0){
@@ -4779,7 +4780,7 @@ function drawBattle(vw,vh){
   const psz=esz;
   const gy=vh*.60;
   const ex=vw*.73,ey=gy,px=vw*.27,py=gy;
-  B.layout={ex:ex,ey:ey-esz*.42,esz:esz,px:px,py:py-psz*.42,psz:psz};
+  B.layout={ex:ex,ey:ey-esz*.42,esz:esz,px:px,py:py-psz*.42,psz:psz,vw:vw,vh:vh};
 
   ctx.fillStyle="#06080d";ctx.fillRect(0,0,vw,vh);
   ctx.save();
@@ -4826,7 +4827,8 @@ function drawBattle(vw,vh){
   // Strike poses: the attacker swaps to its "_atk" sprite for the duration of its lunge.
   const eBase=MONSPR[m.t.id];
   const eSpr=(B.lungeSide<0&&B.lunge>0&&SPR[eBase+"_atk"])?eBase+"_atk":eBase;
-  drawArenaSprite(eSpr,ex+eoffX,ey+eBob,esz,eFade,B.mFlash,bossScaleW,bossScaleH);
+  if(m.t.thing)drawThingArena(eSpr,ex+eoffX,ey+eBob,esz,bossScaleW,bossScaleH,eFade);
+  else drawArenaSprite(eSpr,ex+eoffX,ey+eBob,esz,eFade,B.mFlash,bossScaleW,bossScaleH);
 
   // Poison lingers: bubbling green sprites hang over the foe for as long as it stays poisoned.
   if(B.mStat.poison>0&&B.faint<=0){
@@ -5198,10 +5200,12 @@ function thingUnveils(){
   B.phase="anim";
   const m=B.mon,L=B.layout;
   blog("The shape it was wearing splits down the middle like a seed husk.","c-lvl");
+  B.trans={kind:"unveil",t0:tclock,dur:2};
   quake(20);
   if(L){sburst(L.ex,L.ey,"#c94a3c",40,420);sring(L.ex,L.ey,"rgba(200,60,60,.95)",L.esz*1.4);}
-  queue(1.3,()=>{
+  queue(2,()=>{
     if(!B)return;
+    B.trans=null;
     const t=MONSTERS.find(x=>x.id==="thing2");
     m.t=t;m.hp=m.max=t.hp;B.mhp=B.mmax=B.mShown=t.hp;B.phaseNum=2;B.qcd=1;B.mcd=0;
     for(const k in B.mStat)B.mStat[k]=0;
@@ -5215,9 +5219,10 @@ function thingEnrages(){
   B.phase="over";
   const m=B.mon,L=B.layout;
   blog("It does not die. It gets angry.","c-hit");
+  B.trans={kind:"enrage",t0:tclock,dur:2};
   quake(24);
   if(L){sburst(L.ex,L.ey,"#8a1f3a",50,460);sring(L.ex,L.ey,"rgba(160,20,40,.95)",L.esz*1.6);}
-  queue(1.6,()=>{endBattle();startChase(m);});
+  queue(2,()=>{endBattle();startChase(m);});
 }
 function distFrom(sx,sy){
   const D=new Int16Array(W*H).fill(-1),q=[sx+sy*W];D[q[0]]=0;
@@ -5237,7 +5242,7 @@ function startChase(m){
   mons=[];   // it swallows everything else on the floor as it grows
   for(const d of DOORS){d.open=true;map[d.y][d.x]=FLOOR;}   // and the hill shakes every door open
   for(const l of LEVERS)l.on=true;
-  S.chase={x:bx,y:by,fx:bx+.5,fy:by+.5,t:0,wait:CHASE_WAIT,pulse:0,growl:3.5,stuck:0};
+  S.chase={x:bx,y:by,fx:bx+.5,fy:by+.5,t:0,wait:CHASE_WAIT,pulse:0,growl:3.5,stuck:0,flash:1,roared:false,dir:null,speedNow:0};
   // The way out: a room about CHASE_PATH steps away from where it rose, so the run is long but fair.
   const D=distFrom(bx,by);
   let best=null,bs=1e9;
@@ -5267,8 +5272,12 @@ const CHASE_LINES=["The roots tear up behind you.","It is right behind you.","Yo
 function chaseTick(dt){
   const C=S.chase;if(!C)return;
   C.t+=dt;
-  if(C.wait>0)C.wait-=dt;
-  else{
+  if(C.flash>0)C.flash=Math.max(0,C.flash-dt*1.4);
+  C.speedNow=0;
+  if(C.wait>0){
+    C.wait-=dt;
+    if(!C.roared&&C.wait<CHASE_WAIT*.28){C.roared=true;quake(26);say("It opens its mouth, and keeps opening it.","c-hit");}
+  }else{
     const spd=Math.min(CHASE_MAX,CHASE_SPEED+CHASE_RAMP*Math.max(0,C.t-CHASE_WAIT));
     const dir=chaseDir(C)||[S.fx-C.fx,S.fy-C.fy];
     const len=Math.hypot(dir[0],dir[1]);
@@ -5277,10 +5286,14 @@ function chaseTick(dt){
       if(!boxWall(C.fx+vx,C.fy,MON_R))C.fx+=vx;
       if(!boxWall(C.fx,C.fy+vy,MON_R))C.fy+=vy;
       // caught on a corner: slide back to the middle of its tile and carry on
-      if(Math.hypot(C.fx-ox,C.fy-oy)<sp*.3){C.stuck+=dt;if(C.stuck>.35){C.fx=C.x+.5;C.fy=C.y+.5;C.stuck=0;}}else C.stuck=0;
+      const mv=Math.hypot(C.fx-ox,C.fy-oy);
+      if(mv>1e-4){const nd=[(C.fx-ox)/mv,(C.fy-oy)/mv];C.dir=C.dir?[C.dir[0]*.8+nd[0]*.2,C.dir[1]*.8+nd[1]*.2]:nd;const l=Math.hypot(C.dir[0],C.dir[1])||1;C.dir=[C.dir[0]/l,C.dir[1]/l];}
+      C.speedNow=mv/dt;
+      if(mv<sp*.3){C.stuck+=dt;if(C.stuck>.35){C.fx=C.x+.5;C.fy=C.y+.5;C.stuck=0;}}else C.stuck=0;
       C.x=Math.floor(C.fx);C.y=Math.floor(C.fy);
     }
   }
+  chaseArms(C,dt);
   const d=Math.hypot(S.fx-C.fx,S.fy-C.fy);
   if(d<CHASE_CATCH){S.chase=null;setTension(false);quake(24);held.clear();die("thing");return;}
   if(S.px===S.sx&&S.py===S.sy){
@@ -5293,14 +5306,205 @@ function chaseTick(dt){
   C.growl-=dt;
   if(C.growl<=0){C.growl=4+Math.random()*3;if(d<10)say(pick(CHASE_LINES),"c-hit");}
 }
+/* ---------- the Thing's true shape ---------- */
+// Phase 2 and the chase draw the Thing by hand instead of from a 16x16 sprite: a swollen blood-red head
+// with hollow eyes and a grin full of teeth, carried on two long jointed arms. It is painted at sprite
+// resolution (16 art pixels to a tile) on a small canvas, its edges snapped to hard pixels, then scaled up.
+const HZ={N:112,c:null,g:null};
+const HZ_COL={line:"#160304",skin:"#8a1a17",hi:"#c0413a",lo:"#3f0808",eye:"#020101",tooth:"#ece3cc",toothLo:"#9c8e74",maw:"#0b0203",gum:"#5a0c10"};
+function hzCtx(){
+  if(!HZ.c){HZ.c=document.createElement("canvas");HZ.c.width=HZ.c.height=HZ.N;HZ.g=HZ.c.getContext("2d",{willReadFrequently:true});}
+  return HZ.g;
+}
+// Two-bone arm from shoulder (sx,sy) toward (tx,ty). The elbow always bends upward, high and spidery.
+function hzArm(g,sx,sy,tx,ty,L1,L2){
+  const ang=Math.atan2(ty-sy,tx-sx),d=Math.max(2,Math.min(Math.hypot(tx-sx,ty-sy),L1+L2-.5));
+  const A=Math.acos(Math.max(-1,Math.min(1,(L1*L1+d*d-L2*L2)/(2*L1*d))));
+  const e=Math.sin(ang-A)<Math.sin(ang+A)?ang-A:ang+A;
+  const ex=sx+Math.cos(e)*L1,ey=sy+Math.sin(e)*L1,hx=sx+Math.cos(ang)*d,hy=sy+Math.sin(ang)*d;
+  const fa=Math.atan2(hy-ey,hx-ex),tips=[];
+  g.lineCap="round";g.lineJoin="round";
+  for(const [col,add] of [[HZ_COL.line,2],[HZ_COL.skin,0]]){
+    g.strokeStyle=col;g.fillStyle=col;
+    g.lineWidth=4+add;g.beginPath();g.moveTo(sx,sy);g.lineTo(ex,ey);g.stroke();
+    g.lineWidth=3+add;g.beginPath();g.moveTo(ex,ey);g.lineTo(hx,hy);g.stroke();
+    g.beginPath();g.arc(hx,hy,2.6+add/2,0,7);g.fill();
+    g.lineWidth=1.3+add;
+    for(let f=-1.5;f<=1.5;f++){
+      const a=fa+f*.45,a2=a+f*.3,mx=hx+Math.cos(a)*4.5,my=hy+Math.sin(a)*4.5,qx=mx+Math.cos(a2)*4,qy=my+Math.sin(a2)*4;
+      g.beginPath();g.moveTo(hx,hy);g.lineTo(mx,my);g.lineTo(qx,qy);g.stroke();
+      if(!add)tips.push([qx,qy]);
+    }
+  }
+  g.strokeStyle=HZ_COL.hi;g.lineWidth=1;g.beginPath();g.moveTo(sx,sy-1.3);g.lineTo(ex,ey-1.3);g.stroke();
+  g.fillStyle=HZ_COL.tooth;for(const [x,y] of tips)g.fillRect(Math.round(x)-.5,Math.round(y)-.5,1,1);
+}
+function hzHead(g,P){
+  const {hx,hy,r}=P,jaw=Math.max(0,Math.min(1,P.jaw));
+  g.fillStyle=HZ_COL.line;g.beginPath();g.ellipse(hx,hy,r+1.3,r*1.06+1.3,0,0,7);g.fill();
+  const gr=g.createRadialGradient(hx-r*.35,hy-r*.45,r*.1,hx,hy,r*1.08);
+  gr.addColorStop(0,HZ_COL.hi);gr.addColorStop(.5,HZ_COL.skin);gr.addColorStop(1,HZ_COL.lo);
+  g.fillStyle=gr;g.beginPath();g.ellipse(hx,hy,r,r*1.06,0,0,7);g.fill();
+  // veins over the scalp
+  g.strokeStyle=HZ_COL.lo;g.lineWidth=.9;
+  for(const [a,b] of [[-.5,.2],[.15,-.3],[.55,.25]]){g.beginPath();g.moveTo(hx+a*r,hy-r*.95);g.quadraticCurveTo(hx+(a+b)*r,hy-r*.7,hx+(a+b*.4)*r,hy-r*.5);g.stroke();}
+  // hollow eyes, slanted in, with a pinprick of light that follows you
+  for(const s of [-1,1]){
+    g.save();g.translate(hx+s*r*.4,hy-r*.18);g.rotate(s*.38);
+    g.fillStyle=HZ_COL.eye;g.beginPath();g.ellipse(0,0,r*.29,r*.36,0,0,7);g.fill();
+    // black runs down from each socket
+    g.strokeStyle=HZ_COL.eye;g.lineCap="round";
+    for(const [x,l] of [[-.12,.55],[.1,.8],[.2,.4]]){g.lineWidth=1.1;g.beginPath();g.moveTo(x*r*s,r*.2);g.lineTo(x*r*s,r*(.2+l));g.stroke();}
+    g.restore();
+    // a single pinprick of light deep in each socket, following you
+    const px=Math.round(hx+s*r*.4+P.look[0]*r*.1),py=Math.round(hy-r*.16+P.look[1]*r*.1);
+    g.fillStyle=P.pupil||"#ffe2c8";g.fillRect(px,py,1,1);
+    if(P.pupil){g.fillStyle="#c01810";g.fillRect(px-1,py,1,1);g.fillRect(px+1,py,1,1);g.fillRect(px,py-1,1,1);g.fillRect(px,py+1,1,1);}
+  }
+  // the grin: runs nearly ear to ear, and the jaw drops when it is hungry
+  const mw=r*.8,my=hy+r*.24,X=t=>hx-mw+2*mw*t;
+  const up=t=>my+Math.sin(Math.PI*t)*r*.15-Math.pow(1-Math.sin(Math.PI*t),2)*r*.22,lo=t=>my+r*(.14+jaw*.52)*Math.sin(Math.PI*t)+Math.sin(Math.PI*t)*r*(.2+jaw*.16)-Math.pow(1-Math.sin(Math.PI*t),2)*r*.18;
+  g.beginPath();g.moveTo(X(0),up(0));
+  for(let i=1;i<=12;i++)g.lineTo(X(i/12),up(i/12));
+  for(let i=12;i>=0;i--)g.lineTo(X(i/12),lo(i/12));
+  g.closePath();g.fillStyle=HZ_COL.maw;g.fill();g.strokeStyle=HZ_COL.line;g.lineWidth=1.3;g.stroke();
+  const tooth=(ax,ay,bx,by,cx,cy)=>{
+    g.fillStyle=HZ_COL.tooth;g.beginPath();g.moveTo(ax,ay);g.lineTo(bx,by);g.lineTo(cx,cy);g.closePath();g.fill();
+    g.fillStyle=HZ_COL.toothLo;g.beginPath();g.moveTo((ax+bx)/2,(ay+by)/2);g.lineTo(bx,by);g.lineTo(cx,cy);g.closePath();g.fill();
+  };
+  const n=10,jag=i=>.65+.7*((Math.sin(i*12.9898)*43758.5453)%1+1)%1;
+  for(let i=0;i<n;i++){const a=i/n,b=(i+1)/n,m=(a+b)/2,th=r*(.2+.14*Math.sin(Math.PI*m))*jag(i);
+    tooth(X(a),up(a),X(b),up(b),X(m),Math.min(up(m)+th,lo(m)-1));}
+  for(let i=0;i<n-1;i++){const a=(i+.5)/n,b=(i+1.5)/n,m=(a+b)/2,th=r*(.17+.12*Math.sin(Math.PI*m))*jag(i+7);
+    tooth(X(a),lo(a),X(b),lo(b),X(m),Math.max(lo(m)-th,up(m)+1));}
+  g.strokeStyle=HZ_COL.gum;g.lineWidth=.8;g.beginPath();g.moveTo(X(0),up(0));for(let i=1;i<=12;i++)g.lineTo(X(i/12),up(i/12));g.stroke();
+}
+// P: {hx,hy,r,jaw,look:[x,y],arms:[[shoulderX,shoulderY,handX,handY],...],clipY?}
+function paintHorror(P){
+  const g=hzCtx(),N=HZ.N;
+  g.clearRect(0,0,N,N);g.save();
+  if(P.clipY!==undefined){g.beginPath();g.rect(0,0,N,P.clipY);g.clip();}
+  for(const a of P.arms)hzArm(g,a[0],a[1],a[2],a[3],P.l1||20,P.l2||21);
+  hzHead(g,P);
+  g.restore();
+  const id=g.getImageData(0,0,N,N),d=id.data;
+  for(let i=3;i<d.length;i+=4)d[i]=d[i]>100?255:0;   // hard pixel edges, like every other sprite
+  g.putImageData(id,0,0);
+  return HZ.c;
+}
+const ease=t=>t<=0?0:t>=1?1:1-Math.pow(1-t,3);
+
+// In a duel: phase 2 squats on its hands; on its strike the near arm sweeps at you.
+// rise lifts it out of the floor (0 = fully up), open unfolds its arms, grow scales it.
+function drawHorrorArena(cx,cy,s,o){
+  o=o||{};
+  const G=88,MX=56,r=14,t=tclock,rise=o.rise||0,open=o.open===undefined?1:o.open;
+  const bob=RM?0:Math.sin(t*2.2)*1.5;
+  const hx=MX+(o.jit||0),hy=G-31+bob+rise*44;
+  const sh=[[hx-r*.85,hy+r*.3],[hx+r*.85,hy+r*.3]];
+  const sway=k=>RM?0:Math.sin(t*1.7+k)*2;
+  let hands=[[MX-27+sway(0),G],[MX+27+sway(2),G]];
+  if(o.attack)hands[0]=[MX-50,hy+6];
+  hands=hands.map((h,i)=>[sh[i][0]+(h[0]-sh[i][0])*open,sh[i][1]+(h[1]-sh[i][1])*open-(1-open)*6]);
+  const img=paintHorror({hx,hy,r,jaw:o.jaw===undefined?.28+(RM?0:.18*Math.sin(t*2.6)):o.jaw,look:[-1,.25],pupil:o.grow>1.2?"#fff4e0":undefined,
+    arms:open>.05?sh.map((p,i)=>[p[0],p[1],hands[i][0],hands[i][1]]):[],clipY:rise>0?G+2:undefined});
+  const S2=s*(o.grow||1);
+  ctx.globalAlpha=o.alpha===undefined?1:o.alpha;
+  ctx.drawImage(img,cx-MX*S2,cy-G*S2,HZ.N*S2,HZ.N*S2);
+  ctx.globalAlpha=1;
+}
+// Draws the foe in a duel against the Thing, including the two transitions between its shapes.
+function drawThingArena(eSpr,cx,cy,esz,sw,shh,alpha){
+  const T=B.trans,s=esz*shh/50;
+  if(!T){
+    if(B.mon.t.id==="thing")drawArenaSprite(eSpr,cx,cy,esz,alpha,B.mFlash,sw,shh);
+    else drawHorrorArena(cx,cy,s,{attack:B.lungeSide<0&&B.lunge>0,alpha});
+    return;
+  }
+  const p=Math.min(1,(tclock-T.t0)/T.dur),L=B.layout,vw=L?L.vw:0,vh=L?L.vh:0;
+  if(T.kind==="unveil"){
+    const img=SPR.thing,w=esz*sw,h=esz*shh;
+    if(p<.45){
+      // the husk shudders, and a red seam opens down its middle
+      const k=p/.45,j=RM?0:(Math.random()-.5)*esz*.07*k;
+      drawArenaSprite("thing",cx+j,cy,esz,1,k*.4,sw,shh);
+      ctx.save();ctx.strokeStyle="#ff4a2a";ctx.shadowColor="#ff2a10";ctx.shadowBlur=12;ctx.lineWidth=Math.max(2,esz*.03);
+      ctx.beginPath();let y=cy-h;ctx.moveTo(cx+j,y);
+      while(y<cy-h+h*k){y+=h*.08;ctx.lineTo(cx+j+(Math.random()-.5)*esz*.06,y);}
+      ctx.stroke();ctx.restore();
+      return;
+    }
+    const k=(p-.45)/.55;
+    // what was inside climbs out of the floor while the two halves fall away
+    drawHorrorArena(cx,cy,s,{rise:1-ease(k*1.25),open:ease((k-.35)/.65),jaw:.2+.8*Math.max(0,k-.6)/.4});
+    for(const side of [-1,1]){
+      ctx.save();ctx.globalAlpha=Math.max(0,1-k*1.3);
+      ctx.translate(cx+side*k*esz*.6,cy+k*k*esz*.35);ctx.rotate(side*k*.7);
+      ctx.drawImage(img,side<0?0:img.width/2,0,img.width/2,img.height,side<0?-w/2:0,-h,w/2,h);
+      ctx.restore();
+    }
+    if(p<.62&&L){ctx.fillStyle=`rgba(255,60,40,${(.62-p)/.17*.55})`;ctx.fillRect(0,0,vw,vh);}
+    return;
+  }
+  // enrage: it convulses and swells past the edges of the arena, the light goes red, then black
+  const j=RM?0:(Math.random()-.5)*esz*.09*(.3+p);
+  drawHorrorArena(cx+j,cy,s,{grow:1+1.6*ease(p),jaw:.5+.5*ease(p*1.6),jit:RM?0:(Math.random()-.5)*2*p});
+  if(L){
+    ctx.fillStyle=`rgba(120,8,18,${Math.min(.75,p*.85)})`;ctx.fillRect(0,0,vw,vh);
+    if(p>.8){ctx.fillStyle=`rgba(0,0,0,${(p-.8)/.2})`;ctx.fillRect(0,0,vw,vh);}
+  }
+}
+
+// On the map: it crawls after you on its hands, planting one and then the other.
+function chaseArms(C,dt){
+  if(!C.arms)C.arms=[-1,1].map(s=>({s,x:C.fx+s*.9,y:C.fy+.4,fx:0,fy:0,tx:0,ty:0,t:1}));
+  const dx=S.fx-C.fx,dy=S.fy-C.fy,dl=Math.hypot(dx,dy)||1;
+  const moving=(C.speedNow||0)>.6;
+  const fwd=moving&&C.dir?C.dir:[dx/dl,dy/dl],px=-fwd[1],py=fwd[0];
+  for(const a of C.arms){
+    if(a.t<1){
+      a.t=Math.min(1,a.t+dt/.16);a.x=a.fx+(a.tx-a.fx)*a.t;a.y=a.fy+(a.ty-a.fy)*a.t;
+      if(a.t>=1&&visible.has(Math.floor(a.x)+","+Math.floor(a.y)))burst(Math.floor(a.x),Math.floor(a.y),"#3a2a22",4,1.4);
+      continue;
+    }
+    const reach=moving?1.75:1.45,side=moving?1.1:.95;
+    const tx=C.fx+fwd[0]*reach+px*a.s*side,ty=C.fy+fwd[1]*reach+py*a.s*side;
+    const other=C.arms.find(o=>o!==a);
+    if(Math.hypot(a.x-tx,a.y-ty)>(moving?.95:.45)&&other.t>=1){a.fx=a.x;a.fy=a.y;a.tx=tx;a.ty=ty;a.t=0;}
+  }
+}
 function drawChase(){
-  const C=S.chase;
-  const sc=RM?2:2+Math.sin(tclock*5)*.08;
-  blit("thing3",C.fx-.5,C.fy-.5,visible.has(C.x+","+C.y)?1:.4,C.wait>0?.25:0,sc,sc);
+  const C=S.chase,N=HZ.N,G=64,MX=56,r=14,s=cell/16,t=tclock;
+  const sx=(C.fx-cam.x)*cell,sy=(C.fy-cam.y)*cell;
+  const dx=S.fx-C.fx,dy=S.fy-C.fy,dl=Math.hypot(dx,dy)||1;
+  const e=C.wait>0?1-C.wait/CHASE_WAIT:1;             // 0..1 while it climbs out of the floor
+  // a stain of red light pools under it
+  const gl=ctx.createRadialGradient(sx,sy,0,sx,sy,cell*2.6);
+  gl.addColorStop(0,"rgba(150,12,20,.45)");gl.addColorStop(1,"rgba(150,12,20,0)");
+  ctx.fillStyle=gl;ctx.fillRect(sx-cell*3,sy-cell*3,cell*6,cell*6);
+  if(e<1){ctx.fillStyle="rgba(4,2,3,.85)";ctx.beginPath();ctx.ellipse(sx,sy,cell*1.3*ease(e*2),cell*.45*ease(e*2),0,0,7);ctx.fill();}
+  const close=dl<4.5,rise=1-ease(e/.6);
+  const bob=RM?0:Math.sin(t*(close?9:4))*1.5;
+  const hx=MX+(RM?0:(e<1?(Math.random()-.5)*2:0)),hy=G-17+bob+rise*36;
+  const jaw=e<1?(e>.72?1:.15):close?(RM?.7:.55+.4*Math.abs(Math.sin(t*8))):.3+(RM?0:.12*Math.sin(t*3));
+  const sh=[[hx-r*.85,hy+r*.3],[hx+r*.85,hy+r*.3]];
+  let arms=[];
+  if(C.arms&&e>.5){
+    const k=ease((e-.5)/.25);
+    arms=C.arms.map((a,i)=>{
+      const lift=a.t<1?Math.sin(Math.PI*a.t)*6:0;
+      const wx=MX+(a.x-C.fx)*16,wy=G+(a.y-C.fy)*16-lift;
+      return[sh[i][0],sh[i][1],sh[i][0]+(wx-sh[i][0])*k,sh[i][1]+(wy-sh[i][1])*k];
+    });
+  }
+  const img=paintHorror({hx,hy,r,jaw,look:[dx/dl,dy/dl],arms,clipY:rise>0?G+4:undefined,pupil:close?"#ffd9c0":undefined});
+  ctx.globalAlpha=visible.has(C.x+","+C.y)?1:.45;
+  ctx.drawImage(img,sx-MX*s,sy-G*s,N*s,N*s);
+  ctx.globalAlpha=1;
   // an arrow at your feet points at the way out
   const o=off(S),px=(S.vx+o[0]+.5-cam.x)*cell,py=(S.vy+o[1]+.5-cam.y)*cell;
-  const a=Math.atan2(S.sy+.5-S.fy,S.sx+.5-S.fx),r=cell*1.15;
-  ctx.save();ctx.translate(px+Math.cos(a)*r,py+Math.sin(a)*r);ctx.rotate(a);
+  const a=Math.atan2(S.sy+.5-S.fy,S.sx+.5-S.fx),rr=cell*1.15;
+  ctx.save();ctx.translate(px+Math.cos(a)*rr,py+Math.sin(a)*rr);ctx.rotate(a);
   ctx.globalAlpha=RM?.9:.65+.35*Math.sin(tclock*6);
   ctx.fillStyle="#fff0b8";ctx.strokeStyle="rgba(6,8,13,.9)";ctx.lineWidth=2;
   ctx.beginPath();ctx.moveTo(cell*.32,0);ctx.lineTo(-cell*.18,-cell*.2);ctx.lineTo(-cell*.18,cell*.2);ctx.closePath();ctx.stroke();ctx.fill();
