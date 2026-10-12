@@ -5551,7 +5551,13 @@ function chaseArms(C,dt){
   for(const a of C.arms){
     if(a.t<1){
       a.t=Math.min(1,a.t+dt/.16);a.x=a.fx+(a.tx-a.fx)*a.t;a.y=a.fy+(a.ty-a.fy)*a.t;
-      if(a.t>=1&&visible.has(Math.floor(a.x)+","+Math.floor(a.y)))burst(Math.floor(a.x),Math.floor(a.y),"#3a2a22",4,1.4);
+      if(a.t>=1){
+        // a hand comes down: the floor shakes with it, harder the closer it is
+        const dd=Math.hypot(S.fx-C.fx,S.fy-C.fy);
+        playMonsterStep(dd);
+        if(dd<9)quake(1.5+(9-dd)*.45);
+        if(visible.has(Math.floor(a.x)+","+Math.floor(a.y)))burst(Math.floor(a.x),Math.floor(a.y),"#3a2a22",4,1.4);
+      }
       continue;
     }
     const reach=moving?1.75:1.45,side=moving?1.1:.95;
@@ -6003,6 +6009,36 @@ function playFootstep(){
   const s=actx.createGain(); s.gain.value=0.18;
   src.connect(filt); filt.connect(g); g.connect(amb.dry); g.connect(s); s.connect(amb.send);
   src.start(t);
+}
+// The Thing's hands coming down on stone as it crawls after you: a deep falling thud you feel more than
+// hear, the crack of the impact, and a patter of grit. Louder the closer it is. Goes straight to the
+// speakers (and the reverb), so the Music button does not silence it.
+let lastMonsterStep=0;
+function playMonsterStep(dist){
+  if(!AUDIO_OK)return;
+  ensureAudio();
+  if(!actx)return;
+  const now=performance.now();if(now-lastMonsterStep<300)return;lastMonsterStep=now;
+  const t=actx.currentTime+.005,vol=Math.max(.35,Math.min(1,1.25-dist/12));
+  const out=actx.createGain();out.gain.value=vol;out.connect(actx.destination);
+  if(amb){const s=actx.createGain();s.gain.value=.35;out.connect(s);s.connect(amb.send);}
+  // the weight: a sine that drops from a low thump to a sub rumble
+  const o=actx.createOscillator();o.type="sine";
+  o.frequency.setValueAtTime(70+Math.random()*12,t);o.frequency.exponentialRampToValueAtTime(30,t+.32);
+  const og=actx.createGain();og.gain.setValueAtTime(.0001,t);og.gain.linearRampToValueAtTime(.95,t+.008);og.gain.exponentialRampToValueAtTime(.0001,t+.45);
+  const sh=actx.createWaveShaper(),c=new Float32Array(256);
+  for(let i=0;i<256;i++){const x=i/128-1;c[i]=Math.tanh(x*2.4);}
+  sh.curve=c;o.connect(og);og.connect(sh);sh.connect(out);o.start(t);o.stop(t+.5);
+  const noise=(len,shape)=>{const b=actx.createBuffer(1,Math.floor(actx.sampleRate*len),actx.sampleRate),d=b.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,shape);
+    const src=actx.createBufferSource();src.buffer=b;return src;};
+  // the impact: a dull crunch of stone
+  const n1=noise(.28,2.6),lp=actx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=380+Math.random()*120;lp.Q.value=.8;
+  const ng=actx.createGain();ng.gain.value=.75;n1.connect(lp);lp.connect(ng);ng.connect(out);n1.start(t);
+  // grit and pebbles skittering away
+  const n2=noise(.22,1.4),bp=actx.createBiquadFilter();bp.type="bandpass";bp.frequency.value=2400;bp.Q.value=1.4;
+  const g2=actx.createGain();g2.gain.setValueAtTime(.0001,t+.04);g2.gain.linearRampToValueAtTime(.12,t+.07);g2.gain.exponentialRampToValueAtTime(.0001,t+.26);
+  n2.connect(bp);bp.connect(g2);g2.connect(out);n2.start(t+.04);
 }
 function playScream(){
   if(!amb)return;
