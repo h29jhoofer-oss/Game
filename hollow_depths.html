@@ -5231,7 +5231,7 @@ function distFrom(sx,sy){
   }
   return D;
 }
-const CHASE_WAIT=2.2,CHASE_SPEED=3.8,CHASE_RAMP=.07,CHASE_MAX=4.8,CHASE_CATCH=.8,CHASE_PATH=60;
+const CHASE_WAIT=2.2,CHASE_SPEED=3.8,CHASE_RAMP=.07,CHASE_MAX=4.8,CHASE_CATCH=.8,CHASE_PATH=55;
 function startChase(m){
   const bx=m.x,by=m.y;
   mons=[];   // it swallows everything else on the floor as it grows
@@ -5244,7 +5244,7 @@ function startChase(m){
   for(const r of S.rooms){
     const d=D[r.cx+r.cy*W];
     if(d<0||map[r.cy][r.cx]!==FLOOR)continue;
-    const sc=Math.abs(d-CHASE_PATH)+(d<30?1000:0);
+    const sc=Math.abs(d-CHASE_PATH)+(d<30?1000:0)+(d>CHASE_PATH+8?300:0);   // much longer runs are too long to outpace it
     if(sc<bs){bs=sc;best=r;}
   }
   if(!best)best=S.rooms[0];

@@ -25,6 +25,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   // 1. The King's fall opens a stair instead of ending the run.
   await fresh(10);
   check('floor 10 has no stair before the King falls', (await ev('S.sx')) === -1);
+  await ev('mons=mons.filter(m=>m.t.id==="king")');   // no stray knight wandering into the next check
   await duelBoss('king');
   await ev('B.mhp=0;winBattle()'); await step(2);
   check('killing the King keeps the run going', await ev('!S.over&&S.mode==="map"&&S.kingSlain'));
