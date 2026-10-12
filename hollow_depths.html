@@ -6657,6 +6657,7 @@ window.addEventListener("keydown",ev=>{
     if(k==="i"||k==="I"){if(S.pack.length&&B&&B.phase==="choose")togglePack();ev.preventDefault();return;}
     return;
   }
+  if(PLAYTEST&&(k==="n"||k==="N")&&S.mode==="map"&&!S.chase&&S.depth<20){S.depth++;if(S.depth>10)S.kingSlain=true;newFloor(S.depth);say(`Playtest: skipped to floor ${S.depth}.`,"c-cold");refresh();ev.preventDefault();return;}
   if(freeMode()&&FREE_CODES[ev.code]){held.add(ev.code);ev.preventDefault();return;}
   if(KEYS[k]){tryMove(KEYS[k][0],KEYS[k][1]);ev.preventDefault();return;}
   if(k==="."){tryMove(0,0);ev.preventDefault();return;}
@@ -6669,7 +6670,6 @@ window.addEventListener("keydown",ev=>{
   if(k==="p"||k==="P"){toggleEditor();ev.preventDefault();return;}
   if(k==="v"||k==="V"){toggleMusic();ev.preventDefault();return;}
   if(k==="Enter"||k===">"){descend();ev.preventDefault();}
-  if(PLAYTEST&&(k==="n"||k==="N")&&S.mode==="map"&&!S.chase&&S.depth<20){S.depth++;if(S.depth>10)S.kingSlain=true;newFloor(S.depth);say(`Playtest: skipped to floor ${S.depth}.`,"c-cold");refresh();ev.preventDefault();}
 });
 document.querySelectorAll(".pad button").forEach(b=>{
   const dx=+b.dataset.dx,dy=+b.dataset.dy,code="pad:"+dx+":"+dy,dir=dx||dy;
