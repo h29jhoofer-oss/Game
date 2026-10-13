@@ -20,7 +20,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const st = await ev(`(()=>{const B={tomb:0,walls:0,ring:0,candles:0,cut:0,onRing:0,guards:0,shrine:0,other:0};
     for(let i=0;i<40;i++){S.depth=8;newFloor(8);if(!TOMB)continue;B.tomb++;
       for(const k of TOMB.tiles){const [x,y]=k.split(",").map(Number);if(map[y][x]===WALL)B.walls++;}
-      for(let y=TOMB.y-1;y<=TOMB.y+2;y++)for(let x=TOMB.x-1;x<=TOMB.x+2;x++)if(!TOMB.tiles.has(x+","+y)&&map[y][x]===FLOOR)B.ring++;
+      for(let y=TOMB.y-1;y<=TOMB.y+2;y++)for(let x=TOMB.x-1;x<=TOMB.x+1;x++)if(!TOMB.tiles.has(x+","+y)&&map[y][x]===FLOOR)B.ring++;
       B.candles+=TOMB.candles.length;
       if(inTombRing(S.px,S.py)||inTombRing(S.sx,S.sy))B.onRing++;
       for(const o of [...items,...traps,...mons])if(inTombRing(o.x,o.y))B.onRing++;
@@ -31,8 +31,8 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
       S.depth=7;newFloor(7);if(TOMB)B.other++;}
     return B;})()`);
   check('floor 8 always has the tomb', st.tomb === 40, st);
-  check('the tomb is a solid 2x2 in the middle of its room', st.walls === 160, st);
-  check('a ring of twelve candles surrounds it', st.ring === 480 && st.candles === 480, st);
+  check('the tomb is a solid 1x2 in the middle of its room', st.walls === 80, st);
+  check('a ring of ten candles surrounds it', st.ring === 400 && st.candles === 400, st);
   check('nothing spawns on the ring, nor the start or stairs', st.onRing === 0, st);
   check('two troll guards keep watch in the vault', st.guards === 80, st);
   check('the shrine stays out of the vault', st.shrine === 0, st);

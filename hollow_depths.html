@@ -1155,12 +1155,12 @@ function closePaper(){if(!paperOpen)return;paperOpen=false;hideOverlay();}
 /* ============================ the Queen's tomb (floor 8) ============================ */
 // Behind the vault's door, troll guards keep watch over a stone tomb ringed with candles. Step inside the
 // ring and the candles go out one by one, the lid grinds aside and the Queen's ghost rises to fight you.
-// The tomb takes the middle 2x2 of a room; the candles stand on the ring of tiles around it, and there is
+// The tomb takes the middle 1x2 of a room; the candles stand on the ring of tiles around it, and there is
 // always a walkway outside the ring, so you can pass by without waking her.
 let TOMB=null;
 const TOMB_SNUFF=.18,TOMB_SNUFF_GAP=.1,TOMB_LID=1.65,TOMB_LID_LEN=1.1,TOMB_RISE=2.9,TOMB_RISE_LEN=1.3,TOMB_FIGHT=4.5;
-function tombRing(r){return{x0:r.cx-2,y0:r.cy-2,x1:r.cx+1,y1:r.cy+1};}
-function inTombRing(x,y){return !!TOMB&&x>=TOMB.x-1&&x<=TOMB.x+2&&y>=TOMB.y-1&&y<=TOMB.y+2;}
+function tombRing(r){return{x0:r.cx-1,y0:r.cy-2,x1:r.cx+1,y1:r.cy+1};}
+function inTombRing(x,y){return !!TOMB&&x>=TOMB.x-1&&x<=TOMB.x+1&&y>=TOMB.y-1&&y<=TOMB.y+2;}
 function placeTomb(depth,rooms){
   TOMB=null;
   if(depth!==8||S.chase||rooms.length<3)return;   // on the climb out, the vault is just another empty floor
@@ -1187,19 +1187,19 @@ function placeTomb(depth,rooms){
     }
     if(!clear(r))continue;
     const before=floodFrom(S.px,S.py).size;
-    const tx=r.cx-1,ty=r.cy-1;
-    for(let j=0;j<2;j++)for(let i=0;i<2;i++)map[ty+j][tx+i]=WALL;
-    if(floodFrom(S.px,S.py).size<before-4){for(let j=0;j<2;j++)for(let i=0;i<2;i++)map[ty+j][tx+i]=FLOOR;continue;}
+    const tx=r.cx,ty=r.cy-1;
+    for(let j=0;j<2;j++)map[ty+j][tx]=WALL;
+    if(floodFrom(S.px,S.py).size<before-2){for(let j=0;j<2;j++)map[ty+j][tx]=FLOOR;continue;}
     const tiles=new Set();
-    for(let j=0;j<2;j++)for(let i=0;i<2;i++)tiles.add((tx+i)+","+(ty+j));
+    for(let j=0;j<2;j++)tiles.add(tx+","+(ty+j));
     // a candle on every tile of the ring, clockwise from the top left, so they go out in a circle
     const ring=[];
-    for(let i=tx-1;i<=tx+2;i++)ring.push([i,ty-1]);
-    for(let j=ty;j<=ty+2;j++)ring.push([tx+2,j]);
-    for(let i=tx+1;i>=tx-1;i--)ring.push([i,ty+2]);
+    for(let i=tx-1;i<=tx+1;i++)ring.push([i,ty-1]);
+    for(let j=ty;j<=ty+2;j++)ring.push([tx+1,j]);
+    for(let i=tx;i>=tx-1;i--)ring.push([i,ty+2]);
     for(let j=ty+1;j>=ty;j--)ring.push([tx-1,j]);
     const candles=ring.map(([x,y])=>{
-      const corner=(x===tx-1||x===tx+2)&&(y===ty-1||y===ty+2),n=corner?3:1+rnd(2),sticks=[];
+      const corner=(x===tx-1||x===tx+1)&&(y===ty-1||y===ty+2),n=corner?3:1+rnd(2),sticks=[];
       for(let k=0;k<n;k++)sticks.push({dx:3+rnd(9),dy:9+rnd(5),h:corner&&k===0?6+rnd(2):3+rnd(3),ph:Math.random()*6.3});
       sticks.sort((a,b)=>a.dy-b.dy);
       return{x,y,sticks,out:-1};
@@ -1209,7 +1209,7 @@ function placeTomb(depth,rooms){
     const walk=[];
     for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++)
       if(map[y][x]===FLOOR&&!inTombRing(x,y)&&!(x===S.px&&y===S.py)&&!(x===S.sx&&y===S.sy))walk.push({x,y});
-    const side=walk.filter(p=>p.x<tx-1),other=walk.filter(p=>p.x>tx+2);
+    const side=walk.filter(p=>p.x<tx-1),other=walk.filter(p=>p.x>tx+1);
     for(const g of [side,other]){const p=g.length?pick(g):pick(walk);if(p&&!mons.some(m=>m.x===p.x&&m.y===p.y)){spawnMon("troll",p.x,p.y);mons[mons.length-1].guard=true;}}
     return;
   }
@@ -1236,9 +1236,9 @@ function tombTick(dt){
   T.lit=T.candles.filter(c=>c.out<0).length/T.candles.length;
   if(T.t>=TOMB_LID&&!T.ground){T.ground=true;playLidGrind();quake(6);say("Stone grinds on stone. The lid of the tomb is moving.","c-hit");}
   T.lid=Math.max(0,Math.min(1,(T.t-TOMB_LID)/TOMB_LID_LEN));
-  if(T.t>=TOMB_LID+TOMB_LID_LEN&&!T.thud){T.thud=true;quake(10);burst(T.x+1,T.y+1,"#566173",10,2.2);}
+  if(T.t>=TOMB_LID+TOMB_LID_LEN&&!T.thud){T.thud=true;quake(10);burst(T.x,T.y+.5,"#566173",10,2.2);}
   T.rise=Math.max(0,Math.min(1,(T.t-TOMB_RISE)/TOMB_RISE_LEN));
-  if(T.t>=TOMB_RISE&&!T.wailed){T.wailed=true;playGhostWail(1.8);ring(T.x+.5,T.y+.5,"rgba(168,224,240,.85)",3.2,1.2);}
+  if(T.t>=TOMB_RISE&&!T.wailed){T.wailed=true;playGhostWail(1.8);ring(T.x,T.y+.5,"rgba(168,224,240,.85)",3,1.2);}
   if(T.t>=TOMB_FIGHT){
     T.stage="open";
     // she comes for you from the tile of the ring nearest to where you stand
@@ -1277,29 +1277,27 @@ function queenDown(m){
 function drawTomb(R){
   const T=TOMB,u=cell/16,ox=(T.x-cam.x)*cell,oy=(T.y-cam.y)*cell;
   const ks=[...T.tiles];if(!ks.some(k=>seen.has(k)))return;
-  const al=ks.some(k=>visible.has(k))?Math.max(.5,bright(T.x+.5,T.y+.5,R)):.2;
+  const al=ks.some(k=>visible.has(k))?Math.max(.5,bright(T.x,T.y+.5,R)):.2;
   const P=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(Math.round(ox+x*u),Math.round(oy+y*u),Math.ceil(w*u),Math.ceil(h*u));};
   ctx.globalAlpha=al;
-  P(2,5,30,27,"rgba(0,0,0,.45)");                       // shadow
-  P(1,21,30,9,"#2b3243");P(1,21,30,1,"#39414f");P(1,29,30,1,"#171c26");   // plinth
-  for(const mx of [8,16,24])P(mx,22,1,7,"#1e242e");
-  P(11,23,10,5,"#1e242e");P(12,24,8,3,"#262e3a");        // the name plate, worn smooth
-  for(const gx of [13,15,16,18])P(gx,25,1,1,"#8c6a43");
-  P(2,3,28,19,"#39414f");                                 // the coffin's walls
+  P(2,3,15,29,"rgba(0,0,0,.45)");                       // shadow
+  P(1,1,14,30,"#39414f");                                 // the coffin's walls
+  P(1,27,14,4,"#2b3243");P(1,27,14,1,"#39414f");P(1,30,14,1,"#171c26");   // its foot, seen from the front
+  P(5,28,6,2,"#1e242e");for(const gx of [6,8,9])P(gx,28,1,1,"#8c6a43");   // the name plate, worn smooth
   if(T.lid>0){
-    P(4,5,24,15,"#06080d");
+    P(3,3,10,22,"#06080d");
     const gl=T.stage==="rest"?.1:.12+.1*Math.sin(tclock*3);
-    P(5,6,22,13,`rgba(95,168,196,${gl.toFixed(3)})`);
+    P(4,4,8,20,`rgba(95,168,196,${gl.toFixed(3)})`);
   }
-  const lx=Math.round(T.lid*11),ly=Math.round(T.lid*3);  // the lid slides off to the side
-  P(2+lx,2+ly,28,19,"#525c6e");P(2+lx,2+ly,28,1,"#8e9aad");P(2+lx,2+ly,1,19,"#566173");P(2+lx,20+ly,28,1,"#2b3243");P(29+lx,2+ly,1,19,"#39414f");
+  const lx=Math.round(T.lid*7),ly=Math.round(T.lid*4);   // the lid slides off to the side
+  P(1+lx,0+ly,14,26,"#525c6e");P(1+lx,0+ly,14,1,"#8e9aad");P(1+lx,0+ly,1,26,"#566173");P(1+lx,25+ly,14,1,"#2b3243");P(14+lx,0+ly,1,26,"#39414f");
   // the carved effigy on the lid: a crowned queen with her hands folded
-  P(13+lx,5+ly,1,1,"#c9a56a");P(15+lx,5+ly,2,1,"#c9a56a");P(18+lx,5+ly,1,1,"#c9a56a");
-  P(13+lx,6+ly,6,2,"#8c6a43");
-  P(14+lx,8+ly,4,3,"#8e9aad");P(14+lx,8+ly,1,3,"#b9c2cf");
-  P(12+lx,11+ly,8,8,"#8e9aad");P(12+lx,11+ly,1,8,"#b9c2cf");P(19+lx,11+ly,1,8,"#566173");
-  P(15+lx,13+ly,2,2,"#b9c2cf");P(14+lx,18+ly,4,1,"#566173");
-  P(6+lx,15+ly,3,1,"#39414f");P(8+lx,16+ly,1,2,"#39414f");P(24+lx,6+ly,1,3,"#39414f");P(25+lx,9+ly,2,1,"#39414f");
+  for(const cx of [5,7,8,10])P(cx+lx,3+ly,1,1,"#c9a56a");
+  P(5+lx,4+ly,6,2,"#8c6a43");
+  P(6+lx,6+ly,4,3,"#8e9aad");P(6+lx,6+ly,1,3,"#b9c2cf");
+  P(5+lx,9+ly,6,13,"#8e9aad");P(5+lx,9+ly,1,13,"#b9c2cf");P(10+lx,9+ly,1,13,"#566173");
+  P(7+lx,13+ly,2,2,"#b9c2cf");P(6+lx,22+ly,4,1,"#566173");
+  P(2+lx,17+ly,2,1,"#39414f");P(3+lx,18+ly,1,2,"#39414f");P(12+lx,5+ly,1,3,"#39414f");
   ctx.globalAlpha=1;
 }
 function drawCandles(R){
@@ -1341,12 +1339,12 @@ function drawTombGhost(){
   const T=TOMB;if(T.stage!=="wake"||T.rise<=0)return;
   const r=T.rise,wob=RM?0:Math.sin(tclock*3.2)*.06;
   ctx.globalCompositeOperation="lighter";
-  const gx=(T.x+1-cam.x)*cell,gy=(T.y+.6-r*1.1-cam.y)*cell,rr=cell*2.2;
+  const gx=(T.x+.5-cam.x)*cell,gy=(T.y+.6-r*1.1-cam.y)*cell,rr=cell*2;
   const g=ctx.createRadialGradient(gx,gy,0,gx,gy,rr);
   g.addColorStop(0,`rgba(168,224,240,${(.3*r).toFixed(3)})`);g.addColorStop(1,"rgba(168,224,240,0)");
   ctx.fillStyle=g;ctx.fillRect(gx-rr,gy-rr,rr*2,rr*2);
   ctx.globalCompositeOperation="source-over";
-  blit("ghost_queen",T.x+.5+wob,T.y+.5-r*1.1,r*(.7+.15*Math.sin(tclock*9)),0,1.7*(.4+.6*r),1.7);
+  blit("ghost_queen",T.x+wob,T.y+.5-r*1.1,r*(.7+.15*Math.sin(tclock*9)),0,1.7*(.4+.6*r),1.7);
 }
 // Battle: she flickers, trails after-images, and nearly vanishes while she has faded.
 function drawGhostArena(spr,x,y,esz,sw,sh,fade){
@@ -3468,7 +3466,7 @@ function blit(name,tx,ty,alpha,fl,sy,sx,flip){
 function bright(x,y,R){
   const d=Math.hypot(x-S.vx,y-S.vy);
   let b=1.18-Math.pow(d/R,1.45)*1.12;
-  if(TOMB&&TOMB.lit>0)b=Math.max(b,TOMB.lit*(.95-Math.hypot(x-TOMB.x-.5,y-TOMB.y-.5)*.17));   // candlelight in the vault
+  if(TOMB&&TOMB.lit>0)b=Math.max(b,TOMB.lit*(.95-Math.hypot(x-TOMB.x,y-TOMB.y-.5)*.17));   // candlelight in the vault
   return Math.max(0,Math.min(1,b));
 }
 
