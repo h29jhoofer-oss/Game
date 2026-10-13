@@ -388,6 +388,12 @@ body.inchasm .dice-tray{display:none}
 .qte-timerbar-wrap{width:min(220px,60vw);height:8px;background:rgba(22,10,10,.85);
   border-radius:4px;overflow:hidden;border:1px solid #5a2a22}
 .qte-timerbar{height:100%;background:linear-gradient(90deg,#f0c060,#c94a3c);width:100%}
+.paper-card{background:#d9d2c0;color:#2b2416;border:2px solid #8a7a58;box-shadow:inset 0 0 0 4px #d9d2c0,inset 0 0 0 6px #8a7a58,8px 8px 0 rgba(0,0,0,.5);
+  padding:22px 24px;max-width:460px;margin:0 auto;font-size:13px;line-height:1.6}
+#card .paper-card h3{color:#5a1d19;margin:0 0 4px;font-size:16px;letter-spacing:.06em}
+#card .paper-card .sub{color:#8a7a58;font-size:11px;margin:0 0 12px;letter-spacing:.08em;text-transform:uppercase}
+#card .paper-card p{margin:0 0 14px;font-style:italic;color:#2b2416}
+.paper-card button{background:#5a1d19;color:#f0dfae;border:0}
 .parry-overlay{
   position:absolute;inset:0;z-index:9;display:none;
   align-items:center;justify-content:flex-end;flex-direction:column;gap:10px;padding-bottom:9%;
@@ -920,6 +926,7 @@ const PLAYTEST=false;   // playtest builds flip this on: every hero unlocked, te
 const XPTABLE=[0,22,55,105,180,285,425,610,850,1150,1520,2000,2550,3150,3800,4500,5250,6050,6900,7800,8750,9750];
 
 /* ============================ state ============================ */
+let PROPS=new Map(); // floor-5 ward furniture by "x,y": solid like walls, but you can see past it
 let DL=new Map(),DOORS=[],LEVERS=[]; // interactive dungeon: doors blocking corridors, levers that open them
 let SHR=null; // the shrine on this floor: {x,y,parts:Map}
 let CHASMS=[],CHM=new Map(),PK=null; // chasms on this floor (by "x,y"), and the side-view crossing in progress
@@ -941,7 +948,7 @@ function cssv(n){
 /* ============================ map gen ============================ */
 function newFloor(depth){
   unlockLore(depth);
-  map=[];seen=new Set();visible=new Set();mons=[];items=[];traps=[];SHR=null;S.atShrine=false;DL=new Map();DOORS=[];LEVERS=[];CHASMS=[];CHM=new Map();PK=null;
+  map=[];seen=new Set();visible=new Set();mons=[];items=[];traps=[];SHR=null;S.atShrine=false;DL=new Map();DOORS=[];LEVERS=[];CHASMS=[];CHM=new Map();PK=null;PROPS=new Map();
   for(let y=0;y<H;y++){map.push(new Array(W).fill(WALL));}
   const rooms=[];
   const tries=depth===10||depth===20?14:22;   // the two boss floors are smaller
@@ -975,6 +982,7 @@ function newFloor(depth){
   placeShrine(depth,rooms);
   placeDoors(depth,rooms);
   placeChasms(depth,rooms);
+  if(depth===5)placeWard(rooms);
 
   if(depth===10){
     const r=rooms[rooms.length-1];
@@ -1057,6 +1065,85 @@ function placeShrine(depth,rooms){
     return;
   }
 }
+/* ============================ the ward (floor 5) ============================ */
+// Where the royal physicians nursed the Queen: cots, shrouded beds, screens, bleeding basins, and tables of
+// plague-doctor instruments. A few tables hold their notes on her condition; take them and they are kept
+// for good (META.papers) and can be read again in the codex.
+// Furniture only goes on the edge ring of a room, never in a doorway or on its centre row or column, and
+// each piece is kept only if every other open tile on the floor can still be reached.
+const PAPERS=[
+ {id:"day3",  title:"Physician's Log, Day Three",
+  body:"Her Majesty presents with a fever that does not break and a chill that does not warm. Pulse slow, very slow. She asks for the window to be opened at night, and is angry with us when we refuse. She says the air down here is better. We are three floors above the cellars."},
+ {id:"blood", title:"Record of Bleedings",
+  body:"Bled eight ounces at dawn and eight at dusk, by order of the senior physician. The blood runs dark and settles strangely in the bowl, like ink in water. Master Vell asks that the bowls be kept and not emptied. No one has asked him why."},
+ {id:"letter",title:"A Letter, Never Sent",
+  body:"Sister, I cannot say this to the King, so I am saying it to you. The Queen does not sleep. She lies with her eyes open and speaks to the floor, very softly, as if someone underneath it is answering her. Last night I put my ear to the boards. Burn this."},
+ {id:"consult",title:"Notes of the Consultation",
+  body:"The mage was sent for, and failed. The priests were sent for, and failed. The King asked me today what lies beneath the castle. I told him cellars, and stone, and the roots of the hill. He did not look as though he believed me. He looked as though he hoped I was wrong."},
+ {id:"final", title:"The Last Entry",
+  body:"Her Majesty died a little before dawn. The King will not allow the body to be moved. He has sent for the court notary instead of the priest, and they have been shut in together for an hour. I do not understand why a grieving husband needs a lawyer. I am afraid that I do."}
+];
+let paperOpen=false;
+function placeWard(rooms){
+  const cand=[],blocked=(x,y)=>{
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      const k=(x+dx)+","+(y+dy);
+      if(DL.has(k)||CHM.has(k))return true;
+      if(LEVERS.some(l=>l.x===x+dx&&l.y===y+dy))return true;
+    }
+    if(SHR&&x>=SHR.x-2&&x<=SHR.x+3&&y>=SHR.y-2&&y<=SHR.y+3)return true;   // leave room to reach the shrine
+    if(mons.some(m=>m.x===x&&m.y===y))return true;
+    return x===S.px&&y===S.py||x===S.sx&&y===S.sy;
+  };
+  for(const r of rooms){
+    if(r.w<5||r.h<4)continue;
+    for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++){
+      const edge=y===r.y||y===r.y+r.h-1||x===r.x||x===r.x+r.w-1;
+      if(!edge||x===r.cx||y===r.cy||map[y][x]!==FLOOR||blocked(x,y))continue;
+      // never in a doorway: skip edge tiles with open floor just outside the room
+      const out=[[x-1,y],[x+1,y],[x,y-1],[x,y+1]].some(([ox,oy])=>(ox<r.x||ox>=r.x+r.w||oy<r.y||oy>=r.y+r.h)&&map[oy]&&map[oy][ox]!==WALL);
+      if(out)continue;
+      const side=y===r.y?"top":y===r.y+r.h-1?"bottom":"side";
+      cand.push({x,y,side,r});
+    }
+  }
+  // Each piece is kept only if every other open tile can still be reached (doors counted as open).
+  for(const d of DOORS)map[d.y][d.x]=FLOOR;
+  let reach=floodFrom(S.px,S.py).size;
+  const put=(c,spr)=>{
+    map[c.y][c.x]=WALL;
+    const n=floodFrom(S.px,S.py).size;
+    if(n!==reach-1){map[c.y][c.x]=FLOOR;return null;}
+    reach=n;const pr={x:c.x,y:c.y,spr};PROPS.set(c.x+","+c.y,pr);return pr;
+  };
+  const tables=[];
+  for(const c of cand){
+    if(Math.random()<.35)continue;                                   // leave gaps, like a real ward
+    if(c.side==="top"){if((c.x-c.r.x)%2)continue;put(c,Math.random()<.22?"ward_body":"ward_bed");}
+    else if(c.side==="bottom"){if((c.x-c.r.x)%2===0)continue;put(c,Math.random()<.5?"ward_bed":Math.random()<.5?"ward_screen":"ward_basin");}
+    else if(Math.random()<.55){const t=put(c,Math.random()<.6?"ward_tools":"ward_table");if(t)tables.push(t);}
+    else put(c,Math.random()<.5?"ward_screen":"ward_basin");
+  }
+  for(const d of DOORS)if(!d.open)map[d.y][d.x]=WALL;
+  // Up to three tables hold papers, preferring ones you have not read yet.
+  const unread=PAPERS.filter(p=>!META.papers.includes(p.id)),pool=(unread.length?unread:PAPERS).slice().sort(()=>Math.random()-.5);
+  tables.sort(()=>Math.random()-.5);
+  for(let i=0;i<Math.min(3,tables.length,pool.length);i++){tables[i].spr="ward_papers";tables[i].paper=pool[i].id;}
+}
+function takePaper(pr){
+  const p=PAPERS.find(x=>x.id===pr.paper);if(!p)return;
+  pr.paper=null;pr.spr="ward_table";
+  const isNew=!META.papers.includes(p.id);
+  if(isNew){META.papers.push(p.id);metaSave();}
+  playItemSound();held.clear();
+  say(isNew?`You take the physician's papers: "${p.title}". (Kept in your codex: ${META.papers.length}/${PAPERS.length})`:`You take another copy of "${p.title}".`,"c-item");
+  paperOpen=true;
+  overlay(`<div class="paper-card"><h3>${p.title}</h3><div class="sub">Found in the ward &middot; ${META.papers.length} of ${PAPERS.length} kept</div>
+    <p>${p.body}</p><button class="close" id="closePaper">Keep it</button></div>`);
+  $("closePaper").onclick=closePaper;
+  refresh();
+}
+function closePaper(){if(!paperOpen)return;paperOpen=false;hideOverlay();}
 /* ============================ doors & levers ============================ */
 const DOOR_COLORS=[{n:"red",c:"#e2574c"},{n:"blue",c:"#4aa8e8"},{n:"green",c:"#58c46a"},{n:"gold",c:"#e8c24a"}];
 function floodFrom(sx,sy){
@@ -1176,9 +1263,17 @@ function interact(){
     const o=DL.get((S.px+dx)+","+(S.py+dy));
     if(o&&o.type==="lever"){pullLever(o);return;}
   }
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+    const pr=PROPS.get((S.px+dx)+","+(S.py+dy));
+    if(pr&&pr.paper){takePaper(pr);return;}
+  }
   say("There is nothing here to use. Shrines and levers answer to E.","c-cold");
 }
 function objHint(){
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+    const pr=PROPS.get((S.px+dx)+","+(S.py+dy));
+    if(pr&&pr.paper&&!pr.hinted){pr.hinted=true;say("Papers lie on a physician's table, in a careful hand. Walk into it, or press E, to take them.","c-lvl");}
+  }
   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
     const o=DL.get((S.px+dx)+","+(S.py+dy));
     if(o&&o.type==="lever"&&!o.on&&!o.hinted){
@@ -1404,7 +1499,7 @@ function computeFOV(){
       if(cx<0||cy<0||cx>=W||cy>=H)break;
       if(Math.hypot(cx-S.px,cy-S.py)>R)break;
       const k=cx+","+cy;visible.add(k);seen.add(k);
-      if(map[cy][cx]===WALL)break;
+      if(map[cy][cx]===WALL&&!PROPS.has(k))break;
     }
   }
 }
@@ -2165,7 +2260,7 @@ function tryMove(dx,dy){
   const tgt=mons.find(m=>m.x===nx&&m.y===ny);
   if(tgt){computeFOV();startBattle(tgt);return;}
   if(map[ny][nx]===CHASM){startChasm(nx,ny,dx,dy);return;}
-  if(map[ny][nx]===WALL){const o=DL.get(nx+","+ny);if(o)bumpObject(o);return;}
+  if(map[ny][nx]===WALL){const o=DL.get(nx+","+ny),pr=PROPS.get(nx+","+ny);if(o)bumpObject(o);else if(pr&&pr.paper)takePaper(pr);return;}
 
   // If exhausted, movement is blocked — forced to rest this turn
   if(S.exhausted){
@@ -2687,7 +2782,7 @@ function drawPack(){
   });
 }
 function togglePack(){
-  if(S.over||descentT>0||levelOpen)return;
+  if(S.over||descentT>0||levelOpen||paperOpen)return;
   if(shrineOpen){shrineOpen=false;hideOverlay();}
   if(codexOpen){codexOpen=false;hideOverlay();}
   if(editorOpen){editorOpen=false;document.getElementById("se-overlay").classList.remove("open");}
@@ -2815,6 +2910,13 @@ const ART={"rook":["............kk..","...........kZlk.",".....kkkk..kwGk.","...
 "thing":["................",".......kk.......",".....k9999k.....","....k966669k....","...k96666669k...","...k6Y6666Y6k...","...k67666676k...","..k966kkkk669k..","..k66v6666v66k..",".k966vv66vv669k.",".k66v66Y66v666k.","k966v666666v669k","k66vv666666vv66k","k6uu66666666uu6k",".uu.uu6666uu.uu.","uu..u..uu..u..uu"],
 "thing2":["..u..u.uu.u..u..","..uu.uu99uu.uu..","...k99999999k...","..k9666666669k..","..k6RR6666RR6k..","..k6RA6666AR6k..",".kk6666666666kk.","k96k0Z0Z0Z0k69k.","k96k00000000k69k","kv6vkk6666kkv6vk","v66v66v66v66v66v","k6vv666RR666vv6k",".k66v666666v66k.",".kuu66666666uuk.","uu.uuu6666uuu.uu","u..u..uuuu..u..u"],
 "thing3":["..A....AA....A..","..0...k00k...0..","..0k.k9999k.k0..","...k99666699k...","..k9RA6666AR9k..",".k966666666669k.","k96000000000069k","k60Z0Z0ZZ0Z0Z06k","k600a0a00a0a006k","k60aaaaaaaaaa06k","k60Z0Z0ZZ0Z0Z06k","vk600000000006kv","v6k6666666666k6v","vv.k66666666k.vv","v..vv6vvvv6vv..v","v...v..vv..v...v"],
+"ward_bed":["................",".kkkkkkkkkkkkkk.",".kNNNNNNNNNNNNk.",".kNwwwwwwwwwwNk.",".kNwlllllllwwNk.",".kNwwwwwwwwwwNk.",".kNGGGGGGGGGGNk.",".kNGQGGGGGGQGNk.",".kNGGGGrGGGGGNk.",".kNGGGrrGGGGGNk.",".kNGQGGGGGGQGNk.",".kNGGGGGGGGGGNk.",".kNNNNNNNNNNNNk.",".kkkkkkkkkkkkkk.",".kN..........Nk.",".kk..........kk."],
+"ward_body":["................",".kkkkkkkkkkkkkk.",".kNNNNNNNNNNNNk.",".kNwwwwwwwwwwNk.",".kNwwllllllwwNk.",".kNwlwwwwwwlwNk.",".kNwwwwwwwwwwNk.",".kNlwwwwwwwwlNk.",".kNwwwwrwwwwwNk.",".kNwwwrrwwwwwNk.",".kNlwwwwwwwwlNk.",".kNwwwwwwwwwwNk.",".kNNNNNNNNNNNNk.",".kkkkkkkkkkkkkk.",".kN..........Nk.",".kk..........kk."],
+"ward_tools":["................","................",".kkkkkkkkkkkkkk.",".kDLLLLLLLLLLDk.",".kDbbbLDLLLlGDk.",".kDbCbbbLLLlGDk.",".kDbbbbbnLLGLDk.",".kDLbbLLLLLlLDk.",".kDkrkLLkLLuLDk.",".kDkRkLkMkLuLDk.",".kDLkLLLkLLLLDk.",".kDDDDDDDDDDDDk.",".kkkkkkkkkkkkkk.",".knk........knk.",".knk........knk.",".kk..........kk."],
+"ward_papers":["................","................",".kkkkkkkkkkkkkk.",".kDLLLLLLLLwLDk.",".kDLwwwwwwllLDk.",".kDLwgggwwllLDk.",".kDLwggwwwlkLDk.",".kDLwgggwwlLLDk.",".kDLwggwRwlLLDk.",".kDLwwwwrwlLLDk.",".kDLLLLLLLLLLDk.",".kDDDDDDDDDDDDk.",".kkkkkkkkkkkkkk.",".knk........knk.",".knk........knk.",".kk..........kk."],
+"ward_table":["................","................",".kkkkkkkkkkkkkk.",".kDLLLLLLLLLLDk.",".kDLLLLDLLLLLDk.",".kDLLLLLLYLLLDk.",".kDLLLLLLJLDLDk.",".kDLLDLLwwwLLDk.",".kDkrkLLlllLLDk.",".kDLkLLLLDLLLDk.",".kDLLLLLLLLLLDk.",".kDDDDDDDDDDDDk.",".kkkkkkkkkkkkkk.",".knk........knk.",".knk........knk.",".kk..........kk."],
+"ward_screen":["................",".NNNNNNNNNNNNNNN",".NllllNllllNlllN",".NllllNllllNlllN",".NllllNlllwNlllN",".NllllNllllNlllN",".NllrlNllllNlllN",".NlrrlNllllNllrN",".NllllNllllNlllN",".NllllNlllwNlllN",".NllllNllllNlllN",".NllllNllllNlllN",".NllllNllllNlllN",".NNNNNNNNNNNNNNN",".N....N....N...N","................"],
+"ward_basin":["................","................","................","................",".....kkkkkk.....","....kGGGGGGk....","....kGaaaaGk....","....kGarraGk....",".....kGGGGk.....","......kNNk......",".......NN.......",".......NN.......",".......NN.......",".....kNNNNk.....","....kNNNNNNk....","................"],
 "potion_heal":["................","................","................","......kkkk......","......kNNk......","......kNNk......",".....kkNNkk.....",".....kRRRRk.....","....kRRRRRRk....","....kRrRRRRk....","....kRrRRRRk....","....kRrRRRRk....","....kRRRRRRk....",".....kkkkkk.....","................","................"],
 "potion_might":["................","................","................","......kkkk......","......kNNk......","......kNNk......",".....kkNNkk.....",".....kOOOOk.....","....kOOOOOOk....","....kOoOOOOk....","....kOoOOOOk....","....kOoOOOOk....","....kOOOOOOk....",".....kkkkkk.....","................","................"],
 "scroll_flame":["................","................","................","...kkkkkkkkkk...","...kwwwwwwwwk...","...kwEEwwEEwk...","...kwwwwwwwwk...","...kwEEEEEEwk...","...kwwwwwwwwk...","...kwEEwwEEwk...","...kwwwwwwwwk...","...kkkkkkkkkk...","....NNNNNNNN....","................","................","................"],
@@ -3117,14 +3219,25 @@ function render(){
       const key=x+","+y,vis=visible.has(key);
       if(!vis&&!seen.has(key))continue;
       const t=map[y][x];
-      const part=SHR&&SHR.parts.get(key);
+      const part=SHR&&SHR.parts.get(key),prop=PROPS.get(key);
       const chz=CHM.get(key);
-      const name=part?"floor"+(((x*7+y*13)%3+3)%3):t===WALL?"wall":t===STAIRS?"stairs":t===CHASM?"chasm"
+      const name=part||prop?"floor"+(((x*7+y*13)%3+3)%3):t===WALL?"wall":t===STAIRS?"stairs":t===CHASM?"chasm"
         :chz&&chz.bridged?(chz.ori==="h"?"bridge_h":"bridge_v"):"floor"+(((x*7+y*13)%3+3)%3);
       const b=vis?bright(x,y,R):0;
       const al=vis?(.26+.74*b):.17;
       blit(name,x,y,al,0,1,1);
       if(part)blit(part,x,y,al,0,1,1);
+      if(prop){
+        blit(prop.spr,x,y,al,0,1,1);
+        if(prop.paper&&vis&&!RM){   // the papers catch the light, so you notice them
+          const gx=(x-cam.x+.45)*cell,gy=(y-cam.y+.45)*cell,pa=.18+.12*Math.sin(tclock*3+x);
+          ctx.globalCompositeOperation="lighter";
+          const gg=ctx.createRadialGradient(gx,gy,0,gx,gy,cell*.6);
+          gg.addColorStop(0,`rgba(240,220,160,${pa.toFixed(3)})`);gg.addColorStop(1,"rgba(240,220,160,0)");
+          ctx.fillStyle=gg;ctx.fillRect(gx-cell*.6,gy-cell*.6,cell*1.2,cell*1.2);
+          ctx.globalCompositeOperation="source-over";ctx.globalAlpha=1;
+        }
+      }
       const ob=DL.get(key);
       if(ob){
         const spr=ob.type==="door"?(ob.open?"door_open":"door_closed"):(ob.on?"lever_on":"lever_off");
@@ -3449,11 +3562,12 @@ let META={unlocked:{cade:true},stats:{},done:{}};
 function metaLoad(){
   try{
     const m=JSON.parse(localStorage.getItem(META_KEY)||"null");
-    if(m&&typeof m==="object"){META.unlocked=Object.assign({cade:true},m.unlocked);META.stats=m.stats||{};META.done=m.done||{};}
+    if(m&&typeof m==="object"){META.unlocked=Object.assign({cade:true},m.unlocked);META.stats=m.stats||{};META.done=m.done||{};if(Array.isArray(m.papers))META.papers=m.papers;}
   }catch(e){}
 }
 function metaSave(){try{localStorage.setItem(META_KEY,JSON.stringify(META));}catch(e){}}
 metaLoad();
+if(!Array.isArray(META.papers))META.papers=[];
 function isUnlocked(id){return !!META.unlocked[id];}
 // Count something towards the quests. Finishing a quest unlocks its hero for every future run.
 function bumpStat(stat,n){
@@ -5229,7 +5343,7 @@ const FLAVOR={
  2:"The bunks upstairs were still made. That's the part Cade can't stop thinking about.",
  3:"Bones, stacked with care, as if someone still expected inspection.",
  4:"A ledger nailed to the wall lists names. Cade recognises three of them.",
- 5:"The air turns sharp, like a struck match that never quite goes out.",
+ 5:"Rows of cots under grey sheets, still made. Some of the sheets are not flat. The air smells of vinegar and a struck match.",
  6:"Every mirror on this floor hangs straight. None of them show the hall.",
  7:"Something huge shifts in the dark ahead, and does not come closer yet.",
  8:"A door with twelve locks, and none of them turning. Cade doesn't try it.",
@@ -5992,8 +6106,11 @@ function drawCodex(){
     `<li><span class="t"><b>${loreView(l).title}</b><em style="white-space:normal">${loreView(l).body}</em></span></li>`
   ).join(""):`<p class="empty">Nothing learned yet. The dungeon will tell you more as you go deeper.</p>`;
   const locked=LORE.length-found.length;
+  const kept=PAPERS.filter(p=>META.papers.includes(p.id));
+  const paperRows=kept.length?`<h3 style="font-size:14px;margin:14px 0 8px">The Queen's papers &nbsp;<span style="color:var(--slate);font-size:12px">${kept.length}/${PAPERS.length}</span></h3>
+    <ul>${kept.map(p=>`<li><span class="t"><b>${p.title}</b><em style="white-space:normal">${p.body}</em></span></li>`).join("")}</ul>`:"";
   overlay(`<div class="pack"><h3 style="font-size:15px;margin-bottom:10px">Codex &nbsp;<span style="color:var(--slate);font-size:12px">${found.length}/${LORE.length}</span></h3>
-    <ul>${rows}</ul>${locked?`<p style="color:var(--slate);font-size:12px;margin:-4px 0 12px">${locked} entr${locked===1?"y":"ies"} still in the dark.</p>`:""}
+    <ul>${rows}</ul>${locked?`<p style="color:var(--slate);font-size:12px;margin:-4px 0 12px">${locked} entr${locked===1?"y":"ies"} still in the dark.</p>`:""}${paperRows}
     <button class="close" id="closeCodex">Close</button></div>`);
   $("closeCodex").onclick=toggleCodex;
 }
@@ -6468,7 +6585,7 @@ for(const k in KEYS){
 const held=new Set();
 let freeClock=0,freeBumpT=0,freeWindedT=0;
 function freeMode(){return !!S;}   // every hero walks freely now; the grid code stays for "." (rest) and as a fallback
-function freePaused(){return S.over||S.mode!=="map"||!!S.jump||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
+function freePaused(){return S.over||S.mode!=="map"||!!S.jump||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
 // What a box of half-width r centred on (cx,cy) overlaps: {wall:true}, {chasm:[x,y]}, or null.
 function boxHit(cx,cy,r){
   const e=1e-6;
@@ -6582,8 +6699,9 @@ function freeStep(dx,dy,dt,speed){
      if((lim-cur)*d>0&&Math.abs(lim-cur)<=Math.abs(d*sp)&&!boxWall(axis?S.fx:lim,axis?lim:S.fy,FREE_R)){if(axis)S.fy=lim;else S.fx=lim;}}
     // Blocked. The tile straight ahead of the one we stand on:
     const ax=Math.floor(S.fx)+(axis?0:Math.sign(d)),ay=Math.floor(S.fy)+(axis?Math.sign(d):0);
-    const o=DL.get(ax+","+ay);
+    const o=DL.get(ax+","+ay),pr=PROPS.get(ax+","+ay);
     if(o&&freeBumpT<=0){freeBumpT=.7;bumpObject(o);if(S.mode!=="map"||S.over)return;}
+    else if(pr&&pr.paper&&freeBumpT<=0){freeBumpT=.7;takePaper(pr);return;}
     // ...if it is open, slide toward our tile's centre line so doorways and corridors are easy to enter.
     if(ax>=0&&ay>=0&&ax<W&&ay<H&&map[ay][ax]!==WALL){
       if(axis===0){const c=Math.floor(S.fy)+.5;S.fy+=Math.sign(c-S.fy)*Math.min(Math.abs(c-S.fy),sp);}
@@ -7084,6 +7202,10 @@ window.addEventListener("keydown",ev=>{
     if(k==="Escape"||k==="l"||k==="L")toggleCodex();
     ev.preventDefault();return;
   }
+  if(paperOpen){
+    if(k==="Escape"||k==="Enter"||k===" "||k==="e"||k==="E")closePaper();
+    ev.preventDefault();return;
+  }
   if(S.over)return;
   if(S.mode==="chasm"){
     if(k==="Escape"){if(!ev.repeat)courseRetreat();}
@@ -7563,7 +7685,7 @@ function toggleEditor(){
 
 /* ============================ boot ============================ */
 function start(id){
-  descentT=0;levelOpen=false;levelPicked=false;
+  descentT=0;levelOpen=false;levelPicked=false;paperOpen=false;
   menuQuiet=false;setMusicVolume();
   hideOverlay();packOpen=false;codexOpen=false;
   ensureAudio();
