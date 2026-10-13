@@ -954,7 +954,7 @@ function cssv(n){
 /* ============================ map gen ============================ */
 function newFloor(depth){
   unlockLore(depth);
-  map=[];seen=new Set();visible=new Set();mons=[];items=[];traps=[];SHR=null;S.atShrine=false;DL=new Map();DOORS=[];LEVERS=[];CHASMS=[];CHM=new Map();PK=null;PROPS=new Map();TOMB=null;
+  map=[];seen=new Set();visible=new Set();mons=[];items=[];traps=[];SHR=null;S.atShrine=false;DL=new Map();DOORS=[];LEVERS=[];CHASMS=[];CHM=new Map();PK=null;PROPS=new Map();TOMB=null;THRONE=null;
   for(let y=0;y<H;y++){map.push(new Array(W).fill(WALL));}
   const rooms=[];
   const tries=depth===10||depth===20?14:22;   // the two boss floors are smaller
@@ -986,6 +986,9 @@ function newFloor(depth){
   }else{S.sx=-1;S.sy=-1;}
 
   placeTomb(depth,rooms);
+  placeThrone(depth,rooms);
+  if(depth===10&&!S.chase&&!THRONE&&(S.throneTry=(S.throneTry||0)+1)<20)return newFloor(depth);   // no good spot for the throne: lay the floor out again
+  S.throneTry=0;
   placeShrine(depth,rooms);
   placeDoors(depth,rooms);
   placeChasms(depth,rooms);
@@ -993,7 +996,7 @@ function newFloor(depth){
 
   if(depth===10){
     const r=rooms[rooms.length-1];
-    spawnMon("king",r.cx,r.cy);
+    spawnMon("king",r.cx,r.cy);seatKing(mons[mons.length-1]);   // he waits on his throne
     for(let i=0;i<4;i++)placeMon(depth,"knight");
   }else if(depth>=20){
     const r=rooms[rooms.length-1];
@@ -1047,7 +1050,7 @@ function placeShrine(depth,rooms){
   const order=rooms.map((r,i)=>({r,pref:(i===0?1:0)+(i===last?1:0),k:Math.random()}))
     .sort((a,b)=>a.pref-b.pref||b.k-a.k);
   for(const {r} of order){
-    if(TOMB&&r===TOMB.room)continue;
+    if(TOMB&&r===TOMB.room||THRONE&&r===THRONE.room)continue;
     const spots=[];
     for(let y=r.y+1;y<=r.y+r.h-3;y++)for(let x=r.x+1;x<=r.x+r.w-3;x++)if(foot(x,y))spots.push({x,y});
     if(!spots.length)continue;
@@ -1152,6 +1155,161 @@ function takePaper(pr){
   refresh();
 }
 function closePaper(){if(!paperOpen)return;paperOpen=false;hideOverlay();}
+/* ============================ the throne room (floor 10) ============================ */
+// The Hollow King waits on his throne at the head of the last room, in the dark. Step into the room and the
+// torches along its walls catch one after another, from the doorway to the throne; he rises, comes down the
+// steps, and gives his speech before the fight.
+let THRONE=null;
+const THRONE_TORCH0=.3,THRONE_TORCH_GAP=.4;   // then he rises, takes two steps down, and the fight begins (see throneTick)
+function inThroneRoom(x,y){const r=THRONE&&THRONE.room;return !!r&&x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h;}
+function placeThrone(depth,rooms){
+  THRONE=null;
+  if(depth!==10||S.chase)return;              // on the climb out it is only an empty hall
+  const r=rooms[rooms.length-1];
+  // a hall at least 9 wide and 7 deep, with a wall row above it for the throne's back and the torches
+  const w=Math.max(r.w,9),h=Math.max(r.h,7);
+  const x=Math.max(1,Math.min(W-w-1,r.cx-Math.floor(w/2))),y=Math.max(2,Math.min(H-h-1,r.cy-Math.floor(h/2)));
+  let hits=false;
+  for(let j=y;j<y+h;j++)for(let i=x;i<x+w;i++)if(i===S.px&&j===S.py)hits=true;
+  if(!hits){for(let j=y;j<y+h;j++)for(let i=x;i<x+w;i++)map[j][i]=FLOOR;Object.assign(r,{x,y,w,h,cx:Math.floor(x+w/2),cy:Math.floor(y+h/2)});}
+  // the throne is solid, so it goes on the top row where it blocks no corridor: as near the middle as can be
+  const ty=r.y,before=floodFrom(S.px,S.py).size;
+  let tx=-1;
+  for(const dx of [0,1,-1,2,-2,3,-3]){
+    const x2=r.cx+dx;if(x2<=r.x||x2>=r.x+r.w-1||map[ty-1][x2]!==WALL)continue;
+    map[ty][x2]=WALL;
+    if(floodFrom(S.px,S.py).size>=before-1){tx=x2;break;}
+    map[ty][x2]=FLOOR;
+  }
+  if(tx<0)return;
+  // torches in the side walls and the wall behind the throne, lit in pairs from the far end up to him
+  const torches=[];
+  const wallAt=(i,j)=>j>=0&&j<H&&i>=0&&i<W&&map[j][i]===WALL;
+  for(let j=r.y+r.h-2;j>=r.y+1;j-=2){
+    if(wallAt(r.x-1,j))torches.push({x:r.x-1,y:j,side:"l",lit:-1});
+    if(wallAt(r.x+r.w,j))torches.push({x:r.x+r.w,y:j,side:"r",lit:-1});
+  }
+  for(const i of [tx-3,tx+3])if(i>r.x&&i<r.x+r.w-1&&wallAt(i,r.y-1))torches.push({x:i,y:r.y-1,side:"t",lit:-1});
+  torches.forEach((t,i)=>t.order=i);
+  THRONE={x:tx,y:ty,room:r,torches,stage:"dark",t:0,lit:0,king:null};
+}
+function seatKing(m){
+  if(!THRONE)return;
+  m.x=THRONE.x;m.y=THRONE.y;m.vx=m.x;m.vy=m.y;m.fx=m.x+.5;m.fy=m.y+.5;m.seated=true;THRONE.king=m;
+  // keep the steps in front of him clear
+  for(const o of mons)if(o!==m&&o.x===THRONE.x&&o.y>THRONE.y&&o.y<=THRONE.y+2){const s=openSpot(true);if(s){o.x=s.x;o.y=s.y;o.vx=s.x;o.vy=s.y;o.fx=s.x+.5;o.fy=s.y+.5;}}
+}
+function throneBusy(){return !!THRONE&&THRONE.stage==="wake";}
+function throneTick(dt){
+  const T=THRONE;
+  if(T.stage==="dark"){
+    if(S.mode==="map"&&!S.over&&!S.chase&&descentT<=0&&!levelOpen&&T.king&&mons.includes(T.king)&&inThroneRoom(S.px,S.py)){
+      T.stage="wake";T.t=0;held.clear();S.dashT=0;
+      say("You step into the hall. Something on the throne at the far end turns its head.","c-hit");
+    }
+    return;
+  }
+  if(T.stage!=="wake")return;
+  T.t+=dt;
+  T.torches.forEach((t,i)=>{
+    if(t.lit<0&&T.t>=THRONE_TORCH0+Math.floor(i/2)*THRONE_TORCH_GAP){t.lit=tclock;burst(t.x,t.y,"#f0902a",6,1.4);playTorchWhoosh(i%2);T.lit=Math.max(T.lit,.01);computeFOV();}
+  });
+  T.lit=T.torches.length?T.torches.filter(t=>t.lit>=0).length/T.torches.length:1;
+  const m=T.king;
+  if(!m||!mons.includes(m)){T.stage="done";return;}
+  const end=THRONE_TORCH0+Math.max(0,Math.ceil(T.torches.length/2)-1)*THRONE_TORCH_GAP;
+  const RISE=end+.7,STEP1=RISE+.6,STEP2=STEP1+.6,FIGHT=STEP2+.7;
+  if(T.t>=RISE&&!T.rose){T.rose=true;quake(5);say("The Hollow King rises from his throne.","c-lvl");}
+  if(T.t>=STEP1&&!T.s1){T.s1=true;m.seated=false;m.y=T.y+1;m.fy=m.y+.5;playMonsterStep(8);quake(4);}
+  if(T.t>=STEP2&&!T.s2){T.s2=true;m.y=T.y+2;m.fy=m.y+.5;playMonsterStep(7);quake(5);say("He comes down the steps to meet you.","c-lvl");}
+  if(T.t>=FIGHT){T.stage="done";m.seenYou=true;held.clear();computeFOV();startBattle(m);}
+}
+// The torches' light reaches the floor round them.
+function throneLight(x,y){
+  let b=0;
+  for(const t of THRONE.torches){
+    if(t.lit<0)continue;
+    const k=Math.min(1,(tclock-t.lit)/.35);
+    b=Math.max(b,k*(1-Math.hypot(x-t.x,y-t.y)*.2));
+  }
+  return b;
+}
+function drawThrone(R){
+  const T=THRONE,u=cell/16;
+  const key=T.x+","+T.y;
+  if(!seen.has(key))return;
+  const al=visible.has(key)?Math.max(.55,bright(T.x,T.y,R)):.25;
+  // a red carpet from the throne down the hall
+  const r=T.room;
+  for(let j=T.y+1;j<r.y+r.h;j++){
+    if(!seen.has(T.x+","+j))continue;
+    const a=visible.has(T.x+","+j)?Math.max(.35,bright(T.x,j,R)):.15;
+    const ox=(T.x-cam.x)*cell,oy=(j-cam.y)*cell;
+    ctx.globalAlpha=a;
+    ctx.fillStyle="#4a1713";ctx.fillRect(ox+u*2,oy,u*12,cell);
+    ctx.fillStyle="#8f2f28";ctx.fillRect(ox+u*3,oy,u*10,cell);
+    ctx.fillStyle="#c9a56a";ctx.fillRect(ox+u*3,oy,u,cell);ctx.fillRect(ox+u*12,oy,u,cell);
+    if(j%2)ctx.fillStyle="#a8762c",ctx.fillRect(ox+u*7,oy+u*7,u*2,u*2);
+  }
+  // the throne: a tall gilded back against the wall, a velvet seat, a stone dais
+  const ox=(T.x-.25-cam.x)*cell,oy=(T.y-1-cam.y)*cell;
+  const P=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(Math.round(ox+x*u),Math.round(oy+y*u),Math.ceil(w*u),Math.ceil(h*u));};
+  ctx.globalAlpha=al;
+  P(1,28,22,4,"#39414f");P(1,28,22,1,"#566173");P(1,31,22,1,"#1e242e");          // the dais
+  P(3,24,18,4,"#2b3243");P(3,24,18,1,"#525c6e");
+  P(3,1,18,23,"#0b0d12");P(4,2,16,22,"#7a5418");P(4,2,16,1,"#f0c060");P(4,2,1,22,"#c9a56a");   // gilded back
+  P(6,4,12,18,"#4a1713");P(7,5,10,16,"#8f2f28");P(7,5,1,16,"#c94a3c");            // red velvet
+  P(10,0,4,3,"#f0c060");P(11,0,2,1,"#fff27a");P(3,0,3,4,"#a8762c");P(18,0,3,4,"#a8762c");P(3,0,3,1,"#f0c060");P(18,0,3,1,"#f0c060");
+  P(3,20,18,4,"#a8762c");P(3,20,18,1,"#f0c060");P(3,23,18,1,"#7a5418");          // the seat
+  const m=T.king;
+  if(m&&m.seated&&mons.includes(m)&&SPR.king){
+    // him, seated: the top of his sprite, settled into the chair, with a slow breath
+    const br=RM?0:Math.round(Math.sin(tclock*1.6)*.6);
+    ctx.globalAlpha=al;
+    ctx.drawImage(SPR.king,0,0,16,21,ox+4*u,oy+(2+br+(T.rose?-1:0))*u,16*u,21*u);
+  }
+  ctx.globalAlpha=al;
+  P(1,14,4,10,"#0b0d12");P(2,15,3,8,"#a8762c");P(2,15,3,1,"#f0c060");P(1,13,5,2,"#f0c060");   // armrests in front
+  P(19,14,4,10,"#0b0d12");P(19,15,3,8,"#a8762c");P(19,15,3,1,"#f0c060");P(18,13,5,2,"#f0c060");
+  ctx.globalAlpha=1;
+}
+function drawThroneTorches(R){
+  const T=THRONE,u=cell/16;
+  for(const t of T.torches){
+    const key=t.x+","+t.y;if(!seen.has(key))continue;
+    const al=visible.has(key)?Math.max(.6,bright(t.x,t.y,R)):.25;
+    const ox=(t.x-cam.x)*cell,oy=(t.y-cam.y)*cell;
+    const fx=t.side==="l"?11:t.side==="r"?4:7,fy=t.side==="t"?8:6;   // the sconce leans out of its wall into the room
+    const P=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(Math.round(ox+x*u),Math.round(oy+y*u),Math.ceil(w*u),Math.ceil(h*u));};
+    ctx.globalAlpha=al;
+    P(fx-1,fy+3,4,2,"#2b3243");P(fx,fy+5,2,4,"#39414f");P(fx-1,fy+2,4,1,"#566173");   // iron bracket
+    P(fx,fy+1,2,2,"#3d2a1c");
+    if(t.lit>=0){
+      const f=RM?0:Math.sin(tclock*12+t.order*1.7)>.2?1:0,k=Math.min(1,(tclock-t.lit)/.3);
+      P(fx-1,fy-2+f,4,3,"#b8431f");P(fx,fy-3,2,3,"#f0902a");P(fx,fy-4-f,1,2,"#ffb860");P(fx+1,fy-2,1,1,"#fff27a");
+      if(visible.has(key)){
+        const gx=ox+(fx+1)*u,gy=oy+(fy-1)*u,rr=cell*1.6*k;
+        ctx.globalCompositeOperation="lighter";
+        const g=ctx.createRadialGradient(gx,gy,0,gx,gy,rr);
+        g.addColorStop(0,`rgba(240,150,60,${(.22*k).toFixed(3)})`);g.addColorStop(1,"rgba(240,150,60,0)");
+        ctx.fillStyle=g;ctx.fillRect(gx-rr,gy-rr,rr*2,rr*2);
+        ctx.globalCompositeOperation="source-over";
+      }
+    }else P(fx,fy-1,2,2,"#171c26");                 // a cold, blackened stub
+  }
+  ctx.globalAlpha=1;
+}
+function playTorchWhoosh(pan){
+  if(!AUDIO_OK)return;ensureAudio();if(!actx)return;
+  const t=actx.currentTime+.005,len=.55,b=actx.createBuffer(1,Math.floor(actx.sampleRate*len),actx.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++){const p=i/d.length;d[i]=(Math.random()*2-1)*Math.min(1,p*8)*Math.pow(1-p,1.6)*(Math.random()<.004?3:1);}
+  const src=actx.createBufferSource();src.buffer=b;
+  const f=actx.createBiquadFilter();f.type="bandpass";f.Q.value=.7;f.frequency.setValueAtTime(300,t);f.frequency.exponentialRampToValueAtTime(1600,t+.25);
+  const g=actx.createGain();g.gain.value=.38;
+  let out=g;
+  if(actx.createStereoPanner){const p=actx.createStereoPanner();p.pan.value=pan?.5:-.5;g.connect(p);out=p;}
+  src.connect(f);f.connect(g);out.connect(actx.destination);src.start(t);
+}
 /* ============================ the Queen's tomb (floor 8) ============================ */
 // Behind the vault's door, troll guards keep watch over a stone tomb ringed with candles. Step inside the
 // ring and the candles go out one by one, the lid grinds aside and the Queen's ghost rises to fight you.
@@ -1487,7 +1645,7 @@ function placeDoors(depth,rooms){
 function placeLever(R,rooms,d){
   const spots=[];
   rooms.forEach((r,ri)=>{
-    if(TOMB&&r===TOMB.room)return;
+    if(TOMB&&r===TOMB.room||THRONE&&r===THRONE.room)return;
     if(!R.has(r.cx+","+r.cy))return;
     const add=(x,y,ax,ay)=>{
       if(x<1||y<1||x>=W-1||y>=H-1)return;
@@ -1581,7 +1739,7 @@ function shrineHint(){
 function openSpot(avoidStart){
   for(let t=0;t<600;t++){
     const x=rnd(W),y=rnd(H);
-    if(map[y][x]!==FLOOR||inTombRing(x,y))continue;
+    if(map[y][x]!==FLOOR||inTombRing(x,y)||THRONE&&x===THRONE.x&&y>THRONE.y&&y<=THRONE.y+2)continue;
     if(avoidStart&&dist(x,y,S.px,S.py)<7)continue;
     if(mons.some(m=>m.x===x&&m.y===y))continue;
     if(items.some(i=>i.x===x&&i.y===y))continue;
@@ -1777,6 +1935,11 @@ function computeFOV(){
       const k=cx+","+cy;visible.add(k);seen.add(k);
       if(map[cy][cx]===WALL&&!PROPS.has(k)&&!(TOMB&&TOMB.tiles.has(k)))break;
     }
+  }
+  // once its torches are lit, you can see the whole throne room from inside it
+  if(THRONE&&THRONE.lit>0&&inThroneRoom(S.px,S.py)){
+    const r=THRONE.room;
+    for(let y=r.y-1;y<=r.y+r.h;y++)for(let x=r.x-1;x<=r.x+r.w;x++){const k=x+","+y;visible.add(k);seen.add(k);}
   }
 }
 
@@ -2579,6 +2742,7 @@ function endTurn(){
   if(!freeMode()||S.walkedThisTurn)tickCooldowns();
   S.walkedThisTurn=false;
   for(const m of [...mons]){
+    if(m.seated)continue;
     if(m.cool>0)m.cool--;
     if(m.t.regen&&m.hp<m.max)m.hp=Math.min(m.max,m.hp+m.t.regen);
     // Lingering scroll effects on the map
@@ -3355,9 +3519,10 @@ function tick(dt){
   tclock+=dt;
   if(S&&S.jump){S.jump.t+=dt;if(S.jump.t>=JUMP_LEN){S.jump=null;die("thing");}}
   if(S&&TOMB)tombTick(dt);
+  if(S&&THRONE)throneTick(dt);
   if(S&&S.pendLvl>0&&!levelOpen){
     S.lvlWait=Math.max(0,(S.lvlWait||0)-dt);
-    if(S.lvlWait<=0&&!S.over&&S.mode==="map"&&!tombBusy()&&!packOpen&&!shrineOpen&&!codexOpen&&!editorOpen&&descentT<=0)openLevelUp();
+    if(S.lvlWait<=0&&!S.over&&S.mode==="map"&&!tombBusy()&&!throneBusy()&&!packOpen&&!shrineOpen&&!codexOpen&&!editorOpen&&descentT<=0)openLevelUp();
   }
   torch=RM?1:1+Math.sin(tclock*7.1)*.045+Math.sin(tclock*17.7)*.022;
   const k=RM?1:1-Math.pow(1e-5,dt);
@@ -3470,6 +3635,7 @@ function bright(x,y,R){
   const d=Math.hypot(x-S.vx,y-S.vy);
   let b=1.18-Math.pow(d/R,1.45)*1.12;
   if(TOMB&&TOMB.lit>0)b=Math.max(b,TOMB.lit*(.95-Math.hypot(x-TOMB.x,y-TOMB.y-.5)*.17));   // candlelight in the vault
+  if(THRONE)b=Math.max(b,throneLight(x,y));            // torches in the throne room
   return Math.max(0,Math.min(1,b));
 }
 
@@ -3508,7 +3674,7 @@ function render(){
       const t=map[y][x];
       const part=SHR&&SHR.parts.get(key),prop=PROPS.get(key);
       const chz=CHM.get(key);
-      const name=part||prop||(TOMB&&TOMB.tiles.has(key))?"floor"+(((x*7+y*13)%3+3)%3):t===WALL?"wall":t===STAIRS?"stairs":t===CHASM?"chasm"
+      const name=part||prop||(TOMB&&TOMB.tiles.has(key))||(THRONE&&key===THRONE.x+","+THRONE.y)?"floor"+(((x*7+y*13)%3+3)%3):t===WALL?"wall":t===STAIRS?"stairs":t===CHASM?"chasm"
         :chz&&chz.bridged?(chz.ori==="h"?"bridge_h":"bridge_v"):"floor"+(((x*7+y*13)%3+3)%3);
       const b=vis?bright(x,y,R):0;
       const al=vis?(.26+.74*b):.17;
@@ -3561,6 +3727,7 @@ function render(){
     }
   }
   if(TOMB){drawTomb(R);drawCandles(R);}
+  if(THRONE){drawThrone(R);drawThroneTorches(R);}
   if(S.sx>=0&&visible.has(S.sx+","+S.sy)){
     const p=.5+.5*Math.sin(tclock*3.1);
     ctx.globalCompositeOperation="lighter";
@@ -3604,7 +3771,7 @@ function render(){
 
   const order=mons.slice().sort((a,b)=>a.vy-b.vy);
   for(const m of order){
-    if(!visible.has(m.x+","+m.y))continue;
+    if(m.seated||!visible.has(m.x+","+m.y))continue;   // the King on his throne is drawn with it
     const b=Math.max(.55,bright(m.vx,m.vy,R));
     const o=off(m);
     let bob=0,sy=1,sx=1;
@@ -4259,6 +4426,7 @@ function sfirehit(L,fx){
 
 function startBattle(m){
   if(S.over)return;
+  if(m.seated&&THRONE){m.seated=false;m.y=THRONE.y+2;m.fy=m.y+.5;m.vy=m.y;THRONE.stage="done";}   // fought before he came down: he stands first
   if(packOpen||codexOpen){packOpen=false;codexOpen=false;hideOverlay();}
   S.mode="battle";
   ensureAudio();setTension(true);
@@ -7162,7 +7330,7 @@ for(const k in KEYS){
 const held=new Set();
 let freeClock=0,freeBumpT=0,freeWindedT=0;
 function freeMode(){return !!S;}   // every hero walks freely now; the grid code stays for "." (rest) and as a fallback
-function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
+function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
 // What a box of half-width r centred on (cx,cy) overlaps: {wall:true}, {chasm:[x,y]}, or null.
 function boxHit(cx,cy,r){
   const e=1e-6;
@@ -7233,6 +7401,7 @@ function monBlocked(m,cx,cy){
 }
 function freeMonsters(dt){
   for(const m of mons){
+    if(m.seated)continue;                                 // the King waits on his throne
     monPos(m);
     if(m.walkT>0)m.walkT-=dt;
     if(m.freezeT>0||m.stunT>0)continue;                    // frozen / stunned by a scroll: stand still
@@ -7761,7 +7930,7 @@ window.addEventListener("keydown",ev=>{
   }
   if(descentT>0&&S&&!S.over&&S.mode==="map"){ev.preventDefault();return;}   // still on the way down
   if(S&&S.jump){ev.preventDefault();return;}                                // being caught
-  if(tombBusy()){ev.preventDefault();return;}                               // the Queen is waking
+  if(tombBusy()||throneBusy()){ev.preventDefault();return;}                               // the Queen is waking
   if(B&&B.dlg){if(k===" "||k==="Enter"||k==="e"||k==="E"||k==="z"||k==="Z")dlgAdvance();ev.preventDefault();return;}   // it is talking
   if(levelOpen){
     const cards=[...document.querySelectorAll("#card .lvlcard")];
