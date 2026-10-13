@@ -388,6 +388,25 @@ body.inchasm .dice-tray{display:none}
 .qte-timerbar-wrap{width:min(220px,60vw);height:8px;background:rgba(22,10,10,.85);
   border-radius:4px;overflow:hidden;border:1px solid #5a2a22}
 .qte-timerbar{height:100%;background:linear-gradient(90deg,#f0c060,#c94a3c);width:100%}
+.parry-overlay{
+  position:absolute;inset:0;z-index:9;display:none;
+  align-items:center;justify-content:flex-end;flex-direction:column;gap:10px;padding-bottom:9%;
+  background:radial-gradient(ellipse at center,rgba(20,60,90,.18),rgba(6,8,13,.42));
+  pointer-events:none;
+}
+.parry-overlay.show{display:flex}
+.parry-title{font-size:clamp(14px,3vw,22px);font-weight:800;color:#8fd8f0;letter-spacing:.16em;
+  text-shadow:0 0 14px rgba(95,168,196,.9);animation:qteWarnPulse .35s infinite alternate}
+.parry-track{position:relative;width:min(300px,76vw);height:18px;background:rgba(10,16,24,.92);
+  border:2px solid #3d5566;border-radius:9px;overflow:hidden}
+.parry-zone{position:absolute;top:0;bottom:0;background:linear-gradient(180deg,#a8f0ff,#3f9ab8);
+  box-shadow:0 0 12px 3px rgba(143,216,240,.8)}
+.parry-marker{position:absolute;top:-2px;bottom:-2px;width:5px;margin-left:-2px;background:#fff;
+  box-shadow:0 0 8px 2px rgba(255,255,255,.9)}
+.parry-btn{pointer-events:auto;font-family:inherit;font-weight:800;letter-spacing:.14em;font-size:clamp(13px,2.8vw,17px);
+  padding:10px 26px;border-radius:8px;background:rgba(30,70,95,.92);border:2px solid #8fd8f0;color:#e8fbff;cursor:pointer;
+  box-shadow:0 4px 0 rgba(0,0,0,.5)}
+.parry-btn:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.5)}
 @keyframes qteWarnPulse{0%{opacity:.75;transform:scale(1)}100%{opacity:1;transform:scale(1.07)}}
 @keyframes qteShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
 
@@ -702,6 +721,11 @@ body.inbattle #hint{display:none}
           <div class="qte-warn">⚔ DODGE THE SLAM! ⚔</div>
           <div class="qte-keys" id="qteKeys"></div>
           <div class="qte-timerbar-wrap"><div class="qte-timerbar" id="qteTimerBar"></div></div>
+        </div>
+        <div class="parry-overlay" id="parryOverlay">
+          <div class="parry-title">⚔ PARRY — press SPACE in the glow!</div>
+          <div class="parry-track" id="parryTrack"><div class="parry-zone" id="parryZone"></div><div class="parry-marker" id="parryMarker"></div></div>
+          <button class="parry-btn" id="parryBtn" type="button">PARRY</button>
         </div>
         <div class="veil" id="veil">
           <div class="card" id="card"></div>
@@ -1637,6 +1661,57 @@ function parryChance(boss){
   if(boss)c*=.6;
   return Math.max(0,Math.min(PARRY_MAX,c));
 }
+// A parry opening: the chance to parry is rolled (parryChance), but turning the blow aside still takes
+// timing. The bar pops up and you press Space (or the button) while the marker is in the glow.
+// In the glow: parry and riposte. Too early or late: you half-block it. Not at all: it lands in full.
+function startParryWindow(sp){
+  const m=B.mon,boss=!!m.t.boss,oh=S.offhand||{};
+  const dur=boss?900:1050;
+  const w=Math.max(.08,(boss?.15:.22)+gearMod("parry")+(oh.parry||0)-(hasClause("unsteady")?.06:0));
+  const z0=.5+Math.random()*(.9-.5-Math.min(.35,w)*.5);
+  B.phase="parry";
+  B.pStat.parry=true;                                   // raise the guard while the window is open
+  B.parry={t0:performance.now(),dur,z0,z1:Math.min(.97,z0+w),sp,done:false,timer:null};
+  const L=B.layout;
+  if(L)sring(L.ex,L.ey,"rgba(240,90,70,.85)",L.esz*.7);
+  blog(sp?`The ${m.t.name} winds up ${sp.name}! An opening to parry!`:`The ${m.t.name} winds up a blow! An opening to parry!`,"c-lvl");
+  const ov=$("parryOverlay"),zone=$("parryZone"),mk=$("parryMarker");
+  if(zone){zone.style.left=(B.parry.z0*100)+"%";zone.style.width=((B.parry.z1-B.parry.z0)*100)+"%";}
+  if(mk)mk.style.left="0%";
+  if(ov)ov.classList.add("show");
+  B.parry.timer=setInterval(()=>{
+    if(!B||!B.parry||B.parry.done)return;
+    const p=(performance.now()-B.parry.t0)/B.parry.dur;
+    const mk2=$("parryMarker");if(mk2)mk2.style.left=Math.min(100,p*100)+"%";
+    if(p>=1)resolveParry("none");
+  },16);
+}
+function parryPress(){
+  if(!B||B.phase!=="parry"||!B.parry||B.parry.done)return;
+  const p=(performance.now()-B.parry.t0)/B.parry.dur;
+  resolveParry(p>=B.parry.z0&&p<=B.parry.z1?"perfect":"mistimed");
+}
+function hideParryOverlay(){const ov=$("parryOverlay");if(ov)ov.classList.remove("show");}
+function clearParry(){
+  if(B&&B.parry){B.parry.done=true;if(B.parry.timer)clearInterval(B.parry.timer);B.parry=null;}
+  hideParryOverlay();
+}
+function resolveParry(result){
+  if(!B||!B.parry||B.parry.done)return;
+  const sp=B.parry.sp,m=B.mon;
+  clearParry();
+  if(result==="perfect"){autoParry(sp);return;}
+  B.pStat.parry=false;B.phase="anim";
+  const blocked=result==="mistimed";
+  B.lunge=1;B.lungeSide=-1;
+  blog(blocked?"Mistimed! You only half-block it.":`You miss the opening. The ${m.t.name}'s blow lands.`,"c-hit");
+  queue(.2,()=>enemyStrike(sp,blocked?.6:1,blocked));
+  queue(.5,()=>{
+    refresh();
+    if(S.hp<=0){loseBattle(B.mon.t.name);return;}
+    endRound();
+  });
+}
 function autoParry(sp){
   const m=B.mon;
   B.phase="anim";
@@ -2002,6 +2077,7 @@ function renderMoveBar(){
     return `<button type="button" tabindex="-1" class="moveslot${cd>0||dry(m)?" cool":""}" data-mv="${m.id}" title="${m.name} — ${m.desc}" aria-label="${m.name}">${icon("move_"+m.id,32)}${cd>0?`<span class="cd">${cd}</span>`:""}</button>`;
   }).join("");
 }
+$("parryBtn").onpointerdown=e=>{e.preventDefault();parryPress();};
 $("movebar").addEventListener("mousedown",e=>{if(e.target.closest(".moveslot"))e.preventDefault();});  // keep keyboard focus off the buttons so Space still strikes
 $("movebar").addEventListener("click",e=>{
   const b=e.target.closest(".moveslot");if(!b)return;
@@ -3799,7 +3875,7 @@ function startBattle(m){
   if(!S.combatTips){
     S.combatTips=true;
     blog("Tip: chain hits for a combo; 4 in a row sets up a guaranteed-crit finisher.","c-cold");
-    blog("Tip: wear down the yellow poise bar to stagger a foe. Blows are sometimes parried on their own: off-hands, quick hands and dodge make it likelier.","c-cold");
+    blog("Tip: wear down the yellow poise bar to stagger a foe. Now and then a blow leaves an opening: when the parry bar pops up, press Space while the marker is in the glow. Off-hands, quick hands and dodge make openings likelier.","c-cold");
   }
   refresh();
   queue(.75,()=>{B.phase="choose";drawMoves();});
@@ -3807,7 +3883,7 @@ function startBattle(m){
 function endBattle(){
   setTension(false);
   if(qte){if(qte.timer)clearInterval(qte.timer);qte=null;}
-  hideQteOverlay();
+  hideQteOverlay();clearParry();
   S.mode="map";B=null;seq=[];sfx=[];
   document.body.classList.remove("inbattle");
   requestAnimationFrame(resize);
@@ -4184,7 +4260,7 @@ function enemyTurn(){
   if(sp)B.mcd=sp.cd;
   if(m.t.thing&&!(sp&&sp.heal))playThingAttack();   // it roars with every attack, parried or not
   // A raised guard turns the incoming blow into a timing test.
-  if(!(sp&&sp.heal)&&Math.random()<parryChance(!!m.t.boss)){autoParry(sp);return;}
+  if(!(sp&&sp.heal)&&Math.random()<parryChance(!!m.t.boss)){startParryWindow(sp);return;}
   B.lunge=1;B.lungeSide=-1;
   blog(sp?`The ${m.t.name} uses ${sp.name}!`:`The ${m.t.name} attacks.`);
   queue(.2,()=>enemyStrike(sp,1,false));
@@ -7015,6 +7091,10 @@ window.addEventListener("keydown",ev=>{
     ev.preventDefault();return;
   }
   if(S.mode==="battle"){
+    if(B&&B.phase==="parry"){
+      if(!ev.repeat&&(k===" "||k==="Enter"||k==="q"||k==="Q"))parryPress();
+      ev.preventDefault();return;
+    }
     if(B&&B.phase==="qte"){
       if(!ev.repeat)handleQteKey(k);
       ev.preventDefault();return;
