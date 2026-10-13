@@ -989,7 +989,7 @@ function newFloor(depth){
   if(depth===8&&!S.chase&&!VAULT&&(S.vaultTry=(S.vaultTry||0)+1)<25)return newFloor(depth);   // no rock left for the vault: lay the floor out again
   S.vaultTry=0;
   placeThrone(depth,rooms);
-  if(depth===10&&!S.chase&&!THRONE&&(S.throneTry=(S.throneTry||0)+1)<20)return newFloor(depth);   // no good spot for the throne: lay the floor out again
+  if(depth===10&&!S.chase&&(!THRONE||THRONE.torches.length<4)&&(S.throneTry=(S.throneTry||0)+1)<20)return newFloor(depth);   // no good spot for the throne: lay the floor out again
   S.throneTry=0;
   placeShrine(depth,rooms);
   placeDoors(depth,rooms);
@@ -1322,7 +1322,10 @@ function inVault(x,y){
   if(x>=V.room.x-1&&x<=V.room.x+V.room.w&&y>=V.room.y-1&&y<=V.room.y+V.room.h)return true;
   return V.cor.some(([cx,cy])=>Math.abs(cx-x)+Math.abs(cy-y)<=1);
 }
-// Find solid rock big enough for the vault, with a straight passage from the middle of one side out to open floor.
+// Find solid rock big enough for the vault as near the top of the map as it will go, with a straight passage,
+// two tiles wide, running down from the middle of its bottom wall to open floor. The round door fills the top
+// two rows of the passage.
+function vaultDoorAt(x,y){const V=VAULT;return !!V&&x>=V.x&&x<=V.x+1&&y>=V.y&&y<=V.y+1;}
 function carveVault(){
   VAULT=null;
   const w=VAULT_W,h=VAULT_H,cands=[];
@@ -1331,27 +1334,28 @@ function carveVault(){
     let ok=true;
     for(let j=y-1;j<=y+h&&ok;j++)for(let i=x-1;i<=x+w&&ok;i++)if(map[j][i]!==WALL)ok=false;
     if(!ok)continue;
-    const cx=x+Math.floor(w/2),cy=y+Math.floor(h/2);
-    for(const [dx,dy,sx,sy] of [[-1,0,x-1,cy],[1,0,x+w,cy],[0,-1,cx,y-1],[0,1,cx,y+h]]){
-      const cor=[];let px=sx,py=sy,hit=false;
-      for(let k=0;k<9;k++){
-        if(px<1||py<1||px>=W-1||py>=H-1)break;
-        if(map[py][px]!==WALL){hit=true;break;}
-        cor.push([px,py]);px+=dx;py+=dy;
-      }
-      if(!hit||cor.length<2||map[py][px]!==FLOOR)continue;
-      // the passage runs through solid rock: nothing open beside it until it meets the floor
-      if(cor.slice(0,-1).some(([a,b])=>dx?!solid(a,b-1)||!solid(a,b+1):!solid(a-1,b)||!solid(a+1,b)))continue;
-      if(Math.abs(px-S.px)+Math.abs(py-S.py)<8)continue;
-      cands.push({x,y,cx,cy,cor,jx:px,jy:py});
+    const a=x+w/2-1,b=a+1,cor=[];let py=y+h,hit=false;
+    for(let k=0;k<11;k++){
+      if(py>=H-1)break;
+      if(map[py][a]!==WALL||map[py][b]!==WALL){hit=true;break;}
+      cor.push([a,py],[b,py]);py++;
     }
+    if(!hit||cor.length<6)continue;                     // the two door rows and at least one row of passage
+    const jx=map[py][a]===FLOOR?a:map[py][b]===FLOOR?b:-1;
+    if(jx<0)continue;
+    // the passage runs through solid rock: nothing open beside it until it meets the floor
+    if(cor.some(([i,j])=>!solid(a-1,j)||!solid(b+1,j)))continue;
+    if(Math.abs(jx-S.px)+Math.abs(py-S.py)<8)continue;
+    cands.push({x,y,cx:x+w/2,cy:y+Math.floor(h/2),cor,jx,jy:py});
   }
   if(!cands.length)return null;
-  const c=pick(cands);
+  const top=Math.min(...cands.map(c=>c.y));
+  if(top>2)return null;                                 // the vault is always at the top of the map
+  const c=pick(cands.filter(c=>c.y===top));
   for(let j=c.y;j<c.y+h;j++)for(let i=c.x;i<c.x+w;i++)map[j][i]=FLOOR;
-  for(const [a,b] of c.cor)map[b][a]=FLOOR;
-  const [dx0,dy0]=c.cor[0];
-  map[dy0][dx0]=WALL;                                   // the door, set in the vault's own wall
+  for(const [i,j] of c.cor)map[j][i]=FLOOR;
+  const dx0=c.cx-1,dy0=c.y+h;
+  for(let j=dy0;j<=dy0+1;j++)for(let i=dx0;i<=dx0+1;i++)map[j][i]=WALL;   // the door, two by two, facing down
   const room={x:c.x,y:c.y,w,h,cx:c.cx,cy:c.cy};
   VAULT={x:dx0,y:dy0,room,cor:c.cor,jx:c.jx,jy:c.jy,stage:"shut",t:0,locks:0,swing:0,hinted:false};
   return room;
@@ -1382,13 +1386,14 @@ function vaultKeysFrom(m){
   say(`The troll guard had a ring of six iron keys on its belt. You take them. (${S.vaultKeys} of 12)`,"c-item");
   if(S.vaultKeys>=12)say("That is all twelve. The vault door can be opened.","c-lvl");
 }
+function vaultNear(x,y){const V=VAULT;return !!V&&x>=V.x-1&&x<=V.x+2&&y>=V.y-1&&y<=V.y+2;}
 function vaultBusy(){return !!VAULT&&VAULT.stage==="opening";}
 function vaultTry(){
   const V=VAULT;if(!V||V.stage!=="shut"||S.mode!=="map"||S.over)return;
   const keys=S.vaultKeys||0,rook=CHAR().id==="rook";
   if(keys>=12||rook){
     V.stage="opening";V.t=0;V.pick=keys<12;held.clear();S.dashT=0;
-    say(V.pick?"Rook kneels at the first lock with a bent pin, then the second, then the third. He has opened worse.":"You fit the keys one by one, and turn them.","c-lvl");
+    say(V.pick?"Rook kneels at the first lock with a bent pin, then the second, then the third. He has opened worse.":"You fit the keys one by one. With each one the great wheel turns.","c-lvl");
     return;
   }
   say(keys?`Twelve locks. Your ${keys} keys turn ${keys} of them; the other troll guard has the rest.`:"Twelve locks, and none of them turning. The troll guards outside must carry the keys.","c-cold");
@@ -1396,8 +1401,8 @@ function vaultTry(){
 function vaultTick(dt){
   const V=VAULT;
   if(V.stage==="shut"){
-    if(!V.hinted&&Math.max(Math.abs(S.px-V.x),Math.abs(S.py-V.y))<=1){V.hinted=true;
-      say("A vault door, banded with iron, with twelve locks set into it in rows. Walk into it, or press E, to try it.","c-lvl");}
+    if(!V.hinted&&vaultNear(S.px,S.py)){V.hinted=true;
+      say("A round vault door of black iron, with a great wheel at its heart and twelve locks round its rim. Walk into it, or press E, to try it.","c-lvl");}
     return;
   }
   if(V.stage!=="opening")return;
@@ -1408,31 +1413,72 @@ function vaultTick(dt){
   if(V.t>=t1&&!V.ground){V.ground=true;playLidGrind();quake(6);}
   V.swing=Math.max(0,Math.min(1,(V.t-t1)/VAULT_SWING));
   if(V.t>=t1+VAULT_SWING){
-    V.stage="open";map[V.y][V.x]=FLOOR;quake(8);
+    V.stage="open";for(let j=0;j<2;j++)for(let i=0;i<2;i++)map[V.y+j][V.x+i]=FLOOR;quake(8);
     say("The vault door swings inward. Cold air comes out of the dark, and candlelight.","c-lvl");
     dirty=true;computeFOV();refresh();
   }
 }
+// The door is painted pixel by pixel onto a 32x32 canvas (two tiles), then scaled up like the sprites.
+let VAULT_CV=null;
 function drawVaultDoor(R){
-  const V=VAULT,u=cell/16,key=V.x+","+V.y;
-  if(!seen.has(key))return;
-  const al=visible.has(key)?Math.max(.55,bright(V.x,V.y,R)):.2;
-  const ox=(V.x-cam.x)*cell,oy=(V.y-cam.y)*cell;
-  const P=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(Math.round(ox+x*u),Math.round(oy+y*u),Math.ceil(w*u),Math.ceil(h*u));};
-  ctx.globalAlpha=al;
-  P(0,0,16,16,"#171c26");                                // the stone frame
-  P(1,1,14,15,"#06080d");                                // the dark beyond
-  const sw=V.stage==="open"?1:V.swing,dw=Math.max(2,Math.round(14*(1-sw*.82)));   // the door folds back on its hinge
-  const D=(x,y,w,h,c)=>P(1+x*dw/14,y,Math.max(.5,w*dw/14),h,c);
-  D(0,1,14,15,"#2b3243");D(0,1,14,1,"#566173");D(0,1,1,15,"#39414f");D(13,1,1,15,"#171c26");
-  D(0,5,14,1,"#39414f");D(0,10,14,1,"#39414f");        // iron bands
-  for(const [rx,ry] of [[1,2],[12,2],[1,14],[12,14],[1,6],[12,6],[1,11],[12,11]])D(rx,ry,1,1,"#8e9aad");   // rivets
-  // twelve locks, four to a row
-  for(let i=0;i<12;i++){
-    const cx=2+(i%4)*3,cy=2+Math.floor(i/4)*4+(i>=8?1:0),open=i<V.locks||V.stage==="open";
-    D(cx,cy+1,2,2,open?"#f0c060":"#7a5418");D(cx,cy+1,2,1,open?"#fff27a":"#a8762c");
-    if(!open)D(cx+1,cy+2,1,1,"#0b0d12");
+  const V=VAULT;
+  const keys=[[0,0],[1,0],[0,1],[1,1]].map(([i,j])=>(V.x+i)+","+(V.y+j));
+  if(!keys.some(k=>seen.has(k)))return;
+  const vis=keys.some(k=>visible.has(k));
+  const al=vis?Math.max(.55,bright(V.x,V.y+1,R)):.2;
+  if(!VAULT_CV){VAULT_CV=document.createElement("canvas");VAULT_CV.width=VAULT_CV.height=32;}
+  const c=VAULT_CV.getContext("2d"),img=c.createImageData(32,32),d=img.data;
+  const hex=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+  const put=(x,y,h)=>{if(x<0||y<0||x>31||y>31)return;const k=(y*32+x)*4,[r,g,b]=hex(h);d[k]=r;d[k+1]=g;d[k+2]=b;d[k+3]=255;};
+  const gap=V.pick?VAULT_PICK_GAP:VAULT_LOCK_GAP,open=V.stage==="open";
+  // the wheel turns a twelfth for each lock, smoothly, while they are being opened
+  const spin=open?1:V.stage==="opening"?Math.max(0,Math.min(1,(V.t-VAULT_LOCK0+gap)/(12*gap))):0;
+  const rot=spin*Math.PI*2*1.5;
+  const sw=open?1:V.swing,cx=15.5,cy=15.5;
+  // the stone frame and the round dark hole behind the door
+  for(let y=0;y<32;y++)for(let x=0;x<32;x++){
+    const r=Math.hypot(x-cx,y-cy);
+    put(x,y,r<14.6?"#05070b":r<15.6?"#0b0d12":((x>>2)+(y>>2))%2?"#232a36":"#1e242e");
+    if(r>=15.6&&(y%8===0||(x+(y>>3)*4)%8===0))put(x,y,"#171c26");    // mortar
   }
+  // the door itself, folding back towards its hinge on the left as it swings
+  const dw=Math.max(.06,1-sw*.88);
+  for(let y=0;y<32;y++)for(let x=0;x<32;x++){
+    const ux=1.5+(x-1.5)/dw;                               // where on the flat door this pixel falls
+    const r=Math.hypot(ux-cx,y-cy);if(r>=14.2)continue;
+    const a=Math.atan2(y-cy,ux-cx),lit=Math.cos(a+2.3);     // light from the top left
+    let col=r>12.6?(lit>.3?"#7a8597":lit<-.3?"#2b3243":"#566173"):
+            r>11.6?"#1e242e":
+            (lit>.45&&r>9?"#4b5568":lit<-.45&&r>9?"#2b3243":"#39414f");
+    if(sw>0)col=x<3?"#171c26":col;
+    // the wheel: a rim, six spokes and a hub
+    if(sw<.35){
+      let sp=9,kn=9;                                       // distance to the nearest spoke, and to the nearest handle knob
+      for(let k=0;k<6;k++){
+        const ka=rot+k*Math.PI/3,ex=Math.cos(ka),ey=Math.sin(ka),t=(ux-cx)*ex+(y-cy)*ey;
+        if(t>0&&t<7.2)sp=Math.min(sp,Math.abs((ux-cx)*ey-(y-cy)*ex));
+        kn=Math.min(kn,Math.hypot(ux-cx-ex*8.2,y-cy-ey*8.2));
+      }
+      if(kn<1.5)col=kn<.8?"#e9e5d9":"#8e9aad";
+      else if(r<2.6)col=r<1.4?"#e9e5d9":"#c9d2de";
+      else if(r>=5.4&&r<7)col=r<6.2?(lit>0?"#c9d2de":"#a8b2c2"):"#5d6779";
+      else if(sp<1)col=lit>0?"#c9d2de":"#8e9aad";
+      else if(sp<1.6&&r<7.6)col="#1e242e";
+    }
+    put(x,y,col);
+  }
+  // twelve locks round the rim, like the hours of a clock; each turns gold as it opens
+  for(let i=0;i<12;i++){
+    const a=-Math.PI/2+i*Math.PI/6,bx=cx+Math.cos(a)*10.6,by=cy+Math.sin(a)*10.6,o=open||i<V.locks;
+    const px=Math.round(1.5+(bx-1.5)*dw-.5),py=Math.round(by-.5);
+    if(sw>.6)continue;
+    put(px,py,o?"#fff27a":"#a8762c");put(px+1,py,o?"#f0c060":"#7a5418");
+    put(px,py+1,o?"#f0c060":"#7a5418");put(px+1,py+1,o?"#c9a24a":"#3d2a1c");
+  }
+  c.putImageData(img,0,0);
+  const ox=(V.x-cam.x)*cell,oy=(V.y-cam.y)*cell;
+  ctx.imageSmoothingEnabled=false;ctx.globalAlpha=al;
+  ctx.drawImage(VAULT_CV,Math.round(ox),Math.round(oy),cell*2,cell*2);
   ctx.globalAlpha=1;
 }
 function playLockClunk(i){
@@ -1510,7 +1556,7 @@ function placeTomb(depth,rooms){
     for(const g of [side,other]){const p=g.length?pick(g):pick(walk);if(p&&!mons.some(m=>m.x===p.x&&m.y===p.y)){spawnMon("troll",p.x,p.y);mons[mons.length-1].guard=true;}}
     return;
   }
-  if(VAULT){map[VAULT.y][VAULT.x]=FLOOR;VAULT=null;}
+  if(VAULT){for(let j=0;j<2;j++)for(let i=0;i<2;i++)map[VAULT.y+j][VAULT.x+i]=FLOOR;VAULT=null;}
 }
 
 function tombBusy(){return !!TOMB&&TOMB.stage==="wake";}
@@ -1842,7 +1888,7 @@ function interact(){
     const pr=PROPS.get((S.px+dx)+","+(S.py+dy));
     if(pr&&pr.paper){takePaper(pr);return;}
   }
-  if(VAULT&&VAULT.stage==="shut"&&Math.max(Math.abs(S.px-VAULT.x),Math.abs(S.py-VAULT.y))<=1){vaultTry();return;}
+  if(VAULT&&VAULT.stage==="shut"&&vaultNear(S.px,S.py)){vaultTry();return;}
   say("There is nothing here to use. Shrines and levers answer to E.","c-cold");
 }
 function objHint(){
@@ -2842,7 +2888,7 @@ function tryMove(dx,dy){
   const tgt=mons.find(m=>m.x===nx&&m.y===ny);
   if(tgt){computeFOV();startBattle(tgt);return;}
   if(map[ny][nx]===CHASM){startChasm(nx,ny,dx,dy);return;}
-  if(map[ny][nx]===WALL){const o=DL.get(nx+","+ny),pr=PROPS.get(nx+","+ny);if(o)bumpObject(o);else if(pr&&pr.paper)takePaper(pr);else if(VAULT&&nx===VAULT.x&&ny===VAULT.y)vaultTry();return;}
+  if(map[ny][nx]===WALL){const o=DL.get(nx+","+ny),pr=PROPS.get(nx+","+ny);if(o)bumpObject(o);else if(pr&&pr.paper)takePaper(pr);else if(VAULT&&vaultDoorAt(nx,ny))vaultTry();return;}
 
   // If exhausted, movement is blocked — forced to rest this turn
   if(S.exhausted){
@@ -3817,7 +3863,7 @@ function render(){
       const t=map[y][x];
       const part=SHR&&SHR.parts.get(key),prop=PROPS.get(key);
       const chz=CHM.get(key);
-      const name=part||prop||(TOMB&&TOMB.tiles.has(key))||(THRONE&&key===THRONE.x+","+THRONE.y)||(VAULT&&key===VAULT.x+","+VAULT.y)?"floor"+(((x*7+y*13)%3+3)%3):t===WALL?"wall":t===STAIRS?"stairs":t===CHASM?"chasm"
+      const name=part||prop||(TOMB&&TOMB.tiles.has(key))||(THRONE&&key===THRONE.x+","+THRONE.y)||(VAULT&&vaultDoorAt(x,y))?"floor"+(((x*7+y*13)%3+3)%3):t===WALL?"wall":t===STAIRS?"stairs":t===CHASM?"chasm"
         :chz&&chz.bridged?(chz.ori==="h"?"bridge_h":"bridge_v"):"floor"+(((x*7+y*13)%3+3)%3);
       const b=vis?bright(x,y,R):0;
       const al=vis?(.26+.74*b):.17;
@@ -7592,7 +7638,7 @@ function freeStep(dx,dy,dt,speed){
     const o=DL.get(ax+","+ay),pr=PROPS.get(ax+","+ay);
     if(o&&freeBumpT<=0){freeBumpT=.7;bumpObject(o);if(S.mode!=="map"||S.over)return;}
     else if(pr&&pr.paper&&freeBumpT<=0){freeBumpT=.7;takePaper(pr);return;}
-    else if(VAULT&&ax===VAULT.x&&ay===VAULT.y&&VAULT.stage==="shut"&&freeBumpT<=0){freeBumpT=.9;vaultTry();if(vaultBusy())return;}
+    else if(VAULT&&vaultDoorAt(ax,ay)&&VAULT.stage==="shut"&&freeBumpT<=0){freeBumpT=.9;vaultTry();if(vaultBusy())return;}
     // ...if it is open, slide toward our tile's centre line so doorways and corridors are easy to enter.
     if(ax>=0&&ay>=0&&ax<W&&ay<H&&map[ay][ax]!==WALL){
       if(axis===0){const c=Math.floor(S.fy)+.5;S.fy+=Math.sign(c-S.fy)*Math.min(Math.abs(c-S.fy),sp);}

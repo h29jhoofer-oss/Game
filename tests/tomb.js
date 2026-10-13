@@ -17,7 +17,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const check = (name, ok, detail) => results.push({ name, ok: !!ok, detail });
 
   await ev('localStorage.clear();start("cade")');
-  const st = await ev(`(()=>{const B={tomb:0,walls:0,ring:0,candles:0,cut:0,onRing:0,guards:0,shrine:0,other:0,vault:0,sealed:0,keys:0};
+  const st = await ev(`(()=>{const B={top:0,tomb:0,walls:0,ring:0,candles:0,cut:0,onRing:0,guards:0,shrine:0,other:0,vault:0,sealed:0,keys:0};
     for(let i=0;i<40;i++){S.depth=8;newFloor(8);if(!TOMB)continue;B.tomb++;
       for(const k of TOMB.tiles){const [x,y]=k.split(",").map(Number);if(map[y][x]===WALL)B.walls++;}
       for(let y=TOMB.y-1;y<=TOMB.y+2;y++)for(let x=TOMB.x-1;x<=TOMB.x+1;x++)if(!TOMB.tiles.has(x+","+y)&&map[y][x]===FLOOR)B.ring++;
@@ -26,11 +26,12 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
       for(const o of [...items,...traps,...mons])if(inTombRing(o.x,o.y))B.onRing++;
       const r=TOMB.room;
       if(VAULT){B.vault++;
-        if(map[VAULT.y][VAULT.x]===WALL&&!floodFrom(S.px,S.py).has(TOMB.x+","+(TOMB.y-1)))B.sealed++;
+        if(VAULT.room.y<=2&&VAULT.y===VAULT.room.y+VAULT.room.h&&VAULT.x===VAULT.room.cx-1)B.top++;
+        if([0,1].every(j=>[0,1].every(i=>map[VAULT.y+j][VAULT.x+i]===WALL))&&!floodFrom(S.px,S.py).has(TOMB.x+","+(TOMB.y-1)))B.sealed++;
         const g=mons.filter(m=>m.guard&&m.t.id==="troll"&&m.keys===6);
         if(g.length===2&&g.every(m=>!inVault(m.x,m.y)&&Math.abs(m.x-VAULT.jx)+Math.abs(m.y-VAULT.jy)<=4))B.guards++;
         B.keys+=(S.vaultKeys===0?1:0);
-        map[VAULT.y][VAULT.x]=FLOOR;}
+        for(let j=0;j<2;j++)for(let i=0;i<2;i++)map[VAULT.y+j][VAULT.x+i]=FLOOR;}
       if(SHR&&SHR.room===r)B.shrine++;
       for(const d of DOORS)map[d.y][d.x]=FLOOR;const f=floodFrom(S.px,S.py);
       for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(map[y][x]!==WALL&&!f.has(x+","+y))B.cut++;
@@ -41,6 +42,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('a ring of ten candles surrounds it', st.ring === 400 && st.candles === 400, st);
   check('nothing spawns on the ring, nor the start or stairs', st.onRing === 0, st);
   check('her tomb is always in a vault of its own', st.vault === 40, st);
+  check('the vault sits at the top of the map, its 2x2 door facing down', st.top === st.vault, st);
   check('the vault door seals it: the only way in', st.sealed === st.vault, st);
   check('two troll guards with six keys each stand outside it', st.guards === st.vault && st.keys === st.vault, st);
   check('the shrine stays out of the vault', st.shrine === 0, st);
@@ -50,11 +52,11 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   // The vault door: shut without the keys, open with all twelve.
   await ev(`(()=>{for(let i=0;i<30&&!VAULT;i++){S.depth=8;newFloor(8);}descentT=0;fade=0;S.hp=S.maxhp=999;
     const V=VAULT;S.px=V.jx;S.py=V.jy;const [cx,cy]=V.cor[V.cor.length-1];S.px=cx;S.py=cy;
-    for(const [a,b] of V.cor)if(Math.abs(a-V.x)+Math.abs(b-V.y)===1){S.px=a;S.py=b;}
+    S.px=V.x;S.py=V.y+2;
     S.fx=S.px+.5;S.fy=S.py+.5;S.vx=S.px;S.vy=S.py;computeFOV();})()`);
   await page.keyboard.press('e');
   await page.waitForTimeout(200);
-  check('without the keys the twelve locks hold', await ev('VAULT.stage==="shut"&&map[VAULT.y][VAULT.x]===WALL&&S.log.some(l=>/troll guards outside must carry the keys/.test(l.text))'));
+  check('without the keys the twelve locks hold', await ev('VAULT.stage==="shut"&&map[VAULT.y+1][VAULT.x+1]===WALL&&S.log.some(l=>/troll guards outside must carry the keys/.test(l.text))'));
   await ev('for(const m of mons.filter(m=>m.guard))kill(m)');
   check('each guard drops six keys', await ev('S.vaultKeys===12&&S.log.some(l=>/six iron keys/.test(l.text))'));
   await page.keyboard.press('e');
@@ -64,10 +66,10 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('...lock by lock', await ev('VAULT.locks>3&&VAULT.locks<=12'), await ev('VAULT.locks'));
   await shot('vault_locks');
   await page.waitForFunction('VAULT.stage==="open"',null,{timeout:6000}).catch(()=>{});
-  check('and the door swings open', await ev('VAULT.stage==="open"&&map[VAULT.y][VAULT.x]===FLOOR&&floodFrom(S.px,S.py).has(TOMB.x+","+(TOMB.y-1))'));
+  check('and the door swings open', await ev('VAULT.stage==="open"&&map[VAULT.y][VAULT.x]===FLOOR&&map[VAULT.y+1][VAULT.x+1]===FLOOR&&floodFrom(S.px,S.py).has(TOMB.x+","+(TOMB.y-1))'));
   await shot('vault_open');
   await ev(`(()=>{start("rook");for(let i=0;i<30;i++){S.depth=8;newFloor(8);if(VAULT)break;}descentT=0;fade=0;
-    for(const [a,b] of VAULT.cor)if(Math.abs(a-VAULT.x)+Math.abs(b-VAULT.y)===1){S.px=a;S.py=b;}S.fx=S.px+.5;S.fy=S.py+.5;computeFOV();vaultTry();})()`);
+    S.px=VAULT.x+1;S.py=VAULT.y+2;S.fx=S.px+.5;S.fy=S.py+.5;computeFOV();vaultTry();})()`);
   check('Rook picks the locks without the keys', await ev('VAULT.stage==="opening"&&VAULT.pick'));
   await page.waitForFunction('VAULT.stage==="open"',null,{timeout:8000}).catch(()=>{});
   check('...and they open for him', await ev('VAULT.stage==="open"'));
