@@ -954,7 +954,7 @@ function cssv(n){
 /* ============================ map gen ============================ */
 function newFloor(depth){
   unlockLore(depth);
-  map=[];seen=new Set();visible=new Set();mons=[];items=[];traps=[];SHR=null;S.atShrine=false;DL=new Map();DOORS=[];LEVERS=[];CHASMS=[];CHM=new Map();PK=null;PROPS=new Map();TOMB=null;THRONE=null;VAULT=null;if(S)S.vaultKeys=0;
+  map=[];seen=new Set();visible=new Set();mons=[];items=[];traps=[];SHR=null;S.atShrine=false;DL=new Map();DOORS=[];LEVERS=[];CHASMS=[];CHM=new Map();PK=null;PROPS=new Map();TOMB=null;THRONE=null;VAULT=null;MAPD.dlg=null;if(S)S.vaultKeys=0;
   for(let y=0;y<H;y++){map.push(new Array(W).fill(WALL));}
   const rooms=[];
   const tries=depth===10||depth===20?14:22;   // the two boss floors are smaller
@@ -1360,24 +1360,78 @@ function carveVault(){
   VAULT={x:dx0,y:dy0,room,cor:c.cor,jx:c.jx,jy:c.jy,stage:"shut",t:0,locks:0,swing:0,hinted:false};
   return room;
 }
-// The guards wait just outside, where the passage meets the floor.
+// The guards sit asleep in two alcoves cut either side of the door, at the head of the passage.
 function postVaultGuards(){
-  const V=VAULT,seenT=new Set([V.jx+","+V.jy]),q=[[V.jx,V.jy]],spots=[];
-  while(q.length&&spots.length<12){
-    const [x,y]=q.shift();
-    if(!inVault(x,y)&&!(x===S.px&&y===S.py)&&!(x===S.sx&&y===S.sy)&&map[y][x]===FLOOR)spots.push({x,y});
-    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
-      const nx=x+dx,ny=y+dy,k=nx+","+ny;
-      if(seenT.has(k)||map[ny][nx]===WALL)continue;seenT.add(k);q.push([nx,ny]);
+  const V=VAULT;V.guards=[];V.gstage="sleep";V.gt=0;
+  for(const [x,side] of [[V.x-1,"grub"],[V.x+2,"mog"]]){
+    map[V.y+1][x]=FLOOR;map[V.y+2][x]=FLOOR;
+    spawnMon("troll",x,V.y+1);const m=mons[mons.length-1];
+    m.guard=true;m.keys=6;m.asleep=true;m.who=side;m.ph=side==="mog"?2.1:0;V.guards.push(m);
+  }
+  S.vaultKeys=0;
+}
+// What wakes them: you, coming up the passage.
+const GUARD_LINES=[
+ {who:"grub",mood:"sleep",text:"Hrrrnnnk... zzzz... mmf. Mutton..."},
+ {who:"mog",mood:"sleep",text:"Zzzzz... snrrk... five more years, Queenie... zzzz..."},
+ {who:"grub",mood:"sleep",text:"Zzz... hnh?",sub:"Your boot scrapes on the stone.",act:()=>{playMonsterStep(1);}},
+ {who:"grub",text:"...Mog. MOG. Wake up. Something's walking about.",act:()=>guardWakes("grub")},
+ {who:"mog",text:"Mmh? Tell the Queen we're guarding. We're guarding ever so hard.",act:()=>guardWakes("mog")},
+ {who:"mog",text:"...Wait. That's not the Queen. That one's got skin on."},
+ {who:"grub",mood:"glee",text:"It's MEAT! Fresh meat, walking right up to the door!",act:()=>quake(4)},
+ {who:"mog",mood:"glee",text:"Dinner came to US! Nobody ever brings us dinner!"},
+ {who:"grub",mood:"glee",text:"Dibs on the crunchy bits!"},
+ {who:"mog",mood:"anger",text:"GET IT BEFORE IT RUNS OFF!",act:()=>quake(8)}
+];
+const GUARD_RISE=.9;
+function guardWakes(who){const m=VAULT&&VAULT.guards&&VAULT.guards.find(g=>g.who===who);if(m)m.eyesOpen=true;}
+function guardsBusy(){const V=VAULT;return !!V&&V.gstage==="rise";}
+function guardsTick(dt){
+  const V=VAULT;if(!V.guards)return;
+  const alive=V.guards.filter(m=>mons.includes(m));
+  if(V.gstage==="sleep"){
+    if(!alive.length){V.gstage="done";return;}
+    if(S.mode!=="map"||S.over||descentT>0||levelOpen||vaultBusy()||MAPD.dlg)return;
+    if(!alive.some(m=>visible.has(m.x+","+m.y)&&Math.max(Math.abs(m.x-S.px),Math.abs(m.y-S.py))<=4))return;
+    V.gstage="talk";held.clear();S.dashT=0;
+    say("Two troll guards sit slumped either side of the vault door, snoring.","c-hit");
+    const who=new Set(alive.map(m=>m.who));
+    startDialogue(GUARD_LINES.filter(l=>who.has(l.who)),()=>{V.gstage="rise";V.gt=0;playRoarSound();quake(10);},"Run!",alive[0].who);
+    return;
+  }
+  if(V.gstage!=="rise")return;
+  V.gt+=dt;
+  if(V.gt>=GUARD_RISE){
+    V.gstage="done";
+    for(const m of alive){m.asleep=false;m.seenYou=true;m.chargeT=3;}
+    say(alive.length>1?"The troll guards heave themselves up and come at you, roaring.":"The troll guard heaves itself up and comes at you, roaring.","c-hit");
+    held.clear();computeFOV();refresh();
+  }
+}
+// Asleep, they sit slumped against the wall with their eyes shut; as they wake they straighten up.
+function drawSleeper(m,b){
+  const V=VAULT,img=SPR.troll;if(!img)return;
+  const up=V.gstage==="rise"?Math.min(1,V.gt/GUARD_RISE):0,e=up*up*(3-2*up);
+  const breath=RM?0:Math.sin(tclock*1.3+m.ph)*.025;
+  const sy=.8+.2*e+breath,sx=1.1-.1*e;
+  blit("troll",m.vx,m.vy-.18*(1-e)+.02,b,m.flash||0,sy,sx,m.who==="mog");
+  const w=cell*sx*img.width/16,h=cell*sy*img.height/16,px=(m.vx-cam.x)*cell+(cell-w)/2,py=(m.vy-.18*(1-e)+.02-cam.y)*cell+cell-h;
+  const kx=w/img.width,ky=h/img.height;
+  if(e<.5&&!m.eyesOpen){
+    ctx.globalAlpha=b;
+    for(const [ex,ey] of DLG_WHO.grub.eyes){
+      const xx=m.who==="mog"?img.width-1-ex:ex;
+      ctx.fillStyle="#3f6b2e";ctx.fillRect(px+xx*kx,py+ey*ky,kx,ky);
+      ctx.fillStyle="#0b0d12";ctx.fillRect(px+xx*kx,py+(ey+.55)*ky,kx,ky*.35);
     }
+    if(V.gstage!=="rise"){
+      ctx.font=`700 ${Math.round(cell*.32)}px "IBM Plex Mono", monospace`;ctx.textAlign="center";ctx.textBaseline="middle";
+      for(let k=0;k<3;k++){const p=RM?k/3:(tclock*.45+k/3+m.ph*.13)%1;
+        ctx.globalAlpha=b*Math.sin(p*Math.PI)*.9;ctx.fillStyle="#c8d8f0";
+        ctx.fillText(k%2?"z":"Z",px+w*(m.who==="mog"?.3-p*.25:.7+p*.25),py-p*cell*.7);}
+    }
+    ctx.globalAlpha=1;
   }
-  let n=0;
-  for(const p of spots){
-    if(n>=2)break;
-    if(mons.some(m=>Math.abs(m.x-p.x)+Math.abs(m.y-p.y)<1))continue;
-    spawnMon("troll",p.x,p.y);const m=mons[mons.length-1];m.guard=true;m.keys=6;n++;
-  }
-  S.vaultKeys=12-6*n;                                   // if a guard could not be posted, its keys are simply yours
 }
 function vaultKeysFrom(m){
   if(!m.keys||!VAULT||VAULT.stage!=="shut")return;
@@ -1400,8 +1454,9 @@ function vaultTry(){
 }
 function vaultTick(dt){
   const V=VAULT;
+  guardsTick(dt);
   if(V.stage==="shut"){
-    if(!V.hinted&&vaultNear(S.px,S.py)){V.hinted=true;
+    if(!V.hinted&&vaultNear(S.px,S.py)&&V.gstage!=="talk"&&V.gstage!=="sleep"){V.hinted=true;
       say("A round vault door of black iron, with a great wheel at its heart and twelve locks round its rim. Walk into it, or press E, to try it.","c-lvl");}
     return;
   }
@@ -2799,7 +2854,7 @@ function renderMoveBar(){
     return `<button type="button" tabindex="-1" class="moveslot${cd>0||dry(m)?" cool":""}" data-mv="${m.id}" title="${m.name} — ${m.desc}" aria-label="${m.name}">${icon("move_"+m.id,32)}${cd>0?`<span class="cd">${cd}</span>`:""}</button>`;
   }).join("");
 }
-cv.addEventListener("pointerdown",e=>{if(B&&B.dlg){e.preventDefault();dlgAdvance();}});
+cv.addEventListener("pointerdown",e=>{if(DH().dlg){e.preventDefault();dlgAdvance();}});
 $("parryBtn").onpointerdown=e=>{e.preventDefault();parryPress();};
 $("movebar").addEventListener("mousedown",e=>{if(e.target.closest(".moveslot"))e.preventDefault();});  // keep keyboard focus off the buttons so Space still strikes
 $("movebar").addEventListener("click",e=>{
@@ -2930,7 +2985,7 @@ function endTurn(){
   if(!freeMode()||S.walkedThisTurn)tickCooldowns();
   S.walkedThisTurn=false;
   for(const m of [...mons]){
-    if(m.seated)continue;
+    if(m.seated||m.asleep)continue;
     if(m.cool>0)m.cool--;
     if(m.t.regen&&m.hp<m.max)m.hp=Math.min(m.max,m.hp+m.t.regen);
     // Lingering scroll effects on the map
@@ -3963,6 +4018,7 @@ function render(){
   for(const m of order){
     if(m.seated||!visible.has(m.x+","+m.y))continue;   // the King on his throne is drawn with it
     const b=Math.max(.55,bright(m.vx,m.vy,R));
+    if(m.asleep){drawSleeper(m,b);continue;}
     const o=off(m);
     let bob=0,sy=1,sx=1;
     if(!RM){
@@ -4081,6 +4137,7 @@ function render(){
     ctx.fillRect(0,0,vw,vh);
   }
   if(S.jump)drawJumpscare(vw,vh);
+  if(MAPD.dlg&&S.mode==="map")drawDialogue(vw,vh);
   if(descentT>0&&S.mode==="map"){
     // the floor number surfaces out of the dark while the gate grinds
     const age=descentLen-descentT,a=Math.min(1,age/1.2,fade);
@@ -4615,6 +4672,7 @@ function sfirehit(L,fx){
 }
 
 function startBattle(m){
+  if(m.asleep&&VAULT&&VAULT.guards){MAPD.dlg=null;VAULT.gstage="done";for(const g of VAULT.guards){g.asleep=false;g.seenYou=true;}}
   if(S.over)return;
   if(m.seated&&THRONE){m.seated=false;m.y=THRONE.y+2;m.fy=m.y+.5;m.vy=m.y;THRONE.stage="done";}   // fought before he came down: he stands first
   if(packOpen||codexOpen){packOpen=false;codexOpen=false;hideOverlay();}
@@ -6181,20 +6239,32 @@ function takeGift(id){
   refresh();
 }
 const DLG_CPS=42;   // letters a second as the text types out
-function dlgLine(){return B&&B.dlg&&B.dlg.lines[B.dlg.i];}
-function dlgShown(){const l=dlgLine();return l?Math.min(l.text.length,Math.floor((performance.now()-B.dlg.t0)/1000*DLG_CPS)):0;}
+// Dialogue lives on the battle while there is one, otherwise on the map.
+const MAPD={dlg:null};
+function DH(){return B||MAPD;}
+function dlgLine(){const D=DH().dlg;return D&&D.lines[D.i];}
+function dlgShown(){const l=dlgLine();return l?Math.min(l.text.length,Math.floor((performance.now()-DH().dlg.t0)/1000*DLG_CPS)):0;}
 // Lines can carry a mood ("fear" or "anger") that changes the box's colours and shakes the portrait.
-function startDialogue(lines,onDone,endLabel,who){B.dlg={lines,i:-1,t0:0,onDone,endLabel,who:who||"thing"};dlgNext();}
+function startDialogue(lines,onDone,endLabel,who){DH().dlg={lines,i:-1,t0:0,onDone,endLabel,who:who||"thing"};dlgNext();}
 // Speakers: the name over the text, the sprite their portrait is cut from (x, y, w, h on the sprite), and the box colours.
 const DLG_WHO={
  thing:{name:"THE THING UNDER THE HILL",frame:"#8a5fc4",inner:"#3a2a52",bg:"#140c1e",text:"#e9e5d9",voice:"low"},
  queen:{name:"THE GHOST QUEEN",spr:()=>B.phaseNum===2?"ghost_queen2":"ghost_queen",crop:[2,0,12,10],frame:"#5fa8c4",inner:"#14283f",bg:"#0a1622",text:"#d8ecf4",voice:"ghost"},
- king:{name:"THE HOLLOW KING",spr:()=>"king",crop:[2,0,12,11],frame:"#c9a24a",inner:"#4a3410",bg:"#160f06",text:"#f2e6c8",voice:"king"}
+ king:{name:"THE HOLLOW KING",spr:()=>"king",crop:[2,0,12,11],frame:"#c9a24a",inner:"#4a3410",bg:"#160f06",text:"#f2e6c8",voice:"king"},
+ grub:{name:"GRUB, TROLL GUARD",spr:()=>"troll",crop:[3,1,14,12],eyes:[[8,7],[11,7]],frame:"#6f8a4a",inner:"#24301a",bg:"#0e140a",text:"#e2ead0",voice:"troll"},
+ mog:{name:"MOG, TROLL GUARD",spr:()=>"troll",crop:[3,1,14,12],eyes:[[8,7],[11,7]],flip:true,frame:"#8a7a4a",inner:"#302a1a",bg:"#14110a",text:"#ece4cc",voice:"troll2"}
+};
+// How a line's mood changes the box: frame, inner frame, text colour and how hard the portrait shakes.
+const DLG_MOOD={
+ anger:{frame:"#c94a3c",inner:"#4a1713",text:"#ff8f80",shake:2.2,bold:true},
+ fear:{frame:"#5fa8c4",inner:"#14283f",text:"#a8c8e0",shake:.7},
+ sleep:{frame:"#56607a",inner:"#1e242e",text:"#a8b2c2",shake:0},
+ glee:{frame:"#e0a030",inner:"#4a3410",text:"#ffd890",shake:1.2,bold:true}
 };
 function dlgNext(){
-  const D=B.dlg;D.i++;
+  const H=DH(),D=H.dlg;D.i++;
   const l=D.lines[D.i];
-  if(!l){B.dlg=null;B.giftFx=null;if(D.onDone)D.onDone();return;}
+  if(!l){H.dlg=null;if(B)B.giftFx=null;if(D.onDone)D.onDone();return;}
   D.t0=performance.now();D.blip=0;
   blog(`"${l.text}"`,"c-lvl");
   if(l.sub)blog(l.sub,"c-hit");
@@ -6203,7 +6273,7 @@ function dlgNext(){
 // Space / Enter / click: finish the line if it is still typing, otherwise go on to the next one.
 function dlgAdvance(){
   const l=dlgLine();if(!l)return;
-  if(dlgShown()<l.text.length){B.dlg.t0=performance.now()-l.text.length/DLG_CPS*1000-1;return;}
+  if(dlgShown()<l.text.length){DH().dlg.t0=performance.now()-l.text.length/DLG_CPS*1000-1;return;}
   dlgNext();
 }
 function wrapText(text,maxW){
@@ -6217,12 +6287,12 @@ function wrapText(text,maxW){
 }
 function drawDialogue(vw,vh){
   const l=dlgLine();if(!l)return;
-  const n=dlgShown(),done=n>=l.text.length;
-  if(!done&&n>(B.dlg.blip||0)+2){B.dlg.blip=n;playTalkBlip((DLG_WHO[B.dlg.who]||{}).voice);}
+  const D=DH().dlg,n=dlgShown(),done=n>=l.text.length,W=DLG_WHO[l.who||D.who]||DLG_WHO.thing,M=DLG_MOOD[l.mood]||{};
+  if(!done&&n>(D.blip||0)+2){D.blip=n;playTalkBlip(l.mood==="sleep"?"snore":W.voice);}
   const pad=Math.round(Math.min(vw,vh)*.022),bw=Math.min(vw-pad*2,880),bh=Math.max(118,vh*.27);
-  const bx=(vw-bw)/2,by=vh-bh-pad,mood=l.mood||"",W=DLG_WHO[B.dlg.who]||DLG_WHO.thing;
-  const frame=mood==="anger"?"#c94a3c":mood==="fear"?"#5fa8c4":W.frame,inner=mood==="anger"?"#4a1713":mood==="fear"?"#14283f":W.inner;
-  const shk=RM?0:mood==="anger"?2.2:mood==="fear"?.7:0;
+  const bx=(vw-bw)/2,by=vh-bh-pad,mood=l.mood||"";
+  const frame=M.frame||W.frame,inner=M.inner||W.inner;
+  const shk=RM?0:M.shake||0;
   ctx.save();
   if(mood==="anger"&&!RM&&dlgShown()<l.text.length)ctx.translate((Math.random()-.5)*4,(Math.random()-.5)*4);
   ctx.fillStyle="rgba(6,8,13,.94)";ctx.fillRect(bx,by,bw,bh);
@@ -6233,7 +6303,7 @@ function drawDialogue(vw,vh){
   const ph=bh-u*8,pw=Math.round(ph*1.1),px=bx+u*4,py=by+u*4;
   ctx.fillStyle=W.bg;ctx.fillRect(px,py,pw,ph);
   const spk=W.spr?W.spr():B.mon.t.thing===2?null:MONSPR[B.mon.t.id]||"thing",img=spk?SPR[spk]:null,cr=W.crop||[2,1,12,10];
-  if(!W.spr&&B.mon.t.thing===2){
+  if(!W.spr&&B&&B.mon.t.thing===2){
     // its second shape is painted, not a sprite: paint just the head, mouth moving as it talks
     const MX=HZ.N/2,r=14,hy=40,talk=!done&&!RM?Math.abs(Math.sin(tclock*13)):0;
     const jaw=mood==="anger"?.75+.25*talk:mood==="fear"?.08+.12*talk:.22+.4*talk;
@@ -6249,10 +6319,26 @@ function drawDialogue(vw,vh){
     const bob=RM?0:Math.round(Math.sin(tclock*2.4)*u*.6+(Math.random()-.5)*u*shk);
     ctx.imageSmoothingEnabled=false;
     const jx=shk?Math.round((Math.random()-.5)*u*shk):0;
+    if(W.flip){ctx.save();ctx.translate(px*2+pw,0);ctx.scale(-1,1);}
     ctx.drawImage(img,cr[0],cr[1],cr[2],cr[3],px+u+jx,py+u+bob,pw-u*2,ph-u*2);
+    if(mood==="sleep"&&W.eyes){                            // eyes shut: the lids are a dark line
+      const kx=(pw-u*2)/cr[2],ky=(ph-u*2)/cr[3];
+      for(const [ex,ey] of W.eyes){ctx.fillStyle="#3f6b2e";ctx.fillRect(px+u+jx+(ex-cr[0])*kx,py+u+bob+(ey-cr[1])*ky,kx,ky);
+        ctx.fillStyle="#0b0d12";ctx.fillRect(px+u+jx+(ex-cr[0])*kx,py+u+bob+(ey-cr[1]+.55)*ky,kx,ky*.3);}
+    }
+    if(W.flip)ctx.restore();
+    if(mood==="sleep"){
+      ctx.fillStyle="rgba(10,16,40,.38)";ctx.fillRect(px,py,pw,ph);
+      ctx.font=`700 ${Math.round(ph*.16)}px "IBM Plex Mono", monospace`;ctx.textAlign="center";ctx.textBaseline="middle";
+      for(let k=0;k<3;k++){const p=RM?k/3:(tclock*.6+k/3)%1;
+        ctx.globalAlpha=Math.sin(p*Math.PI);ctx.fillStyle="#c8d8f0";
+        ctx.fillText("z",px+pw*(.72+p*.18),py+ph*(.42-p*.32));}
+      ctx.globalAlpha=1;
+    }
+    if(mood==="glee"){ctx.fillStyle=`rgba(240,170,40,${(.1+.06*Math.sin(tclock*10)).toFixed(3)})`;ctx.fillRect(px,py,pw,ph);}
     if(mood==="anger"){ctx.fillStyle=`rgba(200,30,30,${(.18+.1*Math.sin(tclock*12)).toFixed(3)})`;ctx.fillRect(px,py,pw,ph);}
     if(mood==="fear"){ctx.fillStyle="rgba(40,90,140,.18)";ctx.fillRect(px,py,pw,ph);}
-    if(!done&&!RM&&Math.floor(tclock*9)%2){ctx.globalAlpha=.25;ctx.drawImage(SPRW[spk],cr[0],cr[1],cr[2],cr[3],px+u,py+u+bob,pw-u*2,ph-u*2);ctx.globalAlpha=1;}
+    if(!done&&!RM&&mood!=="sleep"&&Math.floor(tclock*9)%2){if(W.flip){ctx.save();ctx.translate(px*2+pw,0);ctx.scale(-1,1);}ctx.globalAlpha=.25;ctx.drawImage(SPRW[spk],cr[0],cr[1],cr[2],cr[3],px+u,py+u+bob,pw-u*2,ph-u*2);ctx.globalAlpha=1;if(W.flip)ctx.restore();}
   }
   ctx.strokeStyle=frame;ctx.lineWidth=u;ctx.strokeRect(px-u/2,py-u/2,pw+u,ph+u);
   // name, text, and the effect line
@@ -6260,7 +6346,8 @@ function drawDialogue(vw,vh){
   ctx.textAlign="left";ctx.textBaseline="top";
   ctx.font=`700 ${Math.round(fs*.8)}px "IBM Plex Mono", monospace`;ctx.fillStyle="#f0c060";
   ctx.fillText(W.name,tx,py+u*2);
-  ctx.font=`${mood==="anger"?700:500} ${Math.round(fs)}px "IBM Plex Mono", monospace`;ctx.fillStyle=mood==="anger"?"#ff8f80":mood==="fear"?"#a8c8e0":W.text;
+  ctx.textAlign="left";ctx.textBaseline="top";
+  ctx.font=`${M.bold?700:500} ${Math.round(fs)}px "IBM Plex Mono", monospace`;ctx.fillStyle=M.text||W.text;
   const rows=wrapText(l.text,tw);let shown=n,y=py+u*2+fs*1.5;
   for(const r of rows){if(shown<=0)break;ctx.fillText(r.slice(0,shown),tx,y);shown-=r.length+1;y+=fs*1.3;}
   if(done&&l.sub){
@@ -6270,18 +6357,19 @@ function drawDialogue(vw,vh){
   }
   if(done&&(RM||Math.floor(tclock*2.5)%2)){
     ctx.font=`700 ${Math.round(fs*.75)}px "IBM Plex Mono", monospace`;ctx.fillStyle="#c8a8f0";ctx.textAlign="right";ctx.textBaseline="bottom";
-    ctx.fillText(B.dlg.i<B.dlg.lines.length-1?"▼ Space":"▼ "+(B.dlg.endLabel||"Fight"),bx+bw-u*5,by+bh-u*4);
+    ctx.fillText(D.i<D.lines.length-1?"▼ Space":"▼ "+(D.endLabel||"Fight"),bx+bw-u*5,by+bh-u*4);
   }
   ctx.restore();
 }
 // Its voice: a low murmur under each few letters.
 function playTalkBlip(voice){
   if(!AUDIO_OK)return;ensureAudio();if(!actx)return;
-  const t=actx.currentTime+.005,o=actx.createOscillator(),g=actx.createGain();
-  const f0=voice==="ghost"?380+Math.random()*90:voice==="king"?120+Math.random()*30:70+Math.random()*30;
-  o.type=voice==="ghost"?"sine":"triangle";o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f0*(voice==="ghost"?1.15:.68),t+.09);
+  const t=actx.currentTime+.005,osc=actx.createOscillator(),g=actx.createGain();let o=osc;
+  const f0=voice==="ghost"?380+Math.random()*90:voice==="king"?120+Math.random()*30:voice==="troll"?92+Math.random()*22:voice==="troll2"?118+Math.random()*26:voice==="snore"?46+Math.random()*10:70+Math.random()*30;
+  osc.type=voice==="ghost"?"sine":voice==="troll"||voice==="troll2"?"square":"triangle";
+  if(voice==="troll"||voice==="troll2"||voice==="snore"){const lp=actx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=voice==="snore"?260:700;o.connect(lp);o=lp;}osc.frequency.setValueAtTime(f0,t);osc.frequency.exponentialRampToValueAtTime(f0*(voice==="ghost"?1.15:.68),t+.09);
   g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(.18,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+.11);
-  o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+.13);
+  o.connect(g);g.connect(actx.destination);osc.start(t);osc.stop(t+.13);
 }
 // A stolen gift crossing the arena: a little black card with its glyph, pulled from you into it.
 function drawGiftFx(L){
@@ -7520,7 +7608,7 @@ for(const k in KEYS){
 const held=new Set();
 let freeClock=0,freeBumpT=0,freeWindedT=0;
 function freeMode(){return !!S;}   // every hero walks freely now; the grid code stays for "." (rest) and as a fallback
-function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
+function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||!!MAPD.dlg||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
 // What a box of half-width r centred on (cx,cy) overlaps: {wall:true}, {chasm:[x,y]}, or null.
 function boxHit(cx,cy,r){
   const e=1e-6;
@@ -7591,7 +7679,8 @@ function monBlocked(m,cx,cy){
 }
 function freeMonsters(dt){
   for(const m of mons){
-    if(m.seated)continue;                                 // the King waits on his throne
+    if(m.seated||m.asleep)continue;                       // the King waits on his throne; the vault guards sleep
+    if(m.chargeT>0)m.chargeT-=dt;
     monPos(m);
     if(m.walkT>0)m.walkT-=dt;
     if(m.freezeT>0||m.stunT>0)continue;                    // frozen / stunned by a scroll: stand still
@@ -7610,7 +7699,7 @@ function freeMonsters(dt){
     }
     if(!dir)continue;
     const len=Math.hypot(dir[0],dir[1]);if(len<1e-4)continue;
-    const sp=MON_SPEED*(m.t.slow?.5:m.t.erratic?1.3:1)*(hunting?1:.45)*dt;
+    const sp=MON_SPEED*(m.t.slow?.5:m.t.erratic?1.3:1)*(hunting?1:.45)*(m.chargeT>0?1.6:1)*dt;
     const vx=dir[0]/len*sp,vy=dir[1]/len*sp;
     let moved=false;
     const ox=m.fx,oy=m.fy;
@@ -8121,7 +8210,8 @@ window.addEventListener("keydown",ev=>{
   }
   if(descentT>0&&S&&!S.over&&S.mode==="map"){ev.preventDefault();return;}   // still on the way down
   if(S&&S.jump){ev.preventDefault();return;}                                // being caught
-  if(tombBusy()||throneBusy()||vaultBusy()){ev.preventDefault();return;}                               // the Queen is waking
+  if(MAPD.dlg){if(k===" "||k==="Enter"||k==="e"||k==="E"||k==="z"||k==="Z")dlgAdvance();ev.preventDefault();return;}   // someone on the map is talking
+  if(tombBusy()||throneBusy()||vaultBusy()||guardsBusy()){ev.preventDefault();return;}                               // the Queen is waking
   if(B&&B.dlg){if(k===" "||k==="Enter"||k==="e"||k==="E"||k==="z"||k==="Z")dlgAdvance();ev.preventDefault();return;}   // it is talking
   if(levelOpen){
     const cards=[...document.querySelectorAll("#card .lvlcard")];

@@ -29,7 +29,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
         if(VAULT.room.y<=2&&VAULT.y===VAULT.room.y+VAULT.room.h&&VAULT.x===VAULT.room.cx-1)B.top++;
         if([0,1].every(j=>[0,1].every(i=>map[VAULT.y+j][VAULT.x+i]===WALL))&&!floodFrom(S.px,S.py).has(TOMB.x+","+(TOMB.y-1)))B.sealed++;
         const g=mons.filter(m=>m.guard&&m.t.id==="troll"&&m.keys===6);
-        if(g.length===2&&g.every(m=>!inVault(m.x,m.y)&&Math.abs(m.x-VAULT.jx)+Math.abs(m.y-VAULT.jy)<=4))B.guards++;
+        if(g.length===2&&g.every(m=>m.asleep&&m.y===VAULT.y+1&&map[m.y][m.x]===FLOOR)&&g.some(m=>m.x===VAULT.x-1)&&g.some(m=>m.x===VAULT.x+2))B.guards++;
         B.keys+=(S.vaultKeys===0?1:0);
         for(let j=0;j<2;j++)for(let i=0;i<2;i++)map[VAULT.y+j][VAULT.x+i]=FLOOR;}
       if(SHR&&SHR.room===r)B.shrine++;
@@ -44,7 +44,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('her tomb is always in a vault of its own', st.vault === 40, st);
   check('the vault sits at the top of the map, its 2x2 door facing down', st.top === st.vault, st);
   check('the vault door seals it: the only way in', st.sealed === st.vault, st);
-  check('two troll guards with six keys each stand outside it', st.guards === st.vault && st.keys === st.vault, st);
+  check('two troll guards with six keys each sleep either side of the door', st.guards === st.vault && st.keys === st.vault, st);
   check('the shrine stays out of the vault', st.shrine === 0, st);
   check('the tomb and vault never cut anything off', st.cut === 0, st);
   check('no other floor has a tomb', st.other === 0, st);
@@ -52,8 +52,25 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   // The vault door: shut without the keys, open with all twelve.
   await ev(`(()=>{for(let i=0;i<30&&!VAULT;i++){S.depth=8;newFloor(8);}descentT=0;fade=0;S.hp=S.maxhp=999;
     const V=VAULT;S.px=V.jx;S.py=V.jy;const [cx,cy]=V.cor[V.cor.length-1];S.px=cx;S.py=cy;
-    S.px=V.x;S.py=V.y+2;
+    S.px=V.jx;S.py=V.jy+2;if(map[S.py][S.px]!==FLOOR)S.py=V.jy;
     S.fx=S.px+.5;S.fy=S.py+.5;S.vx=S.px;S.vy=S.py;computeFOV();})()`);
+  await page.waitForTimeout(150);
+  check('the guards sleep until you come near', await ev('VAULT.gstage==="sleep"&&!MAPD.dlg') || await ev('Math.max(Math.abs(VAULT.guards[0].x-S.px),Math.abs(VAULT.guards[0].y-S.py))<=4'));
+  await ev('S.px=VAULT.x;S.py=VAULT.y+2;S.fx=S.px+.5;S.fy=S.py+.5;S.vx=S.px;S.vy=S.py;computeFOV();');
+  await page.waitForTimeout(200);
+  check('coming up the passage starts their dialogue, asleep', await ev('VAULT.gstage==="talk"&&MAPD.dlg&&dlgLine().mood==="sleep"&&freePaused()'));
+  await shot('guards_sleep');
+  const seen = [];
+  for (let i = 0; i < 40 && await ev('!!MAPD.dlg'); i++) {
+    seen.push(await ev('dlgLine().who+":"+(dlgLine().mood||"")'));
+    if (i === 6) await shot('guards_glee');
+    await page.keyboard.press('Space'); await page.waitForTimeout(30); await page.keyboard.press('Space'); await page.waitForTimeout(30);
+  }
+  check('both speak: asleep, then waking, then glad of dinner', seen.includes('grub:sleep') && seen.includes('mog:sleep') && seen.includes('grub:') && seen.includes('mog:glee'), seen.join(' '));
+  check('then they stand up', await ev('VAULT.gstage==="rise"&&freePaused()'));
+  await page.waitForTimeout(1100);
+  check('and run at you', await ev('VAULT.gstage==="done"&&VAULT.guards.every(m=>!m.asleep&&m.seenYou&&m.chargeT>0)'));
+  await ev('for(const m of VAULT.guards){m.freezeT=999;m.x=m.vx=VAULT.jx;m.y=m.vy=H-2;m.fx=m.x+.5;m.fy=m.y+.5;}');
   await page.keyboard.press('e');
   await page.waitForTimeout(200);
   check('without the keys the twelve locks hold', await ev('VAULT.stage==="shut"&&map[VAULT.y+1][VAULT.x+1]===WALL&&S.log.some(l=>/troll guards outside must carry the keys/.test(l.text))'));
