@@ -2448,6 +2448,7 @@ function renderMoveBar(){
     return `<button type="button" tabindex="-1" class="moveslot${cd>0||dry(m)?" cool":""}" data-mv="${m.id}" title="${m.name} — ${m.desc}" aria-label="${m.name}">${icon("move_"+m.id,32)}${cd>0?`<span class="cd">${cd}</span>`:""}</button>`;
   }).join("");
 }
+cv.addEventListener("pointerdown",e=>{if(B&&B.dlg){e.preventDefault();dlgAdvance();}});
 $("parryBtn").onpointerdown=e=>{e.preventDefault();parryPress();};
 $("movebar").addEventListener("mousedown",e=>{if(e.target.closest(".moveslot"))e.preventDefault();});  // keep keyboard focus off the buttons so Space still strikes
 $("movebar").addEventListener("click",e=>{
@@ -3486,6 +3487,7 @@ function render(){
     ctx.save();
     if(shake>.2)ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
     drawBattle(vw,vh);
+    if(B.dlg)drawDialogue(vw,vh);
     ctx.restore();
     return;
   }
@@ -5731,37 +5733,129 @@ function bossDown(m){
   dirty=true;computeFOV();refresh();
 }
 // Phase 1 -> 2: the shape it was wearing splits, and what is underneath comes up at full health.
+// What it says as it takes each gift back.
+const GIFT_TAUNT={
+ keen:   "Your Keen Edge. You saw every gap in their guard. Who do you think showed you where to look?",
+ iron:   "Your Iron Hide. Blows glanced off you. That was my hide you were wearing.",
+ study:  "Your Quick Study. Every fight taught you something. It taught me more.",
+ gilded: "Your Gilded Palm. All that coin finding its way to you. It was always finding its way to me.",
+ ember:  "Your Ember Heart. Such a bright little torch. I lent you the dark it pushed back.",
+ troll:  "Your Troll Blood. Your wounds closed so nicely. Now mine will.",
+ riposte:"Your Riposte. You turned their blows back on them. Let us see you turn mine.",
+ second: "Your Second Wind. You got up when you should have stayed down. So will I.",
+ feast:  "Your Bloodfeast. You ate well on the way down. Now you are the meal.",
+ fleet:  "Your Fleetfoot. You ran so lightly. Run now.",
+ mercy:  "Your Mercy Stroke. You never showed any. Neither will I."
+};
+// At the start of the final fight it tells you whose the dark gifts were, in dialogue boxes you read at your
+// own pace (Space, Enter or a click moves on). Each gift it names flies out of you and into it.
 function thingReveal(){
   S.betrayed=true;
   const owned=stolenGifts();
-  queue(1,()=>{if(B)blog("Something in you answers it, like a word on the tip of your tongue.","c-hit");});
+  const lines=[];
   if(!owned.length){
-    queue(1.4,()=>{if(B)blog("\"You took nothing from me,\" says the hill, in a voice like earth settling. \"How careful. How rude.\"","c-lvl");});
-    queue(1,()=>{if(!B)return;B.phase="choose";drawMoves();refresh();});
-    return;
+    lines.push({text:"You took nothing from me."},{text:"Nothing at all, all the way down. How careful. How rude."});
+  }else{
+    lines.push({text:"Did you think the dark was being kind to you?",act:()=>{quake(12);playThingAttack();}},
+               {text:`Every gift you took was a clause, and every clause is mine. ${owned.length===1?"It comes":"They come"} back to me now.`});
+    for(const id of owned)lines.push({text:GIFT_TAUNT[id],sub:`${PERKS[id].name} is torn out of you. ${TURNED[id]}`,act:()=>takeGift(id)});
+    lines.push({text:"Now. Fight me with what is yours."});
   }
-  queue(1.4,()=>{
-    if(!B)return;quake(12);playThingAttack();
-    blog(`"Did you think the dark was being kind to you?" says the hill. "Every gift was a clause. ${owned.length===1?"It comes":"They come"} back to me now."`,"c-lvl");
+  queue(1,()=>{
+    if(!B)return;
+    blog("Something in you answers it, like a word on the tip of your tongue.","c-hit");
+    B.dlg={lines,i:-1,t0:0};dlgNext();
   });
-  for(const id of owned){
-    queue(.9,()=>{
-      if(!B)return;
-      const L=B.layout,p=PERKS[id];
-      B.giftFx={id,t0:performance.now()};
-      playCardSound(true);
-      if(L){sburst(L.px,L.py,"#8a5fc4",16,200);}
-      blog(`${p.name} is torn out of you. ${TURNED[id]}`,"c-hit");
-      B.mStat.gifts=(B.mStat.gifts||0)+1;
-      if(id==="gilded"){
-        const g=Math.min(90,Math.floor((S.gold||0)/4)+20);
-        if(S.gold)blog(`Your ${S.gold} gold goes with it.`,"c-hit");
-        S.gold=0;B.mmax+=g;B.mhp+=g;B.mon.max+=g;B.mon.hp+=g;
-      }
-      queue(.55,()=>{if(!B)return;const L=B.layout;if(L){sburst(L.ex,L.ey,"#c8a8f0",18,240);sring(L.ex,L.ey,"rgba(200,168,240,.85)",L.esz*.8);snum(L.ex,L.ey-L.esz*.9,p.name,"#c8a8f0",true);}quake(5);refresh();});
-    });
+}
+function takeGift(id){
+  const L=B.layout,p=PERKS[id];
+  B.giftFx={id,t0:performance.now()};
+  playCardSound(true);
+  if(L)sburst(L.px,L.py,"#8a5fc4",16,200);
+  B.mStat.gifts=(B.mStat.gifts||0)+1;
+  if(id==="gilded"){
+    const g=Math.min(90,Math.floor((S.gold||0)/4)+20);
+    if(S.gold)blog(`Your ${S.gold} gold goes with it.`,"c-hit");
+    S.gold=0;B.mmax+=g;B.mhp+=g;B.mon.max+=g;B.mon.hp+=g;
   }
-  queue(.9,()=>{if(!B)return;B.giftFx=null;blog("You will have to fight it with only what is yours.","c-cold");B.phase="choose";drawMoves();refresh();});
+  setTimeout(()=>{if(!B)return;const L=B.layout;if(L){sburst(L.ex,L.ey,"#c8a8f0",18,240);sring(L.ex,L.ey,"rgba(200,168,240,.85)",L.esz*.8);snum(L.ex,L.ey-L.esz*.9,p.name,"#c8a8f0",true);}quake(5);refresh();},550);
+  refresh();
+}
+const DLG_CPS=42;   // letters a second as the text types out
+function dlgLine(){return B&&B.dlg&&B.dlg.lines[B.dlg.i];}
+function dlgShown(){const l=dlgLine();return l?Math.min(l.text.length,Math.floor((performance.now()-B.dlg.t0)/1000*DLG_CPS)):0;}
+function dlgNext(){
+  const D=B.dlg;D.i++;
+  const l=D.lines[D.i];
+  if(!l){B.dlg=null;B.giftFx=null;blog("You will have to fight it with only what is yours.","c-cold");B.phase="choose";drawMoves();refresh();return;}
+  D.t0=performance.now();D.blip=0;
+  blog(`"${l.text}"`,"c-lvl");
+  if(l.sub)blog(l.sub,"c-hit");
+  if(l.act)l.act();
+}
+// Space / Enter / click: finish the line if it is still typing, otherwise go on to the next one.
+function dlgAdvance(){
+  const l=dlgLine();if(!l)return;
+  if(dlgShown()<l.text.length){B.dlg.t0=performance.now()-l.text.length/DLG_CPS*1000-1;return;}
+  dlgNext();
+}
+function wrapText(text,maxW){
+  const out=[];let line="";
+  for(const w of text.split(" ")){
+    const t=line?line+" "+w:w;
+    if(ctx.measureText(t).width>maxW&&line){out.push(line);line=w;}else line=t;
+  }
+  if(line)out.push(line);
+  return out;
+}
+function drawDialogue(vw,vh){
+  const l=dlgLine();if(!l)return;
+  const n=dlgShown(),done=n>=l.text.length;
+  if(!done&&n>(B.dlg.blip||0)+2){B.dlg.blip=n;playTalkBlip();}
+  const pad=Math.round(Math.min(vw,vh)*.022),bw=Math.min(vw-pad*2,880),bh=Math.max(118,vh*.27);
+  const bx=(vw-bw)/2,by=vh-bh-pad;
+  ctx.save();
+  ctx.fillStyle="rgba(6,8,13,.94)";ctx.fillRect(bx,by,bw,bh);
+  const u=Math.max(2,Math.round(bh/60));                     // pixel-style double frame
+  ctx.fillStyle="#8a5fc4";ctx.fillRect(bx,by,bw,u);ctx.fillRect(bx,by+bh-u,bw,u);ctx.fillRect(bx,by,u,bh);ctx.fillRect(bx+bw-u,by,u,bh);
+  ctx.fillStyle="#3a2a52";ctx.fillRect(bx+u*2,by+u*2,bw-u*4,u);ctx.fillRect(bx+u*2,by+bh-u*3,bw-u*4,u);ctx.fillRect(bx+u*2,by+u*2,u,bh-u*4);ctx.fillRect(bx+bw-u*3,by+u*2,u,bh-u*4);
+  // the portrait: its head, cut from the sprite it is wearing
+  const ph=bh-u*8,pw=Math.round(ph*1.1),px=bx+u*4,py=by+u*4;
+  ctx.fillStyle="#140c1e";ctx.fillRect(px,py,pw,ph);
+  const img=SPR[MONSPR[B.mon.t.id]]||SPR.thing;
+  if(img){
+    const bob=RM?0:Math.round(Math.sin(tclock*2.4)*u*.6);
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(img,2,1,12,10,px+u,py+u+bob,pw-u*2,ph-u*2);
+    if(!done&&!RM&&Math.floor(tclock*9)%2){ctx.globalAlpha=.25;ctx.drawImage(SPRW[MONSPR[B.mon.t.id]]||SPRW.thing,2,1,12,10,px+u,py+u+bob,pw-u*2,ph-u*2);ctx.globalAlpha=1;}
+  }
+  ctx.strokeStyle="#8a5fc4";ctx.lineWidth=u;ctx.strokeRect(px-u/2,py-u/2,pw+u,ph+u);
+  // name, text, and the effect line
+  const tx=px+pw+u*6,tw=bx+bw-u*6-tx,fs=Math.max(12,Math.min(19,bh*.13));
+  ctx.textAlign="left";ctx.textBaseline="top";
+  ctx.font=`700 ${Math.round(fs*.8)}px "IBM Plex Mono", monospace`;ctx.fillStyle="#f0c060";
+  ctx.fillText("THE THING UNDER THE HILL",tx,py+u*2);
+  ctx.font=`500 ${Math.round(fs)}px "IBM Plex Mono", monospace`;ctx.fillStyle="#e9e5d9";
+  const rows=wrapText(l.text,tw);let shown=n,y=py+u*2+fs*1.5;
+  for(const r of rows){if(shown<=0)break;ctx.fillText(r.slice(0,shown),tx,y);shown-=r.length+1;y+=fs*1.3;}
+  if(done&&l.sub){
+    ctx.font=`500 ${Math.round(fs*.72)}px "IBM Plex Mono", monospace`;ctx.fillStyle="#c8a8f0";
+    let yy=Math.max(y+fs*.3,by+bh-u*4-fs*.72*1.25*2);
+    for(const r of wrapText(l.sub,tw-fs*3))  {ctx.fillText(r,tx,yy);yy+=fs*.72*1.25;}
+  }
+  if(done&&(RM||Math.floor(tclock*2.5)%2)){
+    ctx.font=`700 ${Math.round(fs*.75)}px "IBM Plex Mono", monospace`;ctx.fillStyle="#c8a8f0";ctx.textAlign="right";ctx.textBaseline="bottom";
+    ctx.fillText(B.dlg.i<B.dlg.lines.length-1?"▼ Space":"▼ Fight",bx+bw-u*5,by+bh-u*4);
+  }
+  ctx.restore();
+}
+// Its voice: a low murmur under each few letters.
+function playTalkBlip(){
+  if(!AUDIO_OK)return;ensureAudio();if(!actx)return;
+  const t=actx.currentTime+.005,o=actx.createOscillator(),g=actx.createGain();
+  o.type="triangle";o.frequency.setValueAtTime(70+Math.random()*30,t);o.frequency.exponentialRampToValueAtTime(48,t+.09);
+  g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(.18,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+.11);
+  o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+.13);
 }
 // A stolen gift crossing the arena: a little black card with its glyph, pulled from you into it.
 function drawGiftFx(L){
@@ -5778,6 +5872,7 @@ function drawGiftFx(L){
   ctx.restore();ctx.globalAlpha=1;
 }
 function thingUnveils(){
+  B.dlg=null;B.giftFx=null;
   B.phase="anim";
   const m=B.mon,L=B.layout;
   blog("The shape it was wearing splits down the middle like a seed husk.","c-lvl");
@@ -7582,6 +7677,7 @@ window.addEventListener("keydown",ev=>{
   if(descentT>0&&S&&!S.over&&S.mode==="map"){ev.preventDefault();return;}   // still on the way down
   if(S&&S.jump){ev.preventDefault();return;}                                // being caught
   if(tombBusy()){ev.preventDefault();return;}                               // the Queen is waking
+  if(B&&B.dlg){if(k===" "||k==="Enter"||k==="e"||k==="E"||k==="z"||k==="Z")dlgAdvance();ev.preventDefault();return;}   // it is talking
   if(levelOpen){
     const cards=[...document.querySelectorAll("#card .lvlcard")];
     if(/^[1-9]$/.test(k)&&cards[+k-1])pickLevelCard(cards[+k-1]);
