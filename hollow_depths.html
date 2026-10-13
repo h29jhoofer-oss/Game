@@ -5785,7 +5785,7 @@ const DLG_CPS=42;   // letters a second as the text types out
 function dlgLine(){return B&&B.dlg&&B.dlg.lines[B.dlg.i];}
 function dlgShown(){const l=dlgLine();return l?Math.min(l.text.length,Math.floor((performance.now()-B.dlg.t0)/1000*DLG_CPS)):0;}
 // Lines can carry a mood ("fear" or "anger") that changes the box's colours and shakes the portrait.
-function startDialogue(lines,onDone){B.dlg={lines,i:-1,t0:0,onDone};dlgNext();}
+function startDialogue(lines,onDone,endLabel){B.dlg={lines,i:-1,t0:0,onDone,endLabel};dlgNext();}
 function dlgNext(){
   const D=B.dlg;D.i++;
   const l=D.lines[D.i];
@@ -5827,7 +5827,19 @@ function drawDialogue(vw,vh){
   // the portrait: its head, cut from the sprite it is wearing
   const ph=bh-u*8,pw=Math.round(ph*1.1),px=bx+u*4,py=by+u*4;
   ctx.fillStyle="#140c1e";ctx.fillRect(px,py,pw,ph);
-  const img=SPR[MONSPR[B.mon.t.id]]||SPR.thing;
+  const img=B.mon.t.thing===2?null:SPR[MONSPR[B.mon.t.id]]||SPR.thing;
+  if(B.mon.t.thing===2){
+    // its second shape is painted, not a sprite: paint just the head, mouth moving as it talks
+    const MX=HZ.N/2,r=14,hy=40,talk=!done&&!RM?Math.abs(Math.sin(tclock*13)):0;
+    const jaw=mood==="anger"?.75+.25*talk:mood==="fear"?.08+.12*talk:.22+.4*talk;
+    const hi=paintHorror({hx:MX,hy,r,jaw,look:[-1,.25],pupil:mood==="anger"?"#fff4e0":undefined,arms:[]});
+    const side=r*2.7,K=HZ.K,sx=(MX-side*.55)*K,sy=(hy-r*1.2)*K;
+    const jx=shk?Math.round((Math.random()-.5)*u*shk):0,jy=RM?0:Math.round((Math.random()-.5)*u*shk);
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(hi,sx,sy,side*1.1*K,side*K,px+u+jx,py+u+jy,pw-u*2,ph-u*2);
+    if(mood==="anger"){ctx.fillStyle=`rgba(200,30,30,${(.14+.08*Math.sin(tclock*12)).toFixed(3)})`;ctx.fillRect(px,py,pw,ph);}
+    if(mood==="fear"){ctx.fillStyle="rgba(40,90,140,.18)";ctx.fillRect(px,py,pw,ph);}
+  }
   if(img){
     const bob=RM?0:Math.round(Math.sin(tclock*2.4)*u*.6+(Math.random()-.5)*u*shk);
     ctx.imageSmoothingEnabled=false;
@@ -5853,7 +5865,7 @@ function drawDialogue(vw,vh){
   }
   if(done&&(RM||Math.floor(tclock*2.5)%2)){
     ctx.font=`700 ${Math.round(fs*.75)}px "IBM Plex Mono", monospace`;ctx.fillStyle="#c8a8f0";ctx.textAlign="right";ctx.textBaseline="bottom";
-    ctx.fillText(B.dlg.i<B.dlg.lines.length-1?"▼ Space":"▼ Fight",bx+bw-u*5,by+bh-u*4);
+    ctx.fillText(B.dlg.i<B.dlg.lines.length-1?"▼ Space":"▼ "+(B.dlg.endLabel||"Fight"),bx+bw-u*5,by+bh-u*4);
   }
   ctx.restore();
 }
@@ -5924,7 +5936,7 @@ function thingEnrages(){
     const L=B.layout;
     if(L){sburst(L.ex,L.ey,"#8a1f3a",50,460);sring(L.ex,L.ey,"rgba(160,20,40,.95)",L.esz*1.6);}
     queue(2,()=>{endBattle();startChase(m);});
-  });
+  },"Run");
 }
 function distFrom(sx,sy){
   const D=new Int16Array(W*H).fill(-1),q=[sx+sy*W];D[q[0]]=0;
