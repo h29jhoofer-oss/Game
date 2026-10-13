@@ -44,10 +44,16 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('floor 20 has no stair and holds the Thing', await ev('S.sx===-1&&mons.some(m=>m.t.id==="thing")'));
   await duelBoss('thing'); await step(1); await ev('for(let i=0;i<20&&B.dlg;i++){dlgAdvance();dlgAdvance();}');   // it speaks first (the dark gifts reveal)
   check('phase 1', await ev('B.mon.t.id==="thing"&&B.phaseNum===1&&B.mmax===480'));
-  await ev('B.mhp=0;winBattle()'); await step(2);
+  await ev('B.mhp=0;winBattle()'); await step(2.4);
+  check('when its cloak falls it taunts you', await ev('!!B.dlg&&/that easy/.test(dlgLine().text)&&B.phase!=="choose"'));
+  await ev('for(let i=0;i<20&&B&&B.dlg;i++){dlgAdvance();dlgAdvance();}');
   check('beating phase 1 reveals phase 2 at full health', await ev('S.mode==="battle"&&B.mon.t.id==="thing2"&&B.phaseNum===2&&B.mhp===B.mmax&&B.mmax===560'));
   check('phase 2 has the slam', await ev('!!B.mon.t.qteSp'));
-  await ev('B.mhp=0;winBattle()'); await step(2.2);
+  await ev('B.mhp=0;winBattle()'); await step(1.5);
+  check('beaten again, it is afraid, then angry', await ev('!!B.dlg&&B.dlg.lines[0].mood==="fear"&&B.dlg.lines.at(-1).mood==="anger"'));
+  await step(4);
+  check('the chase waits until you have read it', await ev('S.mode==="battle"&&!S.chase'));
+  await ev('for(let i=0;i<20&&B&&B.dlg;i++){dlgAdvance();dlgAdvance();}'); await step(2.2);
   check('beating phase 2 starts the chase', await ev('S.mode==="map"&&!!S.chase&&mons.length===0&&!S.over'));
   check('a way out opens on the floor', await ev('S.sx>=0&&map[S.sy][S.sx]===STAIRS&&distFrom(S.px,S.py)[S.sx+S.sy*W]>0'));
   await step(7);
@@ -56,7 +62,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   // 4. Running for it: each stair up leads to a fresh floor with it climbing after you, all the way to floor 1.
   await fresh(20);
   await duelBoss('thing'); await step(1); await ev('for(let i=0;i<20&&B.dlg;i++){dlgAdvance();dlgAdvance();}');   // it speaks first (the dark gifts reveal)
-  await ev('B.mhp=0;winBattle()'); await step(2); await ev('B.mhp=0;winBattle()'); await step(2.2);
+  await ev('B.mhp=0;winBattle()'); await step(2.4); await ev('for(let i=0;i<20&&B&&B.dlg;i++){dlgAdvance();dlgAdvance();}'); await ev('B.mhp=0;winBattle()'); await step(1.5); await ev('for(let i=0;i<20&&B&&B.dlg;i++){dlgAdvance();dlgAdvance();}'); await step(2.2);
   const run = async (stopDepth) => {
     for (let i = 0; i < 2000; i++) {
       const r = await ev(`(()=>{if(S.over)return document.querySelector("#card h3").textContent;

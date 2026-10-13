@@ -56,7 +56,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('Riposte turns your blows back on you', await ev(`(()=>{const R=Math.random;Math.random=()=>.05;const r=pDamage({mult:1});Math.random=R;return r.miss&&r.riposted})()`));
   check('Keen Edge sharpens its blows instead', await ev('turned("keen")&&!hasPerk("keen")'));
   check('no more black cards are dealt', await ev('(()=>{S.blackPity=99;const h=dealLevelHand();return !h.some(c=>c.kind==="black")})()'));
-  await ev('B.mhp=0;winBattle()'); await step(5);
+  await ev('B.mhp=0;winBattle()'); await step(2.4); await ev('for(let i=0;i<20&&B&&B.dlg;i++){dlgAdvance();dlgAdvance();}'); await step(.5);
   check('it is still wearing them in its second shape', await ev('B&&B.mon.t.id==="thing2"&&B.mStat.gifts===5'));
   await ev('endBattle();togglePack()');
   check('the pack shows them as taken back', await ev('document.querySelector("#card").innerText.toLowerCase().includes("it took them back")'));
