@@ -3395,7 +3395,7 @@ function tick(dt){
 
   if(S.mode==="chasm"&&PK)courseTick(dt);
   if(B&&B.hitstop>0){B.hitstop=Math.max(0,B.hitstop-dt);}
-  else if(seq.length){
+  else if(seq.length&&!(B&&B.dlg)){   // queued blows wait while someone is talking
     seq[0].d-=dt;
     if(seq[0].d<=0){const e=seq.shift();e.f();}
   }
@@ -4287,6 +4287,7 @@ function startBattle(m){
   }
   refresh();
   if(m.t.thing===1&&!S.betrayed)thingReveal();
+  else if(bossLines(m.t))queue(.75,()=>{if(B)startDialogue(bossLines(m.t).intro,()=>{B.phase="choose";drawMoves();refresh();},"Fight",m.t.id);});
   else queue(.75,()=>{B.phase="choose";drawMoves();});
 }
 function endBattle(){
@@ -4390,6 +4391,7 @@ function triggerPhase2(){
     if(L){sburst(L.ex,L.ey,"#e87aa0",30,340);sring(L.ex,L.ey,"rgba(232,122,160,.9)",L.esz*1.3);}
     blog("Every candle in the vault gutters at once. The Queen remembers how she died.","c-lvl");
     blog("She is not sad any more. She is angry.","c-hit");
+    startDialogue(QUEEN_LINES.phase2,null,"Fight","queen");
     return;
   }
   B.qcd=0; // the King may unleash his slam as soon as his next turn comes
@@ -4398,6 +4400,7 @@ function triggerPhase2(){
   if(L){sburst(L.ex,L.ey,"#f0c060",34,380);sring(L.ex,L.ey,"rgba(240,192,96,.95)",L.esz*1.35);}
   blog("The crown flares white-hot — the Hollow King rises to full wrath!","c-lvl");
   blog("He draws his greatsword. This will not be gentle.","c-hit");
+  if(B.mon.t.id==="king")startDialogue(KING_LINES.phase2,null,"Fight","king");
 }
 function hurtPlayer(dmg,crit){
   S.hp-=dmg;B.pFlash=1;
@@ -4560,6 +4563,7 @@ function payCost(c){
 }
 function costLabel(c){return CHAR().noMana?`${bloodCost(c)} health`:`${c} mana`;}
 function chooseMove(id){
+  if(B&&B.dlg)return;
   if(!B||B.phase!=="choose")return;
   const mv=moveList().find(m=>m.id===id);
   if(!mv||S.lvl<mv.lvl||(S.cds[mv.id]||0)>0)return;
@@ -5058,6 +5062,11 @@ function winBattle(){
   if(!B||B.phase==="over")return;
   if(B.mon.t.thing===1){thingUnveils();return;}
   if(B.mon.t.thing===2){thingEnrages();return;}
+  if(bossLines(B.mon.t)&&!B.lastWord){
+    B.lastWord=true;B.phase="anim";drawMoves();
+    startDialogue(bossLines(B.mon.t).end,()=>winBattle(),B.mon.t.id==="queen"?"Rest":"Continue",B.mon.t.id);
+    return;
+  }
   lowHpCheck();if(B.lowHp)bumpStat("lowhp");
   B.phase="over";B.faint=0.0001;
   const m=B.mon;
@@ -5090,6 +5099,7 @@ function loseBattle(by){
   });
 }
 function tryFlee(){
+  if(B&&B.dlg)return;
   if(!B||B.phase!=="choose")return;
   if(B.mon.t.boss){blog("There is nowhere to run.","c-hit");return;}
   B.phase="anim";drawMoves();
@@ -5115,6 +5125,7 @@ function tryFlee(){
 
 /* ============================ items in battle ============================ */
 function useItemBattle(i){
+  if(B&&B.dlg)return;
   const it=itemAt(i);
   if(!it||!B||B.phase!=="choose")return;
   if(it.kind==="use"&&it.ref.id==="oil"){
@@ -5737,6 +5748,32 @@ function bossDown(m){
   dirty=true;computeFOV();refresh();
 }
 // Phase 1 -> 2: the shape it was wearing splits, and what is underneath comes up at full health.
+// The Queen, woken in her tomb; and the Hollow King on his throne.
+const QUEEN_LINES={
+ intro:[{text:"Who is it? Who has come into my room?"},
+        {text:"They told me the King would come. Every night they told me. He never came."},
+        {text:"You are not the King.",mood:"anger",act:()=>{quake(8);playGhostWail(.8);}},
+        {text:"Then you will stay with me instead."}],
+ phase2:[{text:"I remember now. The cold. The notary's pen, scratching and scratching."},
+         {text:"He traded me. He traded all of us, and I died anyway.",mood:"anger"},
+         {text:"GET OUT OF MY TOMB.",mood:"anger",act:()=>{quake(14);playGhostWail(1.2);}}],
+ end:[{text:"...Oh. It is so quiet."},
+      {text:"If you see him, do not tell him I waited. Let him wonder."},
+      {text:"Let them all rest now. Let me rest."}]
+};
+const KING_LINES={
+ intro:[{text:"So. Something finally climbed all the way down to me."},
+        {text:"Do you know what I gave for her? Everything above us. Every name on the rolls."},
+        {text:"And still she died. And still the terms hold."},
+        {text:"Kneel, and you may keep your name a little longer.",act:()=>quake(8)}],
+ phase2:[{text:"Enough."},
+         {text:"I have not drawn this blade since the day I signed.",mood:"anger",act:()=>quake(10)},
+         {text:"COME, THEN. LET THE HILL HAVE ONE MORE.",mood:"anger",act:()=>quake(16)}],
+ end:[{text:"...Is it over? Is it finally over?"},
+      {text:"No. Listen. Do you hear it, under the floor?",mood:"fear"},
+      {text:"It was never me. I only signed. It is still down there, and it is awake.",mood:"fear"}]
+};
+function bossLines(t){return t.id==="queen"?QUEEN_LINES:t.id==="king"?KING_LINES:null;}
 // What it says as it takes each gift back.
 const GIFT_TAUNT={
  keen:   "Your Keen Edge. You saw every gap in their guard. Who do you think showed you where to look?",
@@ -5789,7 +5826,13 @@ const DLG_CPS=42;   // letters a second as the text types out
 function dlgLine(){return B&&B.dlg&&B.dlg.lines[B.dlg.i];}
 function dlgShown(){const l=dlgLine();return l?Math.min(l.text.length,Math.floor((performance.now()-B.dlg.t0)/1000*DLG_CPS)):0;}
 // Lines can carry a mood ("fear" or "anger") that changes the box's colours and shakes the portrait.
-function startDialogue(lines,onDone,endLabel){B.dlg={lines,i:-1,t0:0,onDone,endLabel};dlgNext();}
+function startDialogue(lines,onDone,endLabel,who){B.dlg={lines,i:-1,t0:0,onDone,endLabel,who:who||"thing"};dlgNext();}
+// Speakers: the name over the text, the sprite their portrait is cut from (x, y, w, h on the sprite), and the box colours.
+const DLG_WHO={
+ thing:{name:"THE THING UNDER THE HILL",frame:"#8a5fc4",inner:"#3a2a52",bg:"#140c1e",text:"#e9e5d9",voice:"low"},
+ queen:{name:"THE GHOST QUEEN",spr:()=>B.phaseNum===2?"ghost_queen2":"ghost_queen",crop:[2,0,12,10],frame:"#5fa8c4",inner:"#14283f",bg:"#0a1622",text:"#d8ecf4",voice:"ghost"},
+ king:{name:"THE HOLLOW KING",spr:()=>"king",crop:[2,0,12,11],frame:"#c9a24a",inner:"#4a3410",bg:"#160f06",text:"#f2e6c8",voice:"king"}
+};
 function dlgNext(){
   const D=B.dlg;D.i++;
   const l=D.lines[D.i];
@@ -5817,10 +5860,10 @@ function wrapText(text,maxW){
 function drawDialogue(vw,vh){
   const l=dlgLine();if(!l)return;
   const n=dlgShown(),done=n>=l.text.length;
-  if(!done&&n>(B.dlg.blip||0)+2){B.dlg.blip=n;playTalkBlip();}
+  if(!done&&n>(B.dlg.blip||0)+2){B.dlg.blip=n;playTalkBlip((DLG_WHO[B.dlg.who]||{}).voice);}
   const pad=Math.round(Math.min(vw,vh)*.022),bw=Math.min(vw-pad*2,880),bh=Math.max(118,vh*.27);
-  const bx=(vw-bw)/2,by=vh-bh-pad,mood=l.mood||"";
-  const frame=mood==="anger"?"#c94a3c":mood==="fear"?"#5fa8c4":"#8a5fc4",inner=mood==="anger"?"#4a1713":mood==="fear"?"#14283f":"#3a2a52";
+  const bx=(vw-bw)/2,by=vh-bh-pad,mood=l.mood||"",W=DLG_WHO[B.dlg.who]||DLG_WHO.thing;
+  const frame=mood==="anger"?"#c94a3c":mood==="fear"?"#5fa8c4":W.frame,inner=mood==="anger"?"#4a1713":mood==="fear"?"#14283f":W.inner;
   const shk=RM?0:mood==="anger"?2.2:mood==="fear"?.7:0;
   ctx.save();
   if(mood==="anger"&&!RM&&dlgShown()<l.text.length)ctx.translate((Math.random()-.5)*4,(Math.random()-.5)*4);
@@ -5830,9 +5873,9 @@ function drawDialogue(vw,vh){
   ctx.fillStyle=inner;ctx.fillRect(bx+u*2,by+u*2,bw-u*4,u);ctx.fillRect(bx+u*2,by+bh-u*3,bw-u*4,u);ctx.fillRect(bx+u*2,by+u*2,u,bh-u*4);ctx.fillRect(bx+bw-u*3,by+u*2,u,bh-u*4);
   // the portrait: its head, cut from the sprite it is wearing
   const ph=bh-u*8,pw=Math.round(ph*1.1),px=bx+u*4,py=by+u*4;
-  ctx.fillStyle="#140c1e";ctx.fillRect(px,py,pw,ph);
-  const img=B.mon.t.thing===2?null:SPR[MONSPR[B.mon.t.id]]||SPR.thing;
-  if(B.mon.t.thing===2){
+  ctx.fillStyle=W.bg;ctx.fillRect(px,py,pw,ph);
+  const spk=W.spr?W.spr():B.mon.t.thing===2?null:MONSPR[B.mon.t.id]||"thing",img=spk?SPR[spk]:null,cr=W.crop||[2,1,12,10];
+  if(!W.spr&&B.mon.t.thing===2){
     // its second shape is painted, not a sprite: paint just the head, mouth moving as it talks
     const MX=HZ.N/2,r=14,hy=40,talk=!done&&!RM?Math.abs(Math.sin(tclock*13)):0;
     const jaw=mood==="anger"?.75+.25*talk:mood==="fear"?.08+.12*talk:.22+.4*talk;
@@ -5848,18 +5891,18 @@ function drawDialogue(vw,vh){
     const bob=RM?0:Math.round(Math.sin(tclock*2.4)*u*.6+(Math.random()-.5)*u*shk);
     ctx.imageSmoothingEnabled=false;
     const jx=shk?Math.round((Math.random()-.5)*u*shk):0;
-    ctx.drawImage(img,2,1,12,10,px+u+jx,py+u+bob,pw-u*2,ph-u*2);
+    ctx.drawImage(img,cr[0],cr[1],cr[2],cr[3],px+u+jx,py+u+bob,pw-u*2,ph-u*2);
     if(mood==="anger"){ctx.fillStyle=`rgba(200,30,30,${(.18+.1*Math.sin(tclock*12)).toFixed(3)})`;ctx.fillRect(px,py,pw,ph);}
     if(mood==="fear"){ctx.fillStyle="rgba(40,90,140,.18)";ctx.fillRect(px,py,pw,ph);}
-    if(!done&&!RM&&Math.floor(tclock*9)%2){ctx.globalAlpha=.25;ctx.drawImage(SPRW[MONSPR[B.mon.t.id]]||SPRW.thing,2,1,12,10,px+u,py+u+bob,pw-u*2,ph-u*2);ctx.globalAlpha=1;}
+    if(!done&&!RM&&Math.floor(tclock*9)%2){ctx.globalAlpha=.25;ctx.drawImage(SPRW[spk],cr[0],cr[1],cr[2],cr[3],px+u,py+u+bob,pw-u*2,ph-u*2);ctx.globalAlpha=1;}
   }
   ctx.strokeStyle=frame;ctx.lineWidth=u;ctx.strokeRect(px-u/2,py-u/2,pw+u,ph+u);
   // name, text, and the effect line
   const tx=px+pw+u*6,tw=bx+bw-u*6-tx,fs=Math.max(12,Math.min(19,bh*.13));
   ctx.textAlign="left";ctx.textBaseline="top";
   ctx.font=`700 ${Math.round(fs*.8)}px "IBM Plex Mono", monospace`;ctx.fillStyle="#f0c060";
-  ctx.fillText("THE THING UNDER THE HILL",tx,py+u*2);
-  ctx.font=`${mood==="anger"?700:500} ${Math.round(fs)}px "IBM Plex Mono", monospace`;ctx.fillStyle=mood==="anger"?"#ff8f80":mood==="fear"?"#a8c8e0":"#e9e5d9";
+  ctx.fillText(W.name,tx,py+u*2);
+  ctx.font=`${mood==="anger"?700:500} ${Math.round(fs)}px "IBM Plex Mono", monospace`;ctx.fillStyle=mood==="anger"?"#ff8f80":mood==="fear"?"#a8c8e0":W.text;
   const rows=wrapText(l.text,tw);let shown=n,y=py+u*2+fs*1.5;
   for(const r of rows){if(shown<=0)break;ctx.fillText(r.slice(0,shown),tx,y);shown-=r.length+1;y+=fs*1.3;}
   if(done&&l.sub){
@@ -5874,10 +5917,11 @@ function drawDialogue(vw,vh){
   ctx.restore();
 }
 // Its voice: a low murmur under each few letters.
-function playTalkBlip(){
+function playTalkBlip(voice){
   if(!AUDIO_OK)return;ensureAudio();if(!actx)return;
   const t=actx.currentTime+.005,o=actx.createOscillator(),g=actx.createGain();
-  o.type="triangle";o.frequency.setValueAtTime(70+Math.random()*30,t);o.frequency.exponentialRampToValueAtTime(48,t+.09);
+  const f0=voice==="ghost"?380+Math.random()*90:voice==="king"?120+Math.random()*30:70+Math.random()*30;
+  o.type=voice==="ghost"?"sine":"triangle";o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f0*(voice==="ghost"?1.15:.68),t+.09);
   g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(.18,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+.11);
   o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+.13);
 }

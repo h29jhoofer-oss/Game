@@ -61,8 +61,12 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await page.waitForTimeout(1600);
   check('then the fight begins', await ev('S.mode==="battle"&&B&&B.mon.t.id==="queen"'));
   check('every candle is out', await ev('TOMB.lit===0&&TOMB.candles.every(c=>c.out>=0)'));
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(1500);
+  check('she speaks first, in her own dialogue box', await ev('!!B.dlg&&B.dlg.who==="queen"&&/Who is it/.test(dlgLine().text)'));
   await shot('queen_battle');
+  check('the fight waits until she has finished', await ev('B.phase!=="choose"'));
+  await ev('for(let i=0;i<20&&B&&B.dlg;i++){dlgAdvance();dlgAdvance();}');
+  check('then it is your move', await ev('!B.dlg&&B.phase==="choose"'));
   check('there is no running from her', await ev('tryFlee(),S.mode==="battle"'));
 
   // Her special attacks.
@@ -84,6 +88,8 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await ev('B.pStat.skip=0;B.pStat.skipMsg=null;B.pStat.chill=0;');
   await ev('hurtMon(Math.ceil(B.mhp-B.mmax*.45),false)');
   check('at half health she turns to phase 2', await ev('B.phaseNum===2'));
+  check('and remembers how she died', await ev('!!B.dlg&&/remember/.test(dlgLine().text)'));
+  await ev('for(let i=0;i<20&&B&&B.dlg;i++){dlgAdvance();dlgAdvance();}');
   const tal = await ev(`(()=>{const h=S.hp;B.phase="anim";seq=[];ghostTalons(B.mon.t.sps2.find(s=>s.hits));return h})()`);
   await page.waitForTimeout(1600);
   check('Spectral Talons rake three times, then it is your turn', await ev(`S.hp<${tal}&&B.phase==="choose"`), await ev('B.phase'));
@@ -91,6 +97,9 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
 
   // Put her to rest.
   await ev('B.mhp=0;winBattle()');
+  await page.waitForTimeout(300);
+  check('beaten, she has a last word', await ev('!!B.dlg&&/quiet/.test(dlgLine().text)&&S.mode==="battle"'));
+  await ev('for(let i=0;i<20&&B&&B.dlg;i++){dlgAdvance();dlgAdvance();}');
   await page.waitForTimeout(1800);
   check('beating her ends the fight', await ev('S.mode==="map"&&!mons.some(m=>m.t.id==="queen")&&!S.over'));
   check('her coffer and grave gold are left behind', await ev(`items.some(i=>i.name==="The Queen's Coffer")&&items.some(i=>i.kind==="gold")`));

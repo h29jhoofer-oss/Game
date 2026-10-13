@@ -27,7 +27,14 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('floor 10 has no stair before the King falls', (await ev('S.sx')) === -1);
   await ev('mons=mons.filter(m=>m.t.id==="king")');   // no stray knight wandering into the next check
   await duelBoss('king');
-  await ev('B.mhp=0;winBattle()'); await step(2);
+  check('the King speaks before the fight', await ev('!!B.dlg&&B.dlg.who==="king"&&B.phase!=="choose"'));
+  await ev('for(let i=0;i<20&&B&&B.dlg;i++){dlgAdvance();dlgAdvance();}');
+  await ev('hurtMon(Math.ceil(B.mhp-B.mmax*.45),false)');
+  check('at half health he draws his sword, and says so', await ev('B.phaseNum===2&&!!B.dlg&&/blade/.test(B.dlg.lines[1].text)'));
+  await ev('for(let i=0;i<20&&B&&B.dlg;i++){dlgAdvance();dlgAdvance();}');
+  await ev('B.mhp=0;winBattle()'); await step(.5);
+  check('beaten, he warns you about what is below', await ev('!!B.dlg&&/still down there/.test(B.dlg.lines.at(-1).text)'));
+  await ev('for(let i=0;i<20&&B&&B.dlg;i++){dlgAdvance();dlgAdvance();}'); await step(2);
   check('killing the King keeps the run going', await ev('!S.over&&S.mode==="map"&&S.kingSlain'));
   check('a stair opens where he fell', await ev('S.sx>=0&&map[S.sy][S.sx]===STAIRS'));
   await ev('S.px=S.sx;S.py=S.sy;S.fx=S.px+.5;S.fy=S.py+.5;descend()');
