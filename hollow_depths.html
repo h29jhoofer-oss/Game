@@ -954,7 +954,7 @@ function cssv(n){
 /* ============================ map gen ============================ */
 function newFloor(depth){
   unlockLore(depth);
-  map=[];seen=new Set();visible=new Set();mons=[];items=[];traps=[];SHR=null;S.atShrine=false;DL=new Map();DOORS=[];LEVERS=[];CHASMS=[];CHM=new Map();PK=null;PROPS=new Map();TOMB=null;THRONE=null;
+  map=[];seen=new Set();visible=new Set();mons=[];items=[];traps=[];SHR=null;S.atShrine=false;DL=new Map();DOORS=[];LEVERS=[];CHASMS=[];CHM=new Map();PK=null;PROPS=new Map();TOMB=null;THRONE=null;VAULT=null;if(S)S.vaultKeys=0;
   for(let y=0;y<H;y++){map.push(new Array(W).fill(WALL));}
   const rooms=[];
   const tries=depth===10||depth===20?14:22;   // the two boss floors are smaller
@@ -986,6 +986,8 @@ function newFloor(depth){
   }else{S.sx=-1;S.sy=-1;}
 
   placeTomb(depth,rooms);
+  if(depth===8&&!S.chase&&!VAULT&&(S.vaultTry=(S.vaultTry||0)+1)<25)return newFloor(depth);   // no rock left for the vault: lay the floor out again
+  S.vaultTry=0;
   placeThrone(depth,rooms);
   if(depth===10&&!S.chase&&!THRONE&&(S.throneTry=(S.throneTry||0)+1)<20)return newFloor(depth);   // no good spot for the throne: lay the floor out again
   S.throneTry=0;
@@ -1310,6 +1312,141 @@ function playTorchWhoosh(pan){
   if(actx.createStereoPanner){const p=actx.createStereoPanner();p.pan.value=pan?.5:-.5;g.connect(p);out=p;}
   src.connect(f);f.connect(g);out.connect(actx.destination);src.start(t);
 }
+/* ============================ the vault door (floor 8) ============================ */
+// The Queen lies in a vault of her own, cut into the rock off a short passage and sealed by an iron door with
+// twelve locks. The two troll guards outside carry six keys each; Rook can pick the locks instead.
+let VAULT=null;
+const VAULT_W=8,VAULT_H=7,VAULT_LOCK0=.25,VAULT_LOCK_GAP=.17,VAULT_PICK_GAP=.3,VAULT_SWING=.9;
+function inVault(x,y){
+  const V=VAULT;if(!V)return false;
+  if(x>=V.room.x-1&&x<=V.room.x+V.room.w&&y>=V.room.y-1&&y<=V.room.y+V.room.h)return true;
+  return V.cor.some(([cx,cy])=>Math.abs(cx-x)+Math.abs(cy-y)<=1);
+}
+// Find solid rock big enough for the vault, with a straight passage from the middle of one side out to open floor.
+function carveVault(){
+  VAULT=null;
+  const w=VAULT_W,h=VAULT_H,cands=[];
+  const solid=(i,j)=>i>=0&&j>=0&&i<W&&j<H&&map[j][i]===WALL;
+  for(let y=1;y+h<H-1;y++)for(let x=1;x+w<W-1;x++){
+    let ok=true;
+    for(let j=y-1;j<=y+h&&ok;j++)for(let i=x-1;i<=x+w&&ok;i++)if(map[j][i]!==WALL)ok=false;
+    if(!ok)continue;
+    const cx=x+Math.floor(w/2),cy=y+Math.floor(h/2);
+    for(const [dx,dy,sx,sy] of [[-1,0,x-1,cy],[1,0,x+w,cy],[0,-1,cx,y-1],[0,1,cx,y+h]]){
+      const cor=[];let px=sx,py=sy,hit=false;
+      for(let k=0;k<9;k++){
+        if(px<1||py<1||px>=W-1||py>=H-1)break;
+        if(map[py][px]!==WALL){hit=true;break;}
+        cor.push([px,py]);px+=dx;py+=dy;
+      }
+      if(!hit||cor.length<2||map[py][px]!==FLOOR)continue;
+      // the passage runs through solid rock: nothing open beside it until it meets the floor
+      if(cor.slice(0,-1).some(([a,b])=>dx?!solid(a,b-1)||!solid(a,b+1):!solid(a-1,b)||!solid(a+1,b)))continue;
+      if(Math.abs(px-S.px)+Math.abs(py-S.py)<8)continue;
+      cands.push({x,y,cx,cy,cor,jx:px,jy:py});
+    }
+  }
+  if(!cands.length)return null;
+  const c=pick(cands);
+  for(let j=c.y;j<c.y+h;j++)for(let i=c.x;i<c.x+w;i++)map[j][i]=FLOOR;
+  for(const [a,b] of c.cor)map[b][a]=FLOOR;
+  const [dx0,dy0]=c.cor[0];
+  map[dy0][dx0]=WALL;                                   // the door, set in the vault's own wall
+  const room={x:c.x,y:c.y,w,h,cx:c.cx,cy:c.cy};
+  VAULT={x:dx0,y:dy0,room,cor:c.cor,jx:c.jx,jy:c.jy,stage:"shut",t:0,locks:0,swing:0,hinted:false};
+  return room;
+}
+// The guards wait just outside, where the passage meets the floor.
+function postVaultGuards(){
+  const V=VAULT,seenT=new Set([V.jx+","+V.jy]),q=[[V.jx,V.jy]],spots=[];
+  while(q.length&&spots.length<12){
+    const [x,y]=q.shift();
+    if(!inVault(x,y)&&!(x===S.px&&y===S.py)&&!(x===S.sx&&y===S.sy)&&map[y][x]===FLOOR)spots.push({x,y});
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+dx,ny=y+dy,k=nx+","+ny;
+      if(seenT.has(k)||map[ny][nx]===WALL)continue;seenT.add(k);q.push([nx,ny]);
+    }
+  }
+  let n=0;
+  for(const p of spots){
+    if(n>=2)break;
+    if(mons.some(m=>Math.abs(m.x-p.x)+Math.abs(m.y-p.y)<1))continue;
+    spawnMon("troll",p.x,p.y);const m=mons[mons.length-1];m.guard=true;m.keys=6;n++;
+  }
+  S.vaultKeys=12-6*n;                                   // if a guard could not be posted, its keys are simply yours
+}
+function vaultKeysFrom(m){
+  if(!m.keys||!VAULT||VAULT.stage!=="shut")return;
+  S.vaultKeys=Math.min(12,(S.vaultKeys||0)+m.keys);m.keys=0;
+  playItemSound();
+  say(`The troll guard had a ring of six iron keys on its belt. You take them. (${S.vaultKeys} of 12)`,"c-item");
+  if(S.vaultKeys>=12)say("That is all twelve. The vault door can be opened.","c-lvl");
+}
+function vaultBusy(){return !!VAULT&&VAULT.stage==="opening";}
+function vaultTry(){
+  const V=VAULT;if(!V||V.stage!=="shut"||S.mode!=="map"||S.over)return;
+  const keys=S.vaultKeys||0,rook=CHAR().id==="rook";
+  if(keys>=12||rook){
+    V.stage="opening";V.t=0;V.pick=keys<12;held.clear();S.dashT=0;
+    say(V.pick?"Rook kneels at the first lock with a bent pin, then the second, then the third. He has opened worse.":"You fit the keys one by one, and turn them.","c-lvl");
+    return;
+  }
+  say(keys?`Twelve locks. Your ${keys} keys turn ${keys} of them; the other troll guard has the rest.`:"Twelve locks, and none of them turning. The troll guards outside must carry the keys.","c-cold");
+}
+function vaultTick(dt){
+  const V=VAULT;
+  if(V.stage==="shut"){
+    if(!V.hinted&&Math.max(Math.abs(S.px-V.x),Math.abs(S.py-V.y))<=1){V.hinted=true;
+      say("A vault door, banded with iron, with twelve locks set into it in rows. Walk into it, or press E, to try it.","c-lvl");}
+    return;
+  }
+  if(V.stage!=="opening")return;
+  V.t+=dt;
+  const gap=V.pick?VAULT_PICK_GAP:VAULT_LOCK_GAP;
+  while(V.locks<12&&V.t>=VAULT_LOCK0+V.locks*gap){V.locks++;playLockClunk(V.locks);}
+  const t1=VAULT_LOCK0+12*gap+.3;
+  if(V.t>=t1&&!V.ground){V.ground=true;playLidGrind();quake(6);}
+  V.swing=Math.max(0,Math.min(1,(V.t-t1)/VAULT_SWING));
+  if(V.t>=t1+VAULT_SWING){
+    V.stage="open";map[V.y][V.x]=FLOOR;quake(8);
+    say("The vault door swings inward. Cold air comes out of the dark, and candlelight.","c-lvl");
+    dirty=true;computeFOV();refresh();
+  }
+}
+function drawVaultDoor(R){
+  const V=VAULT,u=cell/16,key=V.x+","+V.y;
+  if(!seen.has(key))return;
+  const al=visible.has(key)?Math.max(.55,bright(V.x,V.y,R)):.2;
+  const ox=(V.x-cam.x)*cell,oy=(V.y-cam.y)*cell;
+  const P=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(Math.round(ox+x*u),Math.round(oy+y*u),Math.ceil(w*u),Math.ceil(h*u));};
+  ctx.globalAlpha=al;
+  P(0,0,16,16,"#171c26");                                // the stone frame
+  P(1,1,14,15,"#06080d");                                // the dark beyond
+  const sw=V.stage==="open"?1:V.swing,dw=Math.max(2,Math.round(14*(1-sw*.82)));   // the door folds back on its hinge
+  const D=(x,y,w,h,c)=>P(1+x*dw/14,y,Math.max(.5,w*dw/14),h,c);
+  D(0,1,14,15,"#2b3243");D(0,1,14,1,"#566173");D(0,1,1,15,"#39414f");D(13,1,1,15,"#171c26");
+  D(0,5,14,1,"#39414f");D(0,10,14,1,"#39414f");        // iron bands
+  for(const [rx,ry] of [[1,2],[12,2],[1,14],[12,14],[1,6],[12,6],[1,11],[12,11]])D(rx,ry,1,1,"#8e9aad");   // rivets
+  // twelve locks, four to a row
+  for(let i=0;i<12;i++){
+    const cx=2+(i%4)*3,cy=2+Math.floor(i/4)*4+(i>=8?1:0),open=i<V.locks||V.stage==="open";
+    D(cx,cy+1,2,2,open?"#f0c060":"#7a5418");D(cx,cy+1,2,1,open?"#fff27a":"#a8762c");
+    if(!open)D(cx+1,cy+2,1,1,"#0b0d12");
+  }
+  ctx.globalAlpha=1;
+}
+function playLockClunk(i){
+  if(!AUDIO_OK)return;ensureAudio();if(!actx)return;
+  const t=actx.currentTime+.005,o=actx.createOscillator(),g=actx.createGain();
+  o.type="square";o.frequency.setValueAtTime(260+(i%4)*30,t);o.frequency.exponentialRampToValueAtTime(90,t+.06);
+  g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(.12,t+.004);g.gain.exponentialRampToValueAtTime(.0001,t+.09);
+  const f=actx.createBiquadFilter();f.type="lowpass";f.frequency.value=1400;
+  o.connect(f);f.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+.1);
+  const len=.05,b=actx.createBuffer(1,Math.floor(actx.sampleRate*len),actx.sampleRate),d=b.getChannelData(0);
+  for(let k=0;k<d.length;k++)d[k]=(Math.random()*2-1)*Math.pow(1-k/d.length,3);
+  const n=actx.createBufferSource();n.buffer=b;const hp=actx.createBiquadFilter();hp.type="highpass";hp.frequency.value=2500;
+  const ng=actx.createGain();ng.gain.value=.18;n.connect(hp);hp.connect(ng);ng.connect(actx.destination);n.start(t);
+}
 /* ============================ the Queen's tomb (floor 8) ============================ */
 // Behind the vault's door, troll guards keep watch over a stone tomb ringed with candles. Step inside the
 // ring and the candles go out one by one, the lid grinds aside and the Queen's ghost rises to fight you.
@@ -1329,7 +1466,8 @@ function placeTomb(depth,rooms){
       if(map[y][x]!==FLOOR)return false;
     }
     return true;};
-  const mid=rooms.slice(1,-1).sort((a,b)=>fits(b)-fits(a)||b.w*b.h-a.w*a.h);
+  const vr=carveVault();                         // her own vault behind a twelve-lock door, if the rock has room for one
+  const mid=vr?[vr]:rooms.slice(1,-1).sort((a,b)=>fits(b)-fits(a)||b.w*b.h-a.w*a.h);
   for(const r of mid){
     if(!fits(r)){
       // widen the room around its middle until the ring has a walkway round it (only ever adds floor)
@@ -1363,6 +1501,7 @@ function placeTomb(depth,rooms){
       return{x,y,sticks,out:-1};
     });
     TOMB={x:tx,y:ty,room:r,tiles,candles,stage:"lit",t:0,lit:1,lid:0,rise:0,seen:false};
+    if(VAULT){postVaultGuards();return;}
     // two troll guards stand watch on the walkway, on either side of the ring
     const walk=[];
     for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++)
@@ -1371,7 +1510,9 @@ function placeTomb(depth,rooms){
     for(const g of [side,other]){const p=g.length?pick(g):pick(walk);if(p&&!mons.some(m=>m.x===p.x&&m.y===p.y)){spawnMon("troll",p.x,p.y);mons[mons.length-1].guard=true;}}
     return;
   }
+  if(VAULT){map[VAULT.y][VAULT.x]=FLOOR;VAULT=null;}
 }
+
 function tombBusy(){return !!TOMB&&TOMB.stage==="wake";}
 function tombTick(dt){
   const T=TOMB;
@@ -1701,6 +1842,7 @@ function interact(){
     const pr=PROPS.get((S.px+dx)+","+(S.py+dy));
     if(pr&&pr.paper){takePaper(pr);return;}
   }
+  if(VAULT&&VAULT.stage==="shut"&&Math.max(Math.abs(S.px-VAULT.x),Math.abs(S.py-VAULT.y))<=1){vaultTry();return;}
   say("There is nothing here to use. Shrines and levers answer to E.","c-cold");
 }
 function objHint(){
@@ -1739,7 +1881,7 @@ function shrineHint(){
 function openSpot(avoidStart){
   for(let t=0;t<600;t++){
     const x=rnd(W),y=rnd(H);
-    if(map[y][x]!==FLOOR||inTombRing(x,y)||THRONE&&x===THRONE.x&&y>THRONE.y&&y<=THRONE.y+2)continue;
+    if(map[y][x]!==FLOOR||inTombRing(x,y)||inVault(x,y)||THRONE&&x===THRONE.x&&y>THRONE.y&&y<=THRONE.y+2)continue;
     if(avoidStart&&dist(x,y,S.px,S.py)<7)continue;
     if(mons.some(m=>m.x===x&&m.y===y))continue;
     if(items.some(i=>i.x===x&&i.y===y))continue;
@@ -2290,7 +2432,7 @@ function kill(m){
   if(m.t.boss){quake(15);ring(m.x,m.y,"rgba(240,192,96,.95)",7,1.3);}
   mons=mons.filter(o=>o!==m);
   say(`The ${m.t.name} falls.`,"c-good");
-  gainXp(m.t.xp);feastHeal();
+  gainXp(m.t.xp);feastHeal();vaultKeysFrom(m);
   if(m.t.boss){bossDown(m);return;}
   if(Math.random()<.22){
     const it=Object.assign(rollItem(S.depth),{x:m.x,y:m.y});
@@ -2700,7 +2842,7 @@ function tryMove(dx,dy){
   const tgt=mons.find(m=>m.x===nx&&m.y===ny);
   if(tgt){computeFOV();startBattle(tgt);return;}
   if(map[ny][nx]===CHASM){startChasm(nx,ny,dx,dy);return;}
-  if(map[ny][nx]===WALL){const o=DL.get(nx+","+ny),pr=PROPS.get(nx+","+ny);if(o)bumpObject(o);else if(pr&&pr.paper)takePaper(pr);return;}
+  if(map[ny][nx]===WALL){const o=DL.get(nx+","+ny),pr=PROPS.get(nx+","+ny);if(o)bumpObject(o);else if(pr&&pr.paper)takePaper(pr);else if(VAULT&&nx===VAULT.x&&ny===VAULT.y)vaultTry();return;}
 
   // If exhausted, movement is blocked — forced to rest this turn
   if(S.exhausted){
@@ -3520,9 +3662,10 @@ function tick(dt){
   if(S&&S.jump){S.jump.t+=dt;if(S.jump.t>=JUMP_LEN){S.jump=null;die("thing");}}
   if(S&&TOMB)tombTick(dt);
   if(S&&THRONE)throneTick(dt);
+  if(S&&VAULT)vaultTick(dt);
   if(S&&S.pendLvl>0&&!levelOpen){
     S.lvlWait=Math.max(0,(S.lvlWait||0)-dt);
-    if(S.lvlWait<=0&&!S.over&&S.mode==="map"&&!tombBusy()&&!throneBusy()&&!packOpen&&!shrineOpen&&!codexOpen&&!editorOpen&&descentT<=0)openLevelUp();
+    if(S.lvlWait<=0&&!S.over&&S.mode==="map"&&!tombBusy()&&!throneBusy()&&!vaultBusy()&&!packOpen&&!shrineOpen&&!codexOpen&&!editorOpen&&descentT<=0)openLevelUp();
   }
   torch=RM?1:1+Math.sin(tclock*7.1)*.045+Math.sin(tclock*17.7)*.022;
   const k=RM?1:1-Math.pow(1e-5,dt);
@@ -3674,7 +3817,7 @@ function render(){
       const t=map[y][x];
       const part=SHR&&SHR.parts.get(key),prop=PROPS.get(key);
       const chz=CHM.get(key);
-      const name=part||prop||(TOMB&&TOMB.tiles.has(key))||(THRONE&&key===THRONE.x+","+THRONE.y)?"floor"+(((x*7+y*13)%3+3)%3):t===WALL?"wall":t===STAIRS?"stairs":t===CHASM?"chasm"
+      const name=part||prop||(TOMB&&TOMB.tiles.has(key))||(THRONE&&key===THRONE.x+","+THRONE.y)||(VAULT&&key===VAULT.x+","+VAULT.y)?"floor"+(((x*7+y*13)%3+3)%3):t===WALL?"wall":t===STAIRS?"stairs":t===CHASM?"chasm"
         :chz&&chz.bridged?(chz.ori==="h"?"bridge_h":"bridge_v"):"floor"+(((x*7+y*13)%3+3)%3);
       const b=vis?bright(x,y,R):0;
       const al=vis?(.26+.74*b):.17;
@@ -3728,6 +3871,7 @@ function render(){
   }
   if(TOMB){drawTomb(R);drawCandles(R);}
   if(THRONE){drawThrone(R);drawThroneTorches(R);}
+  if(VAULT)drawVaultDoor(R);
   if(S.sx>=0&&visible.has(S.sx+","+S.sy)){
     const p=.5+.5*Math.sin(tclock*3.1);
     ctx.globalCompositeOperation="lighter";
@@ -5250,7 +5394,7 @@ function winBattle(){
     else if(!boss&&Math.random()<.24){
       items.push(Object.assign(rollItem(S.depth),{x:m.x,y:m.y}));
     }
-    gainXp(m.t.xp);
+    gainXp(m.t.xp);vaultKeysFrom(m);
     feastHeal();
     endBattle();
     if(boss){bossDown(m);return;}
@@ -5863,7 +6007,7 @@ const FLAVOR={
  5:"Rows of cots under grey sheets, still made. Some of the sheets are not flat. The air smells of vinegar and a struck match.",
  6:"Every mirror on this floor hangs straight. None of them show the hall.",
  7:"Something huge shifts in the dark ahead, and does not come closer yet.",
- 8:"A door with twelve locks, and none of them turning. Cade doesn't try it.",
+ 8:"A door with twelve locks, and none of them turning. Somebody on this floor has the keys.",
  9:"Armour that hasn't rusted in three years falls into step somewhere behind him.",
  10:"The stair ends in a vaulted hall. The crown at the far end is still lit."
 };
@@ -7330,7 +7474,7 @@ for(const k in KEYS){
 const held=new Set();
 let freeClock=0,freeBumpT=0,freeWindedT=0;
 function freeMode(){return !!S;}   // every hero walks freely now; the grid code stays for "." (rest) and as a fallback
-function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
+function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
 // What a box of half-width r centred on (cx,cy) overlaps: {wall:true}, {chasm:[x,y]}, or null.
 function boxHit(cx,cy,r){
   const e=1e-6;
@@ -7448,6 +7592,7 @@ function freeStep(dx,dy,dt,speed){
     const o=DL.get(ax+","+ay),pr=PROPS.get(ax+","+ay);
     if(o&&freeBumpT<=0){freeBumpT=.7;bumpObject(o);if(S.mode!=="map"||S.over)return;}
     else if(pr&&pr.paper&&freeBumpT<=0){freeBumpT=.7;takePaper(pr);return;}
+    else if(VAULT&&ax===VAULT.x&&ay===VAULT.y&&VAULT.stage==="shut"&&freeBumpT<=0){freeBumpT=.9;vaultTry();if(vaultBusy())return;}
     // ...if it is open, slide toward our tile's centre line so doorways and corridors are easy to enter.
     if(ax>=0&&ay>=0&&ax<W&&ay<H&&map[ay][ax]!==WALL){
       if(axis===0){const c=Math.floor(S.fy)+.5;S.fy+=Math.sign(c-S.fy)*Math.min(Math.abs(c-S.fy),sp);}
@@ -7537,7 +7682,7 @@ function placeChasms(depth,rooms){
   const near=(x,y)=>{for(const o of DL.values())if(Math.abs(o.x-x)<=2&&Math.abs(o.y-y)<=2)return true;return false;};
   const cand=[];
   for(let y=2;y<H-2;y++)for(let x=2;x<W-2;x++){
-    if(map[y][x]!==FLOOR||inRoom(x,y)||near(x,y))continue;
+    if(map[y][x]!==FLOOR||inRoom(x,y)||near(x,y)||inVault(x,y))continue;
     const f=(a,b)=>map[b][a]===FLOOR;
     const h=f(x-1,y)&&f(x+1,y)&&map[y-1][x]===WALL&&map[y+1][x]===WALL;
     const v=f(x,y-1)&&f(x,y+1)&&map[y][x-1]===WALL&&map[y][x+1]===WALL;
@@ -7930,7 +8075,7 @@ window.addEventListener("keydown",ev=>{
   }
   if(descentT>0&&S&&!S.over&&S.mode==="map"){ev.preventDefault();return;}   // still on the way down
   if(S&&S.jump){ev.preventDefault();return;}                                // being caught
-  if(tombBusy()||throneBusy()){ev.preventDefault();return;}                               // the Queen is waking
+  if(tombBusy()||throneBusy()||vaultBusy()){ev.preventDefault();return;}                               // the Queen is waking
   if(B&&B.dlg){if(k===" "||k==="Enter"||k==="e"||k==="E"||k==="z"||k==="Z")dlgAdvance();ev.preventDefault();return;}   // it is talking
   if(levelOpen){
     const cards=[...document.querySelectorAll("#card .lvlcard")];
