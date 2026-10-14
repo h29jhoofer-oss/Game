@@ -54,6 +54,8 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await shot('queen_told');
   await page.keyboard.press('Space'); await page.keyboard.press('Space');
   check('and she answers', await ev('B.dlg&&!dlgLine().who&&/trolls/.test(dlgLine().text)'));
+  check('she warns you off the blessings from the shadows', await ev('queenEnd().some(l=>/blessings/.test(l.text)&&/shadows/.test(l.text))&&queenEnd().some(l=>/Do not trust them/.test(l.text))'));
+  check('...and knows if you carry one', await ev('(()=>{const p=S.perks;S.perks={};const a=queenEnd().some(l=>l.gift);S.perks={[Object.keys(PERKS)[0]]:1};const b=queenEnd().some(l=>l.gift);S.perks=p;return !a&&b;})()'));
   check('no page errors', errors.length === 0, errors);
 
   let pass = 0;

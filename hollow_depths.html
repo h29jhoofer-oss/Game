@@ -5554,7 +5554,7 @@ function winBattle(){
   }
   if(bossLines(B.mon.t)&&!B.lastWord){
     B.lastWord=true;B.phase="anim";drawMoves();
-    const end=B.mon.t.id==="queen"&&S.guardsSorry?QUEEN_GUARDS.concat(QUEEN_LINES.end):bossLines(B.mon.t).end;
+    const end=B.mon.t.id==="queen"?queenEnd():bossLines(B.mon.t).end;
     startDialogue(end,()=>winBattle(),B.mon.t.id==="queen"?"Rest":"Continue",B.mon.t.id);
     return;
   }
@@ -6251,8 +6251,18 @@ const QUEEN_LINES={
          {text:"GET OUT OF MY TOMB.",mood:"anger",act:()=>{quake(14);playGhostWail(1.2);}}],
  end:[{text:"...Oh. It is so quiet."},
       {text:"If you see him, do not tell him I waited. Let him wonder."},
+      {text:"Wait. Listen to me. When you go down, there will be blessings. They come from the shadows."},
+      {mood:"fear",text:"Gifts that ask nothing. Do not trust them. Nothing down there gives without counting."},
+      {gift:true,mood:"fear",text:"...You already carry one. I can feel it on you, like cold on the back of the neck."},
+      {text:"I cannot say more. It hears its name. It always hears its name."},
       {text:"Let them all rest now. Let me rest."}]
 };
+// Her last words: what you pass on from her guards, then her warning. The line about the gifts you carry only
+// comes if you have taken one.
+function queenEnd(){
+  const owned=Object.keys(S.perks||{}).some(id=>PERKS[id]);
+  return (S.guardsSorry?QUEEN_GUARDS:[]).concat(QUEEN_LINES.end.filter(l=>!l.gift||owned));
+}
 // If her trolls are dead, you pass on what they said.
 const QUEEN_GUARDS=[
  {who:"hero",text:"Your guards. Grub and Mog. They asked me to tell you they were sorry. They couldn't keep your door."},
