@@ -9233,7 +9233,7 @@ function start(id){
   S=newState(typeof id==="string"?id:"cade");
   $("log").innerHTML="";
   newFloor(1);
-  if(PLAYTEST&&S.char==="cade")playtestKit();
+  if(PLAYTEST&&(S.char==="cade"||S.char==="monk"))playtestKit();
   resize();refresh();
   say(CHAR().intro||"You climb down into the first floor. The torch holds.","c-cold");
 }
@@ -9257,9 +9257,10 @@ function playtestKit(){
   S.rings=[RINGS.find(r=>r.id==="storm"),RINGS.find(r=>r.id==="mending")];
   for(const r of S.rings)applyMods(r.mods,1);
   S.hp=S.maxhp;
-  S.pack=[cons("heal",2),cons("heal",2),cons("heal",2),cons("heal",1),cons("heal",1),
-    cons("flame",2),cons("bolt",2),cons("ice",2),cons("dark",2)];
-  say("Playtest kit: the best gear, scrolls and healing. Press N to skip a floor and gain a level.","c-cold");
+  S.pack=[cons("heal",2),cons("heal",2),cons("heal",2),cons("heal",1),cons("heal",1)].concat(CHAR().noMagic
+    ? [cons("heal",2),cons("heal",2),cons("heal",1)]            // no scrolls for a man who will not read them
+    : [cons("flame",2),cons("bolt",2),cons("ice",2),cons("dark",2)]);
+  say(CHAR().noMagic?"Playtest kit: the best gear and healing. Press N to skip a floor and gain a level.":"Playtest kit: the best gear, scrolls and healing. Press N to skip a floor and gain a level.","c-cold");
 }
 function title(){
   S.over=true;   // keys and buttons must not play the demo floor behind the title card
