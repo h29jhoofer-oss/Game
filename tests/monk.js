@@ -111,7 +111,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await ready();
   const bare = await ev('(()=>{B.pStat.ward=0;const r0=Math.random;Math.random=()=>.5;const h=S.hp;enemyStrike(null,1,false);Math.random=r0;return h-S.hp;})()');
   check('and the blow is halved', taken[1] === 1 && taken[0] > 0 && taken[0] <= Math.ceil(bare / 2), [taken, bare]);
-  await ready(); await ev('S.hp=500;window._sw=0;const o=pSwing;pSwing=f=>{window._sw++;o(f);};chooseMove("litany")'); await step(1.5);
+  await ready(); await ev('S.hp=500;window._sw=0;const o=pSwing;pSwing=f=>{window._sw++;o(f);};window._r0=Math.random;Math.random=()=>.5;chooseMove("litany")'); await step(1.5); await ev('Math.random=window._r0');
   check('Litany is three blows, and each knits his wounds', await ev('window._sw===3&&(document.getElementById("log").textContent.match(/knits your wounds/g)||[]).length>=3'), await ev('window._sw'));
 
   check('no page errors', errors.length === 0, errors);
