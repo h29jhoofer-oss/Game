@@ -3177,6 +3177,7 @@ function descend(){
   held.clear();
   S.depth++;
   newFloor(S.depth);
+  S.tamNext=S.depth;S.tamWait=0;
   if(S.flameout)say("Your torch is dead. The dark here is crowded with things.","c-hit");
   const fl=flavorFor(S.depth);
   if(fl)say(fl,"c-cold");
@@ -4199,6 +4200,7 @@ function tick(dt){
   shake=Math.max(0,shake-dt*38);
   if(descentT>0){descentT=Math.max(0,descentT-dt);fade=Math.min(1,descentT/DESCENT_FADE);}
   else fade=Math.max(0,fade-dt*2.4);
+  tamFloorTick(dt);
 
   if(S.mode==="chasm"&&PK)courseTick(dt);
   if(B&&B.hitstop>0){B.hitstop=Math.max(0,B.hitstop-dt);}
@@ -5809,6 +5811,101 @@ const WISP_TALK={
 };
 const WISP_TOPICS=["who","king","queen","fall"];
 function wispLines(id){const T=WISP_TALK[id],c=CHAR().id;return(T.all||[]).concat(T[c]||T.cade);}
+// Tam speaks up a moment after you reach each floor. On the castle floors (1-10) he remembers it with you,
+// so what he says depends on who you are. Below the throne he has never been, and he is frightened.
+// "all" lines come first, then the hero's own.
+const T_=t=>({text:t}),HS=t=>({who:"hero",text:t});
+const TAM_FLOOR={
+ 1:{all:[T_("This was the servants' stair. I ran up it a thousand times. It never used to go down this far.")],
+  cade:[HS("You used to slide down that rail."),T_("Only when you weren't looking. You were always looking.")],
+  rook:[T_("You came in this way once, didn't you? Through the coal hatch. I saw your boots and didn't tell.")],
+  doctor:[T_("You counted these steps, going up for leeches. Two hundred and twelve. I counted too.")],
+  mage:[T_("Your tower was at the top of these. I can still smell the ink.")],
+  monk:[T_("Do you pray on stairs, Brother? I always did. Please don't let me fall, please don't let me fall.")]},
+ 2:{all:[T_("The guards slept here. They let me sit by the fire, as long as I didn't talk.")],
+  cade:[HS("That's my bunk. Third from the door."),T_("Still made. You were always tidy.")],
+  rook:[T_("Don't take the boots. They're still waiting for their feet.")],
+  doctor:[T_("You stitched a guard up on that table. He bit a wooden spoon the whole time.")],
+  mage:[T_("You warded these doors once. Look, the goblins still won't touch the north one.")],
+  monk:[T_("Some of them used to climb up to your chapel on rest days. Not many. Some.")]},
+ 3:{all:[T_("These ones swore to stand at the King's door forever. They meant it more than he did.")],
+  cade:[T_("You wanted to be one of them. Remember? I'm glad you weren't.")],
+  rook:[T_("They caught you here once, and let you go. The tall one said you looked hungry.")],
+  doctor:[T_("They wouldn't let you in to see him, at the end. Orders, they said. They were crying.")],
+  mage:[T_("They saluted you every morning. You never saluted back. I always wondered if you noticed.")],
+  monk:[T_("Bless them, Brother. Someone should. They're still waiting for somebody to tell them they can rest.")]},
+ 4:{all:[T_("The King hired these ones and never paid them. There was a list of names. The notary kept it.")],
+  cade:[T_("One of them taught you dice. He cheated. You knew, and you let him.")],
+  rook:[T_("You owe some of them money too, I think."),HS("Everyone down here owes somebody.")],
+  doctor:[T_("You treated their captain for nothing. He's the big one, there. He doesn't remember.")],
+  mage:[T_("They were frightened of you. They'd go the long way round the yard when you walked by.")],
+  monk:[T_("They wanted their pay before they wanted anything else. Even prayers. Especially prayers.")]},
+ 5:{all:[T_("This was the sick wing. I brought the candles in every night, and carried the bad smells out.")],
+  cade:[T_("You weren't meant to come in here. Nobody was. It was catching, they said. It wasn't.")],
+  rook:[T_("There's nothing to steal in here. Only bottles. None of them worked.")],
+  doctor:[T_("Your slate's still by the door. You never finished the last line."),HS("...I will.")],
+  mage:[T_("This is where they told him your spells hadn't worked either. I was holding the lamp.")],
+  monk:[T_("You sat with the sick ones in here, after the doctors had gone. I remember your voice. It was the only quiet thing.")]},
+ 6:{all:[T_("Don't look in the mirrors too long. They don't show you. They show what you swapped away.")],
+  cade:[T_("In that one you're still up on the wall. You look younger. You look like you haven't run yet.")],
+  rook:[T_("There's one that only shows hands. Everybody's hands. Yours are in it, reaching.")],
+  doctor:[T_("That one shows the Queen's chart. Every page. Don't read it. Please.")],
+  mage:[T_("One of them shows your tower on fire. It never burned. I think it's showing you what you wanted.")],
+  monk:[T_("They don't show you at all, Brother. Not one of them. I think that's a good sign.")]},
+ 7:{all:[T_("The King's beasts. I fed the little ones. The big ones fed themselves.")],
+  cade:[T_("You brought me here at the summer fair and bought me a honey cake. I ate it too fast and was sick.")],
+  rook:[T_("That's the cage! The one that bit you! I laughed so hard I fell in the trough.")],
+  doctor:[T_("They got sick first. You wrote it down. Nobody listened to you.")],
+  mage:[T_("You kept a raven from here. It talked. It said very rude things about the steward.")],
+  monk:[T_("Saint Francis talked to the animals, didn't he? You could try. I don't think these ones will answer.")]},
+ 8:{all:[T_("This is her floor. Somebody is still lighting the candles down here.",),{text:"It isn't me.",mood:"fear"}],
+  cade:[T_("The trolls were kind to me. They'd lift me up to reach the high wicks.")],
+  rook:[T_("Twelve locks. You could do it. Don't tell me how.")],
+  doctor:[T_("You'll want to go in. You always wanted to go in, even when they told you no.")],
+  mage:[T_("She asked for you at the end, did you know? Not for magic. Just for company.")],
+  monk:[T_("Pray before you open it, Brother. Not for her. For you.")]},
+ 9:{all:[T_("The King's own knights. They were told to keep everyone out. Later, that meant him too.")],
+  cade:[T_("Sir Hollis gave you your first sword, didn't he? He's down here. Somewhere in all that armour.")],
+  rook:[T_("They'll know you. They never forgot a face. Or a purse.")],
+  doctor:[T_("They wouldn't let you treat them. A knight doesn't bleed, they said. They did.")],
+  mage:[T_("They hated magic. They used to spit after you'd passed. Sorry.")],
+  monk:[T_("They'll call you a coward, for not carrying a sword. Let them.")]},
+ 10:{all:[T_("He's at the end of the hall. He's been sitting there three years. I don't think he blinks.")],
+  cade:[T_("He'll know your name. He knew everyone's name. That's the worst part.")],
+  rook:[T_("That crown is real gold. Don't."),HS("I wasn't going to."),T_("You were.")],
+  doctor:[T_("He'll ask you if she's getting better. Don't answer him. Please.")],
+  mage:[T_("He'll want you to fix it. He still thinks you can.")],
+  monk:[T_("He'll laugh at you, Brother. He laughs at everything now. It isn't a real laugh.")]},
+ 11:{all:[T_("I never came below the throne. Nobody did. Stay close. Closer, please.")]},
+ 12:{all:[T_("The walls are breathing. Can you hear it? Don't tell me. I don't want to know.")]},
+ 13:{all:[T_("There are roots in the stone now. They're all growing up. Towards everything we used to be.")]},
+ 14:{all:[T_("Something keeps saying my name down here. It's using my mum's voice."),{text:"It isn't her.",mood:"fear"}],
+  monk:[HS("Then do not answer it, Tam. Answer me.")],cade:[HS("Stay by me. Don't listen.")],
+  rook:[HS("Then don't answer. Never answer a voice you can't see.")],doctor:[HS("Voices are a symptom. Ignore the symptom.")],
+  mage:[HS("Words can't hurt you if you don't give them back.")]},
+ 15:{all:[T_("The monsters down here have its eyes. Red, like coals. It's looking at us through them.")]},
+ 16:{all:[T_("Am I getting smaller? Is it darker, or am I dimmer?")],
+  cade:[HS("You're fine, Tam. You're the brightest thing down here.")],rook:[HS("You're brighter than the torch, kid.")],
+  doctor:[HS("Your colour is good. Steady. Keep breathing, or whatever it is you do.")],
+  mage:[HS("Here. Take a little of mine."),T_("...Oh. That's warm.")],monk:[HS("You are as bright as you need to be. That is always enough.")]},
+ 17:{all:[T_("There's writing on the wall. A fair hand. It's the notary's."),T_("It just says, over and over: 'and the rest'.")]},
+ 18:{all:[T_("It's warm down here. It shouldn't be warm."),{text:"Things that are warm are alive.",mood:"fear"}]},
+ 19:{all:[T_("One more floor. I can feel it under us, like a heartbeat in the stone. It knows we're coming.")]},
+ 20:{all:[T_("There's a stair going up. Up! Do you see it?"),{text:"...Why is it so quiet?",mood:"fear"}]}
+};
+function tamFloorLines(d){const F=TAM_FLOOR[d];if(!F)return null;return(F.all||[]).concat(F[CHAR().id]||[]);}
+let tamChatter=true;       // tests turn this off when they need a floor to themselves
+const TAM_DELAY=.8;        // seconds after arriving before he speaks
+function tamFloorTick(dt){
+  if(!tamChatter||!S||!S.tamNext)return;
+  if(S.tamNext!==S.depth){S.tamNext=0;return;}   // that floor is gone: he only talks about where you are
+  if(S.mode!=="map"||S.chase||freePaused()||!activeWisp())return;
+  S.tamWait=(S.tamWait||0)+dt;
+  if(S.tamWait<TAM_DELAY)return;
+  const d=S.tamNext;S.tamNext=0;S.tamWait=0;
+  const L=tamFloorLines(d);
+  if(L&&L.length)startDialogue(L,null,"Go on","wisp");
+}
 let wispTalkOpen=false,wispPicked=false;
 // The questions are dealt as a hand of cards, like the level-up draft: lift one to read it, play it to ask.
 const WISP_CARD={who:{spr:"wisp_0",blurb:"The little light at your shoulder. Who was he, before?"},
@@ -9388,6 +9485,7 @@ function start(id){
   S=newState(typeof id==="string"?id:"cade");
   $("log").innerHTML="";
   newFloor(1);
+  S.tamNext=1;S.tamWait=0;
   if(PLAYTEST&&(S.char==="cade"||S.char==="monk"))playtestKit();
   resize();refresh();
   say(CHAR().intro||"You climb down into the first floor. The torch holds.","c-cold");
@@ -9396,7 +9494,7 @@ function start(id){
 // with the best gear, a stack of top-tier scrolls and healing, so the deep floors can be tried quickly.
 function playtestSkip(){
   S.depth++;if(S.depth>10)S.kingSlain=true;
-  newFloor(S.depth);
+  newFloor(S.depth);S.tamNext=S.depth;S.tamWait=0;
   say(`Playtest: skipped to floor ${S.depth}.`,"c-cold");
   if(S.lvl<XPTABLE.length-1){S.xp=Math.max(S.xp,XPTABLE[S.lvl]-1);gainXp(1);S.lvlWait=.2;}
   refresh();

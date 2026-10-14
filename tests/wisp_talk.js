@@ -40,6 +40,27 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await ev('start("cade");S.pack=S.pack.filter(it=>!isWisp(it))');
   check('without a wisp, H does nothing', await (async () => { await page.keyboard.press('h'); return ev('!wispTalkOpen'); })());
 
+  // Tam's word on every floor
+  check('he has something to say on all twenty floors', await ev('Array.from({length:20},(_,i)=>i+1).every(d=>(TAM_FLOOR[d].all||[]).length>0)'));
+  const per = [];
+  for (let d = 1; d <= 10; d++) { const v = []; for (const h of heroes) { await ev(`start("${h}")`); v.push(await ev(`tamFloorLines(${d}).map(l=>l.text).join("|")`)); } per.push(new Set(v).size); }
+  check('on the castle floors (1-10) each hero hears him differently', per.every(n => n === 5), per);
+  const step = async secs => { for (let i = 0; i < Math.ceil(secs / 0.05); i++) await ev('tick(0.05)'); };
+  await ev('start("doctor");descentT=0;fade=0;');
+  check('not the instant you arrive', await ev('!MAPD.dlg'));
+  await step(1.2);
+  check('a moment after reaching floor 1, he speaks', await ev('!!MAPD.dlg&&MAPD.dlg.who==="wisp"&&/leeches/.test(MAPD.dlg.lines.map(l=>l.text).join(" "))'));
+  for (let i = 0; i < 20 && await ev('!!MAPD.dlg'); i++) await ev('dlgAdvance();dlgAdvance()');
+  await step(2);
+  check('only once per floor', await ev('!MAPD.dlg'));
+  await ev('S.px=S.sx;S.py=S.sy;S.fx=S.px+.5;S.fy=S.py+.5;descend()');
+  await step(0.3);
+  check('he waits until the way down is over', await ev('!MAPD.dlg'));
+  for (let i = 0; i < 200 && !await ev('!!MAPD.dlg'); i++) await step(.1);
+  check('and on the next floor he speaks again', await ev('S.depth===2&&!!MAPD.dlg&&/stitched/.test(MAPD.dlg.lines.map(l=>l.text).join(" "))'), await ev('[S.depth,descentT,!!MAPD.dlg]'));
+  await ev('start("cade");descentT=0;fade=0;S.pack=S.pack.filter(it=>!isWisp(it))'); await step(2);
+  check('no wisp, no remarks', await ev('!MAPD.dlg'));
+
   check('rooted monsters have red eyes', await ev('ROOTED_BASES.every(b=>{const r=SPR[b+"_r"];if(!r.eyes||!r.eyes.length)return false;const d=r.getContext("2d").getImageData(0,0,r.width,r.height).data;return r.eyes.every(([x,y])=>{const i=(y*r.width+x)*4;return d[i]>240&&d[i+1]<100;});})'));
   check('their walk and attack frames too', await ev('["orc_atk_r","troll_walk_2_r","wraith_walk_1_r","troll_s3_r"].every(k=>SPR[k].eyes&&SPR[k].eyes.length===2)'));
   check('no page errors', errors.length === 0, errors);
