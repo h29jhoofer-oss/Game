@@ -954,7 +954,7 @@ function cssv(n){
 /* ============================ map gen ============================ */
 function newFloor(depth){
   unlockLore(depth);
-  map=[];seen=new Set();visible=new Set();mons=[];items=[];traps=[];SHR=null;S.atShrine=false;DL=new Map();DOORS=[];LEVERS=[];CHASMS=[];CHM=new Map();PK=null;PROPS=new Map();TOMB=null;THRONE=null;VAULT=null;MAPD.dlg=null;if(S)S.guardsSorry=false;if(S)S.vaultKeys=0;
+  map=[];seen=new Set();visible=new Set();mons=[];items=[];traps=[];SHR=null;S.atShrine=false;DL=new Map();DOORS=[];LEVERS=[];CHASMS=[];CHM=new Map();PK=null;PROPS=new Map();TOMB=null;THRONE=null;VAULT=null;ARRIVE=null;MAPD.dlg=null;if(S)S.guardsSorry=false;if(S)S.vaultKeys=0;
   for(let y=0;y<H;y++){map.push(new Array(W).fill(WALL));}
   const rooms=[];
   const tries=depth===10||depth===20?14:22;   // the two boss floors are smaller
@@ -979,8 +979,8 @@ function newFloor(depth){
   S.wisp=null;                 // the follower snaps back to you on a new floor
   S.fx=S.px+.5;S.fy=S.py+.5;   // continuous position (tile units, centre) for free movement
 
-  // Floor 10's stair only opens once the King falls; floor 20 has no stair down at all.
-  if(depth!==10&&depth<20){
+  // Floor 10's stair only opens once the King falls. Floor 20's goes up and out, or would.
+  if(depth!==10){
     const last=rooms[rooms.length-1];
     S.sx=last.cx;S.sy=last.cy;map[S.sy][S.sx]=STAIRS;
   }else{S.sx=-1;S.sy=-1;}
@@ -1001,9 +1001,7 @@ function newFloor(depth){
     spawnMon("king",r.cx,r.cy);seatKing(mons[mons.length-1]);   // he waits on his throne
     for(let i=0;i<4;i++)placeMon(depth,"knight");
   }else if(depth>=20){
-    const r=rooms[rooms.length-1];
-    spawnMon("thing",r.cx,r.cy);
-    for(let i=0;i<4;i++)placeMon(depth,pick(["knight","wraith"]));
+    for(let i=0;i<4;i++)placeMon(depth,pick(["knight","wraith"]));   // it is not here yet: it comes when you try to leave
   }else{
     let n=depth>10?7+rnd(3):3+depth+rnd(2);
     if(S&&S.flameout)n*=2; // dark floors teem with monsters
@@ -2630,7 +2628,7 @@ function resolveParry(result){
   const blocked=result==="mistimed";
   B.lunge=1;B.lungeSide=-1;
   blog(blocked?"Mistimed! You only half-block it.":`You miss the opening. The ${m.t.name}'s blow lands.`,"c-hit");
-  queue(.2,()=>enemyStrike(sp,blocked?.6:1,blocked));
+  queue(strikeDelay(),()=>enemyStrike(sp,blocked?.6:1,blocked));
   queue(.5,()=>{
     refresh();
     if(S.hp<=0){loseBattle(B.mon.t.name);return;}
@@ -2643,7 +2641,7 @@ function autoParry(sp){
   B.pStat.parry=true;                 // hold the parry pose
   B.lunge=1;B.lungeSide=-1;
   blog(sp?`The ${m.t.name} uses ${sp.name}!`:`The ${m.t.name} attacks.`);
-  queue(.2,()=>{
+  queue(strikeDelay(),()=>{
     const L=B.layout;
     if(L){
       const mx=(L.px+L.ex)/2,my=(L.py+L.ey)/2-L.psz*.25;
@@ -3182,6 +3180,7 @@ let descentT=0,descentLen=0;
 const DESCENT_FADE=.6;   // the last part of the blackout fades back in
 function descend(){
   if(S.mode!=="map"||S.px!==S.sx||S.py!==S.sy||descentT>0||S.chase)return;
+  if(S.depth>=20){thingArrives();return;}            // you try to leave, and it comes to see you off
   playGateSound();
   descentLen=descentT=gateLen();
   held.clear();
@@ -3192,9 +3191,96 @@ function descend(){
   if(fl)say(fl,"c-cold");
   if(S.depth===10)say("Something enormous stirs at the far end of the hall.","c-lvl");
   if(S.depth===11)say("The stair under the throne goes on, far further than any stair should.","c-lvl");
-  if(S.depth===20)say("The roots all run one way here. Something at the end of them is waiting.","c-lvl");
+  if(S.depth===20)say("The roots all run one way here, towards a stair going up. It is very quiet.","c-lvl");
   if(S.depth===5)bumpStat("alembic");
   refresh();
+}
+
+// Floor 20: you set foot on the stair out, and it comes walking out of the dark to talk terms. Slowly, trailing
+// thin smoke, all the way up to you. Then the offer, your answer, and the fight.
+let ARRIVE=null;
+const ARRIVE_SPEED=1.5,ARRIVE_FROM=9;
+const THING_DEAL=[
+ {text:"Ah. Leaving already? Please, don't let me keep you. Well. Let me keep you a little."},
+ {text:"I have been watching you climb down. All twenty floors. Very impressive. Truly. I don't say that to everyone. I say it to most people."},
+ {text:"I'll be brief, because I value your time. Your time is, in a sense, what we are here to discuss."},
+ {text:"That stair goes up, and out. Daylight. Grass. A bed with no one in it but you. I can let you walk up it tonight."},
+ {text:"In exchange, a small consideration. Your soul. Standard terms. You will hardly notice it is gone. Nobody ever does."},
+ {text:"The King signed. The Queen was signed for. Everyone signs, in the end. It is a very good deal. It is the only deal."},
+ {who:"hero",text:"No."},
+ {text:"...Sorry? The acoustics down here are terrible."},
+ {who:"hero",text:"I said no. I'm not signing anything of yours."},
+ {mood:"anger",text:"I see. That is... disappointing. I did try to do this politely."},
+ {mood:"anger",text:"Very well. No contract, then. I will simply take it off your body.",act:()=>{quake(12);playRoarSound();}}
+];
+function arriveBusy(){return !!ARRIVE&&ARRIVE.stage!=="done";}
+function thingArrives(){
+  if(ARRIVE)return;
+  const D=distFrom(S.px,S.py);
+  // somewhere back in the dark, about nine steps away along the way you came
+  let best=null,bs=1e9;
+  for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){
+    const d=D[x+y*W];if(d<4||map[y][x]!==FLOOR)continue;
+    const sc=Math.abs(d-ARRIVE_FROM)+(mons.some(m=>m.x===x&&m.y===y)?50:0);
+    if(sc<bs){bs=sc;best=[x,y];}
+  }
+  if(!best)for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]])if(!best&&map[S.py+dy][S.px+dx]===FLOOR)best=[S.px+dx,S.py+dy];
+  if(!best)return;
+  // his path in: always one step closer, until he is next to you
+  const path=[best];let [x,y]=best;
+  while(D[x+y*W]>1){
+    let nb=null;
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const v=D[x+dx+(y+dy)*W];if(v>=0&&v<D[x+y*W]&&!nb)nb=[x+dx,y+dy];}
+    if(!nb)break;[x,y]=nb;path.push(nb);
+  }
+  ARRIVE={stage:"walk",x:best[0],y:best[1],path,leg:1,t:0,puffT:0,stepT:0,puffs:[],walk:0};
+  held.clear();S.dashT=0;
+  for(const m of mons)m.cool=Math.max(m.cool||0,3);
+  say("You set your foot on the first step. Behind you, unhurried footsteps, and the smell of smoke.","c-hit");
+  playGrowl();
+}
+function arriveTick(dt){
+  const A=ARRIVE;
+  for(const p of A.puffs)p.t+=dt;
+  A.puffs=A.puffs.filter(p=>p.t<p.life);
+  if(A.stage!=="walk")return;
+  A.t+=dt;
+  let move=ARRIVE_SPEED*dt;
+  while(move>0&&A.leg<A.path.length){
+    const [tx,ty]=A.path[A.leg],dx=tx-A.x,dy=ty-A.y,d=Math.hypot(dx,dy);
+    if(d<=move){A.x=tx;A.y=ty;A.leg++;move-=d;}else{A.x+=dx/d*move;A.y+=dy/d*move;move=0;}
+  }
+  A.walk+=dt*ARRIVE_SPEED;
+  A.puffT-=dt;
+  if(A.puffT<=0){A.puffT=.06;A.puffs.push({x:A.x+.5+(Math.random()-.5)*.25,y:A.y+.55+(Math.random()-.5)*.15,t:0,life:1.6+Math.random()*.8,drift:(Math.random()-.5)*.3});}
+  A.stepT-=dt;if(A.stepT<=0){A.stepT=.75;playMonsterStep(4);}
+  computeFOV();
+  if(A.leg>=A.path.length){
+    A.stage="talk";
+    startDialogue(THING_DEAL,()=>{
+      A.stage="done";
+      spawnMon("thing",Math.round(A.x),Math.round(A.y));
+      const m=mons[mons.length-1];m.seenYou=true;held.clear();computeFOV();startBattle(m);
+    },"Fight","thing");
+  }
+}
+// Him, walking in his robe, and the thin smoke he leaves behind: a few art pixels each, rising and thinning.
+function drawArrive(R){
+  const A=ARRIVE,u=cell/16;
+  for(const p of A.puffs){
+    // each wisp is a thin curl a pixel wide, swaying as it rises
+    const k=p.t/p.life,sway=RM?0:Math.sin(p.t*3+p.drift*20)*.06;
+    const px=Math.round((p.x+p.drift*k+sway-cam.x)*16)*u,py=Math.round((p.y-k*1.1-cam.y)*16)*u;
+    ctx.globalAlpha=(1-k)*.8;ctx.fillStyle=k<.35?"#b9c2cf":"#8e9aad";
+    ctx.fillRect(px,py,u,u*(k<.5?3:2));
+    ctx.globalAlpha=(1-k)*.45;ctx.fillRect(px+u*(sway>0?1:-1),py-u*(k<.5?1:2),u,u*2);
+  }
+  ctx.globalAlpha=1;
+  if(A.stage==="done")return;
+  const tx=Math.round(A.x),ty=Math.round(A.y);
+  if(!visible.has(tx+","+ty))return;
+  const b=Math.max(.6,bright(tx,ty,R)),bob=RM?0:Math.sin(A.walk*Math.PI*1.4)*.03;
+  blit("thing",A.x,A.y+bob,b,0,1+(RM?0:Math.sin(tclock*1.8)*.02),1);
 }
 
 /* ============================ end states ============================ */
@@ -3958,6 +4044,7 @@ function tick(dt){
   if(S&&TOMB)tombTick(dt);
   if(S&&THRONE)throneTick(dt);
   if(S&&VAULT)vaultTick(dt);
+  if(S&&ARRIVE)arriveTick(dt);
   if(S&&S.pendLvl>0&&!levelOpen){
     S.lvlWait=Math.max(0,(S.lvlWait||0)-dt);
     if(S.lvlWait<=0&&!S.over&&S.mode==="map"&&!tombBusy()&&!throneBusy()&&!vaultBusy()&&!packOpen&&!shrineOpen&&!codexOpen&&!editorOpen&&descentT<=0)openLevelUp();
@@ -4008,7 +4095,7 @@ function tick(dt){
     if(B.darkFlash>0)B.darkFlash=Math.max(0,B.darkFlash-dt*2.2);
     if(B.iceFlash>0)B.iceFlash=Math.max(0,B.iceFlash-dt*2.6);
     if(B.intro>0)B.intro=Math.max(0,B.intro-dt*3.2);
-    if(B.lunge>0)B.lunge=Math.max(0,B.lunge-dt*3.4);
+    if(B.lunge>0)B.lunge=Math.max(0,B.lunge-dt*(B.lungeSide<0&&B.mon.t.thing?THING_LUNGE:3.4));
     if(B.orbs&&B.orbs.length){
       for(const o of B.orbs){
         o.t+=dt;
@@ -4239,6 +4326,7 @@ function render(){
   if(S.chase)drawChase();
   if(TOMB)drawTombGhost();
   if(THRONE&&THRONE.knight)drawKnight(R);
+  if(ARRIVE)drawArrive(R);
 
   if(!S.over||S.hp>0){
     const o=off(S);
@@ -5308,13 +5396,16 @@ function enemyTurn(){
   if(!self&&Math.random()<parryChance(!!m.t.boss)){startParryWindow(sp);return;}
   B.lunge=1;B.lungeSide=-1;
   blog(sp?`The ${m.t.name} uses ${sp.name}!`:`The ${m.t.name} attacks.`);
-  queue(.2,()=>enemyStrike(sp,1,false));
+  queue(strikeDelay(),()=>enemyStrike(sp,1,false));
   queue(.5,()=>{
     refresh();
     if(S.hp<=0){loseBattle(B.mon.t.name);return;}
     endRound();
   });
 }
+// The Thing takes its time over a blow: its strike plays out slower, and lands later to match.
+const THING_LUNGE=1.9;
+function strikeDelay(){return B&&B.mon.t.thing?.2*3.4/THING_LUNGE:.2;}
 // The landing of one enemy attack. scale<1 means the player blocked part of it.
 function enemyStrike(sp,scale,blocked){
   const m=B.mon,L=B.layout;
@@ -6332,7 +6423,7 @@ Object.assign(FLAVOR,{
  17:"Writing scratched into the roots, in a fair notary's hand. Clause after clause.",
  18:"The dark here has weight. Cade can feel it settle on his shoulders.",
  19:"The roots begin to move when he is not looking at them.",
- 20:"The roots end in a hollow the size of a cathedral. In the middle of it, something wearing a shape."
+ 20:"The roots end in a hollow the size of a cathedral. At the far side of it, a stair goes up. Nothing else is here. Yet."
 });
 LORE.push(
  {id:"deep",  at:11,title:"Beneath the Throne",
@@ -6524,7 +6615,7 @@ function drawDialogue(vw,vh){
   // the portrait: its head, cut from the sprite it is wearing
   const ph=bh-u*8,pw=Math.round(ph*1.1),px=bx+u*4,py=by+u*4;
   ctx.fillStyle=W.bg;ctx.fillRect(px,py,pw,ph);
-  let spk=W.spr?W.spr():B.mon.t.thing===2?null:MONSPR[B.mon.t.id]||"thing";
+  let spk=W.spr?W.spr():!B?"thing":B.mon.t.thing===2?null:MONSPR[B.mon.t.id]||"thing";
   if(spk&&W.scarred&&l.mood==="fear"&&SPR[spk+"_s3"])spk+="_s3";
   const img=spk?SPR[spk]:null,cr=W.crop||[2,1,12,10];
   if(!W.spr&&B&&B.mon.t.thing===2){
@@ -6675,6 +6766,7 @@ function startChase(m){
   for(const d of DOORS){d.open=true;map[d.y][d.x]=FLOOR;}   // and the hill shakes every door open
   for(const l of LEVERS)l.on=true;
   S.chase=newChase(bx,by,CHASE_WAIT);S.chase.flash=1;
+  if(S.sx>=0&&map[S.sy][S.sx]===STAIRS)map[S.sy][S.sx]=FLOOR;
   placeWayUp(bx,by);
   // Its swelling hurls you a few steps along the way out, so it is always behind you, never in the way.
   const DE=distFrom(S.sx,S.sy);let hx=bx,hy=by;
@@ -7834,7 +7926,7 @@ function refresh(){
   const onStairs=S.mode==="map"&&S.px===S.sx&&S.py===S.sy;
   $("btnStairs").disabled=!onStairs||S.over;
   $("hint").innerHTML=onStairs
-    ? `Stairs down. Press <b>Enter</b> or tap Descend.`
+    ? (S.depth>=20?`A stair up, and out. Press <b>Enter</b> or tap Descend to leave.`:`Stairs down. Press <b>Enter</b> or tap Descend.`)
     : `Move with arrows or WASD. Walk into a creature to duel it. <b>I</b> pack, <b>E</b> pray at a shrine / pull a lever, <b>T</b> swap off-hand, <b>F</b> use lamp oil, <b>L</b> codex, <b>P</b> sprites, <b>Space</b> dashes, <b>.</b> waits. Stand still to regain stamina.`;
   refreshStamina();
   refreshFlame();
@@ -7862,7 +7954,7 @@ for(const k in KEYS){
 const held=new Set();
 let freeClock=0,freeBumpT=0,freeWindedT=0;
 function freeMode(){return !!S;}   // every hero walks freely now; the grid code stays for "." (rest) and as a fallback
-function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||!!MAPD.dlg||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
+function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()||!!MAPD.dlg||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
 // What a box of half-width r centred on (cx,cy) overlaps: {wall:true}, {chasm:[x,y]}, or null.
 function boxHit(cx,cy,r){
   const e=1e-6;
@@ -8465,7 +8557,7 @@ window.addEventListener("keydown",ev=>{
   if(descentT>0&&S&&!S.over&&S.mode==="map"){ev.preventDefault();return;}   // still on the way down
   if(S&&S.jump){ev.preventDefault();return;}                                // being caught
   if(MAPD.dlg){if(k===" "||k==="Enter"||k==="e"||k==="E"||k==="z"||k==="Z")dlgAdvance();ev.preventDefault();return;}   // someone on the map is talking
-  if(tombBusy()||throneBusy()||vaultBusy()||guardsBusy()){ev.preventDefault();return;}                               // the Queen is waking
+  if(tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()){ev.preventDefault();return;}                               // the Queen is waking
   if(B&&B.dlg){if(k===" "||k==="Enter"||k==="e"||k==="E"||k==="z"||k==="Z")dlgAdvance();ev.preventDefault();return;}   // it is talking
   if(levelOpen){
     const cards=[...document.querySelectorAll("#card .lvlcard")];

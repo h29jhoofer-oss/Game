@@ -18,7 +18,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const duelThing = async gifts => {
     await ev(`localStorage.clear();start("cade");S.hp=S.maxhp=400;S.gold=120;S.perks={};for(const g of ${JSON.stringify(gifts)})S.perks[g]=true;
       S.depth=20;newFloor(20);descentT=0;fade=0;S.pendLvl=0;
-      const m=mons.find(m=>m.t.id==="thing");S.px=m.x-1;S.py=m.y;S.fx=S.px+.5;S.fy=S.py+.5;`);
+      spawnMon("thing",S.sx,S.sy);const m=mons[mons.length-1];S.px=m.x-1;S.py=m.y;S.fx=S.px+.5;S.fy=S.py+.5;`);
   };
 
   await duelThing(['keen', 'troll', 'gilded', 'riposte', 'iron']);

@@ -48,8 +48,20 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
 
   // 3. Floor 20: the Thing, in two shapes.
   await fresh(20);
-  check('floor 20 has no stair and holds the Thing', await ev('S.sx===-1&&mons.some(m=>m.t.id==="thing")'));
-  await duelBoss('thing'); await step(1); await ev('for(let i=0;i<20&&B.dlg;i++){dlgAdvance();dlgAdvance();}');   // it speaks first (the dark gifts reveal)
+  check('floor 20 has a stair out, and no Thing yet', await ev('S.sx>=0&&map[S.sy][S.sx]===STAIRS&&!mons.some(m=>m.t.id==="thing")'));
+  await ev('mons=[];S.px=S.sx;S.py=S.sy;S.fx=S.px+.5;S.fy=S.py+.5;S.vx=S.px;S.vy=S.py;computeFOV();refresh();descend()');
+  check('trying to leave brings it walking in', await ev('ARRIVE&&ARRIVE.stage==="walk"&&freePaused()&&S.depth===20'));
+  const d0 = await ev('Math.hypot(ARRIVE.x-S.px,ARRIVE.y-S.py)');
+  await step(1.5);
+  check('slowly, trailing smoke', await ev(`ARRIVE.puffs.length>5&&Math.hypot(ARRIVE.x-S.px,ARRIVE.y-S.py)<${d0}&&Math.hypot(ARRIVE.x-S.px,ARRIVE.y-S.py)>${d0}-3`));
+  for (let i = 0; i < 300 && await ev('ARRIVE.stage==="walk"'); i++) await step(.1);
+  check('it comes right up to you and talks terms', await ev('ARRIVE.stage==="talk"&&!!MAPD.dlg&&Math.hypot(ARRIVE.x-S.px,ARRIVE.y-S.py)<=1.01&&/soul/i.test(THING_DEAL.map(l=>l.text).join(" "))'));
+  const said = [];
+  for (let i = 0; i < 30 && await ev('!!MAPD.dlg'); i++) { said.push(await ev('(dlgLine().who||"thing")+":"+dlgLine().text')); await ev('dlgAdvance();dlgAdvance()'); }
+  check('you turn it down, and it decides to take it anyway', said.some(t => t === 'hero:No.') && /take it off your body/.test(said[said.length - 1]), said);
+  await step(.3);
+  check('then the fight', await ev('S.mode==="battle"&&B&&B.mon.t.id==="thing"'));
+  await step(1); await ev('for(let i=0;i<20&&B.dlg;i++){dlgAdvance();dlgAdvance();}');   // it speaks first (the dark gifts reveal)
   check('phase 1', await ev('B.mon.t.id==="thing"&&B.phaseNum===1&&B.mmax===480'));
   await ev('B.mhp=0;winBattle()'); await step(2.4);
   check('when its cloak falls it taunts you', await ev('!!B.dlg&&/that easy/.test(dlgLine().text)&&B.phase!=="choose"'));
@@ -67,7 +79,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('standing still gets you caught', await ev('S.over&&!S.chase&&/falls/.test(document.querySelector("#card h3").textContent)'));
 
   // 4. Running for it: each stair up leads to a fresh floor with it climbing after you, all the way to floor 1.
-  await fresh(20);
+  await fresh(20); await ev('spawnMon("thing",S.sx,S.sy)');
   await duelBoss('thing'); await step(1); await ev('for(let i=0;i<20&&B.dlg;i++){dlgAdvance();dlgAdvance();}');   // it speaks first (the dark gifts reveal)
   await ev('B.mhp=0;winBattle()'); await step(2.4); await ev('for(let i=0;i<20&&B&&B.dlg;i++){dlgAdvance();dlgAdvance();}'); await ev('B.mhp=0;winBattle()'); await step(1.5); await ev('for(let i=0;i<20&&B&&B.dlg;i++){dlgAdvance();dlgAdvance();}'); await step(2.2);
   const run = async (stopDepth) => {
