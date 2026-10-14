@@ -1233,7 +1233,118 @@ function throneTick(dt){
   if(T.t>=RISE&&!T.rose){T.rose=true;quake(5);say("The Hollow King rises from his throne.","c-lvl");}
   if(T.t>=STEP1&&!T.s1){T.s1=true;m.seated=false;if(!(S.px===T.x&&S.py===T.y+1))m.y=T.y+1;m.fy=m.y+.5;playMonsterStep(8);quake(4);}
   if(T.t>=STEP2&&!T.s2){T.s2=true;if(m.y===T.y+1&&!(S.px===T.x&&S.py===T.y+2))m.y=T.y+2;m.fy=m.y+.5;playMonsterStep(7);quake(5);say("He comes down the steps to meet you.","c-lvl");}
-  if(T.t>=FIGHT){T.stage="done";m.seenYou=true;held.clear();computeFOV();startBattle(m);}
+  if(T.t>=STEP2+.5&&!T.kn){T.kn=true;if(!sendKnight(T))T.knDone=true;}
+  if(T.knight&&!T.knDone){knightTick(T,dt);return;}       // the fight waits until the King has dealt with him
+  if(T.t>=Math.max(FIGHT,T.knEndT!==undefined?T.knEndT+.7:0)){T.stage="done";m.seenYou=true;held.clear();computeFOV();startBattle(m);}
+}
+// The last of his knights comes running into the hall to beg the King's pardon. He does not get to finish.
+const KNIGHT_SPEED=5.5;
+const KNIGHT_LINES=[
+ {who:"knight",mood:"fear",text:"Your Majesty! Your Majesty, forgive me, please!"},
+ {who:"knight",mood:"fear",text:"We tried to keep it out. We held the bridge, and the gate, and the long stair. We held them for days."},
+ {who:"knight",mood:"fear",text:"Sir Aldous fell, and Brannoch, and the twins. I am the last. We worked so hard to keep it from reaching y-",cut:true},
+ {who:"king",mood:"anger",text:"Enough.",act:()=>throneBehead()},
+ {who:"king",text:"You were told to hold the door. You did not hold the door."},
+ {who:"king",text:"Knights. Polished, and sworn, and soft as candle wax. Every one of them."},
+ {who:"king",text:"Too weak to keep a door shut. Too weak even to die quietly."},
+ {who:"king",text:"...Now. You."}
+];
+function sendKnight(T){
+  const r=T.room,inR=(x,y)=>x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h;
+  // he kneels beside the King, at the foot of the steps
+  let kx=T.x+1;const ky=T.y+2;
+  if(!inR(kx,ky)||map[ky][kx]!==FLOOR)kx=T.x-1;
+  if(!inR(kx,ky)||map[ky][kx]!==FLOOR)return false;
+  for(const o of mons)if(o!==T.king&&o.x===kx&&o.y===ky){const p=openSpot(true);if(p){o.x=o.vx=p.x;o.y=o.vy=p.y;o.fx=p.x+.5;o.fy=p.y+.5;}}
+  // and comes in by whichever doorway is furthest down the hall
+  let best=null;
+  for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++){
+    if(map[y][x]!==FLOOR)continue;
+    for(const [dx,dy] of [[0,1],[-1,0],[1,0],[0,-1]]){
+      const ox=x+dx,oy=y+dy;
+      if(inR(ox,oy)||map[oy][ox]===WALL||map[oy][ox]===CHASM)continue;
+      if(!best||y>best.iy)best={ox,oy,ix:x,iy:y};
+    }
+  }
+  const path=best?[[best.ox,best.oy],[best.ix,best.iy],[kx,best.iy],[kx,ky]]:[[kx,r.y+r.h-1],[kx,ky]];
+  T.knight={x:path[0][0],y:path[0][1],path,leg:1,stage:"run",kx,ky,walk:0,stepT:0,t:0};
+  say("Running footsteps, behind you. A knight in dented plate comes into the hall at a stagger.","c-lvl");
+  return true;
+}
+function knightTick(T,dt){
+  const K=T.knight;K.t+=dt;
+  if(K.stage==="run"){
+    let move=KNIGHT_SPEED*dt;
+    while(move>0&&K.leg<K.path.length){
+      const [tx,ty]=K.path[K.leg],dx=tx-K.x,dy=ty-K.y,d=Math.hypot(dx,dy);
+      if(d<=move){K.x=tx;K.y=ty;K.leg++;move-=d;}else{K.x+=dx/d*move;K.y+=dy/d*move;if(dx)K.face=Math.sign(dx);move=0;}
+    }
+    K.walk+=dt*KNIGHT_SPEED*1.6;K.stepT-=dt;
+    if(K.stepT<=0){K.stepT=.18;playMonsterStep(3);}
+    if(K.leg>=K.path.length){K.stage="kneel";K.t=0;K.face=K.kx>T.x?-1:1;playMonsterStep(2);quake(2);}
+  }else if(K.stage==="kneel"&&K.t>=.55&&!K.spoke){
+    K.spoke=true;
+    startDialogue(KNIGHT_LINES,()=>{T.knDone=true;T.knEndT=T.t;},"Fight","knight");
+  }
+}
+// The King's blade: one stroke, and the knight's head leaves his shoulders.
+function throneBehead(){
+  const T=THRONE,K=T&&T.knight;if(!K)return;
+  K.stage="dead";K.dead=tclock;
+  burst(K.kx,K.ky,"#c94a3c",26,4.2);burst(K.kx,K.ky,"#8f2f28",14,2.6);
+  quake(16);playBladeCut();
+  say("The King's sword comes down. The knight's head leaves his shoulders before he can finish.","c-hit");
+}
+function playBladeCut(){
+  if(!AUDIO_OK)return;ensureAudio();if(!actx)return;
+  const t=actx.currentTime+.005,len=.32,b=actx.createBuffer(1,Math.floor(actx.sampleRate*len),actx.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++){const p=i/d.length;d[i]=(Math.random()*2-1)*Math.min(1,p*30)*Math.pow(1-p,2.2);}
+  const src=actx.createBufferSource();src.buffer=b;
+  const f=actx.createBiquadFilter();f.type="bandpass";f.Q.value=1.4;f.frequency.setValueAtTime(5200,t);f.frequency.exponentialRampToValueAtTime(700,t+.22);
+  const g=actx.createGain();g.gain.value=.5;src.connect(f);f.connect(g);g.connect(actx.destination);src.start(t);
+  const o=actx.createOscillator(),og=actx.createGain();o.type="sine";
+  o.frequency.setValueAtTime(140,t+.06);o.frequency.exponentialRampToValueAtTime(45,t+.3);
+  og.gain.setValueAtTime(.0001,t+.06);og.gain.linearRampToValueAtTime(.35,t+.07);og.gain.exponentialRampToValueAtTime(.0001,t+.34);
+  o.connect(og);og.connect(actx.destination);o.start(t+.06);o.stop(t+.36);
+}
+function drawKnight(R){
+  const T=THRONE,K=T.knight,img=SPR.knight;if(!img)return;
+  const key=Math.round(K.x)+","+Math.round(K.y);
+  if(!visible.has(key)&&!visible.has(K.kx+","+K.ky))return;
+  const b=Math.max(.6,bright(Math.round(K.x),Math.round(K.y),R)),u=cell/16;
+  const ox=(K.x-cam.x)*cell,oy=(K.y-cam.y)*cell,flip=K.face<0;
+  ctx.imageSmoothingEnabled=false;
+  if(K.stage==="run"){
+    const f=Math.floor(K.walk)%4,n=SPR["knight_walk_"+f]?"knight_walk_"+f:"knight";
+    blit(n,K.x,K.y-(f%2?1/16:0),b,0,1,1,flip);return;
+  }
+  if(K.stage==="kneel"){
+    const shake=RM?0:Math.sin(tclock*30)*.02;   // trembling
+    blit("knight",K.x+shake,K.y,b,0,.84,1.06,flip);return;
+  }
+  // dead: the blood pools, the body slumps over, the head arcs away and rolls
+  const e=tclock-K.dead,dir=K.kx>T.x?1:-1;
+  ctx.globalAlpha=b*.85;ctx.fillStyle="#5a0c10";
+  const pr=Math.min(1,e/1.6)*cell*.62;
+  ctx.beginPath();ctx.ellipse(ox+cell*.5+dir*cell*.15,oy+cell*.88,pr,pr*.42,0,0,Math.PI*2);ctx.fill();
+  const tip=Math.max(0,Math.min(1,(e-.35)/.35)),ease=tip*tip*(3-2*tip);
+  ctx.save();ctx.globalAlpha=b;
+  ctx.translate(ox+cell*.5,oy+cell);ctx.rotate(-dir*ease*.5);if(flip)ctx.scale(-1,1);   // he crumples forward
+  const bh=11*u*(.84-.34*ease);
+  ctx.drawImage(img,0,5,16,11,-cell*.53,-bh,cell*1.06,bh);         // the body, from the neck down
+  if(e<.6){ctx.fillStyle="#c94a3c";ctx.fillRect(-u*3,-bh-u,u*6,u*1.4);}   // the neck, red
+  ctx.restore();
+  const hf=Math.min(1,e/.6),hx=ox+cell*.5+dir*(hf*cell*1.4+Math.max(0,Math.min(1,(e-.6)/.4))*cell*.35);
+  const hy=oy+cell*(1-.84)+u*2-Math.sin(hf*Math.PI)*cell*.9+hf*cell*.62;
+  ctx.save();ctx.globalAlpha=b;ctx.translate(hx,hy);ctx.rotate(dir*Math.min(e,1)*Math.PI*3.2);if(flip)ctx.scale(-1,1);
+  ctx.drawImage(img,1,0,11,6,-u*5.5,-u*3,u*11,u*6);
+  ctx.restore();
+  if(e<.3){                                     // the stroke itself: a white arc through where his neck was
+    const a=1-e/.3;ctx.save();ctx.globalCompositeOperation="lighter";ctx.globalAlpha=a;
+    ctx.strokeStyle="#fff4e0";ctx.lineWidth=u*2;ctx.beginPath();
+    ctx.arc(ox+cell*.5-dir*cell*.6,oy+cell*.3,cell*.85,dir>0?-.9:Math.PI-.4,dir>0?.4:Math.PI+.9);ctx.stroke();ctx.restore();
+  }
+  ctx.globalAlpha=1;
 }
 // The torches' light reaches the floor round them.
 function throneLight(x,y){
@@ -4121,6 +4232,7 @@ function render(){
 
   if(S.chase)drawChase();
   if(TOMB)drawTombGhost();
+  if(THRONE&&THRONE.knight)drawKnight(R);
 
   if(!S.over||S.hp>0){
     const o=off(S);
@@ -6352,6 +6464,7 @@ const DLG_WHO={
  thing:{name:"THE THING UNDER THE HILL",frame:"#8a5fc4",inner:"#3a2a52",bg:"#140c1e",text:"#e9e5d9",voice:"low"},
  queen:{name:"THE GHOST QUEEN",spr:()=>B.phaseNum===2?"ghost_queen2":"ghost_queen",crop:[2,0,12,10],frame:"#5fa8c4",inner:"#14283f",bg:"#0a1622",text:"#d8ecf4",voice:"ghost"},
  king:{name:"THE HOLLOW KING",spr:()=>"king",crop:[2,0,12,11],frame:"#c9a24a",inner:"#4a3410",bg:"#160f06",text:"#f2e6c8",voice:"king"},
+ knight:{name:"THE LAST KNIGHT",spr:()=>"knight",crop:[1,0,12,9],frame:"#8e9aad",inner:"#2b3243",bg:"#0c0f16",text:"#e9e5d9",voice:"hero"},
  hero:{get name(){return CHAR().name.toUpperCase();},spr:()=>CHAR().spr,crop:[2,0,12,10],frame:"#c4622d",inner:"#3d2410",bg:"#120c08",text:"#e9e5d9",voice:"hero"},
  grub:{name:"GRUB, TROLL GUARD",spr:()=>"troll",scarred:true,crop:[3,1,14,12],eyes:[[8,7],[11,7]],frame:"#6f8a4a",inner:"#24301a",bg:"#0e140a",text:"#e2ead0",voice:"troll"},
  mog:{name:"MOG, TROLL GUARD",spr:()=>"troll",scarred:true,crop:[3,1,14,12],eyes:[[8,7],[11,7]],flip:true,frame:"#8a7a4a",inner:"#302a1a",bg:"#14110a",text:"#ece4cc",voice:"troll2"}
@@ -6391,6 +6504,7 @@ function drawDialogue(vw,vh){
   const l=dlgLine();if(!l)return;
   const D=DH().dlg,n=dlgShown(),done=n>=l.text.length,W=DLG_WHO[l.who||D.who]||DLG_WHO.thing,M=DLG_MOOD[l.mood]||{};
   if(!done&&n>(D.blip||0)+2){D.blip=n;playTalkBlip(l.mood==="sleep"?"snore":W.voice);}
+  if(done&&l.cut){D.cutT=D.cutT||performance.now();if(performance.now()-D.cutT>90){D.cutT=0;dlgNext();return;}}   // interrupted
   const pad=Math.round(Math.min(vw,vh)*.022),bw=Math.min(vw-pad*2,880),bh=Math.max(118,vh*.27);
   const bx=(vw-bw)/2,by=vh-bh-pad,mood=l.mood||"";
   const frame=M.frame||W.frame,inner=M.inner||W.inner;

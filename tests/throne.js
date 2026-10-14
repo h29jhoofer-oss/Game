@@ -67,6 +67,20 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await page.waitForTimeout(300);
   check('he rises from the throne and steps down', await ev('!THRONE.king.seated&&THRONE.king.y>THRONE.y'));
   await shot('throne_step');
+  await page.waitForFunction('THRONE.knight',null,{timeout:4000}).catch(()=>{});
+  check('a knight comes running into the hall', await ev('THRONE.knight&&THRONE.knight.stage==="run"&&freePaused()'));
+  await page.waitForTimeout(500);
+  await shot('knight_run');
+  await page.waitForFunction('MAPD.dlg',null,{timeout:8000}).catch(()=>{});
+  check('he kneels by the King and begs forgiveness', await ev('THRONE.knight.stage==="kneel"&&MAPD.dlg&&dlgLine().who==="knight"&&S.mode==="map"'));
+  await shot('knight_kneel');
+  for (let i = 0; i < 6 && await ev('THRONE.knight.stage!=="dead"'); i++) { await page.keyboard.press('Space'); await page.waitForTimeout(40); await page.keyboard.press('Space'); await page.waitForTimeout(250); }
+  check('he is cut off mid-word', await ev('THRONE.knight.stage==="dead"&&dlgLine().who==="king"&&MAPD.dlg.lines[MAPD.dlg.i-1].cut'));
+  await page.waitForTimeout(500);
+  await shot('knight_dead');
+  const kseen = [];
+  for (let i = 0; i < 20 && await ev('!!MAPD.dlg'); i++) { kseen.push(await ev('dlgLine().text')); await page.keyboard.press('Space'); await page.waitForTimeout(30); await page.keyboard.press('Space'); await page.waitForTimeout(30); }
+  check('the King sneers at his knights', kseen.some(t => /Too weak/.test(t)), kseen);
   await page.waitForFunction('S.mode==="battle"&&B&&B.dlg',null,{timeout:6000}).catch(()=>{});
   check('then the fight, and his speech', await ev('S.mode==="battle"&&B&&B.mon.t.id==="king"&&!!B.dlg&&B.dlg.who==="king"'));
   check('every torch is lit', await ev('THRONE.torches.every(t=>t.lit>=0)'));
