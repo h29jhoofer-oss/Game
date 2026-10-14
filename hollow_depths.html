@@ -765,7 +765,7 @@ body.inbattle #hint{display:none}
           <button id="btnStairs" disabled>Descend</button>
         </div>
       </div>
-      <p class="hint" id="hint">Move with arrows or WASD. Walk into a creature to duel it. <b>I</b> pack, <b>E</b> pray at a shrine / pull a lever, <b>T</b> swap off-hand, <b>F</b> use lamp oil, <b>L</b> codex, <b>P</b> sprites, <b>Space</b> dashes, <b>.</b> waits. Stand still to regain stamina.</p>
+      <p class="hint" id="hint">Move with arrows or WASD. Walk into a creature to duel it. <b>I</b> pack, <b>E</b> pray at a shrine / pull a lever, <b>T</b> swap off-hand, <b>F</b> use lamp oil, <b>L</b> codex, <b>H</b> talk to your wisp, <b>P</b> sprites, <b>Space</b> dashes, <b>.</b> waits. Stand still to regain stamina.</p>
     </div>
   </div>
 </div>
@@ -895,7 +895,7 @@ const POTIONS=[
  {id:"dark",  name:"Scroll of Darkness", glyph:"?", col:"--rime", note:"Blinds the foe. Its blows go wide."},
  {id:"bolt",  name:"Scroll of Lightning",glyph:"?", col:"--rime", note:"A crack of sky. Hits hard and stuns."},
  {id:"ice",   name:"Scroll of Ice",      glyph:"?", col:"--rime", note:"Frost spikes burst from the floor and freeze the foe."},
- {id:"wisp", name:"Scroll of the Wisp", glyph:"?", col:"--rime", note:"A little blue spirit is bound to it. It follows you and fights beside you. Cast it to hurl the wisp at a foe: the healthier it is, the harder it hits. If it dies, the scroll crumbles."},
+ {id:"wisp", name:"Scroll of the Wisp", glyph:"?", col:"--rime", note:"A little violet spirit is bound to it. It follows you and fights beside you. Cast it to hurl the wisp at a foe: the healthier it is, the harder it hits. If it dies, the scroll crumbles."},
  {id:"oil",  name:"Lamp Oil",        glyph:"~", col:"--torch", note:"Fully rekindles your torch."}
 ];
 const MONSTERS=[
@@ -2950,7 +2950,7 @@ function spendMana(amount){S.mana=Math.max(0,S.mana-amount);refreshMana();}
 /* ============================ quick-cast spell bar ============================ */
 // One tappable icon for every spell scroll in the pack (up to the 9 pack slots). Battle only.
 // Clicking is exactly the same as choosing the scroll from the item list; it vanishes once the scroll is used.
-const SPELL_COL={wisp:"#6fa0e8",flame:"#f0902a",ice:"#8fd8f0",poison:"#6fa844",dark:"#8a5fc4",bolt:"#f0c060"};
+const SPELL_COL={wisp:"#a87fe0",flame:"#f0902a",ice:"#8fd8f0",poison:"#6fa844",dark:"#8a5fc4",bolt:"#f0c060"};
 function renderSpellBar(){
   const el=$("spellbar");if(!el)return;
   const list=[];
@@ -3711,10 +3711,10 @@ const ART={"rook":["............kk..","...........kZlk.",".....kkkk..kwGk.","...
 "chasm":["xffFffffffffFfff","xfggqgqqgqgqggff","xgqkkkkkkkkkkqgf","xqkzzzzzzzzzzkqf","gkzzzz1zzzzzzzkg","qkzzzzzzzzz1zzkq","gkzzzzzzzzzzzzkg","qkz1zzzzzzzzzzkq","gkzzzzzzzz1zzzkg","qkzzzzzzzzzzzzkq","gkzzzzz1zzzzz1kg","qkzzzzzzzzzzzzkq","xqkzzzzzzzzzzkqf","xgqkkkkkkkkkkqgf","xfggqgqqgqgqggff","xffffFffffffFfff"],
 "bridge_h":["xffFffffffffFfff","xfkkkkkkkkkkkkff","LDLLDLLDLLDLLDLL","zNDzNDzNDzNDzNDz","zNDzNDzNDzNDzNDz","zNnzNDzNnzNDzNnz","zNDzNnzNDzNnzNDz","zNDzNDzNDzNDzNDz","zNnzNDzNDzNDzNnz","zNDzNDzNnzNDzNDz","zNDzNnzNDzNnzNDz","zNDzNDzNDzNDzNDz","zNnzNDzNnzNDzNnz","LDLLDLLDLLDLLDLL","xfkkkkkkkkkkkkff","xffffFffffffFfff"],
 "bridge_v":["xxLzzzzzzzzzzLxx","ffDNNNNNNNNNNDff","fkLDDnDDnDDDnLkf","FkLzzzzzzzzzzLkf","fkDNNNNNNNNNNDkf","fkLDDDnDDDnDDLkF","fkLzzzzzzzzzzLkf","fkDNNNNNNNNNNDkf","fkLDDnDDDnDDnLkf","fkLzzzzzzzzzzLkf","fkDNNNNNNNNNNDkf","fkLDDDnDDDnDDLkf","FkLzzzzzzzzzzLkF","fkDNNNNNNNNNNDkf","ffLDDnDDnDDDnLff","ffLzzzzzzzzzzLff"],
-"wisp_0":["................","........3.......",".......33.......","......343...3...","......3443.33...",".....344433.....","....34444443....","...34Z4444443...","...3ZZ4444443...","..3444k44k4443..","..3444k44k4443..","..344444444443..","...3444444443...","....33444433....",".....233332.....","......2222......"],
-"wisp_1":["................",".........3......","...3.....33.....","...33...343.....","....3..3443.....",".....3344443....","....34444443....","...34Z4444443...","...3ZZ4444443...","..3444k44k4443..","..3444k44k4443..","..344444444443..","...3444444443...","....33444433....",".....233332.....",".....2.22.2....."],
-"wisp_orb":["................","................","......3333......","....33444433....","...3444444443...","...344ZZZZ443...","..344ZZZZZZ443..","..34ZZZZZZZZ43..","..34ZZZZZZZZ43..","..344ZZZZZZ443..","...344ZZZZ443...","...3444444443...","....33444433....","......3333......","................","................"],
-"scroll_wisp":["................","..kkkkkkkkkkkk..",".kooooooooooook.",".kNNNNNNNNNNNNk.","..kwwwww3wwwwk..","..kwwww343wwwk..","..kwww34443wwk..","..kww344Z443wk..","..kww3kZZk43wk..","..kww34ZZ443wk..","..kwww34443wwk..",".kNNNNNNNNNNNNk.",".knnnnnnnnnnnnk.","..kkkkkkkkkkkk..","................","................"],
+"wisp_0":["................","........V.......",".......VV.......","......V7V...V...","......V77V.VV...",".....V777VV.....","....V777777V....","...V7Z777777V...","...VZZ777777V...","..V777k77k777V..","..V777k77k777V..","..V7777777777V..","...V77777777V...","....VV7777VV....",".....8VVVV8.....","......8888......"],
+"wisp_1":["................",".........V......","...V.....VV.....","...VV...V7V.....","....V..V77V.....",".....VV7777V....","....V777777V....","...V7Z777777V...","...VZZ777777V...","..V777k77k777V..","..V777k77k777V..","..V7777777777V..","...V77777777V...","....VV7777VV....",".....8VVVV8.....",".....8.88.8....."],
+"wisp_orb":["................","................","......VVVV......","....VV7777VV....","...V77777777V...","...V77ZZZZ77V...","..V77ZZZZZZ77V..","..V7ZZZZZZZZ7V..","..V7ZZZZZZZZ7V..","..V77ZZZZZZ77V..","...V77ZZZZ77V...","...V77777777V...","....VV7777VV....","......VVVV......","................","................"],
+"scroll_wisp":["................","..kkkkkkkkkkkk..",".kooooooooooook.",".kNNNNNNNNNNNNk.","..kwwwwwVwwwwk..","..kwwwwV7Vwwwk..","..kwwwV777Vwwk..","..kwwV77Z77Vwk..","..kwwVkZZk7Vwk..","..kwwV7ZZ77Vwk..","..kwwwV777Vwwk..",".kNNNNNNNNNNNNk.",".knnnnnnnnnnnnk.","..kkkkkkkkkkkk..","................","................"],
 "player_walk_0":["............y...","...........OyO..","..........EEyEE.","...........eee..","....gGGGGg..N...","...gGkPPkGgPN...","...GgPPPPggPN...","....ggggggggN...","..gGcCCCCcGgN...",".GgGCCwwCCgGN...",".gGcCCCCCCcg....","..knddddddnk....","....dddddd......","....dddddd......","...nnnn..NNN....",".........nnnn..."],
 "player_walk_1":["............y...","...........OyO..","..........EEyEE.","...........eee..","....gGGGGg..N...","...gGkPPkGgPN...","...GgPPPPggPN...","....ggggggggN...","..gGcCCCCcGgN...",".GgGCCwwCCgGN...",".gGcCCCCCCcg....","..knddddddnk....","....dddddd......","....dddddd......","....NNN..NNN....","...nnnn..nnnn..."],
 "player_walk_2":["............y...","...........OyO..","..........EEyEE.","...........eee..","....gGGGGg..N...","...gGkPPkGgPN...","...GgPPPPggPN...","....ggggggggN...","..gGcCCCCcGgN...",".GgGCCwwCCgGN...",".gGcCCCCCCcg....","..knddddddnk....","....dddddd......","....ddddddNN....","....NNN..nnnn...","...nnnn........."],
@@ -3934,7 +3934,22 @@ function buildSprites(){
 // runs under the skin it shows as a raised vein; where it breaks the skin the flesh is torn dark around it.
 const ROOTED_BASES=["rat","bat","goblin","skeleton","orc","slime","wraith","ogre","troll","knight"];
 const ROOT_PAD=[3,3,3,2];   // a bigger canvas (left, top, right, bottom), same pixel size, so the roots can grow out past the body
-const ROOTS={};   // base name -> the root paths, shared by all of its frames so the roots don't jump about
+const ROOTS={};
+// Where each monster's eyes are on its base sprite. Other frames find theirs by matching the pixels round them.
+const ROOT_EYES={rat:[[3,9]],bat:[[6,6],[9,6]],goblin:[[5,5],[9,5]],skeleton:[[6,3],[9,3]],orc:[[5,4],[10,4]],
+  slime:[[5,8],[9,8]],wraith:[[6,5],[9,5]],ogre:[[10,4],[13,4]],troll:[[8,7],[11,7]],knight:[[6,3],[8,3]]};
+function frameEyes(base,frame){
+  const A=ART[base],F=ART[frame]||A,at=(R,x,y)=>(R[y]||"")[x]||".";
+  return(ROOT_EYES[base]||[]).map(([ex,ey])=>{
+    let best=[ex,ey],bs=1e9;
+    for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
+      let sc=Math.abs(dx)+Math.abs(dy)>0?.5:0;
+      for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)if(at(A,ex+i,ey+j)!==at(F,ex+dx+i,ey+dy+j))sc++;
+      if(sc<bs){bs=sc;best=[ex+dx,ey+dy];}
+    }
+    return best;
+  });
+}   // base name -> the root paths, shared by all of its frames so the roots don't jump about
 function rootRng(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
 function rootPaths(base){
   if(ROOTS[base])return ROOTS[base];
@@ -4004,6 +4019,13 @@ function buildRooted(key){
     // a few pulsing red knots where the root is thickest
     if(!P.feet&&P.r0>1)for(const i of [8,40]){if(underAt(i))continue;const [x,y]=pts[i];put(Math.round(x),Math.round(y),NODE);}   // a red knot or two
   }
+  // the Thing looks out of them now: every eye burns red, and bleeds a little red light into the pixels round it
+  const eyes=frameEyes(m[1],key.replace(/_s\d$/,"")).map(([x,y])=>[x+PL,y+PT]);
+  for(const [x,y] of eyes){
+    for(const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]){const X=x+dx,Y=y+dy;if(!body(X,Y))continue;const i=(Y*W+X)*4;d[i]=Math.min(255,d[i]*.45+150);d[i+1]*=.45;d[i+2]*=.45;}
+    put(x,y,[255,72,52]);
+  }
+  a.eyes=eyes;
   c.putImageData(sd,0,0);
   SPR[key+"_r"]=a;
   const b=document.createElement("canvas");b.width=W;b.height=Hh;b.pad=ROOT_PAD;
@@ -4012,6 +4034,18 @@ function buildRooted(key){
 }
 // A rooted monster (floors 11-19) is drawn with its rooted sprite.
 function rootSpr(t,name){return t&&t.deep&&SPR[name+"_r"]?name+"_r":name;}
+// A soft red glow over a rooted sprite's eyes, drawn where the sprite was drawn (x, y, w, h on screen).
+function eyeGlow(img,x,y,w,h,alpha){
+  if(!img.eyes)return;
+  const ux=w/img.width,uy=h/img.height,pulse=RM?1:.8+.2*Math.sin(tclock*4.2);
+  ctx.save();ctx.globalCompositeOperation="lighter";ctx.globalAlpha=(alpha===undefined?1:alpha)*pulse;
+  for(const [ex,ey] of img.eyes){
+    const cx=x+(ex+.5)*ux,cy=y+(ey+.5)*uy,r=ux*2.2;
+    const g=ctx.createRadialGradient(cx,cy,0,cx,cy,r);g.addColorStop(0,"rgba(255,70,50,.75)");g.addColorStop(1,"rgba(255,40,30,0)");
+    ctx.fillStyle=g;ctx.fillRect(cx-r,cy-r,r*2,r*2);
+  }
+  ctx.restore();
+}
 // Trolls show their wounds. Each stage adds more slashes to the one before: _s1 at three-quarter health,
 // _s2 at half, _s3 at a quarter. As a troll knits its wounds back up, it goes back down the stages.
 const SCARS=[
@@ -4236,6 +4270,7 @@ function blit(name,tx,ty,alpha,fl,sy,sx,flip){
   }else{
     ctx.drawImage(img,px,py,w,h);
     if(fl>.02){ctx.globalAlpha=Math.min(1,fl);ctx.drawImage(SPRW[name],px,py,w,h);}
+    eyeGlow(img,px,py,w,h,alpha);
   }
   ctx.globalAlpha=1;
 }
@@ -5589,7 +5624,7 @@ function resolveQte(success){
 }
 
 /* ============================ the wisp ============================ */
-// A Scroll of the Wisp in the pack means a little blue spirit follows you. The first one in the pack is the
+// A Scroll of the Wisp in the pack means a little violet spirit follows you. The first one in the pack is the
 // one that's awake. Its health lives on the scroll item (whp / wmax) and is set when you first carry it.
 const WISP_HIT_CHANCE=.25;      // share of ordinary enemy attacks that go for the wisp instead of you
 const WISP_ORB_MULT=1.6;        // cast damage = wisp health x this (+ your level)
@@ -5603,7 +5638,7 @@ function activeWisp(){const it=S.pack.find(isWisp);return it?wispInit(it):null;}
 function wispDie(it){
   const i=S.pack.indexOf(it);if(i>=0)S.pack.splice(i,1);
   const L=B&&B.layout;
-  if(L&&B.wispPos){sburst(B.wispPos.x,B.wispPos.y,"#6fa0e8",22,220);sburst(B.wispPos.x,B.wispPos.y,"#ffffff",8,150);}
+  if(L&&B.wispPos){sburst(B.wispPos.x,B.wispPos.y,"#a87fe0",22,220);sburst(B.wispPos.x,B.wispPos.y,"#ffffff",8,150);}
   (B?blog:say)("Your wisp flickers out. The scroll in your pack crumbles to ash.","c-hit");
 }
 function wispRest(){
@@ -5617,7 +5652,7 @@ function wispAttack(){
   const d=2+Math.floor(S.depth/2)+rnd(3);
   B.mhp-=d;B.mFlash=.5;B.wispLunge=1;
   const L=B.layout;
-  if(L){snum(L.ex,L.ey-L.esz*.7,String(d),"#6fa0e8");sburst(L.ex,L.ey-L.esz*.2,"#6fa0e8",9,170);}
+  if(L){snum(L.ex,L.ey-L.esz*.7,String(d),"#a87fe0");sburst(L.ex,L.ey-L.esz*.2,"#a87fe0",9,170);}
   blog(`Your wisp darts in and sears the ${B.mon.t.name} for ${d}.`,"c-cold");
   checkBossPhase();
   return B.mhp<=0;
@@ -5630,7 +5665,7 @@ function wispTakesHit(sp){
   if(Math.random()>((sp&&sp.acc!==undefined)?sp.acc:m.t.acc)){blog(`The ${m.t.name} swipes at your wisp and misses.`,"c-cold");return true;}
   const d=Math.max(1,Math.round(rint(m.t.min,m.t.max)*((sp&&sp.mult)||1)));
   w.whp=Math.max(0,w.whp-d);B.wispFlash=1;
-  if(B.wispPos)snum(B.wispPos.x,B.wispPos.y-B.wispPos.s*.6,"-"+d,"#a8e0f0");
+  if(B.wispPos)snum(B.wispPos.x,B.wispPos.y-B.wispPos.s*.6,"-"+d,"#c8a8f0");
   blog(`The ${m.t.name} lashes at your wisp (-${d}).`,"c-hit");
   if(w.whp<=0)wispDie(w);
   return true;
@@ -5640,12 +5675,12 @@ function castWisp(it){
   wispInit(it);
   const d=Math.round(it.whp*WISP_ORB_MULT)+S.lvl;
   const L=B.layout,from=B.wispPos||(L&&{x:L.px,y:L.py-L.psz*.8,s:L.psz*.4});
-  blog("You loose the wisp. It balls itself into a blazing blue orb...","c-lvl");
+  blog("You loose the wisp. It balls itself into a blazing violet orb...","c-lvl");
   if(L&&from)sfx.push({k:"wispball",x0:from.x,y0:from.y,x1:L.ex,y1:L.ey-L.esz*.2,arc:L.esz*.35,size:L.esz*.32,t:0,life:.45});
   queue(.45,()=>{
     hurtMon(d,true);rollDie("red",d);poiseHit(Math.round(d*.6));
     const L2=B.layout;
-    if(L2){sburst(L2.ex,L2.ey,"#6fa0e8",30,330);sburst(L2.ex,L2.ey,"#ffffff",14,240);sring(L2.ex,L2.ey,"rgba(111,160,232,.95)",L2.esz*1.1);}
+    if(L2){sburst(L2.ex,L2.ey,"#a87fe0",30,330);sburst(L2.ex,L2.ey,"#ffffff",14,240);sring(L2.ex,L2.ey,"rgba(168,127,224,.95)",L2.esz*1.1);}
     quake(12);B.critFlash=.6;
     blog(`The wisp bursts against the ${B.mon.t.name} for ${d}! (It had ${it.whp} health left.)`,"c-lvl");
   });
@@ -5655,7 +5690,7 @@ function wispFrame(){return "wisp_"+(Math.floor(tclock*5)%2);}
 function wispBar(x,y,w,ratio){
   const h=Math.max(2,Math.round(w*.12));
   ctx.globalAlpha=.9;ctx.fillStyle="#0c1015";ctx.fillRect(x-w/2-1,y-1,w+2,h+2);
-  ctx.fillStyle=ratio>.5?"#6fa0e8":ratio>.25?"#f0c060":"#c94a3c";
+  ctx.fillStyle=ratio>.5?"#a87fe0":ratio>.25?"#f0c060":"#c94a3c";
   ctx.fillRect(x-w/2,y,Math.max(1,w*ratio),h);ctx.globalAlpha=1;
 }
 // Map: the wisp drifts after you, hanging back over the shoulder you're walking away from.
@@ -5667,7 +5702,7 @@ function drawWispMap(){
   const sz=.62,gx=(S.wisp.x-cam.x+.5)*cell,gy=(S.wisp.y-cam.y+.5)*cell;
   ctx.globalCompositeOperation="lighter";
   const g=ctx.createRadialGradient(gx,gy,0,gx,gy,cell*.9);
-  g.addColorStop(0,"rgba(111,160,232,.30)");g.addColorStop(1,"rgba(111,160,232,0)");
+  g.addColorStop(0,"rgba(168,127,224,.30)");g.addColorStop(1,"rgba(168,127,224,0)");
   ctx.fillStyle=g;ctx.fillRect(gx-cell,gy-cell,cell*2,cell*2);
   ctx.globalCompositeOperation="source-over";
   const img=SPR[wispFrame()];
@@ -5683,7 +5718,7 @@ function drawWispBattle(px,py,psz,ex,ey,esz,intro,vw){
   B.wispPos={x:x,y:y,s:s};
   ctx.globalCompositeOperation="lighter";
   const g=ctx.createRadialGradient(x,y,0,x,y,s*1.4);
-  g.addColorStop(0,"rgba(111,160,232,.35)");g.addColorStop(1,"rgba(111,160,232,0)");
+  g.addColorStop(0,"rgba(168,127,224,.35)");g.addColorStop(1,"rgba(168,127,224,0)");
   ctx.fillStyle=g;ctx.fillRect(x-s*1.4,y-s*1.4,s*2.8,s*2.8);
   ctx.globalCompositeOperation="source-over";
   const img=SPR[wispFrame()];
@@ -5693,6 +5728,103 @@ function drawWispBattle(px,py,psz,ex,ey,esz,intro,vw){
   }
   wispBar(x,y+s*.58,s*.9,w.whp/w.wmax);
 }
+
+/* ---------- talking to the wisp ---------- */
+// The wisp is Tam, who lit the Queen's candles. Press H on the map to talk to him. He knew every one of the
+// heroes before the castle sank, so what he says about the King, the Queen and that night depends on who asks.
+const HERO_SAYS=t=>({who:"hero",text:t});
+const WISP_TALK={
+ who:{title:"Who are you?",
+  all:[{text:"Me? I'm Tam. I was the lamp boy. I lit the Queen's candles every night. Forty of them, and I never missed one."},
+       {text:"When the castle went down I was halfway up a ladder with a taper. I suppose I'm what's left of the taper."}],
+  cade:[HERO_SAYS("Tam... freckles? Always running down the wall walk with a lit taper?"),
+        {text:"That was me! You were on the outer wall. You used to save me the crusts off your bread."},
+        {text:"You didn't come down after us that night. That's alright. I wouldn't have either."}],
+  rook:[HERO_SAYS("A lamp boy. You'd have known which rooms had the silver in them."),
+        {text:"...You're the one who nicked the candle snuffer. The gold one, from the Queen's room. I got the blame for that."},
+        HERO_SAYS("Sorry, kid."),
+        {text:"No you're not. It's alright. It's down here somewhere, if you want to steal it again."}],
+  doctor:[{text:"I know you. You still smell of cloves."},
+          {text:"You carried the leeches up to her room every morning. You were the only one who ever said please to me."},
+          HERO_SAYS("I remember. You held the candle steady while I worked. Your hands never shook.")],
+  mage:[{text:"Master Hale! You used to make my taper light itself when I was late, so nobody would know."},
+        {text:"I think that's why I came back like this. A bit of your light stuck to me."},
+        HERO_SAYS("...I am sorry, Tam."),
+        {text:"What for? It's nice. I glow."}],
+  monk:[{text:"You're from the chapel on the hill. I can see it on you, like candle smoke."},
+        HERO_SAYS("You are a spirit, bound up in a scroll. I should not even be speaking with you."),
+        {text:"I'm not magic, Brother. I'm just a boy who died holding a light. Is that allowed?"},
+        HERO_SAYS("...Yes, Tam. That is allowed.")]},
+ king:{title:"Tell me about the King.",
+  cade:[{text:"King Aldric was kind, before. He knew the name of every guard on the wall. Even yours."},
+        {text:"Then the Queen got sick, and he stopped sleeping. He walked the walls all night. You must have seen him."},
+        HERO_SAYS("I did. I thought he was checking on us."),
+        {text:"He wasn't. He was listening to the ground.",mood:"fear"}],
+  rook:[{text:"He was rich. That's what you really want to know, isn't it?"},
+        HERO_SAYS("It's a start."),
+        {text:"He gave it all away in the end. Not the gold. The inside part. The gold he kept. It's on his head."}],
+  doctor:[{text:"He used to wait outside her door while you worked. He'd ask me if the candles were bright enough. As if light would help."},
+          {text:"When you told him there was nothing more you could do, he went very quiet. Then he went downstairs."},
+          {text:"He'd never been downstairs before. Not that far down.",mood:"fear"}],
+  mage:[{text:"He trusted you more than anyone. He told me so once, when he thought nobody was listening."},
+        {text:"When your spells didn't work he didn't blame you. He blamed the stars. Then he went looking for someone else to ask."},
+        HERO_SAYS("And found something that answered.")],
+  monk:[{text:"He used to come up to your chapel, did you know? Before. He'd light a candle for her, and I'd carry it."},
+        {text:"Then one night the candle went out by itself, and he never went back. He said if God wasn't listening, he'd find someone who was."},
+        HERO_SAYS("God was listening, Tam. The King did not like the answer.")]},
+ queen:{title:"Tell me about the Queen.",
+  cade:[{text:"She laughed at everything. Even me falling off ladders. Especially me falling off ladders."},
+        {text:"She got sick in the spring. By winter she couldn't stand the light, so I had to snuff her candles one by one."},
+        {text:"That was the worst job I ever had."}],
+  rook:[{text:"She left a window open in the east tower every night. For the birds, she said."},
+        HERO_SAYS("...That was her? I came in through that window four times."),
+        {text:"She knew. She left a cake on the sill once. For the birds."}],
+  doctor:[{text:"You'd know more than me. You wrote it all down."},
+          HERO_SAYS("I wrote down what I saw. Not what it was."),
+          {text:"She asked me once if the doctor was afraid of her. I said no. I lied, didn't I?"},
+          HERO_SAYS("...Yes, Tam.")],
+  mage:[{text:"She didn't like magic. She said it smelled like burnt hair."},
+        {text:"But she let you try anyway, because he asked her to. She held his hand the whole time, and told him it was alright when it didn't work."}],
+  monk:[{text:"She prayed with you, didn't she? At the end."},
+        HERO_SAYS("Every evening. She asked for courage. Never for a cure."),
+        {text:"The King asked for a cure. That was the difference between them."}]},
+ fall:{title:"What happened here?",
+  all:[{text:"He made a deal. There was a man with a pen, the notary, and something under the hill told him what to write."},
+       {text:"Her life, for his. Not his life. The rest of him. Everything a king is meant to have on the inside."},
+       {text:"She died anyway. It was in the small writing. Then the hill opened its mouth and swallowed all of us.",mood:"fear"}],
+  cade:[HERO_SAYS("I heard the stones go. I ran."),
+        {text:"Lots of people ran. Most of them didn't make it to the top. You did. That isn't nothing."}],
+  rook:[HERO_SAYS("So the King got cheated."),
+        {text:"Everyone who signs with it gets cheated. That's the only thing it's ever honest about."}],
+  doctor:[HERO_SAYS("Then it was never a sickness."),
+          {text:"It was a sickness first. Then it was a price. He just didn't know which one he was paying."}],
+  mage:[HERO_SAYS("Words. In the end it was always going to be words."),
+        {text:"Yours were better. They just weren't for sale."}],
+  monk:[HERO_SAYS("He bargained with the Devil."),
+        {text:"It didn't call itself that. It called itself a friend.",mood:"fear"},
+        {text:"It's going to call you that too, Brother. Don't answer."}]}
+};
+const WISP_TOPICS=["who","king","queen","fall"];
+function wispLines(id){const T=WISP_TALK[id],c=CHAR().id;return(T.all||[]).concat(T[c]||T.cade);}
+let wispTalkOpen=false;
+function wispTalk(){
+  if(!activeWisp()){say("There is no one here to talk to but the dark.","c-cold");return;}
+  wispTalkOpen=true;held.clear();
+  const asked=S.wispAsked||(S.wispAsked={});
+  overlay(`<h3>Talk to Tam</h3>
+    <p class="lede">The little wisp bobs at your shoulder, waiting.</p>
+    <div style="display:flex;flex-direction:column;gap:8px">${WISP_TOPICS.map((id,i)=>`<button id="wt_${id}" style="text-align:left">[${i+1}] ${WISP_TALK[id].title}${asked[id]?' <span style="opacity:.5">(asked)</span>':""}</button>`).join("")}
+    <button id="wt_bye" style="text-align:left;opacity:.8">[${WISP_TOPICS.length+1}] Never mind.</button></div>`);
+  for(const id of WISP_TOPICS)$("wt_"+id).onclick=()=>wispAsk(id);
+  $("wt_bye").onclick=wispBye;
+}
+function wispAsk(id){
+  if(!wispTalkOpen)return;
+  wispTalkOpen=false;hideOverlay();held.clear();
+  (S.wispAsked||(S.wispAsked={}))[id]=true;
+  startDialogue(wispLines(id),()=>wispTalk(),"Back","wisp");
+}
+function wispBye(){if(!wispTalkOpen)return;wispTalkOpen=false;hideOverlay();held.clear();}
 
 /* ============================ round upkeep ============================ */
 // Plague Bearer (Vell): the foe's poison and bleeding feed him a share of every tick.
@@ -6260,7 +6392,7 @@ function drawBattle(vw,vh){
       const q=Math.min(1,f.t/f.life),x=f.x0+(f.x1-f.x0)*q,y=f.y0+(f.y1-f.y0)*q-Math.sin(q*Math.PI)*f.arc;
       const img=SPR.wisp_orb,sz=f.size*(1+.25*Math.sin(f.t*30));
       ctx.globalCompositeOperation="lighter";
-      const g=ctx.createRadialGradient(x,y,0,x,y,sz*1.3);g.addColorStop(0,"rgba(111,160,232,.55)");g.addColorStop(1,"rgba(111,160,232,0)");
+      const g=ctx.createRadialGradient(x,y,0,x,y,sz*1.3);g.addColorStop(0,"rgba(168,127,224,.55)");g.addColorStop(1,"rgba(168,127,224,0)");
       ctx.fillStyle=g;ctx.fillRect(x-sz*1.3,y-sz*1.3,sz*2.6,sz*2.6);
       ctx.globalCompositeOperation="source-over";
       if(img)ctx.drawImage(img,x-sz/2,y-sz/2,sz,sz);
@@ -6290,6 +6422,7 @@ function drawArenaSprite(name,cx,cy,size,alpha,fl,scaleW,scaleH){
   ctx.drawImage(img,x,y,w,h);
   if(fl>.02){ctx.globalAlpha=Math.min(1,fl)*alpha;ctx.drawImage(SPRW[name],x,y,w,h);}
   ctx.globalAlpha=1;
+  eyeGlow(img,x,y,w,h,alpha);
 }
 function statusText(st,who){
   const out=[];
@@ -6594,6 +6727,7 @@ const DLG_WHO={
  knight:{name:"THE LAST KNIGHT",spr:()=>"knight",crop:[1,0,12,9],frame:"#8e9aad",inner:"#2b3243",bg:"#0c0f16",text:"#e9e5d9",voice:"hero"},
  hero:{get name(){return CHAR().name.toUpperCase();},spr:()=>CHAR().spr,crop:[2,0,12,10],frame:"#c4622d",inner:"#3d2410",bg:"#120c08",text:"#e9e5d9",voice:"hero"},
  grub:{name:"GRUB, TROLL GUARD",spr:()=>"troll",scarred:true,crop:[3,1,14,12],eyes:[[8,7],[11,7]],frame:"#6f8a4a",inner:"#24301a",bg:"#0e140a",text:"#e2ead0",voice:"troll"},
+ wisp:{name:"TAM, THE WISP",spr:()=>"wisp_0",crop:[2,1,12,13],frame:"#a87fe0",inner:"#3a2a52",bg:"#120c1c",text:"#efe6ff",voice:"wisp"},
  mog:{name:"MOG, TROLL GUARD",spr:()=>"troll",scarred:true,crop:[3,1,14,12],eyes:[[8,7],[11,7]],flip:true,frame:"#8a7a4a",inner:"#302a1a",bg:"#14110a",text:"#ece4cc",voice:"troll2"}
 };
 // How a line's mood changes the box: frame, inner frame, text colour and how hard the portrait shakes.
@@ -6710,7 +6844,7 @@ function drawDialogue(vw,vh){
 function playTalkBlip(voice){
   if(!AUDIO_OK)return;ensureAudio();if(!actx)return;
   const t=actx.currentTime+.005,osc=actx.createOscillator(),g=actx.createGain();let o=osc;
-  const f0=voice==="ghost"?380+Math.random()*90:voice==="king"?120+Math.random()*30:voice==="troll"?92+Math.random()*22:voice==="troll2"?118+Math.random()*26:voice==="snore"?46+Math.random()*10:voice==="hero"?165+Math.random()*30:70+Math.random()*30;
+  const f0=voice==="ghost"?380+Math.random()*90:voice==="wisp"?520+Math.random()*140:voice==="king"?120+Math.random()*30:voice==="troll"?92+Math.random()*22:voice==="troll2"?118+Math.random()*26:voice==="snore"?46+Math.random()*10:voice==="hero"?165+Math.random()*30:70+Math.random()*30;
   osc.type=voice==="ghost"?"sine":voice==="troll"||voice==="troll2"?"square":"triangle";
   if(voice==="troll"||voice==="troll2"||voice==="snore"){const lp=actx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=voice==="snore"?260:700;o.connect(lp);o=lp;}osc.frequency.setValueAtTime(f0,t);osc.frequency.exponentialRampToValueAtTime(f0*(voice==="ghost"?1.15:.68),t+.09);
   g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(.18,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+.11);
@@ -8074,7 +8208,7 @@ function refresh(){
   $("btnStairs").disabled=!onStairs||S.over;
   $("hint").innerHTML=onStairs
     ? (S.depth>=20?`A stair up, and out. Press <b>Enter</b> or tap Descend to leave.`:`Stairs down. Press <b>Enter</b> or tap Descend.`)
-    : `Move with arrows or WASD. Walk into a creature to duel it. <b>I</b> pack, <b>E</b> pray at a shrine / pull a lever, <b>T</b> swap off-hand, <b>F</b> use lamp oil, <b>L</b> codex, <b>P</b> sprites, <b>Space</b> dashes, <b>.</b> waits. Stand still to regain stamina.`;
+    : `Move with arrows or WASD. Walk into a creature to duel it. <b>I</b> pack, <b>E</b> pray at a shrine / pull a lever, <b>T</b> swap off-hand, <b>F</b> use lamp oil, <b>L</b> codex, <b>H</b> talk to your wisp, <b>P</b> sprites, <b>Space</b> dashes, <b>.</b> waits. Stand still to regain stamina.`;
   refreshStamina();
   refreshFlame();
   refreshMana();
@@ -8101,7 +8235,7 @@ for(const k in KEYS){
 const held=new Set();
 let freeClock=0,freeBumpT=0,freeWindedT=0;
 function freeMode(){return !!S;}   // every hero walks freely now; the grid code stays for "." (rest) and as a fallback
-function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()||monkChoiceOpen||!!MAPD.dlg||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
+function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()||monkChoiceOpen||wispTalkOpen||!!MAPD.dlg||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
 // What a box of half-width r centred on (cx,cy) overlaps: {wall:true}, {chasm:[x,y]}, or null.
 function boxHit(cx,cy,r){
   const e=1e-6;
@@ -8705,6 +8839,7 @@ window.addEventListener("keydown",ev=>{
   if(descentT>0&&S&&!S.over&&S.mode==="map"){ev.preventDefault();return;}   // still on the way down
   if(S&&S.jump){ev.preventDefault();return;}                                // being caught
   if(monkChoiceOpen){if(k==="1")monkChoose(false);else if(k==="2")monkChoose(true);ev.preventDefault();return;}
+  if(wispTalkOpen){const n=+k;if(n>=1&&n<=WISP_TOPICS.length)wispAsk(WISP_TOPICS[n-1]);else if(n===WISP_TOPICS.length+1||k==="Escape"||k==="h"||k==="H")wispBye();ev.preventDefault();return;}
   if(MAPD.dlg){if(k===" "||k==="Enter"||k==="e"||k==="E"||k==="z"||k==="Z")dlgAdvance();ev.preventDefault();return;}   // someone on the map is talking
   if(tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()){ev.preventDefault();return;}                               // the Queen is waking
   if(B&&B.dlg){if(k===" "||k==="Enter"||k==="e"||k==="E"||k==="z"||k==="Z")dlgAdvance();ev.preventDefault();return;}   // it is talking
@@ -8769,6 +8904,7 @@ window.addEventListener("keydown",ev=>{
   if(k==="t"||k==="T"){toggleOffhand();ev.preventDefault();return;}
   if(k==="p"||k==="P"){toggleEditor();ev.preventDefault();return;}
   if(k==="v"||k==="V"){toggleMusic();ev.preventDefault();return;}
+  if(k==="h"||k==="H"){if(activeWisp())wispTalk();ev.preventDefault();return;}
   if(k==="Enter"||k===">"){descend();ev.preventDefault();}
 });
 document.querySelectorAll(".pad button").forEach(b=>{
@@ -9216,7 +9352,7 @@ function toggleEditor(){
 
 /* ============================ boot ============================ */
 function start(id){
-  monkChoiceOpen=false;descentT=0;levelOpen=false;levelPicked=false;paperOpen=false;
+  monkChoiceOpen=false;wispTalkOpen=false;descentT=0;levelOpen=false;levelPicked=false;paperOpen=false;
   menuQuiet=false;setMusicVolume();
   hideOverlay();packOpen=false;codexOpen=false;
   ensureAudio();
