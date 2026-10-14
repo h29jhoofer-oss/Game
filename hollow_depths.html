@@ -3928,12 +3928,12 @@ function buildSprites(){
   for(const key in SPR)buildRooted(key);
 }
 /* ---------- rooted monsters ---------- */
-// Below the throne the Thing's roots have grown through the old monsters. Each one gets a rooted copy drawn at
-// twice the resolution, so a root can be half a pixel thick: one comes up out of the ground and runs right
+// Below the throne the Thing's roots have grown through the old monsters. Each one gets a rooted copy on a
+// slightly bigger canvas at the same pixel size, so the roots can reach out past it: one comes up out of the ground and runs right
 // through the body, another crosses it side to side, and fine rootlets trail from the feet. Where a root
 // runs under the skin it shows as a raised vein; where it breaks the skin the flesh is torn dark around it.
 const ROOTED_BASES=["rat","bat","goblin","skeleton","orc","slime","wraith","ogre","troll","knight"];
-const ROOT_RES=2;
+const ROOT_PAD=[3,3,3,2];   // a bigger canvas (left, top, right, bottom), same pixel size, so the roots can grow out past the body
 const ROOTS={};   // base name -> the root paths, shared by all of its frames so the roots don't jump about
 function rootRng(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
 function rootPaths(base){
@@ -3942,25 +3942,25 @@ function rootPaths(base){
   let x0=w,x1=0,y0=h,y1=0;
   for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(d[(y*w+x)*4+3]>0){x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);}
   let seed=0;for(const ch of base)seed=seed*31+ch.charCodeAt(0);
-  const R=rootRng(seed),K=ROOT_RES,bw=x1-x0+1,bh=y1-y0+1,side=R()<.5?-1:1;
-  const cx=(x0+x1+1)/2*K,W=w*K,Hh=h*K;
+  const [PL,PT,PR,PB]=ROOT_PAD,R=rootRng(seed),bw=x1-x0+1,bh=y1-y0+1,side=R()<.5?-1:1;
+  x0+=PL;x1+=PL;y0+=PT;y1+=PT;
+  const cx=(x0+x1+1)/2,W=w+PL+PR,Hh=h+PT+PB,clampX=x=>Math.max(0,Math.min(W-1,x));
   const paths=[
-    // the main root: up out of the floor on one side, through the body, out past the far shoulder
-    {a:[cx+side*bw*.3*K,Hh],c:[cx+side*bw*.05*K,(y0+bh*.5)*K],b:[Math.max(1,Math.min(W-2,cx-side*(bw*.45+1)*K)),Math.max(1,(y0-1-R()*2)*K)],r0:1.7,r1:.5,wob:.5,ph:R()*6},
-    // a second, thinner root driven through it side to side
+    // the main root: up out of the floor on one side, through the body, and out past the far shoulder
+    {a:[cx+side*bw*.3,Hh],c:[cx+side*bw*.05,y0+bh*.5],b:[clampX(cx-side*(bw*.5+1.5)),Math.max(0,y0-2-R()*1.5)],r0:1,r1:.35,wob:.35,ph:R()*6},
     // a thinner one breaks out of its back and curls up, as if it had been growing there for years
-    {a:[cx+side*bw*.1*K,(y0+bh*.6)*K],c:[cx+side*(bw*.55+1)*K,(y0+bh*.5)*K],b:[Math.max(1,Math.min(W-2,cx+side*(bw*.5+1.5)*K)),(y0+bh*(.12+R()*.15))*K],r0:1.2,r1:.35,wob:.3,ph:R()*6},
+    {a:[cx+side*bw*.1,y0+bh*.6],c:[cx+side*(bw*.6+1),y0+bh*.5],b:[clampX(cx+side*(bw*.5+2.5)),y0+bh*(.08+R()*.12)],r0:.6,r1:.3,wob:.25,ph:R()*6},
   ];
-  // rootlets spreading from the feet into the ground
-  for(let i=0;i<2;i++){const fx=cx+(i?-1:1)*bw*(.15+R()*.2)*K;paths.push({a:[fx,(y1-1.5)*K],c:[fx+(i?-3:3),Hh-2],b:[fx+(i?-6:6),Hh],r0:.9,r1:.3,wob:.2,ph:R()*6,feet:true});}
+  // rootlets spreading from the feet into the floor
+  for(let i=0;i<2;i++){const fx=cx+(i?-1:1)*bw*(.15+R()*.2);paths.push({a:[fx,y1-1],c:[fx+(i?-1.5:1.5),Hh-1],b:[clampX(fx+(i?-3.5:3.5)),Hh],r0:.45,r1:.3,wob:.1,ph:R()*6,feet:true});}
   return ROOTS[base]=paths;
 }
 function buildRooted(key){
   const m=/^([a-z]+)(_atk|_walk_\d)?(_s\d)?$/.exec(key);
   if(!m||!ROOTED_BASES.includes(m[1])||!SPR[m[1]])return;
-  const paths=rootPaths(m[1]),K=ROOT_RES,src=SPR[key],w=src.width,h=src.height,W=w*K,Hh=h*K;
-  const a=document.createElement("canvas");a.width=W;a.height=Hh;a.res=K;
-  const c=a.getContext("2d");c.imageSmoothingEnabled=false;c.drawImage(src,0,0,W,Hh);
+  const [PL,PT,PR,PB]=ROOT_PAD,paths=rootPaths(m[1]),src=SPR[key],w=src.width,h=src.height,W=w+PL+PR,Hh=h+PT+PB;
+  const a=document.createElement("canvas");a.width=W;a.height=Hh;a.pad=ROOT_PAD;
+  const c=a.getContext("2d");c.imageSmoothingEnabled=false;c.drawImage(src,PL,PT);
   const sd=c.getImageData(0,0,W,Hh),d=sd.data;
   const body=(x,y)=>{if(x<0||y<0||x>=W||y>=Hh)return false;const i=(y*W+x)*4;return d[i+3]>0;};
   const flesh=(x,y)=>{if(!body(x,y))return false;const i=(y*W+x)*4;return d[i]+d[i+1]+d[i+2]>70;};   // not the black outline
@@ -3974,11 +3974,11 @@ function buildRooted(key){
       let t=i/N;const u=P.rev?1-t:t;
       const x=(1-u)*(1-u)*P.a[0]+2*(1-u)*u*P.c[0]+u*u*P.b[0],y=(1-u)*(1-u)*P.a[1]+2*(1-u)*u*P.c[1]+u*u*P.b[1];
       const wb=Math.sin(u*9+P.ph)*P.wob;
-      pts.push([x+wb,y+wb*.5,P.r0+(P.r1-P.r0)*u]);
+      pts.push([x+wb,y+wb*.5,P.r0+(P.r1-P.r0)*Math.sqrt(u)]);
     }
     // first the dark torn skin around it, then the root itself; runs under the skin are drawn as raised veins
     const inAt=i=>{const [x,y]=pts[i],X=Math.round(x),Y=Math.round(y);return X>=0&&Y>=0&&X<W&&Y<Hh&&!!bodyAt[Y*W+X];};
-    const underAt=i=>inAt(i)&&!P.feet&&Math.floor(i/16)%2===1;
+    const underAt=i=>inAt(i)&&!P.feet&&Math.floor(i/24)%2===1;
     for(let i=1;i<pts.length;i++){
       if(underAt(i)===underAt(i-1)&&inAt(i)===inAt(i-1))continue;   // a wound where it goes in or comes out
       const [x,y,r]=pts[i];
@@ -3993,8 +3993,9 @@ function buildRooted(key){
       for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){
         const dd=dx*dx+dy*dy,X=X0+dx,Y=Y0+dy;if(X<0||Y<0||X>=W||Y>=Hh)continue;const k=Y*W+X;
         if(under){if(dd<=r*r+.3&&!sunk.has(k))sunk.set(k,dy>0?.62:.8);continue;}
-        if(dd<=r*r+.3)fill.set(k,dy<-r*.4?LIT:dy>r*.4?SH:BARK);
-        else if(dd<=(r+.9)*(r+.9))edge.add(k);
+        const rr=bodyAt[k]?Math.min(r,.5):r;                               // inside the body it is a single strand of bark
+        if(dd<=rr*rr+.3)fill.set(k,dy<-rr*.4?LIT:dy>rr*.4?SH:BARK);
+        else if(dd<=(rr+.9)*(rr+.9))(bodyAt[k]?sunk.has(k)||sunk.set(k,.72):edge.add(k));   // out in the air it gets a dark outline
       }
     });
     for(const [k,f] of sunk)if(!fill.has(k))dark(k%W,(k/W)|0,f);        // a raised vein under the skin
@@ -4005,7 +4006,7 @@ function buildRooted(key){
   }
   c.putImageData(sd,0,0);
   SPR[key+"_r"]=a;
-  const b=document.createElement("canvas");b.width=W;b.height=Hh;b.res=K;
+  const b=document.createElement("canvas");b.width=W;b.height=Hh;b.pad=ROOT_PAD;
   const cb=b.getContext("2d");cb.drawImage(a,0,0);cb.globalCompositeOperation="source-in";cb.fillStyle="#fff";cb.fillRect(0,0,W,Hh);
   SPRW[key+"_r"]=b;
 }
@@ -4220,9 +4221,10 @@ function off(e){
 }
 function blit(name,tx,ty,alpha,fl,sy,sx,flip){
   const img=SPR[name];if(!img)return;
-  const k=img.res||1,w=cell*(sx||1)*img.width/k/16,h=cell*(sy||1)*img.height/k/16;   // a 24px sprite spans a tile and a half
-  const px=(tx-cam.x)*cell+(cell-w)/2;
-  const py=(ty-cam.y)*cell+cell-h;
+  const w=cell*(sx||1)*img.width/16,h=cell*(sy||1)*img.height/16;   // a 24px sprite spans a tile and a half
+  const pd=img.pad,pb=pd?cell*(sy||1)*pd[3]/16:0;                     // a padded (rooted) sprite hangs its extra rows below the floor line
+  const px=(tx-cam.x)*cell+(cell-w)/2+(pd?cell*(sx||1)*(pd[2]-pd[0])/32:0);
+  const py=(ty-cam.y)*cell+cell-h+pb;
   ctx.globalAlpha=alpha;
   if(flip){
     ctx.save();
@@ -6278,8 +6280,12 @@ function drawBattle(vw,vh){
 }
 function drawArenaSprite(name,cx,cy,size,alpha,fl,scaleW,scaleH){
   const img=SPR[name];if(!img)return;
-  const w=size*(scaleW||1),h=size*(scaleH||1);
-  const x=cx-w/2,y=cy-h;
+  let w=size*(scaleW||1),h=size*(scaleH||1);
+  let x=cx-w/2,y=cy-h;
+  if(img.pad){                                    // the sprite's own pixels keep their size; the roots spill out round it
+    const [l,t,r,b]=img.pad,uw=w/(img.width-l-r),uh=h/(img.height-t-b);
+    x-=l*uw;y-=t*uh;w=img.width*uw;h=img.height*uh;
+  }
   ctx.globalAlpha=alpha;
   ctx.drawImage(img,x,y,w,h);
   if(fl>.02){ctx.globalAlpha=Math.min(1,fl)*alpha;ctx.drawImage(SPRW[name],x,y,w,h);}
