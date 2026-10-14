@@ -87,6 +87,33 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await ev('start("cade")'); await toChase();
   check('nobody else gets the choice', await ev('!!S.chase&&!MAPD.dlg&&!monkChoiceOpen'));
 
+  // His own rites, one a level.
+  await ev('start("monk")');
+  const rites = await ev('moveList().map(m=>m.id+":"+m.lvl).join(",")');
+  check('his own moves, one each level from 3 to 9', rites === 'strike:1,rally:2,crosssign:3,holywater:4,sanctuary:5,penance:6,litany:7,rites:8,last:9', rites);
+  check('they are his alone', await ev('moveListFor(charById("cade")).every(m=>!m.only||m.only!=="monk")'));
+  check('each has its own icon', await ev('["crosssign","holywater","sanctuary","penance","litany","rites"].every(id=>!!ART["move_"+id])'));
+  check('levelling up teaches them', await ev('newMovesAt(5).map(m=>m.name).join()==="Sanctuary"'));
+  const fight = id => ev(`(()=>{start("monk");S.lvl=9;S.hp=S.maxhp=999;mons=[];spawnMon("${id}",S.px+1,S.py);startBattle(mons[0]);B.dlg=null;parryChance=()=>0;})()`);
+  const dmgOf = (mv, extra) => ev(`(()=>{const r0=Math.random;Math.random=()=>.5;${extra || ''}const mv=moveList().find(m=>m.id==="${mv}");const r=pDamage(mv,{noMiss:true});Math.random=r0;return r.dmg;})()`);
+  await fight('skel');
+  const smite = await dmgOf('crosssign'), plain = await dmgOf('strike');
+  check('Sign of the Cross hits the dead far harder', smite > plain * 1.3, [smite, plain]);
+  const fresh = await dmgOf('penance', 'S.hp=S.maxhp;'), hurt = await dmgOf('penance', 'S.hp=Math.round(S.maxhp*.2);');
+  check('Penance is stronger the more he is hurt', hurt > fresh * 1.8, [fresh, hurt]);
+  await ev('B.phase="choose";chooseMove("holywater")'); await step(1.5);
+  check('Holy Water makes the foe swing wild, and scalds the dead', await ev('B.mStat.blind>0&&B.mStat.burn>0'));
+  const ready = async () => { for (let i = 0; i < 100 && await ev('B&&B.phase!=="choose"'); i++) await step(.1); await ev('S.cds={};B.dlg=null'); };
+  await ready(); await ev('chooseMove("sanctuary")');
+  for (let i = 0; i < 40 && !await ev('B.pStat.ward>0'); i++) await step(.05);
+  check('Sanctuary raises a circle of light', await ev('B.pStat.ward===2'), await ev('[B.phase,B.mhp,S.lvl,B.pStat.ward,document.getElementById("log").textContent.slice(-300)]'));
+  const taken = await ev('(()=>{const r0=Math.random;Math.random=()=>.5;const h=S.hp;enemyStrike(null,1,false);Math.random=r0;return [h-S.hp,B.pStat.ward];})()');
+  await ready();
+  const bare = await ev('(()=>{B.pStat.ward=0;const r0=Math.random;Math.random=()=>.5;const h=S.hp;enemyStrike(null,1,false);Math.random=r0;return h-S.hp;})()');
+  check('and the blow is halved', taken[1] === 1 && taken[0] > 0 && taken[0] <= Math.ceil(bare / 2), [taken, bare]);
+  await ready(); await ev('S.hp=500;window._sw=0;const o=pSwing;pSwing=f=>{window._sw++;o(f);};chooseMove("litany")'); await step(1.5);
+  check('Litany is three blows, and each knits his wounds', await ev('window._sw===3&&(document.getElementById("log").textContent.match(/knits your wounds/g)||[]).length>=3'), await ev('window._sw'));
+
   check('no page errors', errors.length === 0, errors);
   let pass = 0;
   for (const r of results) { console.log((r.ok ? 'ok   ' : 'FAIL ') + r.name + (r.ok ? '' : '  ' + JSON.stringify(r.detail))); if (r.ok) pass++; }
