@@ -52,7 +52,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('it wears them: STOLEN GIFTS on its plate', await ev('B.mStat.gifts===5'));
   check('Gilded Palm takes your gold and feeds it', await ev('S.gold===0&&B.mmax>960&&B.mhp===B.mmax'), await ev('[S.gold,B.mmax]'));
   check('Iron Hide hardens it', await ev(`(()=>{const R=Math.random;Math.random=()=>.5;S.str=30;const a=pDamage({mult:1},{noMiss:true}).dmg;S.perks.iron=false;const b=pDamage({mult:1},{noMiss:true}).dmg;S.perks.iron=true;Math.random=R;return a<b})()`));
-  check('Troll Blood closes its wounds', await ev(`(()=>{B.mhp-=100;const h=B.mhp;B.phase="anim";endRound();return B.mhp>=h+6})()`));
+  check('Troll Blood closes its wounds', await ev(`(()=>{S.pack=S.pack.filter(it=>!isWisp(it));B.mhp-=100;const h=B.mhp;B.phase="anim";endRound();return B.mhp>=h+6})()`));
   check('Riposte turns your blows back on you', await ev(`(()=>{const R=Math.random;Math.random=()=>.05;const r=pDamage({mult:1});Math.random=R;return r.miss&&r.riposted})()`));
   check('Keen Edge sharpens its blows instead', await ev('turned("keen")&&!hasPerk("keen")'));
   check('no more black cards are dealt', await ev('(()=>{S.blackPity=99;const h=dealLevelHand();return !h.some(c=>c.kind==="black")})()'));

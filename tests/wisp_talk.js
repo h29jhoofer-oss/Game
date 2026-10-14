@@ -12,7 +12,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const ev = s => page.evaluate(s);
   const results = [];
   const check = (name, ok, detail) => results.push({ name, ok: !!ok, detail });
-  const giveWisp = h => ev(`(()=>{start("${h}");descentT=0;fade=0;const w=POTIONS.find(x=>x.id==="wisp");S.pack.push({kind:"use",ref:w,glyph:"?",col:w.col,name:w.name});})()`);
+  const giveWisp = h => ev(`(()=>{start("${h}");descentT=0;fade=0;})()`);
 
   check('the wisp is violet now, not blue', await ev('["wisp_0","wisp_1","wisp_orb"].every(k=>ART[k].join("").includes("V")&&!/[234]/.test(ART[k].join("")))&&SPELL_COL.wisp==="#a87fe0"'));
   await giveWisp('rook');
@@ -33,7 +33,11 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
     for (const h of heroes) { await ev(`start("${h}")`); said.push(await ev(`wispLines("${t}").map(l=>l.text).join("|")`)); }
     check(`"${t}": a different answer for each of the five heroes`, new Set(said).size === 5, said.map(x => x.slice(0, 40)));
   }
-  await ev('start("cade")');
+  const starts = [];
+  for (const h of heroes) { await ev(`start("${h}")`); starts.push(await ev('S.pack.filter(isWisp).length===1&&!!activeWisp()')); }
+  check('every hero starts out with Tam\'s scroll', starts.every(Boolean), starts);
+  check('the playtest kit keeps it', await ev('(()=>{start("monk");playtestKit();return S.pack.filter(isWisp).length===1;})()'));
+  await ev('start("cade");S.pack=S.pack.filter(it=>!isWisp(it))');
   check('without a wisp, H does nothing', await (async () => { await page.keyboard.press('h'); return ev('!wispTalkOpen'); })());
 
   check('rooted monsters have red eyes', await ev('ROOTED_BASES.every(b=>{const r=SPR[b+"_r"];if(!r.eyes||!r.eyes.length)return false;const d=r.getContext("2d").getImageData(0,0,r.width,r.height).data;return r.eyes.every(([x,y])=>{const i=(y*r.width+x)*4;return d[i]>240&&d[i+1]<100;});})'));

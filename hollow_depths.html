@@ -1029,10 +1029,6 @@ function newFloor(depth){
     }
     const s2=openSpot(false);
     if(s2)items.push(Object.assign(gearItem("offhand",OFFHAND_ITEMS.find(o=>o.id==="buckler")),{x:s2.x,y:s2.y}));
-    if(PLAYTEST){
-      const w=POTIONS.find(p=>p.id==="wisp"),s3=openSpot(false);
-      if(s3)items.push({kind:"use",ref:w,glyph:w.glyph,col:w.col,name:w.name,note:w.note,x:s3.x,y:s3.y});
-    }
   }
   computeFOV();
   fx=[];corpses=[];trapFx=[];shake=0;fade=1;
@@ -4718,8 +4714,10 @@ function newState(id){
      dodge:0, upgrades:{str:0,hp:0,stam:0,dodge:0,mana:0}, perks:{}, pendLvl:0, lvlWait:0, blackPity:0, facingLeft:false,
      offhand:OFFHANDS.torch,altOffhand:null,amulet:null,rings:[null,null],regenAcc:0,weapon:WEAPONS[0],armor:ARMORS[0],pack:[],log:[],over:false,mode:"map",cds:{},lore:new Set(),char:C.id};
   if(C.init)C.init(st);
+  st.pack.push(tamScroll());   // every hero sets out with Tam's scroll: the wisp is with them from the first step
   return st;
 }
+function tamScroll(){const w=POTIONS.find(p=>p.id==="wisp");return{kind:"use",ref:w,glyph:w.glyph,col:w.col,name:w.name,note:w.note};}
 // Story text that mentions Cade is re-voiced for other heroes.
 const LORE_ALT={
  cade:{rook:{title:"Rook",body:"Rook picked pockets in the King's market until the night the castle dropped into the hill with the whole day's takings in it. Three years of scraping by later, he has decided that everything down there is just a very large, very unguarded purse."}},
@@ -9414,7 +9412,7 @@ function playtestKit(){
   S.rings=[RINGS.find(r=>r.id==="storm"),RINGS.find(r=>r.id==="mending")];
   for(const r of S.rings)applyMods(r.mods,1);
   S.hp=S.maxhp;
-  S.pack=[cons("heal",2),cons("heal",2),cons("heal",2),cons("heal",1),cons("heal",1)].concat(CHAR().noMagic
+  S.pack=[tamScroll(),cons("heal",2),cons("heal",2),cons("heal",2),cons("heal",1),cons("heal",1)].concat(CHAR().noMagic
     ? [cons("heal",2),cons("heal",2),cons("heal",1)]            // no scrolls for a man who will not read them
     : [cons("flame",2),cons("bolt",2),cons("ice",2),cons("dark",2)]);
   say(CHAR().noMagic?"Playtest kit: the best gear and healing. Press N to skip a floor and gain a level.":"Playtest kit: the best gear, scrolls and healing. Press N to skip a floor and gain a level.","c-cold");
