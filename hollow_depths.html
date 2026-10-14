@@ -1163,6 +1163,8 @@ function closePaper(){if(!paperOpen)return;paperOpen=false;hideOverlay();}
 // steps, and gives his speech before the fight.
 let THRONE=null;
 const THRONE_TORCH0=.3,THRONE_TORCH_GAP=.4;   // then he rises, takes two steps down, and the fight begins (see throneTick)
+// The red carpet runs from the foot of the throne down the middle of the hall.
+function onCarpet(x,y){const T=THRONE,r=T&&T.room;return !!r&&x===T.x&&y>T.y&&y<r.y+r.h;}
 function inThroneRoom(x,y){const r=THRONE&&THRONE.room;return !!r&&x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h;}
 function placeThrone(depth,rooms){
   THRONE=null;
@@ -1206,8 +1208,13 @@ function throneTick(dt){
   const T=THRONE;
   if(T.stage==="dark"){
     if(S.mode==="map"&&!S.over&&!S.chase&&descentT<=0&&!levelOpen&&T.king&&mons.includes(T.king)&&inThroneRoom(S.px,S.py)){
+      // the hall stays dark until you set foot on the carpet
+      if(!onCarpet(S.px,S.py)){
+        if(!T.hinted){T.hinted=true;say("A long dark hall. A red carpet runs down the middle of it, towards something tall at the far end.","c-cold");}
+        return;
+      }
       T.stage="wake";T.t=0;held.clear();S.dashT=0;
-      say("You step into the hall. Something on the throne at the far end turns its head.","c-hit");
+      say("You step onto the carpet. Something on the throne at the far end turns its head.","c-hit");
     }
     return;
   }
@@ -1222,8 +1229,8 @@ function throneTick(dt){
   const end=THRONE_TORCH0+Math.max(0,Math.ceil(T.torches.length/2)-1)*THRONE_TORCH_GAP;
   const RISE=end+.7,STEP1=RISE+.6,STEP2=STEP1+.6,FIGHT=STEP2+.7;
   if(T.t>=RISE&&!T.rose){T.rose=true;quake(5);say("The Hollow King rises from his throne.","c-lvl");}
-  if(T.t>=STEP1&&!T.s1){T.s1=true;m.seated=false;m.y=T.y+1;m.fy=m.y+.5;playMonsterStep(8);quake(4);}
-  if(T.t>=STEP2&&!T.s2){T.s2=true;m.y=T.y+2;m.fy=m.y+.5;playMonsterStep(7);quake(5);say("He comes down the steps to meet you.","c-lvl");}
+  if(T.t>=STEP1&&!T.s1){T.s1=true;m.seated=false;if(!(S.px===T.x&&S.py===T.y+1))m.y=T.y+1;m.fy=m.y+.5;playMonsterStep(8);quake(4);}
+  if(T.t>=STEP2&&!T.s2){T.s2=true;if(m.y===T.y+1&&!(S.px===T.x&&S.py===T.y+2))m.y=T.y+2;m.fy=m.y+.5;playMonsterStep(7);quake(5);say("He comes down the steps to meet you.","c-lvl");}
   if(T.t>=FIGHT){T.stage="done";m.seenYou=true;held.clear();computeFOV();startBattle(m);}
 }
 // The torches' light reaches the floor round them.
