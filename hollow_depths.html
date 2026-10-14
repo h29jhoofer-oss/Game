@@ -1324,9 +1324,15 @@ function drawKnight(R){
   }
   // dead: the blood pools, the body slumps over, the head arcs away and rolls
   const e=tclock-K.dead,dir=K.kx>T.x?1:-1;
-  ctx.globalAlpha=b*.85;ctx.fillStyle="#5a0c10";
-  const pr=Math.min(1,e/1.6)*cell*.62;
-  ctx.beginPath();ctx.ellipse(ox+cell*.5+dir*cell*.15,oy+cell*.88,pr,pr*.42,0,0,Math.PI*2);ctx.fill();
+  // the pool, on the sprite's own pixel grid, with a ragged edge and a darker middle
+  const pr=Math.min(1,e/1.6)*10,pcx=8+dir*2.4,pcy=14;
+  ctx.globalAlpha=b*.9;
+  for(let j=-5;j<=5;j++)for(let i=-12;i<=12;i++){
+    const d=Math.hypot(i/pr,j/(pr*.42)),rag=((i*7+j*13)&3)*.06;
+    if(d>1-rag)continue;
+    ctx.fillStyle=d<.55?"#3d070a":(i+j)%5===0?"#8f2f28":"#5a0c10";
+    ctx.fillRect(Math.round(ox+(Math.round(pcx)+i)*u),Math.round(oy+(pcy+j)*u),Math.ceil(u),Math.ceil(u));
+  }
   const tip=Math.max(0,Math.min(1,(e-.35)/.35)),ease=tip*tip*(3-2*tip);
   ctx.save();ctx.globalAlpha=b;
   ctx.translate(ox+cell*.5,oy+cell);ctx.rotate(-dir*ease*.5);if(flip)ctx.scale(-1,1);   // he crumples forward
