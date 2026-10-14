@@ -18,12 +18,13 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await giveWisp('rook');
   await page.keyboard.press('h');
   check('H opens the talk menu', await ev('wispTalkOpen&&freePaused()&&/Talk to Tam/.test(document.getElementById("card").textContent)'));
-  await page.keyboard.press('2');
+  check('the questions are dealt as cards, like the level-up hand', await ev('document.querySelectorAll("#card .chargrid.fan .charcard.wispcard").length===4&&!document.querySelector("#card button")'));
+  await page.keyboard.press('2'); await page.waitForTimeout(700);
   check('asking about the King starts his answer', await ev('!wispTalkOpen&&!!MAPD.dlg&&MAPD.dlg.who==="wisp"'));
   for (let i = 0; i < 30 && await ev('!!MAPD.dlg'); i++) await ev('dlgAdvance();dlgAdvance()');
-  check('then the menu comes back, marking what was asked', await ev('wispTalkOpen&&/\\(asked\\)/.test(document.getElementById("card").textContent)&&S.wispAsked.king'));
-  await page.keyboard.press('5');
-  check('and Never mind closes it', await ev('!wispTalkOpen&&!freePaused()'));
+  check('then the menu comes back, marking what was asked', await ev('wispTalkOpen&&/Asked before/.test(document.querySelector(\'.wispcard[data-id="king"]\').textContent)&&S.wispAsked.king'));
+  await page.keyboard.press('Escape');
+  check('and Esc puts them away', await ev('!wispTalkOpen&&!freePaused()'));
 
   // every hero hears something different
   const heroes = ['cade', 'rook', 'doctor', 'mage', 'monk'];

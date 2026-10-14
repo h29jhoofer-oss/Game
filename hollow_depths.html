@@ -187,6 +187,11 @@ canvas{display:block;max-width:100%;max-height:100%;touch-action:manipulation;
 .lvlcard .cname{font-size:16px}
 .lvlcard .cgain{font-size:14px;font-weight:700;color:var(--ink);margin:0 0 8px}
 .lvlcard .ckey{margin-top:auto;padding-top:10px;font-size:10.5px;color:var(--rule);letter-spacing:.08em}
+.wispcard .cport{padding:6px}
+.wispcard.asked .ctitle{color:var(--rule)}
+.wispbye{text-align:center;margin:0;color:#8e9aad;font-size:13px;cursor:pointer;letter-spacing:.06em}
+.wispbye span{opacity:.6}
+.wispbye:hover{color:#e9e5d9}
 /* black cards: rare dark gifts, special abilities rather than plain stats */
 .charcard.black{
   --ink:#e9e1c8;--ink2:#bdb39a;--rule:#6d5a8a;--red:#c9a2ff;--gold-d:#7d5fb0;
@@ -5806,25 +5811,50 @@ const WISP_TALK={
 };
 const WISP_TOPICS=["who","king","queen","fall"];
 function wispLines(id){const T=WISP_TALK[id],c=CHAR().id;return(T.all||[]).concat(T[c]||T.cade);}
-let wispTalkOpen=false;
+let wispTalkOpen=false,wispPicked=false;
+// The questions are dealt as a hand of cards, like the level-up draft: lift one to read it, play it to ask.
+const WISP_CARD={who:{spr:"wisp_0",blurb:"The little light at your shoulder. Who was he, before?"},
+ king:{spr:"king",blurb:"King Aldric, who went downstairs one night and never came back up."},
+ queen:{spr:"ghost_queen",blurb:"The Queen in the vault, and the forty candles lit for her."},
+ fall:{spr:"stairs",blurb:"The night the castle dropped into the hill."}};
 function wispTalk(){
   if(!activeWisp()){say("There is no one here to talk to but the dark.","c-cold");return;}
-  wispTalkOpen=true;held.clear();
-  const asked=S.wispAsked||(S.wispAsked={});
+  wispTalkOpen=true;wispPicked=false;held.clear();
+  const asked=S.wispAsked||(S.wispAsked={}),mid=(WISP_TOPICS.length-1)/2;
+  const cards=WISP_TOPICS.map((id,i)=>{
+    const C=WISP_CARD[id],pip=`<b>${i+1}</b>`;
+    return `<div class="charcard lvlcard wispcard${asked[id]?" asked":""}" data-id="${id}" role="button" tabindex="0" style="--i:${i};--t:${(i-mid).toFixed(2)}">
+      <div class="cpip tl red">${pip}</div><div class="cpip br red">${pip}</div>
+      <div class="cport">${icon(C.spr,96)}</div>
+      <div class="cname">${WISP_TALK[id].title.replace(/\.$/,"")}</div>
+      <div class="ctitle">${asked[id]?"Asked before":"Ask Tam"}</div>
+      <div class="cbody"><div class="cblurb">${C.blurb}</div><div class="ckey">PRESS ${i+1}</div></div></div>`;
+  }).join("");
   overlay(`<h3>Talk to Tam</h3>
-    <p class="lede">The little wisp bobs at your shoulder, waiting.</p>
-    <div style="display:flex;flex-direction:column;gap:8px">${WISP_TOPICS.map((id,i)=>`<button id="wt_${id}" style="text-align:left">[${i+1}] ${WISP_TALK[id].title}${asked[id]?' <span style="opacity:.5">(asked)</span>':""}</button>`).join("")}
-    <button id="wt_bye" style="text-align:left;opacity:.8">[${WISP_TOPICS.length+1}] Never mind.</button></div>`);
-  for(const id of WISP_TOPICS)$("wt_"+id).onclick=()=>wispAsk(id);
+    <p class="lede">The little wisp bobs at your shoulder, waiting. Choose a question.</p>
+    <div class="chargrid fan lvlhand">${cards}</div>
+    <p class="wispbye" id="wt_bye">Never mind <span>[Esc]</span></p>`);
+  $("card").classList.add("wide");
+  playCardSound(false);
+  const grid=document.querySelector("#card .chargrid");
+  layoutFan(grid);requestAnimationFrame(()=>layoutFan(grid));
+  if(window.ResizeObserver){if(fanRO)fanRO.disconnect();fanRO=new ResizeObserver(()=>layoutFan(grid));fanRO.observe($("card"));}
+  wireHand(grid,()=>wispPicked,el=>wispAsk(el.dataset.id));
   $("wt_bye").onclick=wispBye;
 }
 function wispAsk(id){
-  if(!wispTalkOpen)return;
-  wispTalkOpen=false;hideOverlay();held.clear();
+  if(!wispTalkOpen||wispPicked)return;
+  wispPicked=true;held.clear();
+  const el=document.querySelector(`#card .wispcard[data-id="${id}"]`);
+  if(el){playCardSound(true);el.classList.add("chosen");el.closest(".chargrid").classList.add("picked");}
   (S.wispAsked||(S.wispAsked={}))[id]=true;
-  startDialogue(wispLines(id),()=>wispTalk(),"Back","wisp");
+  setTimeout(()=>{
+    if(fanRO){fanRO.disconnect();fanRO=null;}
+    wispTalkOpen=false;hideOverlay();
+    startDialogue(wispLines(id),()=>wispTalk(),"Back","wisp");
+  },RM?150:500);
 }
-function wispBye(){if(!wispTalkOpen)return;wispTalkOpen=false;hideOverlay();held.clear();}
+function wispBye(){if(!wispTalkOpen||wispPicked)return;if(fanRO){fanRO.disconnect();fanRO=null;}wispTalkOpen=false;hideOverlay();held.clear();}
 
 /* ============================ round upkeep ============================ */
 // Plague Bearer (Vell): the foe's poison and bleeding feed him a share of every tick.
@@ -8839,7 +8869,7 @@ window.addEventListener("keydown",ev=>{
   if(descentT>0&&S&&!S.over&&S.mode==="map"){ev.preventDefault();return;}   // still on the way down
   if(S&&S.jump){ev.preventDefault();return;}                                // being caught
   if(monkChoiceOpen){if(k==="1")monkChoose(false);else if(k==="2")monkChoose(true);ev.preventDefault();return;}
-  if(wispTalkOpen){const n=+k;if(n>=1&&n<=WISP_TOPICS.length)wispAsk(WISP_TOPICS[n-1]);else if(n===WISP_TOPICS.length+1||k==="Escape"||k==="h"||k==="H")wispBye();ev.preventDefault();return;}
+  if(wispTalkOpen){const n=+k;if(n>=1&&n<=WISP_TOPICS.length)wispAsk(WISP_TOPICS[n-1]);else if(k==="Escape"||k==="h"||k==="H")wispBye();ev.preventDefault();return;}
   if(MAPD.dlg){if(k===" "||k==="Enter"||k==="e"||k==="E"||k==="z"||k==="Z")dlgAdvance();ev.preventDefault();return;}   // someone on the map is talking
   if(tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()){ev.preventDefault();return;}                               // the Queen is waking
   if(B&&B.dlg){if(k===" "||k==="Enter"||k==="e"||k==="E"||k==="z"||k==="Z")dlgAdvance();ev.preventDefault();return;}   // it is talking
