@@ -55,7 +55,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
     S.px=V.jx;S.py=V.jy+2;if(map[S.py][S.px]!==FLOOR)S.py=V.jy;
     S.fx=S.px+.5;S.fy=S.py+.5;S.vx=S.px;S.vy=S.py;computeFOV();})()`);
   await page.waitForTimeout(150);
-  check('the guards sleep until you come near', await ev('VAULT.gstage==="sleep"&&!MAPD.dlg') || await ev('Math.max(Math.abs(VAULT.guards[0].x-S.px),Math.abs(VAULT.guards[0].y-S.py))<=4'));
+  check('the guards sleep until you come near', await ev('VAULT.gstage==="sleep"&&!MAPD.dlg') || await ev('Math.max(Math.abs(VAULT.guards[0].x-S.px),Math.abs(VAULT.guards[0].y-S.py))<=GUARD_WAKE_NEAR'));
   await ev('S.px=VAULT.x;S.py=VAULT.y+2;S.fx=S.px+.5;S.fy=S.py+.5;S.vx=S.px;S.vy=S.py;computeFOV();');
   await page.waitForTimeout(200);
   check('coming up the passage starts their dialogue, asleep', await ev('VAULT.gstage==="talk"&&MAPD.dlg&&dlgLine().mood==="sleep"&&freePaused()'));

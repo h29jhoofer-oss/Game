@@ -1164,6 +1164,7 @@ function closePaper(){if(!paperOpen)return;paperOpen=false;hideOverlay();}
 let THRONE=null;
 const THRONE_TORCH0=.3,THRONE_TORCH_GAP=.4;   // then he rises, takes two steps down, and the fight begins (see throneTick)
 // The red carpet runs from the foot of the throne down the middle of the hall.
+const THRONE_WAKE_NEAR=3;   // how close to the throne, along the carpet, before the torches catch
 function onCarpet(x,y){const T=THRONE,r=T&&T.room;return !!r&&x===T.x&&y>T.y&&y<r.y+r.h;}
 function inThroneRoom(x,y){const r=THRONE&&THRONE.room;return !!r&&x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h;}
 function placeThrone(depth,rooms){
@@ -1209,7 +1210,8 @@ function throneTick(dt){
   if(T.stage==="dark"){
     if(S.mode==="map"&&!S.over&&!S.chase&&descentT<=0&&!levelOpen&&T.king&&mons.includes(T.king)&&inThroneRoom(S.px,S.py)){
       // the hall stays dark until you set foot on the carpet
-      if(!onCarpet(S.px,S.py)){
+      // ...and walked up it far enough to see him clearly on his throne
+      if(!onCarpet(S.px,S.py)||S.py>T.y+THRONE_WAKE_NEAR){
         if(!T.hinted){T.hinted=true;say("A long dark hall. A red carpet runs down the middle of it, towards something tall at the far end.","c-cold");}
         return;
       }
@@ -1412,7 +1414,7 @@ function guardLastWords(m){
   const other=VAULT&&VAULT.guards&&VAULT.guards.some(g=>g!==m&&mons.includes(g));
   return L[other?"first":"last"];
 }
-const GUARD_RISE=.9;
+const GUARD_RISE=.9,GUARD_WAKE_NEAR=2;   // they wake when you are this close: right up at the door
 function guardWakes(who){const m=VAULT&&VAULT.guards&&VAULT.guards.find(g=>g.who===who);if(m)m.eyesOpen=true;}
 function guardsBusy(){const V=VAULT;return !!V&&V.gstage==="rise";}
 function guardsTick(dt){
@@ -1421,7 +1423,7 @@ function guardsTick(dt){
   if(V.gstage==="sleep"){
     if(!alive.length){V.gstage="done";return;}
     if(S.mode!=="map"||S.over||descentT>0||levelOpen||vaultBusy()||MAPD.dlg)return;
-    if(!alive.some(m=>visible.has(m.x+","+m.y)&&Math.max(Math.abs(m.x-S.px),Math.abs(m.y-S.py))<=4))return;
+    if(!alive.some(m=>visible.has(m.x+","+m.y)&&Math.max(Math.abs(m.x-S.px),Math.abs(m.y-S.py))<=GUARD_WAKE_NEAR))return;
     V.gstage="talk";held.clear();S.dashT=0;
     say("Two troll guards sit slumped either side of the vault door, snoring.","c-hit");
     const who=new Set(alive.map(m=>m.who));
