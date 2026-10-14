@@ -6839,23 +6839,41 @@ function drawHolyScare(vw,vh){
   else if(t<.55&&!RM&&Math.sin(t*37)>.3){ctx.fillStyle="rgba(160,10,20,.35)";ctx.fillRect(0,0,vw,vh);}
   // the cross comes up from the bottom of the screen in his hand, then burns white-gold
   if(t>.5){
-    const up=ease((t-.5)/.4),u=Math.round(vh/90),cx=vw/2,cy=vh*(1.25-.62*up);
+    const up=ease((t-.5)/.4),u=Math.max(2,Math.round(vh/70)),cx=Math.round(vw/2),cy=vh*(1.3-.62*up);
     const glow=Math.max(0,Math.min(1,(t-.85)/.35)),pulse=RM?1:.85+.15*Math.sin(t*14);
     if(glow>0){
       ctx.globalCompositeOperation="lighter";
-      const R=vh*(.25+1.1*glow)*pulse,g=ctx.createRadialGradient(cx,cy-u*10,0,cx,cy-u*10,R);
+      const R=vh*(.25+1.1*glow)*pulse,g=ctx.createRadialGradient(cx,cy-u*24,0,cx,cy-u*24,R);
       g.addColorStop(0,`rgba(255,250,220,${.95*glow})`);g.addColorStop(.35,`rgba(255,215,120,${.55*glow})`);g.addColorStop(1,"rgba(255,200,90,0)");
       ctx.fillStyle=g;ctx.fillRect(0,0,vw,vh);
       // rays, in hard pixel bands
       ctx.fillStyle=`rgba(255,240,190,${.35*glow})`;
-      for(let k=0;k<12;k++){const a=k/12*Math.PI*2+t*.3;for(let d=u*14;d<R;d+=u*3)ctx.fillRect(Math.round((cx+Math.cos(a)*d)/u)*u,Math.round((cy-u*10+Math.sin(a)*d)/u)*u,u*2,u*2);}
+      for(let k=0;k<12;k++){const a=k/12*Math.PI*2+t*.3;for(let d=u*14;d<R;d+=u*3)ctx.fillRect(Math.round((cx+Math.cos(a)*d)/u)*u,Math.round((cy-u*24+Math.sin(a)*d)/u)*u,u*2,u*2);}
       ctx.globalCompositeOperation="source-over";
     }
     const P=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(Math.round(cx+x*u),Math.round(cy+y*u),w*u,h*u);};
-    P(-5,4,10,30,"#5e3a24");P(-5,4,2,30,"#8a5a3c");P(-6,4,1,30,"#0b0d12");P(5,4,1,30,"#0b0d12");    // the sleeve
-    P(-4,-2,8,7,"#e8b08a");P(-4,-2,8,1,"#f4d2b0");P(-5,-2,1,7,"#0b0d12");P(4,-2,1,7,"#0b0d12");     // the hand
-    const cg=glow>.2?"#fff8e0":"#f0c060",cs=glow>.2?"#ffe9a0":"#a8762c";
-    P(-1,-22,3,22,cs);P(-1,-22,2,22,cg);P(-6,-16,13,3,cs);P(-6,-16,13,2,cg);                      // the cross
+    // both arms come up from the bottom corners, the brown sleeves stepping in towards the shaft
+    for(let k=0;k<9;k++){
+      const y=9+k*4,o=7+k*3;
+      P(-o-8,y,9,5,"#0b0d12");P(-o-7,y,8,4,"#5e3a24");P(-o-7,y,8,1,"#8a5a3c");
+      P(o-1,y,9,5,"#0b0d12");P(o-1,y,8,4,"#5e3a24");P(o-1,y,8,1,"#8a5a3c");
+    }
+    // the cross: thick dark outline, gold body, a bright bevel, and a ruby where the beams meet
+    const hot=glow>.2,body=hot?"#fff2c0":"#f0c060",lit=hot?"#ffffff":"#fff27a",shade=hot?"#e8c070":"#a8762c";
+    P(-3,-38,6,52,"#0b0d12");P(-13,-30,26,6,"#0b0d12");                                  // outline
+    P(-2,-37,4,50,body);P(-12,-29,24,4,body);                                            // body
+    P(-2,-37,1,50,lit);P(-12,-29,24,1,lit);                                              // bevel light
+    P(1,-37,1,50,shade);P(-12,-26,24,1,shade);                                           // bevel shade
+    P(-13,-31,2,8,"#0b0d12");P(11,-31,2,8,"#0b0d12");P(-3,-39,6,2,"#0b0d12");          // flared ends
+    P(-12,-30,1,6,body);P(11,-30,1,6,body);P(-2,-38,4,1,body);
+    P(-1,-28,2,2,hot?"#ff8f80":"#c94a3c");
+    // two hands clasped round the shaft, one above the other
+    for(const [y,side] of [[-2,-1],[5,1]]){
+      const x0=side<0?-8:-6;                                                             // each fist comes in from its own side
+      P(x0,y,14,8,"#0b0d12");P(x0+1,y+1,12,6,"#e8b08a");P(x0+1,y+1,12,1,"#f4d2b0");P(x0+1,y+6,12,1,"#c98a6a");
+      for(let f=1;f<4;f++)P(x0+1+f*3,y+2,1,4,"#c98a6a");                                 // the fingers, wrapped round the shaft
+      P(side<0?x0+1:x0+10,y+1,3,3,"#f4d2b0");P(side<0?x0+1:x0+10,y+4,3,1,"#c98a6a");    // thumb pressed over the grip
+    }
   }
   if(t>HOLY_LEN-.9){ctx.fillStyle=`rgba(255,248,225,${Math.min(1,(t-(HOLY_LEN-.9))/.6)})`;ctx.fillRect(0,0,vw,vh);}
 }
