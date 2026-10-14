@@ -91,6 +91,15 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const end = await run(0);
   check('reaching daylight from floor 1 wins the run', end === 'Out from under the hill', end);
 
+  // Robed, it does not lunge: the robe parts and an arm comes out of it.
+  const robe = await ev(`(()=>{start("cade");S.depth=10;newFloor(10);descentT=0;fade=0;S.hp=S.maxhp=999;S.betrayed=true;mons=[];spawnMon("thing",S.px+1,S.py);startBattle(mons[0]);
+    return {open:!!SPR.thing_open};})()`);
+  await page.waitForTimeout(1800);
+  const px = await ev(`(()=>{const L=B.layout,cv=document.getElementById("cv"),g=cv.getContext("2d");
+    const grab=()=>{const d=g.getImageData(0,0,cv.width,cv.height).data;let red=0;for(let i=0;i<d.length;i+=16)if(d[i]>110&&d[i+1]<45&&d[i+2]<45)red++;return red;};
+    B.lunge=0;B.lungeSide=0;render();const before=grab();
+    B.lunge=.55;B.lungeSide=-1;render();const during=grab();return {before,during};})()`);
+  check('robed, it strikes with a red arm out of its robe', robe.open && px.during > px.before * 1.5 + 40, px);
   check('no page errors', errors.length === 0, errors);
   await browser.close();
   let fail = 0;

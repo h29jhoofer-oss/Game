@@ -3742,7 +3742,7 @@ const ART={"rook":["............kk..","...........kZlk.",".....kkkk..kwGk.","...
 "troll":["........................","........k..k............",".......kUkkUkk..........","......kmUmmUmUkk........","......kUSSSSSSUmkk......",".....kUWWWWWWUmUmmk.....","......kWSSMSSWmmXmmk....",".....kWMykMykMkSSUSSk...","....kMkWkMMMMMkSSkMMSk..","....kMWWMkMMMMkSSkMSSk..","...kMWMMMwmmwkMMSSkMMk..","...kWMMMkkkkkkMMMSkmSk..","...kMMMkmkwkMMmmmmSkmmk.","..kMSmmkmmMMMMMmmSSkmSk.","..kMkkkMmMmmmmmMmSkMmSk.","..kMmSkMmMMMMMMMmSkmmSk.","..kmSkkmmMmmmmmMmSkkmSk.",".kmSSk.kSSMMMMMSSk.kmSSk",".kmSSk.kMSSMMMSSSk.kmSSk",".kSSSk.kMmSSSSSmSk.kSSSk",".kMMmk.kmSSkkkmSSk.kMMmk","kwmSSwkkSSSk.kSSSk.kmSSw",".kkwkkkMMMMmkMMMMmkwkwkk","...k..kwSwSwkwSwSwkk.k.."],
 "knight":["..k..kgRgk......",".kGkkggRggk.....",".kGkgqqqqqqk....",".kGkgkRaRkdk....",".kGkqqqqqqdk....",".kGggdddddrrkk..",".kgqqqdddggaggk.",".kqqqqddggdgrrgk",".kGggdqdqqgqRRqq",".kGgdqqdqqgrrrrd","koodd00000gqrrqd",".knkddddddqqrrqd","..k0agqdgqddrrdk","..k0agqdgqdaddk.","..kaaddddddaaak.","...ksssssssskk.."],
 "king":["...kokokkokok...","...khhhhhhhhk...","...kORoCCoRKk...","...koKKKKKKKk...","...kv9HssH99k...","...kvsEssEx6k...","...k9xssssx6k...","..kkw6xaax6wkk..",".kwwll6xx6llwlk.","kllkllllllllkllk",".kGGGGGDNGGGGGk.","..kvGGGNnGGGvk..","..kv9oooooo96k..","..kv999lG9996k..","..kv999Zg9996k..","..kv999lg9996k..",".kv9999lg99999k.",".kv9999lg99996k.",".kv9999lg99996k.",".k96666lg66666k.",".k96666lg66666k.","k966666lG666666k","kOOOOOOGgOOOOOOk","kKKKKKKKKKKKKKKk"],
-"thing":["................",".......kk.......",".....k9999k.....","....k966669k....","...k96666669k...","...k6Y6666Y6k...","...k67666676k...","..k966kkkk669k..","..k66v6666v66k..",".k966vv66vv669k.",".k66v66Y66v666k.","k966v666666v669k","k66vv666666vv66k","k6uu66666666uu6k",".uu.uu6666uu.uu.","uu..u..uu..u..uu"],
+"thing_open":["................",".......kk.......",".....k9999k.....","....k966669k....","...k96666669k...","...k6Y6666Y6k...","...k67666676k...","..k966kkkk669k..","..k66vvkkvv66k..",".k966vkakkv669k.",".k66vvkaakv666k.","k966vkkrRkkv669k","k66vvkkkakkvv66k","k6uu6vkkkkv6uu6k",".uu.uuvkkvuu.uu.","uu..u..uu..u..uu"],"thing":["................",".......kk.......",".....k9999k.....","....k966669k....","...k96666669k...","...k6Y6666Y6k...","...k67666676k...","..k966kkkk669k..","..k66v6666v66k..",".k966vv66vv669k.",".k66v66Y66v666k.","k966v666666v669k","k66vv666666vv66k","k6uu66666666uu6k",".uu.uu6666uu.uu.","uu..u..uu..u..uu"],
 "thing2":["..u..u.uu.u..u..","..uu.uu99uu.uu..","...k99999999k...","..k9666666669k..","..k6RR6666RR6k..","..k6RA6666AR6k..",".kk6666666666kk.","k96k0Z0Z0Z0k69k.","k96k00000000k69k","kv6vkk6666kkv6vk","v66v66v66v66v66v","k6vv666RR666vv6k",".k66v666666v66k.",".kuu66666666uuk.","uu.uuu6666uuu.uu","u..u..uuuu..u..u"],
 "thing3":["..A....AA....A..","..0...k00k...0..","..0k.k9999k.k0..","...k99666699k...","..k9RA6666AR9k..",".k966666666669k.","k96000000000069k","k60Z0Z0ZZ0Z0Z06k","k600a0a00a0a006k","k60aaaaaaaaaa06k","k60Z0Z0ZZ0Z0Z06k","vk600000000006kv","v6k6666666666k6v","vv.k66666666k.vv","v..vv6vvvv6vv..v","v...v..vv..v...v"],
 "ward_bed":["................",".kkkkkkkkkkkkkk.",".kNNNNNNNNNNNNk.",".kNwwwwwwwwwwNk.",".kNwlllllllwwNk.",".kNwwwwwwwwwwNk.",".kNGGGGGGGGGGNk.",".kNGQGGGGGGQGNk.",".kNGGGGrGGGGGNk.",".kNGGGrrGGGGGNk.",".kNGQGGGGGGQGNk.",".kNGGGGGGGGGGNk.",".kNNNNNNNNNNNNk.",".kkkkkkkkkkkkkk.",".kN..........Nk.",".kk..........kk."],
@@ -5986,7 +5986,7 @@ function drawBattle(vw,vh){
   const eFade=B.faint>0?(B.faint<.18?1:Math.max(0,1-(B.faint-.18)*4.5)):1;
   const eRecoil=B.mFlash>0?Math.min(1,B.mFlash)*esz*.09:0;   // knocked back when struck
   const pRecoil=B.pFlash>0?Math.min(1,B.pFlash)*psz*.09:0;
-  const eoffX=(B.lungeSide<0&&m.t.thing!==2?-lunge*dash:0)+eRecoil+intro*vw*.35;   // the unveiled Thing reaches instead
+  const eoffX=(B.lungeSide<0&&!m.t.thing?-lunge*dash:0)+eRecoil+intro*vw*.35;   // the unveiled Thing reaches instead
   const eBob=RM?0:Math.sin(tclock*2.1)*esz*(m.t.ghost?.05:.02)-(m.t.ghost?esz*.06:0);   // a ghost floats
   // Strike poses: the attacker swaps to its "_atk" sprite for the duration of its lunge.
   const eBase=MONSPR[m.t.id];
@@ -6901,6 +6901,27 @@ function drawHorrorArena(cx,cy,s,o){
   ctx.drawImage(img,cx-MX*S2,cy-G*S2,HZ.N*S2,HZ.N*S2);
   ctx.globalAlpha=1;
 }
+// The arm out of the robe: it reaches from the opening, winds up over you, rakes down, and draws back inside.
+function drawRobeArm(cx,cy,w,h,s,q,L,alpha){
+  if(q<.06||q>.97)return;
+  const G=88,MX=HZ.N/2;
+  const sx=MX,sy=G+(-h+10.5*h/16)/s;                       // the opening in the robe, on the horror's own grid
+  const tx=MX+(L.px-cx)/s,ty=G+(L.py-cy)/s;
+  const keys=[[sx+2,sy+2],[tx+14,ty-34],[tx+6,ty-18],[tx-10,ty+18],[sx+2,sy+2]],at=[0,.3,.42,.7,1];
+  let k=0;while(k<3&&q>at[k+1])k++;
+  const f=ease((q-at[k])/(at[k+1]-at[k])),hx=keys[k][0]+(keys[k+1][0]-keys[k][0])*f,hy=keys[k][1]+(keys[k+1][1]-keys[k][1])*f;
+  const len=Math.max(8,Math.hypot(hx-sx,hy-sy)*.56);
+  const g=hzCtx(),Q=HZ.c.width;
+  g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,Q,Q);g.save();g.setTransform(HZ.K,0,0,HZ.K,0,0);
+  hzArm(g,sx,sy,hx,hy,len,len+1);
+  g.restore();
+  const id=g.getImageData(0,0,Q,Q),d=id.data;
+  for(let i=3;i<d.length;i+=4)d[i]=d[i]>100?255:0;
+  g.putImageData(id,0,0);
+  ctx.globalAlpha=alpha===undefined?1:alpha;ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(HZ.c,cx-MX*s,cy-G*s,HZ.N*s,HZ.N*s);
+  ctx.globalAlpha=1;
+}
 // Three claw marks raked across the hero, laid down in chunky art pixels.
 function drawClawMarks(x,y,size,q){
   if(q<.42)return;
@@ -6917,7 +6938,16 @@ function drawClawMarks(x,y,size,q){
 function drawThingArena(eSpr,cx,cy,esz,sw,shh,alpha){
   const T=B.trans,s=esz*shh/50;
   if(!T){
-    if(B.mon.t.id==="thing")drawArenaSprite(eSpr,cx,cy,esz,alpha,B.mFlash,sw,shh);
+    if(B.mon.t.id==="thing"){
+      // in its robe it does not lunge: the robe parts, and a long red arm comes out of it and rakes you
+      const L=B.layout,atk=B.lungeSide<0&&B.lunge>0&&L;
+      if(atk&&SPR.thing_open){
+        const q=1-B.lunge;
+        drawArenaSprite(q>.03&&q<.95?"thing_open":"thing",cx,cy,esz,alpha,B.mFlash,sw,shh);
+        drawRobeArm(cx,cy,esz*sw,esz*shh,s,q,L,alpha);
+        drawClawMarks(L.px,L.py,L.psz,q);
+      }else drawArenaSprite(eSpr==="thing_atk"?"thing":eSpr,cx,cy,esz,alpha,B.mFlash,sw,shh);
+    }
     else{
       const L=B.layout,atk=B.lungeSide<0&&B.lunge>0&&L;
       drawHorrorArena(cx,cy,s,atk?{alpha,slash:1-B.lunge,tx:L.px-cx,ty:L.py-cy}:{alpha});
