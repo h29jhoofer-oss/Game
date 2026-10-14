@@ -420,6 +420,122 @@ body.inchasm .dice-tray{display:none}
   padding:10px 26px;border-radius:8px;background:rgba(30,70,95,.92);border:2px solid #8fd8f0;color:#e8fbff;cursor:pointer;
   box-shadow:0 4px 0 rgba(0,0,0,.5)}
 .parry-btn:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.5)}
+/* ---------- the moves as a hand of little cards ---------- */
+.movebar{flex-wrap:nowrap!important;gap:0!important;align-items:flex-end}
+.moveslot.mcard{
+  --ink:#161b23;--gold-d:#a8873a;
+  position:relative;flex:none;width:46px;height:64px;margin:0 0 0 -6px;padding:0;
+  display:block;line-height:1;
+  background-color:#d9d2c0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%23cfc6aa' d='M1 1h1v1h-1zM3 3h1v1h-1z'/%3E%3C/svg%3E");background-size:6px 6px;
+  box-shadow:0 -2px 0 0 var(--gold-d),0 2px 0 0 var(--gold-d),-2px 0 0 0 var(--gold-d),2px 0 0 0 var(--gold-d),
+    0 -3px 0 0 #0a0c10,0 3px 0 0 #0a0c10,-3px 0 0 0 #0a0c10,3px 0 0 0 #0a0c10,4px 5px 0 0 rgba(0,0,0,.5);
+  transform-origin:50% 160%;
+  transform:rotate(calc(var(--t) * 4deg)) translateY(calc(var(--t) * var(--t) * 1.6px));
+  transition:transform .14s ease-out;z-index:calc(5 + var(--i));
+}
+.moveslot.mcard:first-child{margin-left:0}
+.moveslot.mcard::before{content:"";position:absolute;inset:3px;border:1px solid #8a7a58;pointer-events:none}
+.moveslot.mcard:hover{transform:rotate(calc(var(--t) * 4deg)) translateY(-12px) scale(1.12);z-index:30}
+.moveslot.mcard:active{transform:rotate(calc(var(--t) * 4deg)) translateY(-6px) scale(1.05)}
+.mc-pip{position:absolute;left:5px;top:4px;font:700 10px/1 "IBM Plex Mono",monospace;color:#b8433a}
+.mc-key{position:absolute;right:5px;bottom:4px;font:700 9px/1 "IBM Plex Mono",monospace;color:#8a7a58}
+.mc-art{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+  background:#161b23;box-shadow:0 0 0 2px #a8873a}
+.mc-art img{width:30px!important;height:30px!important;filter:none!important}
+.moveslot.mcard.cool .mc-art img{opacity:.4;filter:grayscale(.9)!important}
+/* face down: the deck's back, and the turns left before it comes back to hand */
+.moveslot.mcard.down{background:#4a1418;cursor:default}
+.moveslot.mcard.down:hover{transform:rotate(calc(var(--t) * 4deg)) translateY(calc(var(--t) * var(--t) * 1.6px))}
+.moveslot.mcard.down::before{border-color:#a8873a}
+.mc-back{position:absolute;inset:5px;display:flex;align-items:center;justify-content:center;background-color:#4a1418;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' shape-rendering='crispEdges'%3E%3Cpath fill='%23a8873a' d='M5 0h2v1h-2zM4 1h1v1h-1zM7 1h1v1h-1zM3 2h1v1h-1zM8 2h1v1h-1zM2 3h1v1h-1zM9 3h1v1h-1zM1 4h1v1h-1zM10 4h1v1h-1zM0 5h1v2h-1zM11 5h1v2h-1zM1 7h1v1h-1zM10 7h1v1h-1zM2 8h1v1h-1zM9 8h1v1h-1zM3 9h1v1h-1zM8 9h1v1h-1zM4 10h1v1h-1zM7 10h1v1h-1zM5 11h2v1h-2z'/%3E%3C/svg%3E");
+  background-size:12px 12px;image-rendering:pixelated}
+.mc-back b{display:flex;align-items:center;justify-content:center;width:20px;height:20px;background:#2a0c0a;color:#f0c060;font:700 13px/1 "IBM Plex Mono",monospace;
+  box-shadow:0 0 0 2px #a8873a,0 0 0 3px #0a0c10}
+.mcard.fly{position:absolute;z-index:8;width:46px;height:64px;pointer-events:none;
+  background:#d9d2c0;box-shadow:0 0 0 2px #a8873a,0 0 0 3px #0a0c10,6px 8px 0 rgba(0,0,0,.45);
+  animation:mcFly .7s cubic-bezier(.2,.7,.3,1) forwards}
+.mcard.fly::before{content:"";position:absolute;inset:3px;border:1px solid #8a7a58}
+@keyframes mcFly{
+  0%{transform:translate(0,0) scale(1)}
+  55%{transform:translate(var(--dx),var(--dy)) scale(1.9);opacity:1}
+  80%{transform:translate(var(--dx),var(--dy)) scale(1.9,1.9) scaleX(.05);opacity:1}
+  100%{transform:translate(var(--dx),var(--dy)) scale(1.9) scaleX(0);opacity:0}}
+@media (max-width:760px){.moveslot.mcard{width:38px;height:54px;margin-left:-8px}.mc-art{width:28px;height:28px}.mc-art img{width:24px!important;height:24px!important}}
+
+/* ---------- a card turned over the table between the map and a fight ---------- */
+.flipwipe{position:absolute;inset:0;z-index:7;pointer-events:none;display:flex;align-items:center;justify-content:center}
+.flipwipe i{display:block;height:86%;aspect-ratio:2/3;transform:scaleX(0);background-color:#4a1418;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' shape-rendering='crispEdges'%3E%3Cpath fill='%23a8873a' d='M5 0h2v1h-2zM4 1h1v1h-1zM7 1h1v1h-1zM3 2h1v1h-1zM8 2h1v1h-1zM2 3h1v1h-1zM9 3h1v1h-1zM1 4h1v1h-1zM10 4h1v1h-1zM0 5h1v2h-1zM11 5h1v2h-1zM1 7h1v1h-1zM10 7h1v1h-1zM2 8h1v1h-1zM9 8h1v1h-1zM3 9h1v1h-1zM8 9h1v1h-1zM4 10h1v1h-1zM7 10h1v1h-1zM5 11h2v1h-2z'/%3E%3C/svg%3E");
+  background-size:36px 36px;image-rendering:pixelated;
+  box-shadow:0 0 0 6px #a8873a,0 0 0 10px #0a0c10,14px 16px 0 rgba(0,0,0,.5)}
+.flipwipe.go i{animation:flipWipe .55s ease-in-out}
+@keyframes flipWipe{0%{transform:scaleX(0)}40%{transform:scaleX(1)}60%{transform:scaleX(1)}100%{transform:scaleX(0)}}
+
+/* ---------- the table: green baize in a wooden rail, and the log kept on a scorepad ---------- */
+body{background-color:#0c0907;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Cpath fill='%23130e0a' d='M0 1h5v1h-5zM3 5h5v1h-5z'/%3E%3C/svg%3E");background-size:16px 16px}
+.panel{
+  background-color:#14231b;border:0;border-radius:0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%23182a20' d='M0 0h1v1h-1zM2 2h1v1h-1z'/%3E%3C/svg%3E");background-size:6px 6px;
+  box-shadow:0 0 0 3px #3d2a1c,0 0 0 5px #5e3a24,0 0 0 7px #0a0c10,6px 7px 0 4px rgba(0,0,0,.45);
+}
+.panel h2{color:#7f9a86}
+.stat span:first-child{color:#7f9a86}
+.gear{border-top-color:#22392b}
+.mapwrap{border:0;border-radius:0;box-shadow:0 0 0 3px #3d2a1c,0 0 0 5px #5e3a24,0 0 0 7px #0a0c10,6px 7px 0 4px rgba(0,0,0,.45)}
+.board,.main,.rail{gap:16px}
+#app{gap:14px;padding:14px 16px}
+.panel.log{
+  background-color:#e6dfcb;color:#2b2416;
+  background-image:linear-gradient(90deg,transparent 30px,rgba(184,67,58,.55) 30px,rgba(184,67,58,.55) 32px,transparent 32px),
+    repeating-linear-gradient(180deg,transparent 0 18px,rgba(79,110,150,.35) 18px 19px);
+  background-size:auto,auto;background-position:0 0,0 4px;background-attachment:local;
+  padding:4px 10px 4px 40px;line-height:19px;
+  box-shadow:0 0 0 2px #b3a888,0 0 0 4px #0a0c10,6px 7px 0 2px rgba(0,0,0,.45);
+}
+#log.panel p{color:#4a4232;margin:0;line-height:19px}
+#log.panel p.new{color:#161b23}
+#log.panel .c-hit{color:#8f2f28}
+#log.panel .c-good{color:#3f6b2e}
+#log.panel .c-item{color:#7a5418}
+#log.panel .c-lvl{color:#a8541f;font-weight:600}
+#log.panel .c-cold{color:#2f5c6b}
+/* ---------- the bestiary: a binder of monster cards ---------- */
+.bestiary{display:flex;flex-direction:column;gap:10px}
+.pk-best{font-size:12px;padding:4px 10px;margin-left:auto;margin-right:12px}
+.bestgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:22px 16px;padding:10px 10px 16px;
+  max-height:min(66vh,640px);overflow-y:auto}
+.beastcard{cursor:default;padding:26px 18px 22px;min-height:380px}
+.beastcard .cport{padding:6px;margin-bottom:10px}
+.beastcard .cport img{width:72px;height:72px}
+.beastcard .cname{font-size:14px}
+.beastcard .ctitle{margin:5px 0 7px;font-size:10.5px}
+.beastcard .cblurb{font-size:11px;font-style:italic}
+.cpip i{display:block;font-style:normal;font-size:12px;line-height:1;margin-top:2px}
+.bstats{display:flex;justify-content:center;gap:10px;margin:7px 0 4px;font-size:11.5px;font-weight:700;color:var(--ink)}
+.bsw{margin-top:6px;text-align:left}
+.bsw h5{margin:0 0 2px;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--rule)}
+#card .bsw p{margin:0 0 3px;font-size:10.5px;line-height:1.35;color:var(--ink2);padding-left:11px;position:relative}
+.bsw p.up::before{content:"▲";position:absolute;left:0;color:#3f6b2e;font-size:8px;top:2px}
+.bsw p.dn::before{content:"▼";position:absolute;left:0;color:var(--red);font-size:8px;top:2px}
+#card .broot{margin:8px 0 0;font-size:9.5px;line-height:1.35;color:#6a2f8a;font-style:italic}
+#card .charcard.black .bsw p{color:#cfc6dd}.charcard.black .bstats{color:#f0e6c8}.charcard.black .cblurb{color:#cfc6dd}
+.best-btns{display:flex;gap:18px;justify-content:center}
+#card .best-btns button,#card .pk-best{background:#1e242e;border:1px solid #4a5765;color:var(--bone);font-size:12.5px;padding:6px 14px;width:auto;flex:none;letter-spacing:.06em}
+#card .best-btns button:hover,#card .pk-best:hover{border-color:var(--gold);color:#f0dfae}
+/* a card lying face down: the deck's back, a gold lattice on oxblood */
+.beastcard.down{padding:0;background:#3a0f12;cursor:default}
+.beastcard.down::before{inset:8px;border-color:var(--gold-d);box-shadow:inset 0 0 0 2px #3a0f12,inset 0 0 0 4px var(--gold-d)}
+.beastcard.down::after{display:none}
+.cback{position:absolute;inset:16px;display:flex;align-items:center;justify-content:center;
+  background-color:#4a1418;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' shape-rendering='crispEdges'%3E%3Cpath fill='%23a8873a' d='M5 0h2v1h-2zM4 1h1v1h-1zM7 1h1v1h-1zM3 2h1v1h-1zM8 2h1v1h-1zM2 3h1v1h-1zM9 3h1v1h-1zM1 4h1v1h-1zM10 4h1v1h-1zM0 5h1v2h-1zM11 5h1v2h-1zM1 7h1v1h-1zM10 7h1v1h-1zM2 8h1v1h-1zM9 8h1v1h-1zM3 9h1v1h-1zM8 9h1v1h-1zM4 10h1v1h-1zM7 10h1v1h-1zM5 11h2v1h-2z'/%3E%3Cpath fill='%235a1d19' d='M5 5h2v2h-2z'/%3E%3C/svg%3E");
+  background-size:24px 24px;image-rendering:pixelated}
+.cback span{display:flex;align-items:center;justify-content:center;width:64px;height:64px;background:#2a0c0a;color:var(--gold);
+  font-size:34px;font-weight:700;box-shadow:0 -4px 0 0 var(--gold-d),0 4px 0 0 var(--gold-d),-4px 0 0 0 var(--gold-d),4px 0 0 0 var(--gold-d),
+  0 -6px 0 0 #0a0c10,0 6px 0 0 #0a0c10,-6px 0 0 0 #0a0c10,6px 0 0 0 #0a0c10;text-shadow:2px 2px 0 #000}
 /* the roots' version of the bar: violet instead of blue */
 .parry-overlay.roots{background:radial-gradient(ellipse at center,rgba(90,40,130,.22),rgba(10,6,16,.5))}
 .parry-overlay.roots .parry-title{color:#c8a8f0;text-shadow:0 0 14px rgba(168,127,224,.95)}
@@ -746,6 +862,7 @@ body.inbattle #hint{display:none}
           <div class="parry-track" id="parryTrack"><div class="parry-zone" id="parryZone"></div><div class="parry-marker" id="parryMarker"></div></div>
           <button class="parry-btn" id="parryBtn" type="button">PARRY</button>
         </div>
+        <div class="flipwipe" id="flipwipe"><i></i></div>
         <div class="veil" id="veil">
           <div class="card" id="card"></div>
         </div>
@@ -2684,6 +2801,7 @@ function playerAtk(){
 }
 function kill(m){
   if(m.t.thing){m.hp=Math.max(1,m.hp);say("The thing under the hill will not be killed from a distance. Go to it.","c-hit");return;}
+  noteBeast(m.t);
   if(m.t.guardian)dropGuardianGold(m);
   corpses.push({spr:rootSpr(m.t,hurtSpr(MONSPR[m.t.id],0)),x:m.vx,y:m.vy,t:0});
   burst(m.x,m.y,cssv("--blood"),m.t.boss?44:13,m.t.boss?6.5:3.6);
@@ -2991,6 +3109,25 @@ $("spellbar").addEventListener("click",e=>{
 
 /* ============================ move icons ============================ */
 // One small sprite per unlocked move (hotkeys 1-9 still work). A move on cooldown is dimmed and shows its turns left.
+// The move you play leaves the hand: its card rises to the middle of the table, turns, and is gone.
+function playMoveCard(mv){
+  const wrap=$("mapwrap"),from=document.querySelector(`#movebar .mcard[data-mv="${mv.id}"]`);
+  if(!wrap||!from)return;
+  const r=from.getBoundingClientRect(),w=wrap.getBoundingClientRect();
+  const c=document.createElement("div");
+  c.className="mcard fly";c.innerHTML=`<span class="mc-pip">${mv.lvl}</span><span class="mc-art">${icon("move_"+mv.id,32)}</span>`;
+  c.style.left=(r.left-w.left)+"px";c.style.top=(r.top-w.top)+"px";
+  c.style.setProperty("--dx",(w.width/2-(r.left-w.left)-r.width/2)+"px");c.style.setProperty("--dy",(w.height*.42-(r.top-w.top))+"px");
+  wrap.appendChild(c);
+  if(typeof playCardSound==="function")playCardSound(true);
+  setTimeout(()=>c.remove(),RM?100:700);
+}
+// Between the map and a fight, a card is turned over the whole table.
+function flipWipe(){
+  const f=$("flipwipe");if(!f||RM)return;
+  f.classList.remove("go");void f.offsetWidth;f.classList.add("go");
+  if(typeof playCardSound==="function")playCardSound(false);
+}
 function renderMoveBar(){
   const el=$("movebar");if(!el)return;
   const list=(S&&S.mode==="battle"&&B)?unlocked():[];
@@ -2998,9 +3135,13 @@ function renderMoveBar(){
   const sig=list.map(m=>m.id+":"+(S.cds[m.id]||0)+(dry(m)?"!":"")).join("|");
   if(el.dataset.sig===sig)return;          // nothing changed: leave the buttons alone
   el.dataset.sig=sig;
-  el.innerHTML=list.map(m=>{
-    const cd=S.cds[m.id]||0;
-    return `<button type="button" tabindex="-1" class="moveslot${cd>0||dry(m)?" cool":""}" data-mv="${m.id}" title="${m.name} — ${m.desc}" aria-label="${m.name}">${icon("move_"+m.id,32)}${cd>0?`<span class="cd">${cd}</span>`:""}</button>`;
+  // a small fanned hand of cards: the rank in the corner is the level that taught it; a move that is
+  // cooling down lies face down, showing how many turns until it can be played again
+  const mid=(list.length-1)/2;
+  el.innerHTML=list.map((m,i)=>{
+    const cd=S.cds[m.id]||0,down=cd>0,t=(i-mid).toFixed(2);
+    return `<button type="button" tabindex="-1" class="moveslot mcard${down?" down":""}${!down&&dry(m)?" cool":""}" data-mv="${m.id}" style="--t:${t};--i:${i}" title="${m.name} — ${m.desc}" aria-label="${m.name}">`
+      +(down?`<span class="mc-back"><b>${cd}</b></span>`:`<span class="mc-pip">${m.lvl}</span><span class="mc-art">${icon("move_"+m.id,32)}</span><span class="mc-key">${i+1}</span>`)+`</button>`;
   }).join("");
 }
 cv.addEventListener("pointerdown",e=>{if(DH().dlg){e.preventDefault();dlgAdvance();}});
@@ -3594,8 +3735,86 @@ function gearActions(slot){
 }
 const GEAR_SLOTS=[["weapon","Weapon"],["armor","Armour"],["offhand","Off-hand"],["belt","Belt"],["amulet","Pendant"],["ring0","Ring"],["ring1","Ring"]];
 const GEAR_EMPTY={belt:["weapon_torch","Find a dagger or shield to carry a second off-hand."],amulet:["amulet_vigor","Pendants turn up in chests and on the floor."],ring0:["ring_might","You can wear two rings."],ring1:["ring_might","You can wear two rings."]};
+/* ============================ the bestiary ============================ */
+// Every kind of foe you have ever put down gets a card, kept between runs. Open it from the pack. A beast you
+// have not beaten yet lies face down. Strengths and weaknesses come from how each one really fights.
+const BEASTS=[
+ {id:"rat",suit:"♣",where:"Floors 1-3",blurb:"Fat on three years of garrison rations. Alone it is a nuisance. It is never alone for long.",
+  strong:["Quick, cheap bites","Turns up in numbers"],weak:["Frail: 12 health","No armour at all"]},
+ {id:"bat",suit:"♣",where:"Floors 1-4",blurb:"It keeps to the ceiling and drops on whatever carries a light.",
+  strong:["Erratic: darts about the map and is hard to pin down"],weak:["Paper-thin: 11 health","No armour","Misses a quarter of its swoops"]},
+ {id:"gob",suit:"♠",where:"Floors 2-5",blurb:"Wears the wall guard's tabards, cut down and stitched back wrong, as if it forgot how an arm was shaped.",
+  strong:["Dirty Trick: knocks your guard down for 2 turns"],weak:["Light armour (1)","Not much health"]},
+ {id:"skel",suit:"♠",where:"Floors 3-7",blurb:"The honour guard, still standing at the King's door long after there is a King to guard.",
+  strong:["Bone Shard ignores all armour","Hits harder than it looks"],weak:["One of the dead: Anselm's holy blows hit it 30% harder","Only 2 armour"]},
+ {id:"orc",suit:"♠",where:"Floors 3-8",blurb:"Mercenaries the King hired and never paid. They remember the debt better than their own names.",
+  strong:["Cleave: a huge swing, nearly half again as hard","Plenty of health (62)"],weak:["Cleave misses one time in five","Light armour (2)"]},
+ {id:"slime",suit:"♦",where:"Floors 4-8",blurb:"Whatever spilled in the sick wing, and kept spilling.",
+  strong:["Heavy for its size: 78 health, 4 armour","Acid Spray eats your guard for 3 turns"],weak:["Slow: crawls at half pace on the map, easy to walk away from"]},
+ {id:"wraith",suit:"♠",where:"Floors 5-10",blurb:"A courtier who traded something to stay close to the King, and kept trading.",
+  strong:["Every blow ignores armour","Life Drain heals it as it hurts you"],weak:["No armour at all","One of the dead: holy blows hit it harder"]},
+ {id:"ogre",suit:"♣",where:"Floors 6-10",blurb:"The menagerie's largest. It used to be fed by hand. Now it feeds itself.",
+  strong:["Smash: almost twice as hard as a normal blow","105 health"],weak:["Slow on the map","Smash misses a third of the time"]},
+ {id:"troll",suit:"♣",where:"Floors 7-10",blurb:"It knits its wounds as fast as you open them. Watch the scars: they show how hurt it really is.",
+  strong:["Regenerates 3 health every turn","Knit Flesh heals a fifth of its health at once"],weak:["Can't out-heal a burst: save your big moves and land them together","Its scars close as it heals, so you can see when it is winning"]},
+ {id:"knight",suit:"♥",where:"Floors 8-10",blurb:"The King's own knights, chosen for loyalty over sense. Forever has not changed their minds.",
+  strong:["5 armour and 125 health","Shield Bash stuns you for a turn"],weak:["Guard Break and Sunder cut through the armour","Its bash only comes every 5 turns"]},
+ {id:"guardian",suit:"♦",where:"Beside every shrine",blurb:"Gilded statues set round the shrines. Rob the shrine and they remember they have fists.",
+  strong:["Gilded Fist hits half again as hard"],weak:["Slow, and never leaves its post","Sheds gold when it breaks"]},
+ {id:"queen",suit:"♥",face:"Q",where:"Floor 8 · the vault",blurb:"She waited every night for the King to come. He never came. She does not want visitors now.",
+  strong:["Fade: half your blows pass straight through her","Wail and Cold Embrace ignore armour","No blood to spill: bleeding does nothing","At half health she remembers how she died"],
+  weak:["One of the dead: holy blows hit her harder","Fade wears off after a few turns"]},
+ {id:"king",suit:"♥",face:"K",where:"Floor 10 · the throne",blurb:"King Aldric, who bargained away everything inside him to save his Queen, and lost her anyway.",
+  strong:["520 health and 6 armour piercing","Reckoning Slam: dodge it or take two and a half times the damage","Crown of Ash burns; Devour heals him"],
+  weak:["One of the dead: holy blows hit him harder","Parry his blows and stagger him to open him up"]},
+ {id:"thing",suit:"★",face:"J",joker:true,where:"Floor 20 · the stair out",blurb:"It speaks like a lawyer, deals like a friend, and has been under the hill longer than the hill.",
+  strong:["Two shapes: 960 health, then 1120","Steals every dark gift you took and turns it on you","You cannot kill it. You can only outrun it"],
+  weak:["Refuse its gifts and it has nothing to steal","Its first shape reaches slowly: there is time to parry"]},
+ {id:"shade",suit:"✝",where:"Floor 20 · only by faith",blurb:"What is left of it after the cross. Small, shaking, and for the first time, mortal.",
+  strong:["Nothing, any more"],weak:["Everything. It is afraid of the light"]}
+];
+const BEAST_OF={thing2:"thing",thing3:"thing"};
+function beastId(t){return BEAST_OF[t.id]||t.id;}
+function noteBeast(t){
+  if(!t)return;
+  const id=beastId(t);if(!BEASTS.some(b=>b.id===id))return;
+  META.beasts=META.beasts||{};
+  if(META.beasts[id])return;
+  META.beasts[id]=true;metaSave();
+  const L=B&&B.layout;
+  (B?blog:say)(`A new card for the bestiary: ${beastName(BEASTS.find(b=>b.id===id))}.`,"c-item");
+}
+function beastName(b){const t=MONSTERS.find(m=>m.id===b.id);const n=(t&&(t.title||t.name))||b.id;return n.replace(/^the /,"The ").replace(/^./,c=>c.toUpperCase());}
+let bestiaryView=false;
+function beastCard(b,i){
+  const known=META.beasts&&META.beasts[b.id];
+  if(!known)return `<div class="charcard beastcard down" aria-label="An unknown beast"><div class="cback"><span>?</span></div></div>`;
+  const t=MONSTERS.find(m=>m.id===b.id)||{},red=b.suit==="♥"||b.suit==="♦",pip=`<b>${b.face||t.g||"?"}</b><i>${b.suit}</i>`;
+  const stat=t.hp?`<div class="bstats"><span>♥ ${t.hp}</span><span>⚔ ${t.min}-${t.max}</span><span>⛨ ${t.def}</span></div>`:"";
+  return `<div class="charcard beastcard${b.joker?" black":""}">
+    <div class="cpip tl${red?" red":""}">${pip}</div><div class="cpip br${red?" red":""}">${pip}</div>
+    <div class="cport">${icon(MONSPR[b.id]||b.id,72)}</div>
+    <div class="cname">${beastName(b)}</div>
+    <div class="ctitle">${b.where}</div>
+    <div class="cbody"><div class="cblurb">${b.blurb}</div>${stat}
+      <div class="bsw"><h5>Strengths</h5>${b.strong.map(x=>`<p class="up">${x}</p>`).join("")}</div>
+      <div class="bsw"><h5>Weaknesses</h5>${b.weak.map(x=>`<p class="dn">${x}</p>`).join("")}</div>
+      ${b.id!=="queen"&&b.id!=="king"&&b.id!=="thing"&&b.id!=="shade"&&b.id!=="guardian"?`<p class="broot">Below the throne it comes back rooted: tougher, with red eyes.</p>`:""}</div></div>`;
+}
+function drawBestiary(){
+  const n=BEASTS.filter(b=>META.beasts&&META.beasts[b.id]).length;
+  overlay(`<div class="bestiary">
+    <div class="pk-head"><h3>Bestiary <span>${n}/${BEASTS.length}</span></h3><span class="pk-gold">Every foe you have beaten, kept between runs</span></div>
+    <div class="bestgrid">${BEASTS.map(beastCard).join("")}</div>
+    <div class="best-btns"><button id="bestBack">Back to the pack [B]</button><button class="close" id="bestClose">Close [I]</button></div>
+  </div>`);
+  $("card").classList.add("wide","packcard");
+  $("bestBack").onclick=()=>{bestiaryView=false;drawPack();};
+  $("bestClose").onclick=()=>{bestiaryView=false;togglePack();};
+}
 function drawPack(){
   if(!packOpen)return;
+  if(bestiaryView){drawBestiary();return;}
   const a=playerAtk();
   if(packSel&&packSel.at==="pack"&&!S.pack[packSel.i])packSel=null;
   if(packSel&&packSel.at==="spell"&&!(S.spells&&S.spells[packSel.id]!==undefined))packSel=null;
@@ -3644,7 +3863,7 @@ function drawPack(){
   const perks=owned.length?`<div class="gr-perks${S.betrayed?" taken":""}"><h4>${S.betrayed?"Dark gifts \u2014 it took them back":"Dark gifts"}</h4>${owned.map(id=>`<div title="${S.betrayed?"It has this now. "+TURNED[id]:PERKS[id].gain+". "+PERKS[id].text}">${glyphSvg(PERKS[id].glyph,1.4)}<span>${PERKS[id].name}</span></div>`).join("")}</div>`:"";
   const stats=`<div class="gr-stats"><span>Strike <b>${a.min}-${a.max}</b></span><span>Guard <b>${guardVal()}</b></span><span>Parry <b>${packPct(parryChance(false))}</b></span><span>Dodge <b>${packPct(S.dodge||0)}</b></span></div>`;
   overlay(`<div class="pack pk">
-    <div class="pk-head"><h3>Pack <span>${S.pack.length}/${PACK_SLOTS}</span></h3><span class="pk-gold">${icon("gold",16)} ${S.gold} gold</span></div>
+    <div class="pk-head"><h3>Pack <span>${S.pack.length}/${PACK_SLOTS}</span></h3><button class="pk-best" id="openBest" type="button">Bestiary [B]</button><span class="pk-gold">${icon("gold",16)} ${S.gold} gold</span></div>
     <div class="pk-cols">
       <div class="pk-left">
         <div class="pk-grid">${cells.join("")}</div>
@@ -3658,6 +3877,7 @@ function drawPack(){
   </div>`);
   $("card").classList.add("wide","packcard");
   $("closePack").onclick=togglePack;
+  $("openBest").onclick=()=>{bestiaryView=true;drawPack();};
   const tip=$("pkTip");
   const showTip=(el,html)=>{
     tip.innerHTML=html;tip.classList.add("show");
@@ -3715,7 +3935,7 @@ function togglePack(){
   if(shrineOpen){shrineOpen=false;hideOverlay();}
   if(codexOpen){codexOpen=false;hideOverlay();}
   if(editorOpen){editorOpen=false;document.getElementById("se-overlay").classList.remove("open");}
-  packOpen=!packOpen;
+  packOpen=!packOpen;bestiaryView=false;
   packSel=null;
   if(packOpen)drawPack();else{hideOverlay();$("card").classList.remove("packcard");}
 }
@@ -4694,7 +4914,7 @@ let META={unlocked:{cade:true},stats:{},done:{}};
 function metaLoad(){
   try{
     const m=JSON.parse(localStorage.getItem(META_KEY)||"null");
-    if(m&&typeof m==="object"){META.unlocked=Object.assign({cade:true},m.unlocked);META.stats=m.stats||{};META.done=m.done||{};if(Array.isArray(m.papers))META.papers=m.papers;}
+    if(m&&typeof m==="object"){META.unlocked=Object.assign({cade:true},m.unlocked);META.stats=m.stats||{};META.done=m.done||{};META.beasts=m.beasts||{};if(Array.isArray(m.papers))META.papers=m.papers;}
   }catch(e){}
 }
 function metaSave(){try{localStorage.setItem(META_KEY,JSON.stringify(META));}catch(e){}}
@@ -5117,7 +5337,7 @@ function startBattle(m){
   if(m.t.boss)B.maxPoise=Math.min(B.maxPoise,70);
   B.poise=B.maxPoise;
   seq=[];sfx=[];
-  document.body.classList.add("inbattle");
+  document.body.classList.add("inbattle");flipWipe();
   requestAnimationFrame(resize);
   $("log").innerHTML="";
   blog(`${aName(m.t)} blocks the way!`,"c-lvl");
@@ -5138,7 +5358,7 @@ function endBattle(){
   if(qte){if(qte.timer)clearInterval(qte.timer);qte=null;}
   hideQteOverlay();clearParry();
   S.mode="map";B=null;seq=[];sfx=[];
-  document.body.classList.remove("inbattle");
+  document.body.classList.remove("inbattle");flipWipe();
   requestAnimationFrame(resize);
   $("log").innerHTML="";
   for(const m of S.log.slice(-12))say0(m.text,m.cls);
@@ -5349,6 +5569,7 @@ function chooseMove(id){
   if(!mv||S.lvl<mv.lvl||(S.cds[mv.id]||0)>0)return;
   if(mv.transfuse&&(S.ichor||0)<TRANSFUSE_MIN){blog(`Your vials are nearly dry — Transfusion needs at least ${TRANSFUSE_MIN} Ichor.`,"c-cold");return;}
   B.phase="anim";
+  playMoveCard(mv);
   if(mv.cd)S.cds[mv.id]=mv.cd+1;
   drawMoves();
   if(mv.kind!=="buff")pSwing();   // buffs like Rally are not an attack swing
@@ -6185,7 +6406,8 @@ function endRound(){
 function winBattle(){
   if(!B||B.phase==="over")return;
   if(B.mon.t.thing===1){thingUnveils();return;}
-  if(B.mon.t.thing===2){thingEnrages();return;}
+  if(B.mon.t.thing===2){noteBeast(B.mon.t);thingEnrages();return;}
+  noteBeast(B.mon.t);
   if(B.mon.guard&&B.mon.who&&!B.lastWord&&guardLastWords(B.mon)){
     B.lastWord=true;S.guardsSorry=true;B.phase="anim";drawMoves();
     startDialogue(guardLastWords(B.mon),()=>winBattle(),"Continue",B.mon.who);
@@ -9117,7 +9339,9 @@ window.addEventListener("keydown",ev=>{
     ev.preventDefault();return;
   }
   if(packOpen){
-    if(k==="Escape"||k==="i"||k==="I")togglePack();
+    if(k==="b"||k==="B"){bestiaryView=!bestiaryView;drawPack();ev.preventDefault();return;}
+    if(bestiaryView&&/^[1-9]$/.test(k)){ev.preventDefault();return;}
+    if(k==="Escape"||k==="i"||k==="I"){bestiaryView=false;togglePack();}
     else if(/^[1-9]$/.test(k)){packSel=null;useItem(parseInt(k,10)-1);if(packOpen)drawPack();}
     ev.preventDefault();return;
   }
