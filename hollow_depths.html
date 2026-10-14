@@ -1383,6 +1383,28 @@ const GUARD_LINES=[
  {who:"grub",mood:"glee",text:"Dibs on the crunchy bits!"},
  {who:"mog",mood:"anger",text:"GET IT BEFORE IT RUNS OFF!",act:()=>quake(8)}
 ];
+// And what they say as they go down: sorry, to the Queen, for the door.
+const GUARD_DEATH={
+ grub:{
+  first:[{who:"grub",mood:"fear",text:"Hurk... oh. Oh, that's a lot of blood. Is that mine?"},
+         {who:"grub",mood:"fear",text:"My Queen... I'm sorry. I was s'posed to keep the door shut. I only shut my eyes for a bit."},
+         {who:"grub",mood:"fear",text:"Mog... you guard it now. Guard it ever so hard..."}],
+  last:[{who:"grub",mood:"fear",text:"Mog went first... so it's just me, and I'm going too."},
+        {who:"grub",mood:"fear",text:"Sorry, Queenie. We fell asleep again. We always fell asleep."},
+        {who:"grub",mood:"fear",text:"Hope it's quiet... where you are..."}]},
+ mog:{
+  first:[{who:"mog",mood:"fear",text:"Ow. OW. That went right through. Grub, it's gone right through me."},
+         {who:"mog",mood:"fear",text:"Your Majesty, I'm sorry. I promised I'd mind your door. I promised."},
+         {who:"mog",mood:"fear",text:"Grub... don't let it in. Don't let it wake her..."}],
+  last:[{who:"mog",mood:"fear",text:"Grub's gone... and now the door's got nobody."},
+        {who:"mog",mood:"fear",text:"I'm sorry, my Queen. We were s'posed to keep you safe. We couldn't even keep dinner."},
+        {who:"mog",mood:"fear",text:"Tell her... tell her we tried..."}]}
+};
+function guardLastWords(m){
+  const L=GUARD_DEATH[m.who];if(!L)return null;
+  const other=VAULT&&VAULT.guards&&VAULT.guards.some(g=>g!==m&&mons.includes(g));
+  return L[other?"first":"last"];
+}
 const GUARD_RISE=.9;
 function guardWakes(who){const m=VAULT&&VAULT.guards&&VAULT.guards.find(g=>g.who===who);if(m)m.eyesOpen=true;}
 function guardsBusy(){const V=VAULT;return !!V&&V.gstage==="rise";}
@@ -2533,7 +2555,9 @@ function kill(m){
   if(m.t.boss){quake(15);ring(m.x,m.y,"rgba(240,192,96,.95)",7,1.3);}
   mons=mons.filter(o=>o!==m);
   say(`The ${m.t.name} falls.`,"c-good");
-  gainXp(m.t.xp);feastHeal();vaultKeysFrom(m);
+  gainXp(m.t.xp);feastHeal();
+  if(m.guard&&m.who&&S.mode==="map"&&!MAPD.dlg&&guardLastWords(m)){const lw=guardLastWords(m);m.who=null;startDialogue(lw,null,"Continue",lw[0].who);}
+  vaultKeysFrom(m);
   if(m.t.boss){bossDown(m);return;}
   if(Math.random()<.22){
     const it=Object.assign(rollItem(S.depth),{x:m.x,y:m.y});
@@ -5478,6 +5502,11 @@ function winBattle(){
   if(!B||B.phase==="over")return;
   if(B.mon.t.thing===1){thingUnveils();return;}
   if(B.mon.t.thing===2){thingEnrages();return;}
+  if(B.mon.guard&&B.mon.who&&!B.lastWord&&guardLastWords(B.mon)){
+    B.lastWord=true;B.phase="anim";drawMoves();
+    startDialogue(guardLastWords(B.mon),()=>winBattle(),"Continue",B.mon.who);
+    return;
+  }
   if(bossLines(B.mon.t)&&!B.lastWord){
     B.lastWord=true;B.phase="anim";drawMoves();
     startDialogue(bossLines(B.mon.t).end,()=>winBattle(),B.mon.t.id==="queen"?"Rest":"Continue",B.mon.t.id);
