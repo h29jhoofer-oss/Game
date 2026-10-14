@@ -266,6 +266,8 @@ canvas{display:block;max-width:100%;max-height:100%;touch-action:manipulation;
   display:none;flex-wrap:wrap;justify-content:center;align-items:flex-end;gap:4px;pointer-events:none;
 }
 body.inbattle .movebar{display:flex}
+/* while anyone is talking, the move icons and spell bar step aside so the whole dialogue box can be read */
+body.talking .movebar,body.talking .spellbar,body.talking .dice-tray{display:none!important}
 .moveslot{
   pointer-events:auto;position:relative;
   width:44px;height:44px;padding:0;margin:0;
@@ -4569,7 +4571,10 @@ function resize(){
   ctx.imageSmoothingEnabled=false;
   cam.set=false;
 }
+let talkingCls=false;
+function syncTalking(){const t=!!(S&&DH().dlg);if(t!==talkingCls){talkingCls=t;document.body.classList.toggle("talking",t);}}
 function loop(now){
+  syncTalking();
   const dt=Math.min(.05,(now-last)/1000||0);last=now;
   lastFrameAt=performance.now();if(audioHidden)updateAudioVisibility();
   tick(dt);render();
