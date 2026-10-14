@@ -4921,6 +4921,11 @@ function tryBleedMon(dagger,slash,force){
   const L=B.layout,name=B.mon.t.name;
   if(slash&&L)sbleedfx(L.ex,L.ey-L.esz*.5,L.esz*1.3,FX_BLEED.slash,FX_BLEED.slashLife);
   if(B.mhp<=0)return;
+  // The Ghost Queen has been dead nine hundred years: there is no blood left in her to spill.
+  if(B.mon.t.ghost){
+    if(!B.noBloodSaid&&(force||dagger)){B.noBloodSaid=true;blog(`The ${name} does not bleed. There is no blood left in her to spill.`,"c-cold");}
+    return;
+  }
   const armor=Math.max(0,B.mon.t.def-(B.mStat.sunder||0));
   const C=CHAR();
   if(!force&&Math.random()>=Math.min(.9,bleedChance(dagger?BLEED_DAGGER:BLEED_BASE,armor)*(C.bleedMult||1)))return;

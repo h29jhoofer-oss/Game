@@ -129,6 +129,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('then it is your move', await ev('!B.dlg&&B.phase==="choose"'));
   check('there is no running from her', await ev('tryFlee(),S.mode==="battle"'));
 
+  check('she does not bleed, even from a sure wound', await ev('(()=>{tryBleedMon(true,true,true);tryBleedMon(true,true,false);return !(B.mStat.bleed>0)&&/no blood left/.test(document.getElementById("log").textContent);})()'));
   // Her special attacks.
   const fx = await ev(`(()=>{const sps=B.mon.t.sps2,g=n=>sps.find(s=>s.name===n);const R=Math.random;Math.random=()=>.5;
     const o={};B.phase="anim";
