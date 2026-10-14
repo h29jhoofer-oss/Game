@@ -832,6 +832,8 @@ const WEAPONS=[
  // Orrin's signature staff. Never dropped as loot.
  {id:"staff",   name:"The Ashwood Staff", min:3, max:6,  crit:.08,acc:.97,reach:1,pierce:1,d:0, special:true,
   note:"Thirty years of the court mage's hand worn into the grip. The stone at its head still glows when it is pointed at something that should not be alive."},
+ {id:"pilgrim", name:"Pilgrim's Staff",   min:2, max:5,  crit:.06,acc:.94,reach:1,pierce:1,d:0, special:true,
+  note:"Plain ash wood, worn smooth at the grip. It has walked to every shrine in the kingdom."},
  {id:"cane",    name:"The Bloodletter",   min:3, max:5,  crit:.10,acc:.96,reach:1,pierce:1,d:0, special:true,bleeds:true,leech:.2,thirst:50,thirstMax:8,
   note:"A physician's cane with a hollow lancet tip. It drinks a fifth of every wound, and grows sharper with every 50 HP it drinks."}
 ];
@@ -923,6 +925,9 @@ const MONSTERS=[
  {id:"thing", g:"\u03A8",name:"Thing Under the Hill",title:"The Thing Under the Hill",hp:480,min:14,max:23,def:5,acc:.9,xp:0,lo:99,hi:99,col:"--rime",pierce:3,boss:true,thing:1,
   phaseLabel:"\u269C PHASE 1 \u2014 WEARING A SHAPE",intro:"Every eye in the dark opens at once.",
   sps:[{name:"Grasping Roots",mult:1.1,cd:3,guardDown:2},{name:"Fine Print",mult:.9,drain:.5,cd:4},{name:"Weight of the Hill",mult:1.5,cd:4,acc:.78}]},
+ // What is left of it after the monk's cross: small, shaking, and mortal.
+ {id:"shade", g:"\u03C8",name:"shade of the Thing",title:"What Is Left of It",hp:70,min:3,max:7,def:1,acc:.7,xp:0,lo:99,hi:99,col:"--slate",boss:true,mini:true,shade:true,
+  phaseLabel:"\u271D THE LIGHT HAS FOUND IT",intro:"It cowers from the light.",sps:[{name:"Cringe",cd:4,heal:.05},{name:"Last Spite",mult:1.2,cd:3}]},
  {id:"thing2",g:"\u03A8",name:"Thing Under the Hill",title:"The Thing Under the Hill",hp:560,min:18,max:28,def:6,acc:.93,xp:0,lo:99,hi:99,col:"--blood",pierce:4,boss:true,thing:2,
   phaseLabel:"\u2694 PHASE 2 \u2014 UNVEILED",
   sps:[{name:"Grasping Roots",mult:1.2,cd:3,guardDown:3},{name:"Swallowing Dark",mult:1.1,drain:.6,cd:3},{name:"Ember of the Deep",mult:1,burn:3,cd:4},{name:"Feed on the Hill",cd:6,heal:.06}],
@@ -3214,6 +3219,11 @@ const THING_DEAL=[
  {mood:"anger",text:"Very well. No contract, then. I will simply take it off your body.",act:()=>{quake(12);playRoarSound();}}
 ];
 function arriveBusy(){return !!ARRIVE&&ARRIVE.stage!=="done";}
+function dealLines(){
+  if(CHAR().id!=="monk")return THING_DEAL;
+  return THING_DEAL.map(l=>l.who==="hero"&&l.text!=="No."?{who:"hero",text:"My soul is not mine to sell. It belongs to God."}:l)
+    .flatMap(l=>/^I see\./.test(l.text)?[{text:"God. Ha. He does not come down this far, holy man. Ask the Queen. Ask the King. Ask the knights."},l]:[l]);
+}
 function thingArrives(){
   if(ARRIVE)return;
   const D=distFrom(S.px,S.py);
@@ -3257,7 +3267,7 @@ function arriveTick(dt){
   computeFOV();
   if(A.leg>=A.path.length){
     A.stage="talk";
-    startDialogue(THING_DEAL,()=>{
+    startDialogue(dealLines(),()=>{
       A.stage="done";
       spawnMon("thing",Math.round(A.x),Math.round(A.y));
       const m=mons[mons.length-1];m.seenYou=true;held.clear();computeFOV();startBattle(m);
@@ -3828,7 +3838,7 @@ const ART={"rook":["............kk..","...........kZlk.",".....kkkk..kwGk.","...
 "troll":["........................","........k..k............",".......kUkkUkk..........","......kmUmmUmUkk........","......kUSSSSSSUmkk......",".....kUWWWWWWUmUmmk.....","......kWSSMSSWmmXmmk....",".....kWMykMykMkSSUSSk...","....kMkWkMMMMMkSSkMMSk..","....kMWWMkMMMMkSSkMSSk..","...kMWMMMwmmwkMMSSkMMk..","...kWMMMkkkkkkMMMSkmSk..","...kMMMkmkwkMMmmmmSkmmk.","..kMSmmkmmMMMMMmmSSkmSk.","..kMkkkMmMmmmmmMmSkMmSk.","..kMmSkMmMMMMMMMmSkmmSk.","..kmSkkmmMmmmmmMmSkkmSk.",".kmSSk.kSSMMMMMSSk.kmSSk",".kmSSk.kMSSMMMSSSk.kmSSk",".kSSSk.kMmSSSSSmSk.kSSSk",".kMMmk.kmSSkkkmSSk.kMMmk","kwmSSwkkSSSk.kSSSk.kmSSw",".kkwkkkMMMMmkMMMMmkwkwkk","...k..kwSwSwkwSwSwkk.k.."],
 "knight":["..k..kgRgk......",".kGkkggRggk.....",".kGkgqqqqqqk....",".kGkgkRaRkdk....",".kGkqqqqqqdk....",".kGggdddddrrkk..",".kgqqqdddggaggk.",".kqqqqddggdgrrgk",".kGggdqdqqgqRRqq",".kGgdqqdqqgrrrrd","koodd00000gqrrqd",".knkddddddqqrrqd","..k0agqdgqddrrdk","..k0agqdgqdaddk.","..kaaddddddaaak.","...ksssssssskk.."],
 "king":["...kokokkokok...","...khhhhhhhhk...","...kORoCCoRKk...","...koKKKKKKKk...","...kv9HssH99k...","...kvsEssEx6k...","...k9xssssx6k...","..kkw6xaax6wkk..",".kwwll6xx6llwlk.","kllkllllllllkllk",".kGGGGGDNGGGGGk.","..kvGGGNnGGGvk..","..kv9oooooo96k..","..kv999lG9996k..","..kv999Zg9996k..","..kv999lg9996k..",".kv9999lg99999k.",".kv9999lg99996k.",".kv9999lg99996k.",".k96666lg66666k.",".k96666lg66666k.","k966666lG666666k","kOOOOOOGgOOOOOOk","kKKKKKKKKKKKKKKk"],
-"thing_open":["................",".......kk.......",".....k9999k.....","....k966669k....","...k96666669k...","...k6Y6666Y6k...","...k67666676k...","..k966kkkk669k..","..k66vvkkvv66k..",".k966vkakkv669k.",".k66vvkaakv666k.","k966vkkrRkkv669k","k66vvkkkakkvv66k","k6uu6vkkkkv6uu6k",".uu.uuvkkvuu.uu.","uu..u..uu..u..uu"],"thing":["................",".......kk.......",".....k9999k.....","....k966669k....","...k96666669k...","...k6Y6666Y6k...","...k67666676k...","..k966kkkk669k..","..k66v6666v66k..",".k966vv66vv669k.",".k66v66Y66v666k.","k966v666666v669k","k66vv666666vv66k","k6uu66666666uu6k",".uu.uu6666uu.uu.","uu..u..uu..u..uu"],
+"thing_open":["................",".......kk.......",".....k9999k.....","....k966669k....","...k96666669k...","...k6Y6666Y6k...","...k67666676k...","..k966kkkk669k..","..k66vvkkvv66k..",".k966vkakkv669k.",".k66vvkaakv666k.","k966vkkrRkkv669k","k66vvkkkakkvv66k","k6uu6vkkkkv6uu6k",".uu.uuvkkvuu.uu.","uu..u..uu..u..uu"],"monk":[".............k..",".....kkkk...kDk.","....ktttPk..kNk.","...ktttPPPk.kNk.","...knPPPPnk.kNk.","...kPkPPkPk.kNk.","...kPPPPPPk.kNk.","....kPppPk..kNk.","...kuTTTTuk.kNk.","..kuTTDTTTuuPNk.","..kuTDDDTTukkNk.","..kuTTDTTTukkNk.","..kLLLLLLLLkkNk.","..kuTTTLTTTukNk.","..kuuTTTTTuukNk.","...kkbbkkbbkkNk."],"monk_atk":["................",".....kkkk.......","....ktttPk......","...ktttPPPk.....","...knPPPPnk.....","...kPkPPkPk.....","...kPPPPPPk.....","....kPppPk......","...kuTTTTukkkkkk","..kuTTDTTNPPNNND","..kuTDDDTTukkkkk","..kuTTDTTTuk....","..kLLLLLLLLk....","..kuTTTLTTTuk...","..kuuTTTTTuuk...","...kkbbkkbbkk..."],"monk_parry":["................",".....kkkk.......","....ktttPk......","...ktttPPPk.....","...knPPPPnk.....","...kPkPPkPk...k.","...kPPPPPPk..kDk","....kPppPk..kNk.","...kuTTTTukkNk..","..kuTTDTTTPPk...","..kuTDDDTTNk....","..kuTTDTTNuk....","..kLLLLLNLLk....","..kuTTTNTTTuk...","..kuuTNTTTuuk...","...kkbbkkbbkk..."],"monk_cross":["................",".....kkkk.......","....ktttPk....Y.","...ktttPPPk...O.","...knPPPPnk..OOO","...kPkPPkPk...O.","...kPPPPPPk...O.","....kPppPkkkk.O.","...kuTTTTuuuuPO.","..kuTTDTTTuuuPk.","..kuTDDDTTukkk..","..kuTTDTTTuk....","..kLLLLLLLLk....","..kuTTTLTTTuk...","..kuuTTTTTuuk...","...kkbbkkbbkk..."],"monk_walk_0":[".............k..",".....kkkk...kDk.","....ktttPk..kNk.","...ktttPPPk.kNk.","...knPPPPnk.kNk.","...kPkPPkPk.kNk.","...kPPPPPPk.kNk.","....kPppPk..kNk.","...kuTTTTuk.kNk.","..kuTTDTTTuuPNk.","..kuTDDDTTukkNk.","..kuTTDTTTukkNk.","..kLLLLLLLLkkNk.","..kuTTTLTTTukNk.","..kuuTTTTTuukNk.","..kbbk...kbbkNk."],"monk_walk_1":[".............k..",".....kkkk...kDk.","....ktttPk..kNk.","...ktttPPPk.kNk.","...knPPPPnk.kNk.","...kPkPPkPk.kNk.","...kPPPPPPk.kNk.","....kPppPk..kNk.","...kuTTTTuk.kNk.","..kuTTDTTTuuPNk.","..kuTDDDTTukkNk.","..kuTTDTTTukkNk.","..kLLLLLLLLkkNk.","..kuTTTLTTTukNk.","..kuuTTTTTuukNk.","...kkbbkkbbkkNk."],"monk_walk_2":[".............k..",".....kkkk...kDk.","....ktttPk..kNk.","...ktttPPPk.kNk.","...knPPPPnk.kNk.","...kPkPPkPk.kNk.","...kPPPPPPk.kNk.","....kPppPk..kNk.","...kuTTTTuk.kNk.","..kuTTDTTTuuPNk.","..kuTDDDTTukkNk.","..kuTTDTTTukkNk.","..kLLLLLLLLkkNk.","..kuTTTLTTTukNk.","...kuTTTTTukkNk.","....kbbk.kbbkNk."],"monk_walk_3":[".............k..",".....kkkk...kDk.","....ktttPk..kNk.","...ktttPPPk.kNk.","...knPPPPnk.kNk.","...kPkPPkPk.kNk.","...kPPPPPPk.kNk.","....kPppPk..kNk.","...kuTTTTuk.kNk.","..kuTTDTTTuuPNk.","..kuTDDDTTukkNk.","..kuTTDTTTukkNk.","..kLLLLLLLLkkNk.","..kuTTTLTTTukNk.","..kuuTTTTTuukNk.","...kkbbkkbbkkNk."],"thing_shade":["................","................","................","................","................","................","................","......kssk......","......sxxsk.....",".....kYxxYx.....",".....kYxxYx.....","....kxfxxfxk....","....xxxxxfxxk...","...kxxxxxxfxs...","...kssxxxxxsx...","....s.sxxssss..."],"thing":["................",".......kk.......",".....k9999k.....","....k966669k....","...k96666669k...","...k6Y6666Y6k...","...k67666676k...","..k966kkkk669k..","..k66v6666v66k..",".k966vv66vv669k.",".k66v66Y66v666k.","k966v666666v669k","k66vv666666vv66k","k6uu66666666uu6k",".uu.uu6666uu.uu.","uu..u..uu..u..uu"],
 "thing2":["..u..u.uu.u..u..","..uu.uu99uu.uu..","...k99999999k...","..k9666666669k..","..k6RR6666RR6k..","..k6RA6666AR6k..",".kk6666666666kk.","k96k0Z0Z0Z0k69k.","k96k00000000k69k","kv6vkk6666kkv6vk","v66v66v66v66v66v","k6vv666RR666vv6k",".k66v666666v66k.",".kuu66666666uuk.","uu.uuu6666uuu.uu","u..u..uuuu..u..u"],
 "thing3":["..A....AA....A..","..0...k00k...0..","..0k.k9999k.k0..","...k99666699k...","..k9RA6666AR9k..",".k966666666669k.","k96000000000069k","k60Z0Z0ZZ0Z0Z06k","k600a0a00a0a006k","k60aaaaaaaaaa06k","k60Z0Z0ZZ0Z0Z06k","vk600000000006kv","v6k6666666666k6v","vv.k66666666k.vv","v..vv6vvvv6vv..v","v...v..vv..v...v"],
 "ward_bed":["................",".kkkkkkkkkkkkkk.",".kNNNNNNNNNNNNk.",".kNwwwwwwwwwwNk.",".kNwlllllllwwNk.",".kNwwwwwwwwwwNk.",".kNGGGGGGGGGGNk.",".kNGQGGGGGGQGNk.",".kNGGGGrGGGGGNk.",".kNGGGrrGGGGGNk.",".kNGQGGGGGGQGNk.",".kNGGGGGGGGGGNk.",".kNNNNNNNNNNNNk.",".kkkkkkkkkkkkkk.",".kN..........Nk.",".kk..........kk."],
@@ -3984,7 +3994,7 @@ function icon(name,sz){
     +'style="image-rendering:pixelated;vertical-align:middle;flex:none">';
 }
 const MONSPR={rat:"rat",bat:"bat",gob:"goblin",skel:"skeleton",orc:"orc",slime:"slime",
-  wraith:"wraith",ogre:"ogre",troll:"troll",queen:"ghost_queen",knight:"knight",king:"king",guardian:"guardian",thing:"thing",thing2:"thing2",thing3:"thing3"};
+  wraith:"wraith",ogre:"ogre",troll:"troll",queen:"ghost_queen",knight:"knight",king:"king",guardian:"guardian",thing:"thing",thing2:"thing2",thing3:"thing3",shade:"thing_shade"};
 // Sprite names: weapon_<id>, armor_<id>, and tiered potion/scroll variants.
 function consSpr(id,tier){
   tier=Math.min(2,tier||0);
@@ -4040,7 +4050,10 @@ function flash(x,y,col){burst(x,y,cssv(col),5,3);}
 /* ============================ frame ============================ */
 function tick(dt){
   tclock+=dt;
-  if(S&&S.jump){S.jump.t+=dt;if(S.jump.t>=JUMP_LEN){S.jump=null;die("thing");}}
+  if(S&&S.shade&&S.mode==="map"&&!S.over){S.shade.t-=dt;if(S.shade.t<=0){const m=S.shade.m;S.shade=null;if(mons.includes(m)){held.clear();startBattle(m);}}}
+  if(S&&S.jump){S.jump.t+=dt;
+    if(S.jump.holy){if(S.jump.t>=1.2&&!S.jump.shrieked){S.jump.shrieked=true;quake(18);playThingAttack();}if(S.jump.t>=HOLY_LEN){S.jump=null;holyAfter();}}
+    else if(S.jump.t>=JUMP_LEN){S.jump=null;die("thing");}}
   if(S&&TOMB)tombTick(dt);
   if(S&&THRONE)throneTick(dt);
   if(S&&VAULT)vaultTick(dt);
@@ -4420,7 +4433,7 @@ function render(){
     ctx.fillStyle="rgba(6,8,13,"+Math.min(1,fade).toFixed(3)+")";
     ctx.fillRect(0,0,vw,vh);
   }
-  if(S.jump)drawJumpscare(vw,vh);
+  if(S.jump)(S.jump.holy?drawHolyScare:drawJumpscare)(vw,vh);
   if(MAPD.dlg&&S.mode==="map")drawDialogue(vw,vh);
   if(descentT>0&&S.mode==="map"){
     // the floor number surfaces out of the dark while the gate grinds
@@ -4537,7 +4550,30 @@ const CHARACTERS=[
   },
   intro:"You descend into the first floor with the ledger under your arm. Somewhere below, the other party to the contract is waiting.",
   win:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Edric opens the ledger to the last page, writes out a release in a fair hand, and reads it aloud, word for word, to an empty throne. Then he signs it."}
+,
+ {id:"monk",name:"Brother Anselm",title:"The Hermit Monk",spr:"monk",
+  blurb:"A monk from the chapel on the hill, who prayed through the night the castle sank. He has come down to finish the prayer.",
+  buffs:["Holy: deals 30% more damage to the dead (skeletons, wraiths, the Queen and the King)",
+         "Prayer: kneels to heal and steady himself from level 2",
+         "Faith: if he refuses every dark gift and lays the Thing low, he does not have to run"],
+  weak:["Frail: 30 health, and only 7 more per level",
+        "Weak arms: deals 20% less damage",
+        "Slow: walks 20% slower (fear still carries him when it chases)",
+        "No magic. Magic is not of God: he will not read a scroll, and has no mana",
+        "Every power under the hill mocks him for it"],
+  noMana:true,noMagic:true,holy:true,dmgMult:.8,speed:.8,hpLevel:7,
+  moves:[["strike",0,{name:"Staff Blow",desc:"A plain blow with the walking staff. Always ready."}],
+         ["rally",2,{name:"Prayer",desc:"Kneel and pray: heal, then strike harder for 3 turns."}],
+         ["break",3],["stagger",5],["sunder",7],["execute",8],
+         ["last",9,{name:"Benediction",desc:"A blessing laid on with the whole staff. Heals you."}]],
+  init:function(st){
+    st.maxhp=30;st.hp=30;st.mana=0;st.maxmana=0;
+    st.weapon=WEAPONS.find(w=>w.id==="pilgrim");
+  },
+  intro:"You descend into the first floor with your staff in one hand and the little wooden cross in the other. You say a prayer for the stairs.",
+  win:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Anselm kneels in the ash and prays for the King, because somebody has to."}
 ];
+const HOLY_FOES=new Set(["skel","wraith","queen","king","shade"]);
 const QUESTS=[
  {id:"blood",name:"First Blood",stat:"wounds",goal:20,unit:"wounds opened",unlock:"rook",
   text:"Someone is watching from the dark. Open 20 wounds and he'll step out."},
@@ -4545,6 +4581,8 @@ const QUESTS=[
   text:"An old voice lingers in the scroll-ink. Cast 12 spells and he'll answer."},
  {id:"lowhp",name:"Dotted Line",stat:"lowhp",goal:3,unit:"battles survived at 15% health",unlock:"pact_maker",
   text:"Someone in the dark has been reading over your shoulder, and wants to see how you handle the terms. Survive three battles at 15% health or less, and he'll introduce himself."},
+ {id:"vigil",name:"A Light Below",stat:"kings",goal:1,unit:"Hollow Kings laid to rest",unlock:"monk",
+  text:"Someone has been praying for you, all the way down. Lay the Hollow King to rest and he will come looking for you."},
  {id:"alembic",name:"Notes Unfinished",stat:"alembic",goal:1,unit:"visits to floor 5",unlock:"doctor",
   text:"Something in a long white beak is still taking notes. Reach floor 5 and he'll follow you out."}
 ];
@@ -4987,7 +5025,7 @@ function startBattle(m){
   }
   refresh();
   if(m.t.thing===1&&!S.betrayed)thingReveal();
-  else if(bossLines(m.t))queue(.75,()=>{if(B)startDialogue(bossLines(m.t).intro,()=>{B.phase="choose";drawMoves();refresh();},"Fight",m.t.id);});
+  else if(bossLines(m.t))queue(.75,()=>{if(B)startDialogue(introLines(m.t),()=>{B.phase="choose";drawMoves();refresh();},"Fight",m.t.id);});
   else queue(.75,()=>{B.phase="choose";drawMoves();});
 }
 function endBattle(){
@@ -5020,7 +5058,7 @@ function pDamage(mv,opts){
   if(!opts.noMiss&&turned("riposte")&&Math.random()<.12)return{miss:true,riposted:true};
   if(!opts.noMiss&&turned("fleet")&&Math.random()<.08)return{miss:true};
   if(!opts.noMiss&&Math.random()>acc-(turned("ember")?.08:0))return{miss:true};
-  const mult=(mv.mult||1)*(B.pStat.chill>0?.7:1)*(CHAR().dmgMult||1)*(offAtk?1:clauseMult())*(!offAtk&&B.pStat.bloodPrice?1.6:1);
+  const mult=(mv.mult||1)*(B.pStat.chill>0?.7:1)*(CHAR().dmgMult||1)*(CHAR().holy&&HOLY_FOES.has(B.mon.t.id)?1.3:1)*(offAtk?1:clauseMult())*(!offAtk&&B.pStat.bloodPrice?1.6:1);
   const tb=offAtk?0:thirstBonus(w);
   let base=rint(Math.round((w.min+tb+S.str)*mult),Math.round((w.max+tb+S.str)*mult));
   if(!offAtk&&B.turn===1&&w.opener)base=Math.round(base*w.opener);
@@ -5081,7 +5119,7 @@ function hurtMon(dmg,crit){
   checkBossPhase();
 }
 function checkBossPhase(){
-  if(!B||!B.mon.t.boss||B.mon.t.thing||B.phaseNum!==1)return;
+  if(!B||!B.mon.t.boss||B.mon.t.thing||B.mon.t.shade||B.phaseNum!==1)return;
   if(B.mhp<=B.mmax*.5) triggerPhase2();
 }
 function triggerPhase2(){
@@ -5253,15 +5291,15 @@ function useInk(i){
 }
 // Spells without mana: the Notary signs for them in blood.
 function bloodCost(c){return Math.ceil(c/2);}
-function canPay(c){return CHAR().noMana?S.hp>bloodCost(c):S.mana>=c;}
-function payMsg(it,c){return CHAR().noMana?`You can't afford the ${it.name}: it would cost ${bloodCost(c)} health.`:`Not enough mana — the ${it.name} needs ${c}.`;}
+function canPay(c){return CHAR().noMagic?false:CHAR().noMana?S.hp>bloodCost(c):S.mana>=c;}
+function payMsg(it,c){return CHAR().noMagic?`${CHAR().name} will not read the ${it.name}. Magic is not of God.`:CHAR().noMana?`You can't afford the ${it.name}: it would cost ${bloodCost(c)} health.`:`Not enough mana — the ${it.name} needs ${c}.`;}
 function payCost(c){
   if(!CHAR().noMana){spendMana(c);return;}
   const d=bloodCost(c);S.hp-=d;
   if(B){B.pFlash=.6;const L=B.layout;if(L)snum(L.px,L.py-L.psz*.5,"-"+d,"#c94a3c");blog(`You sign for it in blood (${d}).`,"c-hit");}
   else{num(S.px,S.py,"-"+d,"#c94a3c");say(`You sign for it in blood (${d}).`,"c-hit");}
 }
-function costLabel(c){return CHAR().noMana?`${bloodCost(c)} health`:`${c} mana`;}
+function costLabel(c){return CHAR().noMagic?"never":CHAR().noMana?`${bloodCost(c)} health`:`${c} mana`;}
 function chooseMove(id){
   if(B&&B.dlg)return;
   if(!B||B.phase!=="choose")return;
@@ -6442,13 +6480,15 @@ const ESCAPE_END={
  rook:"Rook bursts out of the hillside into a grey, ordinary morning. Behind him the hill groans, and settles, and is only a hill again. Nothing follows him up. He counts what is left in his purse, decides it is plenty, and laughs until he has to sit down in the wet grass.",
  doctor:"Vell bursts out of the hillside into a grey, ordinary morning. Behind him the hill groans, and settles, and is only a hill again. He sits on the stile and writes the last lines on the slate. Cause of the sickness: a contract. Recommended treatment: leave. Then he walks to the nearest village to wash his hands for a very long time.",
  mage:"Orrin bursts out of the hillside into a grey, ordinary morning. Behind him the hill groans, and settles, and is only a hill again. He says the King's name once, to the open sky. Nothing answers. For once, that is the right answer.",
+ monk:"Anselm stumbles out of the hillside into a grey, ordinary morning, out of breath, his staff gone somewhere below. Behind him the hill groans, and settles, and is only a hill again. He kneels in the wet grass and thanks God for the stairs, every one of them. Whatever lives under the hill is still down there. He will pray about that tomorrow.",
  pact_maker:"Edric bursts out of the hillside into a grey, ordinary morning. Behind him the hill groans, and settles, and is only a hill again. He opens the ledger to the last page and finds it blank: the terms are void, every clause discharged. He tears the page out anyway, folds it once, and lets the wind have it."
 };
 function bossDown(m){
+  if(m.t.id==="shade"){holyWin();return;}
   if(m.t.id==="queen"){queenDown(m);return;}
   if(m.t.id!=="king"){win();return;}
   // The King's fall opens the way down instead of ending the run.
-  S.kingSlain=true;
+  S.kingSlain=true;bumpStat("kings");
   const x=m.x,y=m.y;
   items=items.filter(i=>!(i.x===x&&i.y===y));
   map[y][x]=STAIRS;S.sx=x;S.sy=y;seen.add(x+","+y);
@@ -6499,7 +6539,23 @@ const KING_LINES={
       {text:"No. Listen. Do you hear it, under the floor?",mood:"fear"},
       {text:"It was never me. I only signed. It is still down there, and it is awake.",mood:"fear"}]
 };
-function bossLines(t){return t.id==="queen"?QUEEN_LINES:t.id==="king"?KING_LINES:null;}
+function bossLines(t){return t.id==="queen"?QUEEN_LINES:t.id==="king"?KING_LINES:t.id==="shade"?SHADE_LINES:null;}
+// What they say to a monk: that his god will not come down this far.
+const MONK_MOCK={
+ queen:[{text:"And what is that around your neck? A little cross?"},
+        {text:"I prayed too, holy man. Every night, in the cold, for nine hundred nights. Nobody came."},
+        {text:"Your god does not come down this far.",mood:"anger"}],
+ king:[{text:"A monk. They sent me a monk."},
+       {text:"I had a chapel once. Gold on every wall. I gave it to the hill with everything else, and your god did not lift a finger to stop me."},
+       {text:"He will not lift one for you, either. Pray all you like."}],
+ thing:[{text:"And a monk, no less. With a little wooden god on a string."},
+        {text:"I have read every contract ever signed under this hill. Your god's name is not on a single one of them."},
+        {text:"He will not be there at the end. They never are."}]
+};
+function introLines(t){
+  const L=bossLines(t).intro,mk=CHAR().id==="monk"&&MONK_MOCK[t.id];
+  return mk?L.slice(0,-1).concat(mk,L.slice(-1)):L;
+}
 // What it says as it takes each gift back.
 const GIFT_TAUNT={
  keen:   "Your Keen Edge. You saw every gap in their guard. Who do you think showed you where to look?",
@@ -6528,6 +6584,7 @@ function thingReveal(){
     for(const id of owned)lines.push({text:GIFT_TAUNT[id],sub:`${PERKS[id].name} is torn out of you. ${TURNED[id]}`,act:()=>takeGift(id)});
     lines.push({text:"Now. Fight me with what is yours."});
   }
+  if(CHAR().id==="monk")lines.push(...MONK_MOCK.thing);
   queue(1,()=>{
     if(!B)return;
     blog("Something in you answers it, like a word on the tip of your tongue.","c-hit");
@@ -6558,6 +6615,7 @@ function dlgShown(){const l=dlgLine();return l?Math.min(l.text.length,Math.floor
 function startDialogue(lines,onDone,endLabel,who){DH().dlg={lines,i:-1,t0:0,onDone,endLabel,who:who||"thing"};dlgNext();}
 // Speakers: the name over the text, the sprite their portrait is cut from (x, y, w, h on the sprite), and the box colours.
 const DLG_WHO={
+ shade:{name:"THE THING UNDER THE HILL",spr:()=>"thing_shade",crop:[3,6,10,7],frame:"#566173",inner:"#1e242e",bg:"#06080d",text:"#c8d0dc",voice:"low"},
  thing:{name:"THE THING UNDER THE HILL",frame:"#8a5fc4",inner:"#3a2a52",bg:"#140c1e",text:"#e9e5d9",voice:"low"},
  queen:{name:"THE GHOST QUEEN",spr:()=>B.phaseNum===2?"ghost_queen2":"ghost_queen",crop:[2,0,12,10],frame:"#5fa8c4",inner:"#14283f",bg:"#0a1622",text:"#d8ecf4",voice:"ghost"},
  king:{name:"THE HOLLOW KING",spr:()=>"king",crop:[2,0,12,11],frame:"#c9a24a",inner:"#4a3410",bg:"#160f06",text:"#f2e6c8",voice:"king"},
@@ -6744,7 +6802,7 @@ function thingEnrages(){
     quake(24);
     const L=B.layout;
     if(L){sburst(L.ex,L.ey,"#8a1f3a",50,460);sring(L.ex,L.ey,"rgba(160,20,40,.95)",L.esz*1.6);}
-    queue(2,()=>{endBattle();startChase(m);});
+    queue(2,()=>{endBattle();startChase(m);if(monkFaith())monkStands();});
   },"Run");
 }
 function distFrom(sx,sy){
@@ -6856,6 +6914,106 @@ function chaseTick(dt){
   if(C.pulse<=0){C.pulse=1.1;ring(S.sx,S.sy,"rgba(255,240,184,.85)",2.2,.9);if(d<7)quake(3+(7-d));}
   C.growl-=dt;
   if(C.growl<=0){C.growl=4+Math.random()*3;if(d<10)say(pick(CHASE_LINES),"c-hit");}
+}
+/* ---------- the monk's choice ---------- */
+// If the monk took none of its gifts and has beaten both its shapes, he may choose not to run.
+function monkFaith(){return CHAR().id==="monk"&&!Object.keys(S.perks||{}).some(id=>PERKS[id]);}
+let monkChoiceOpen=false;
+function monkStands(){
+  S.chase.wait=S.chase.wait0=CHASE_WAIT;
+  startDialogue([
+   {who:"hero",text:"No."},
+   {who:"hero",text:"I have walked down twenty floors of this with nothing but a staff and a prayer. I took nothing it offered me."},
+   {who:"hero",text:"I will not run from it now. God brought me down here. He will not leave me at the bottom."}
+  ],()=>{
+    monkChoiceOpen=true;held.clear();
+    overlay(`<h3>Run, or stand?</h3>
+      <p class="lede">It is coming up out of the floor. The stair is open. Anselm's hand is on the little wooden cross.</p>
+      <p>Run, and he may make it up all twenty floors to the light, like anyone else. Stand, and he trusts that he will not have to.</p>
+      <div style="display:flex;gap:10px"><button id="mRun" style="flex:1">Run for the stair [1]</button><button id="mStand" style="flex:1;background:#d4af52;border-color:#f0c060">Stand and pray [2]</button></div>`);
+    $("mRun").onclick=()=>monkChoose(false);$("mStand").onclick=()=>monkChoose(true);
+  },"Choose","hero");
+}
+function monkChoose(stand){
+  if(!monkChoiceOpen)return;
+  monkChoiceOpen=false;hideOverlay();held.clear();
+  if(!stand){S.chase.wait=CHASE_WAIT;say("He runs. There is no shame in it. God will understand.","c-lvl");return;}
+  S.monkStand=true;S.chase.wait=Math.min(S.chase.wait,1.4);
+  say("Anselm kneels on the stone, closes his eyes, and holds the little cross up in front of him.","c-lvl");
+}
+// Caught while he prays: the cross, held up into its face, and a light it cannot stand.
+const HOLY_LEN=4.6;
+function drawHolyScare(vw,vh){
+  const t=S.jump.t,G=96,MX=HZ.N/2,r=14;
+  const recoil=ease(Math.max(0,(t-1.15)/1.6));              // it shrinks back into the dark
+  const zoom=(t<.16?.45+.65*ease(t/.16):1.1-.1*ease((t-.16)/.3))*(1-.82*recoil);
+  const sc=vh*.86/(r*2.35)*zoom,j=RM?0:(Math.random()-.5)*vh*.05*(t<1.1?1:.4+recoil);
+  ctx.fillStyle="#000";ctx.fillRect(0,0,vw,vh);
+  const img=paintHorror({hx:MX,hy:G,r,jaw:t<1.1?(RM?1:.85+.15*Math.sin(t*30)):.3+.6*recoil,look:[0,.2-recoil*.5],pupil:t<1.1?"#fff4e0":undefined,mood:"fear",
+    arms:t<1.1?[[MX-r*.85,G+r*.3,MX-70,G-30,40,40],[MX+r*.85,G+r*.3,MX+70,G-30,40,40]]:[[MX-r*.85,G+r*.3,MX-24,G+20,22,22],[MX+r*.85,G+r*.3,MX+24,G+20,22,22]]});
+  ctx.globalAlpha=1-recoil*.7;
+  ctx.drawImage(img,vw/2-MX*sc+j,vh*(.5-recoil*.1)-(G+r*.18)*sc+j*.6,HZ.N*sc,HZ.N*sc);
+  ctx.globalAlpha=1;
+  if(t<.07){ctx.fillStyle="rgba(255,255,255,.9)";ctx.fillRect(0,0,vw,vh);}
+  else if(t<.55&&!RM&&Math.sin(t*37)>.3){ctx.fillStyle="rgba(160,10,20,.35)";ctx.fillRect(0,0,vw,vh);}
+  // the cross comes up from the bottom of the screen in his hand, then burns white-gold
+  if(t>.5){
+    const up=ease((t-.5)/.4),u=Math.round(vh/90),cx=vw/2,cy=vh*(1.25-.62*up);
+    const glow=Math.max(0,Math.min(1,(t-.85)/.35)),pulse=RM?1:.85+.15*Math.sin(t*14);
+    if(glow>0){
+      ctx.globalCompositeOperation="lighter";
+      const R=vh*(.25+1.1*glow)*pulse,g=ctx.createRadialGradient(cx,cy-u*10,0,cx,cy-u*10,R);
+      g.addColorStop(0,`rgba(255,250,220,${.95*glow})`);g.addColorStop(.35,`rgba(255,215,120,${.55*glow})`);g.addColorStop(1,"rgba(255,200,90,0)");
+      ctx.fillStyle=g;ctx.fillRect(0,0,vw,vh);
+      // rays, in hard pixel bands
+      ctx.fillStyle=`rgba(255,240,190,${.35*glow})`;
+      for(let k=0;k<12;k++){const a=k/12*Math.PI*2+t*.3;for(let d=u*14;d<R;d+=u*3)ctx.fillRect(Math.round((cx+Math.cos(a)*d)/u)*u,Math.round((cy-u*10+Math.sin(a)*d)/u)*u,u*2,u*2);}
+      ctx.globalCompositeOperation="source-over";
+    }
+    const P=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(Math.round(cx+x*u),Math.round(cy+y*u),w*u,h*u);};
+    P(-5,4,10,30,"#5e3a24");P(-5,4,2,30,"#8a5a3c");P(-6,4,1,30,"#0b0d12");P(5,4,1,30,"#0b0d12");    // the sleeve
+    P(-4,-2,8,7,"#e8b08a");P(-4,-2,8,1,"#f4d2b0");P(-5,-2,1,7,"#0b0d12");P(4,-2,1,7,"#0b0d12");     // the hand
+    const cg=glow>.2?"#fff8e0":"#f0c060",cs=glow>.2?"#ffe9a0":"#a8762c";
+    P(-1,-22,3,22,cs);P(-1,-22,2,22,cg);P(-6,-16,13,3,cs);P(-6,-16,13,2,cg);                      // the cross
+  }
+  if(t>HOLY_LEN-.9){ctx.fillStyle=`rgba(255,248,225,${Math.min(1,(t-(HOLY_LEN-.9))/.6)})`;ctx.fillRect(0,0,vw,vh);}
+}
+// After the light: it is small now, cowering in the shadows, and he can finish it.
+function holyAfter(){
+  S.monkStand=false;
+  say("When the light fades, the thing under the hill is crouched in the corner of the hollow, no bigger than a dog, shaking.","c-lvl");
+  const D=distFrom(S.px,S.py);let spot=null;
+  for(let y=1;y<H-1&&!spot;y++)for(let x=1;x<W-1&&!spot;x++)if(D[x+y*W]===3&&map[y][x]===FLOOR)spot=[x,y];
+  if(!spot)for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]])if(!spot&&map[S.py+dy][S.px+dx]===FLOOR)spot=[S.px+dx,S.py+dy];
+  spawnMon("shade",spot[0],spot[1]);const m=mons[mons.length-1];m.seenYou=true;m.cool=99;
+  computeFOV();refresh();
+  S.shade={m,t:1.4};                                     // a moment to see it, then the last fight
+}
+const SHADE_LINES={
+ intro:[{text:"What is that. What is that in your hand.",mood:"fear"},
+        {text:"Put it away. PUT IT AWAY. That is not in the terms!",mood:"fear"},
+        {who:"hero",text:"There are no terms. There never were."},
+        {text:"I am older than your god. I am under everything. I am the hill...",mood:"fear"},
+        {who:"hero",text:"You are small. You were always small. You only stood in the dark, so that nobody could see."}],
+ end:[{text:"...It is so bright. Why is it so bright...",mood:"fear"},
+      {who:"hero",text:"Go back to the dark, and stay there. In His name."}]
+};
+function holyWin(){
+  S.over=true;S.chase=null;setTension(false);packOpen=false;codexOpen=false;shrineOpen=false;unlockLore(21);refresh();
+  const sc=score()+5000,b=saveBest(sc);showBest();
+  overlay(`
+    <h3>Once and for all</h3>
+    <p class="lede">The last of it goes out like a candle pinched between two fingers. For a moment the hollow is perfectly quiet. Then, for the first time in three hundred years, the hill above it is only a hill.</p>
+    <p>Brother Anselm says a prayer for the King, and one for the Queen, and one for Grub and Mog and the last knight, and one for the thing itself, because somebody has to. Then he climbs twenty floors back up to the light, slowly, and nothing follows him, because nothing is left to.</p>
+    <div class="tally">
+      <div><span>Level</span><span>${S.lvl}</span></div>
+      <div><span>Gold</span><span>${S.gold}</span></div>
+      <div><span>Turns</span><span>${S.steps}</span></div>
+      <div><span>Score</span><span>${sc}</span></div>
+      <div><span>Best</span><span>${b}</span></div>
+    </div>
+    <button id="again">Descend again</button>`);
+  $("again").onclick=chooseHero;
 }
 /* ---------- the Thing's true shape ---------- */
 // Phase 2 and the chase draw the Thing by hand instead of from a 16x16 sprite: a swollen blood-red head
@@ -7116,7 +7274,7 @@ function chaseArms(C,dt){
 const JUMP_LEN=1.6;
 function caughtByThing(){
   S.chase=null;held.clear();setTension(false);
-  S.jump={t:0};
+  S.jump={t:0,holy:!!S.monkStand};
   playRoarSound();quake(30);
 }
 function drawJumpscare(vw,vh){
@@ -7954,7 +8112,7 @@ for(const k in KEYS){
 const held=new Set();
 let freeClock=0,freeBumpT=0,freeWindedT=0;
 function freeMode(){return !!S;}   // every hero walks freely now; the grid code stays for "." (rest) and as a fallback
-function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()||!!MAPD.dlg||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
+function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()||monkChoiceOpen||!!MAPD.dlg||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
 // What a box of half-width r centred on (cx,cy) overlaps: {wall:true}, {chasm:[x,y]}, or null.
 function boxHit(cx,cy,r){
   const e=1e-6;
@@ -8057,7 +8215,7 @@ function freeMonsters(dt){
   }
 }
 function freeStep(dx,dy,dt,speed){
-  const sp=(speed||FREE_SPEED)*dt,ox=S.fx,oy=S.fy;
+  const sp=(speed||FREE_SPEED)*(S.chase?1:CHAR().speed||1)*dt,ox=S.fx,oy=S.fy;
   for(const axis of [0,1]){
     const d=axis?dy:dx;if(!d)continue;
     const nx=axis?S.fx:S.fx+d*sp,ny=axis?S.fy+d*sp:S.fy;
@@ -8096,7 +8254,7 @@ function freeStep(dx,dy,dt,speed){
 // Space on the map: a quick dash in the direction you're moving (or facing). Costs stamina, short cooldown.
 const DASH_SPEED=13,DASH_TIME=.2,DASH_COST=14,DASH_CD=.55;
 function dash(){
-  if(!S||S.over||S.mode!=="map"||freePaused())return;
+  if(!S||S.over||S.mode!=="map"||freePaused()||S.monkStand)return;
   if(S.dashT>0||S.dashCD>0)return;
   if(S.exhausted||S.stam<DASH_COST){if(freeWindedT<=0){freeWindedT=1.2;say("You're too winded to dash.","c-hit");}return;}
   let dx=0,dy=0;
@@ -8119,6 +8277,7 @@ function freeTick(dt){
   let dx=0,dy=0;
   for(const c of held){const d=FREE_CODES[c];if(d){dx+=d[0];dy+=d[1];}}
   dx=Math.sign(dx);dy=Math.sign(dy);
+  if(S.monkStand)dx=dy=0;                                  // he is kneeling: he will not move
   const fx0=S.fx,fy0=S.fy;
   if(S.dashCD>0)S.dashCD-=dt;
   if(S.dashT>0){
@@ -8556,6 +8715,7 @@ window.addEventListener("keydown",ev=>{
   }
   if(descentT>0&&S&&!S.over&&S.mode==="map"){ev.preventDefault();return;}   // still on the way down
   if(S&&S.jump){ev.preventDefault();return;}                                // being caught
+  if(monkChoiceOpen){if(k==="1")monkChoose(false);else if(k==="2")monkChoose(true);ev.preventDefault();return;}
   if(MAPD.dlg){if(k===" "||k==="Enter"||k==="e"||k==="E"||k==="z"||k==="Z")dlgAdvance();ev.preventDefault();return;}   // someone on the map is talking
   if(tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()){ev.preventDefault();return;}                               // the Queen is waking
   if(B&&B.dlg){if(k===" "||k==="Enter"||k==="e"||k==="E"||k==="z"||k==="Z")dlgAdvance();ev.preventDefault();return;}   // it is talking
@@ -9065,7 +9225,7 @@ function toggleEditor(){
 
 /* ============================ boot ============================ */
 function start(id){
-  descentT=0;levelOpen=false;levelPicked=false;paperOpen=false;
+  monkChoiceOpen=false;descentT=0;levelOpen=false;levelPicked=false;paperOpen=false;
   menuQuiet=false;setMusicVolume();
   hideOverlay();packOpen=false;codexOpen=false;
   ensureAudio();
