@@ -916,16 +916,16 @@ const MONSTERS=[
   sps:[{name:"Mourning Wail",mult:.7,pierce:99,cd:4,dread:1,wail:1},{name:"Grave Chill",mult:.9,cd:3,chill:3},{name:"Fade",cd:4,fade:3},{name:"Cold Embrace",mult:1.1,pierce:99,drain:.7,cd:3}],
   sps2:[{name:"Mourning Wail",mult:.8,pierce:99,cd:4,dread:1,wail:1},{name:"Grave Chill",mult:1,cd:3,chill:3},{name:"Fade",cd:4,fade:3},{name:"Cold Embrace",mult:1.2,pierce:99,drain:.8,cd:3},
         {name:"Spectral Talons",mult:.5,hits:3,cd:3},{name:"Corpse Candles",mult:.7,burn:3,cd:4}]},
- {id:"king",  g:"\u2126",name:"the Hollow King",hp:260,min:13,max:22,def:5,acc:.92,xp:400,lo:99,hi:99,col:"--torch",pierce:3,boss:true,sps:[{name:"Hollow Roar",mult:1.35,cd:3},{name:"Crown of Ash",mult:.95,burn:3,cd:4},{name:"Devour",mult:1.15,drain:.5,cd:4}],qteSp:{name:"Reckoning Slam",qte:true,mult:2.5,cd:5}},
+ {id:"king",  g:"\u2126",name:"the Hollow King",hp:520,min:20,max:32,def:5,acc:.92,xp:400,lo:99,hi:99,col:"--torch",pierce:6,boss:true,sps:[{name:"Hollow Roar",mult:1.35,cd:3},{name:"Crown of Ash",mult:.95,burn:3,cd:4},{name:"Devour",mult:1.15,drain:.5,cd:4}],qteSp:{name:"Reckoning Slam",qte:true,mult:2.5,cd:5}},
  // The final foe, on floor 20. Beating its first shape reveals the second; beating that only makes it angry,
  // and the third phase is a chase across the floor (see startChase).
- {id:"thing", g:"\u03A8",name:"Thing Under the Hill",title:"The Thing Under the Hill",hp:480,min:14,max:23,def:5,acc:.9,xp:0,lo:99,hi:99,col:"--rime",pierce:3,boss:true,thing:1,
+ {id:"thing", g:"\u03A8",name:"Thing Under the Hill",title:"The Thing Under the Hill",hp:960,min:22,max:34,def:5,acc:.9,xp:0,lo:99,hi:99,col:"--rime",pierce:6,boss:true,thing:1,
   phaseLabel:"\u269C PHASE 1 \u2014 WEARING A SHAPE",intro:"Every eye in the dark opens at once.",
   sps:[{name:"Grasping Roots",mult:1.1,cd:3,guardDown:2},{name:"Fine Print",mult:.9,drain:.5,cd:4},{name:"Weight of the Hill",mult:1.5,cd:4,acc:.78}]},
  // What is left of it after the monk's cross: small, shaking, and mortal.
  {id:"shade", g:"\u03C8",name:"shade of the Thing",title:"What Is Left of It",hp:70,min:3,max:7,def:1,acc:.7,xp:0,lo:99,hi:99,col:"--slate",boss:true,mini:true,shade:true,
   phaseLabel:"\u271D THE LIGHT HAS FOUND IT",intro:"It cowers from the light.",sps:[{name:"Cringe",cd:4,heal:.05},{name:"Last Spite",mult:1.2,cd:3}]},
- {id:"thing2",g:"\u03A8",name:"Thing Under the Hill",title:"The Thing Under the Hill",hp:560,min:18,max:28,def:6,acc:.93,xp:0,lo:99,hi:99,col:"--blood",pierce:4,boss:true,thing:2,
+ {id:"thing2",g:"\u03A8",name:"Thing Under the Hill",title:"The Thing Under the Hill",hp:1120,min:27,max:40,def:6,acc:.93,xp:0,lo:99,hi:99,col:"--blood",pierce:7,boss:true,thing:2,
   phaseLabel:"\u2694 PHASE 2 \u2014 UNVEILED",
   sps:[{name:"Grasping Roots",mult:1.2,cd:3,guardDown:3},{name:"Swallowing Dark",mult:1.1,drain:.6,cd:3},{name:"Ember of the Deep",mult:1,burn:3,cd:4},{name:"Feed on the Hill",cd:6,heal:.06}],
   qteSp:{name:"The Hill Comes Down",qte:true,mult:2.4,cd:4}}
