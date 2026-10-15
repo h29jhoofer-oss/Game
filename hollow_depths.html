@@ -1054,7 +1054,6 @@ const MONSTERS=[
   sps:[{name:"Grasping Roots",mult:1.2,cd:3,guardDown:3},{name:"Swallowing Dark",mult:1.1,drain:.6,cd:3},{name:"Ember of the Deep",mult:1,burn:3,cd:4},{name:"Feed on the Hill",cd:6,heal:.06}],
   qteSp:{name:"The Hill Comes Down",qte:true,mult:2.4,cd:4}}
 ];
-const PLAYTEST=false;   // playtest builds flip this on: every hero unlocked, test items on floor 1
 const XPTABLE=[0,22,55,105,180,285,425,610,850,1150,1520,2000,2550,3150,3800,4500,5250,6050,6900,7800,8750,9750];
 
 /* ============================ state ============================ */
@@ -4948,7 +4947,6 @@ function newState(id){
      dodge:0, upgrades:{str:0,hp:0,stam:0,dodge:0,mana:0}, perks:{}, pendLvl:0, lvlWait:0, blackPity:0, facingLeft:false,
      offhand:OFFHANDS.torch,altOffhand:null,amulet:null,rings:[null,null],regenAcc:0,weapon:WEAPONS[0],armor:ARMORS[0],pack:[],log:[],over:false,mode:"map",cds:{},lore:new Set(),char:C.id};
   if(C.init)C.init(st);
-  st.pack.push(tamScroll());   // every hero sets out with Tam's scroll: the wisp is with them from the first step
   return st;
 }
 function tamScroll(){const w=POTIONS.find(p=>p.id==="wisp");return{kind:"use",ref:w,glyph:w.glyph,col:w.col,name:w.name,note:w.note};}
@@ -6339,7 +6337,10 @@ const TUT_TAM={
       {text:"Nothing down there gives without counting. Remember I said that, later."},
       {text:"And the deeper you go, the more the roots come up through the floor. If one grabs you, pull. Hard."}],
  bye:[{text:"That's everything I know that helps. The rest you'll have to find out."},
-      {text:"I'll be right behind you. I'm always right behind you."}]
+      {text:"I can't come down with you. Not yet. The scroll's only paper, and I'm only a little light."},
+      {text:"But I'll go looking for you. If you find a scroll down there with something violet in it, that'll be me."},
+      {who:"hero",text:"Goodbye, Tam."},
+      {text:"Not goodbye. Just... see you later. Probably. Maybe. Go on."}]
 };
 function tutStep(){return S&&S.tut?TUT_STEPS[S.tut.step]:null;}
 function tutGo(id){
@@ -6355,6 +6356,7 @@ function tutGo(id){
 }
 function startTutorial(){
   start("cade");
+  S.pack.push(tamScroll());    // Tam is with you for the crash course; after it, you go down alone
   S.tamNext=0;S.tut={step:0,t:0,flags:{}};
   // lay the courtyard out by hand: three rooms in a row, joined by short passages
   for(let y=0;y<H;y++)for(let x=0;x<W;x++)map[y][x]=WALL;
@@ -6420,6 +6422,8 @@ function tutFinish(){
   if(!S.tut)return;
   S.tut.step=TUT_STEPS.length;
   startDialogue(TUT_TAM.bye,()=>{
+    S.pack=S.pack.filter(it=>!isWisp(it));S.wisp=null;
+    say("Tam's scroll curls up in your hands and goes dark. When you look again, it is gone.","c-cold");
     META.tutorialDone=true;metaSave();
     const el=$("tutcard");if(el)el.classList.remove("show");
     S.tut=null;S.over=true;
@@ -9481,7 +9485,6 @@ window.addEventListener("keydown",ev=>{
     if(k==="i"||k==="I"){if(S.pack.length&&B&&B.phase==="choose")togglePack();ev.preventDefault();return;}
     return;
   }
-  if(PLAYTEST&&(k==="n"||k==="N")&&S.mode==="map"&&!S.chase&&S.depth<20){playtestSkip();ev.preventDefault();return;}
   if(freeMode()&&FREE_CODES[ev.code]){held.add(ev.code);ev.preventDefault();return;}
   if(KEYS[k]){tryMove(KEYS[k][0],KEYS[k][1]);ev.preventDefault();return;}
   if(k==="."){tryMove(0,0);ev.preventDefault();return;}
@@ -9953,34 +9956,8 @@ function start(id){
   $("log").innerHTML="";
   newFloor(1);
   S.tamNext=1;S.tamWait=0;
-  if(PLAYTEST&&(S.char==="cade"||S.char==="monk"))playtestKit();
   resize();refresh();
   say(CHAR().intro||"You climb down into the first floor. The torch holds.","c-cold");
-}
-// Playtest builds only. N skips a floor and grants a level (its cards come up as usual), and Cade starts
-// with the best gear, a stack of top-tier scrolls and healing, so the deep floors can be tried quickly.
-function playtestSkip(){
-  S.depth++;if(S.depth>10)S.kingSlain=true;
-  newFloor(S.depth);S.tamNext=S.depth;S.tamWait=0;snareReset();S.snareCD=6;
-  say(`Playtest: skipped to floor ${S.depth}.`,"c-cold");
-  if(S.lvl<XPTABLE.length-1){S.xp=Math.max(S.xp,XPTABLE[S.lvl]-1);gainXp(1);S.lvlWait=.2;}
-  refresh();
-}
-function playtestKit(){
-  const cons=(id,t)=>{const r=t?Object.assign({},UPGRADED_CONSUMABLES[id][t]):POTIONS.find(p=>p.id===id);
-    return{kind:"use",ref:r,glyph:r.glyph,col:r.col,name:r.name,note:r.note};};
-  S.weapon=upgradeWeapon("great",3);
-  S.armor=upgradeArmor("plate",3);
-  S.altOffhand=S.offhand;                                 // the torch goes on the belt (T swaps)
-  S.offhand=OFFHAND_ITEMS.find(o=>o.id==="aegis");
-  S.amulet=AMULETS.find(a=>a.id==="heart");applyMods(S.amulet.mods,1);
-  S.rings=[RINGS.find(r=>r.id==="storm"),RINGS.find(r=>r.id==="mending")];
-  for(const r of S.rings)applyMods(r.mods,1);
-  S.hp=S.maxhp;
-  S.pack=[tamScroll(),cons("heal",2),cons("heal",2),cons("heal",2),cons("heal",1),cons("heal",1)].concat(CHAR().noMagic
-    ? [cons("heal",2),cons("heal",2),cons("heal",1)]            // no scrolls for a man who will not read them
-    : [cons("flame",2),cons("bolt",2),cons("ice",2),cons("dark",2)]);
-  say(CHAR().noMagic?"Playtest kit: the best gear and healing. Press N to skip a floor and gain a level.":"Playtest kit: the best gear, scrolls and healing. Press N to skip a floor and gain a level.","c-cold");
 }
 function title(){
   S.over=true;   // keys and buttons must not play the demo floor behind the title card
@@ -9991,10 +9968,10 @@ function title(){
     <p class="lede">${lede}</p>
     ${done?`<p>Choose who goes down.</p>`:`<p>Before your first descent, Tam will walk you through the ruined courtyard at the top of the stair. It doesn't take long.</p>`}
     <button id="go">${done?"Choose your hero":"Begin the crash course"}</button>
-    ${done?`<p class="tut-again"><a href="#" id="tutAgain">Take the crash course again</a></p>`:PLAYTEST?`<p class="tut-again"><a href="#" id="tutSkip">Skip it (playtest build)</a></p>`:""}`);
+    ${done?`<p class="tut-again"><a href="#" id="tutAgain">Take the crash course again</a></p>`:""}`);
   $("go").onclick=()=>{ensureAudio();if(done)chooseHero();else{hideOverlay();startTutorial();}};
-  const again=$("tutAgain")||$("tutSkip");
-  if(again)again.onclick=e=>{e.preventDefault();ensureAudio();if(done){hideOverlay();startTutorial();}else{META.tutorialDone=true;metaSave();chooseHero();}};
+  const again=$("tutAgain");
+  if(again)again.onclick=e=>{e.preventDefault();ensureAudio();hideOverlay();startTutorial();};
 }
 seLoadSavedSprites();
 buildSprites();

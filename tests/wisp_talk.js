@@ -12,7 +12,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const ev = s => page.evaluate(s);
   const results = [];
   const check = (name, ok, detail) => results.push({ name, ok: !!ok, detail });
-  const giveWisp = h => ev(`(()=>{start("${h}");descentT=0;fade=0;})()`);
+  const giveWisp = h => ev(`(()=>{start("${h}");descentT=0;fade=0;S.pack.push(tamScroll());})()`);
 
   check('the wisp is violet now, not blue', await ev('["wisp_0","wisp_1","wisp_orb"].every(k=>ART[k].join("").includes("V")&&!/[234]/.test(ART[k].join("")))&&SPELL_COL.wisp==="#a87fe0"'));
   await giveWisp('rook');
@@ -34,9 +34,9 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
     check(`"${t}": a different answer for each of the five heroes`, new Set(said).size === 5, said.map(x => x.slice(0, 40)));
   }
   const starts = [];
-  for (const h of heroes) { await ev(`start("${h}")`); starts.push(await ev('S.pack.filter(isWisp).length===1&&!!activeWisp()')); }
-  check('every hero starts out with Tam\'s scroll', starts.every(Boolean), starts);
-  check('the playtest kit keeps it', await ev('(()=>{start("monk");playtestKit();return S.pack.filter(isWisp).length===1;})()'));
+  for (const h of heroes) { await ev(`start("${h}")`); starts.push(await ev('S.pack.filter(isWisp).length===0')); }
+  check('no hero starts a real run with Tam: you have to find him again', starts.every(Boolean), starts);
+  check('his scroll can still turn up down there', await ev('/\{p:"wisp",n:4\}/.test(document.documentElement.innerHTML)'));
   await ev('start("cade");S.pack=S.pack.filter(it=>!isWisp(it))');
   check('without a wisp, H does nothing', await (async () => { await page.keyboard.press('h'); return ev('!wispTalkOpen'); })());
 
@@ -46,7 +46,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   for (let d = 1; d <= 10; d++) { const v = []; for (const h of heroes) { await ev(`start("${h}")`); v.push(await ev(`tamFloorLines(${d}).map(l=>l.text).join("|")`)); } per.push(new Set(v).size); }
   check('on the castle floors (1-10) each hero hears him differently', per.every(n => n === 5), per);
   const step = async secs => { for (let i = 0; i < Math.ceil(secs / 0.05); i++) await ev('tick(0.05)'); };
-  await ev('start("doctor");descentT=0;fade=0;');
+  await ev('start("doctor");descentT=0;fade=0;S.pack.push(tamScroll());');
   check('not the instant you arrive', await ev('!MAPD.dlg'));
   await step(1.2);
   check('a moment after reaching floor 1, he speaks', await ev('!!MAPD.dlg&&MAPD.dlg.who==="wisp"&&/leeches/.test(MAPD.dlg.lines.map(l=>l.text).join(" "))'));
