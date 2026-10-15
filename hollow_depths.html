@@ -4907,8 +4907,12 @@ let META={unlocked:{cade:true},stats:{},done:{}};
 function metaLoad(){
   try{
     const m=JSON.parse(localStorage.getItem(META_KEY)||"null");
-    if(m&&typeof m==="object"){META.unlocked=Object.assign({cade:true},m.unlocked);META.stats=m.stats||{};META.done=m.done||{};META.beasts=m.beasts||{};if(Array.isArray(m.papers))META.papers=m.papers;}
+    if(m&&typeof m==="object"){META.stats=m.stats||{};META.done=m.done||{};META.beasts=m.beasts||{};META.tutorialDone=!!m.tutorialDone;if(Array.isArray(m.papers))META.papers=m.papers;}
   }catch(e){}
+  // Heroes are only ever earned by finishing their quests: Cade, plus whoever each finished quest unlocks.
+  // (Rebuilt from the quests on every load, so an old save can't carry a hero its owner never earned.)
+  META.unlocked={cade:true};
+  for(const q of QUESTS)if(META.done[q.id])META.unlocked[q.unlock]=true;
 }
 function metaSave(){try{localStorage.setItem(META_KEY,JSON.stringify(META));}catch(e){}}
 metaLoad();
