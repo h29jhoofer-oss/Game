@@ -52,7 +52,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('in the fight, it says to play a card', await ev('/Play a card/.test(document.getElementById("tutcard").textContent)'));
   await ev('B.mhp=1'); await page.keyboard.press('1');
   await step(.8);
-  check('the rat cannot go down before you have parried', await ev('!!B&&B.mhp>=1&&S.tut.flags.played&&!S.tut.flags.parried'), await ev('[!!B,B&&B.mhp,S.tut.flags,B&&B.phase]'));
+  check('the rat cannot go down before you have parried', await ev('!!B&&!S.tut.flags.won&&S.tut.flags.played&&!S.tut.flags.parried'), await ev('[!!B,B&&B.mhp,S.tut.flags,B&&B.phase]'));
   for (let i = 0; i < 40 && await ev('B&&B.phase!=="parry"'); i++) await step(.1);
   check('it always leaves an opening until you parry', await ev('B.phase==="parry"&&/PARRY/.test(document.getElementById("tutcard").textContent)'));
   await ev('(()=>{const P=B.parry;P.t0=performance.now()-P.dur*(P.z0+P.z1)/2;parryPress();})()'); await step(1);
