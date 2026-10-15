@@ -22,6 +22,12 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const card = await ev('(()=>{const c=document.querySelector(".lvlcard.blood");return c?{txt:c.textContent,bg:getComputedStyle(c).backgroundColor,gain:getComputedStyle(c.querySelector(".cgain")).color}:null;})()');
   check('it is dealt as a black-and-red card', card && card.bg === 'rgb(18, 10, 11)' && card.gain === 'rgb(255, 143, 128)', card);
   check('which says it is a blood gift, what it gives, and exactly what it costs', card && /Blood gift/.test(card.txt) && /Reaping Cut/.test(card.txt) && /10 max health/.test(card.txt) && /Ember Brand/.test(card.txt) && /level 5/.test(card.txt), card && card.txt);
+  check('cut like a real card, 2.5 by 3.5, all three the same', await ev('[...document.querySelectorAll(".lvlcard")].every(c=>c.offsetWidth===206&&c.offsetHeight===288)'));
+  check('its words go on the back, and nothing spills off either face', await ev('(()=>{const c=document.querySelector(".lvlcard.blood");return c.classList.contains("flips")&&[...c.querySelectorAll(".cface")].every(f=>f.scrollHeight<=f.clientHeight+1);})()'));
+  { const r = await ev('(()=>{const b=document.querySelector(".lvlcard.blood").getBoundingClientRect();return{x:b.x+b.width/2,y:b.y+60};})()');
+    await page.mouse.move(r.x, r.y); await page.waitForTimeout(500);
+    check('hovering turns it over to show them', await ev('(()=>{const c=document.querySelector(".lvlcard.blood");return c.classList.contains("lift")&&getComputedStyle(c.querySelector(".lvback")).visibility==="visible"&&getComputedStyle(c.querySelector(".lvfront")).visibility==="hidden";})()'));
+    await page.mouse.move(5, 5); await page.waitForTimeout(300); }
   await ev('pickLevelCard(document.querySelector(".lvlcard.blood"))'); await page.waitForTimeout(800);
   check('taking it costs the health', await ev('S.maxhp===30&&S.hp<=30'));
   check('and puts Reaping Cut in your hand', await ev('unlocked().some(m=>m.id==="reap")'));

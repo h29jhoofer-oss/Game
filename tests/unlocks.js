@@ -26,7 +26,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('opening 20 wounds unlocks Rook', await ev('isUnlocked("rook")&&META.done.blood'));
   await reload();
   check('and Rook is still there after a reload, the others still locked', await ev('isUnlocked("rook")&&!["doctor","mage","monk"].some(isUnlocked)'));
-  await ev('META.tutorialDone=true;metaSave()'); await reload();
+  await ev('META.tutorialDone=true;META.tutorialV=TUT_VER;metaSave()'); await reload();
   check('finishing the crash course survives a reload', await ev('META.tutorialDone===true&&(openSettings(),!!document.getElementById("setTut"))'));
   check('no page errors', errors.length === 0, errors);
   let pass = 0;

@@ -187,6 +187,25 @@ canvas{display:block;max-width:100%;max-height:100%;touch-action:manipulation;
 .lvlcard .cname{font-size:16px}
 .lvlcard .cgain{font-size:14px;font-weight:700;color:var(--ink);margin:0 0 8px}
 .lvlcard .ckey{margin-top:auto;padding-top:10px;font-size:10.5px;color:var(--rule);letter-spacing:.08em}
+/* level cards are cut to a real card's proportions (2.5 x 3.5); the words sit on the back if they don't fit */
+.chargrid.fan .charcard.lvlcard{height:288px;padding:0;transition:transform .2s ease-out,opacity .2s ease-out,box-shadow .2s,scale .36s ease-in-out}
+.cface{position:absolute;inset:0;display:flex;flex-direction:column;align-items:stretch;padding:30px 16px 26px;overflow:hidden}
+.cface .cbody{flex:1;display:flex;flex-direction:column;min-height:0}
+.lvback{visibility:hidden;scale:-1 1;justify-content:center}
+.lvback .cname{font-size:14px}.lvback .ctitle{margin-bottom:6px}
+.lvback .cblurb{font-size:12px;line-height:1.4}.lvback .cprice{font-size:11px}
+.lvback .cbody{flex:0 1 auto}.lvback .ckey{margin-top:10px}
+.cturn{display:none;margin-top:auto;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--rule)}
+.lvlcard.flips .lvfront .cwords{display:none}
+.lvlcard.flips .lvfront .cturn{display:block}
+.lvlcard.flips .lvfront .ckey{margin-top:4px}
+.lvlcard.tight .lvfront .cport{padding:6px}.lvlcard.tight .lvfront .cport svg{width:40px;height:auto;margin:0 auto}.lvlcard.tight .lvfront .cgain{font-size:13px}
+/* the turn: the card squeezes to an edge and opens out showing its back; the faces swap at the edge */
+.chargrid.fan .lvlcard.flips.lift{scale:-1 1}
+.lvlcard.flips .lvfront,.lvlcard.flips .lvback{transition:visibility 0s linear .18s}
+.lvlcard.flips.lift .lvfront{visibility:hidden}
+.lvlcard.flips.lift .lvback{visibility:visible}
+@media (prefers-reduced-motion:reduce){.chargrid.fan .charcard.lvlcard{transition:none}.lvlcard.flips .lvfront,.lvlcard.flips .lvback{transition:none}}
 .wispcard .cport{padding:6px}
 .wispcard.asked .ctitle{color:var(--rule)}
 .wispbye{text-align:center;margin:0;color:#8e9aad;font-size:13px;cursor:pointer;letter-spacing:.06em}
@@ -4993,11 +5012,14 @@ const QUESTS=[
   text:"Something in a long white beak is still taking notes. Reach floor 5 and he'll follow you out."}
 ];
 const META_KEY="hd-meta";
+// The crash course was rewritten (the old man teaches it now). A save that finished an older version
+// of it hasn't met him, so Play takes it through the new one first.
+const TUT_VER=2;
 let META={unlocked:{cade:true},stats:{},done:{}};
 function metaLoad(){
   try{
     const m=JSON.parse(localStorage.getItem(META_KEY)||"null");
-    if(m&&typeof m==="object"){META.stats=m.stats||{};META.done=m.done||{};META.beasts=m.beasts||{};META.tutorialDone=!!m.tutorialDone;if(Array.isArray(m.papers))META.papers=m.papers;}
+    if(m&&typeof m==="object"){META.stats=m.stats||{};META.done=m.done||{};META.beasts=m.beasts||{};META.tutorialDone=!!m.tutorialDone&&m.tutorialV===TUT_VER;if(Array.isArray(m.papers))META.papers=m.papers;}
   }catch(e){}
   // Heroes are only ever earned by finishing their quests: Cade, plus whoever each finished quest unlocks.
   // (Rebuilt from the quests on every load, so an old save can't carry a hero its owner never earned.)
@@ -6548,7 +6570,7 @@ function tutFinish(){
 function tutDone(){
   say("The old man raises a hand as you start down the stair, and keeps it raised until the dark comes between you.","c-cold");
   OLDMAN=null;
-  META.tutorialDone=true;metaSave();
+  META.tutorialDone=true;META.tutorialV=TUT_VER;metaSave();
   const el=$("tutcard");if(el)el.classList.remove("show");
   S.tut=null;S.over=true;
   say("The crash course is done. Choose who goes down.","c-lvl");
@@ -8354,13 +8376,22 @@ function openLevelUp(){
     if(h.kind==="torn")return tornCard(h,i,mid,lvl);
     const pip=`<b>${lvl}</b>${glyphSvg(c.glyph,1.3)}`;
     const blood=black&&c.blood,sul=black&&c.sulphur;
+    const pips=`<div class="cpip tl${black?"":" red"}">${pip}</div><div class="cpip br${black?"":" red"}">${pip}</div>`;
+    const kind=blood?"Blood gift":sul?"Sulphur gift":black?"Dark gift":"Blessing",gain=typeof c.gain==="function"?c.gain():c.gain;
+    const words=`<div class="cblurb">${c.text}</div>${sul?`<div class="cprice">The price: <b>${LVL_CARDS.find(x=>x.id===c.seals).name}</b> burns. You will never take it again.</div>`:""}${blood?`<div class="cprice">The price: <b>${c.hp} max health</b>, and <b>${h.price.name}</b>${h.price.lvl>S.lvl?`, the attack you would learn at level ${h.price.lvl}`:""}. Never again.</div>`:""}`;
+    // Two faces: the front is the card as dealt; if its words don't fit, they move to the back,
+    // and lifting the card (hovering it, focusing it, or a first tap) turns it over to read them.
     return `<div class="charcard lvlcard${black?" black":""}${blood?" blood":""}${sul?" sulphur":""}" data-kind="${h.kind}" data-id="${black?h.id:c.id}"${blood?` data-price="${h.price.id}"`:""} role="button" tabindex="0" style="--i:${i};--t:${(i-mid).toFixed(2)}">
-      <div class="cpip tl${black?"":" red"}">${pip}</div><div class="cpip br${black?"":" red"}">${pip}</div>
+      <div class="cface lvfront">${pips}
       <div class="cport">${glyphSvg(c.glyph,6)}</div>
       <div class="cname">${c.name}</div>
-      <div class="ctitle">${blood?"Blood gift":sul?"Sulphur gift":black?"Dark gift":"Blessing"}</div>
-      <div class="cbody"><div class="cgain">${typeof c.gain==="function"?c.gain():c.gain}</div>
-        <div class="cblurb">${c.text}</div>${sul?`<div class="cprice">The price: <b>${LVL_CARDS.find(x=>x.id===c.seals).name}</b> burns. You will never take it again.</div>`:""}${blood?`<div class="cprice">The price: <b>${c.hp} max health</b>, and <b>${h.price.name}</b>${h.price.lvl>S.lvl?`, the attack you would learn at level ${h.price.lvl}`:""}. Never again.</div>`:""}<div class="ckey">PRESS ${i+1}</div></div></div>`;
+      <div class="ctitle">${kind}</div>
+      <div class="cbody"><div class="cgain">${gain}</div>
+        <div class="cwords">${words}</div><div class="cturn">Hover to turn over</div><div class="ckey">PRESS ${i+1}</div></div></div>
+      <div class="cface lvback">${pips}
+      <div class="cname">${c.name}</div>
+      <div class="ctitle">${kind}</div>
+      <div class="cbody">${words}<div class="ckey">PRESS ${i+1}</div></div></div></div>`;
   }).join("");
   overlay(`<h3>Level ${lvl}</h3>
     <p class="lede">Choose one card.${hand.some(h=>h.kind==="black")?" A black card has been dealt.":""}</p>
@@ -8368,9 +8399,20 @@ function openLevelUp(){
   $("card").classList.add("wide");
   playCardSound(false);
   const grid=document.querySelector("#card .chargrid");
+  cardsTurn(grid);
   layoutFan(grid);requestAnimationFrame(()=>layoutFan(grid));
   if(window.ResizeObserver){if(fanRO)fanRO.disconnect();fanRO=new ResizeObserver(()=>layoutFan(grid));fanRO.observe($("card"));}
   wireHand(grid,()=>levelPicked,pickLevelCard);
+}
+// A card whose words overflow its face keeps only its emblem and gain up front, and turns over to read.
+function cardsTurn(grid){
+  const touch=matchMedia("(hover:none)").matches;
+  grid.querySelectorAll(".lvlcard .lvfront").forEach(f=>{
+    const card=f.parentElement;card.classList.remove("flips","tight");
+    if(f.scrollHeight>f.clientHeight+1){card.classList.add("flips");if(touch)f.querySelector(".cturn").textContent="Tap to turn over";}
+    // a long name or gain still too big for the front: the emblem shrinks to make room
+    if(f.scrollHeight>f.clientHeight+1)card.classList.add("tight");
+  });
 }
 // A blessing a sulphur gift burnt: still dealt, scorched at the edges and torn in three, and it can't be taken.
 function tornCard(h,i,mid,lvl){

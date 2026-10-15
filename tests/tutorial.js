@@ -84,6 +84,11 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('from then on Settings can replay the crash course', await ev('!!document.getElementById("setTut")'));
   await ev('title()'); await page.click('#tPlay'); await page.waitForTimeout(200);
   check('and Play goes straight to the heroes', await ev('!S.tut&&/charcard/.test(document.getElementById("card").innerHTML)'));
+  // a save that finished the old crash course (before the old man) hasn't met him: Play takes it through again
+  await ev('localStorage.setItem("hd-meta",JSON.stringify({tutorialDone:true,stats:{},done:{}}))'); await page.reload(); await page.waitForTimeout(300);
+  await ev('tamChatter=false');
+  await page.click('#tPlay'); await page.waitForTimeout(300);
+  check('an older save that finished the old course gets the new one on Play', await ev('!!S.tut&&MAPD.dlg&&MAPD.dlg.who==="oldman"'));
   check('no page errors', errors.length === 0, errors);
   let pass = 0;
   for (const r of results) { console.log((r.ok ? 'ok   ' : 'FAIL ') + r.name + (r.ok ? '' : '  ' + JSON.stringify(r.detail))); if (r.ok) pass++; }
