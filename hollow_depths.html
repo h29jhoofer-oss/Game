@@ -3419,11 +3419,25 @@ const THING_DEAL=[
  {mood:"anger",text:"Very well. No contract, then. I will simply take it off your body.",act:()=>{quake(12);playRoarSound();}}
 ];
 function arriveBusy(){return !!ARRIVE&&ARRIVE.stage!=="done";}
+// Floor 20. You set foot on the stair out, and the kindly old man from the top of the stair comes walking up
+// behind you. Then he isn't an old man, and the deal is on the table.
 function dealLines(){
-  if(META.tutorialDone){const met={text:"We've met, you know. At the top of the stair. I was an old man then, with a hood. I did say I'd be waiting at the bottom."};
-    const L=CHAR().id!=="monk"?THING_DEAL:monkDeal();return [THING_DEAL[0],met].concat(L.slice(1));}
-  if(CHAR().id!=="monk")return THING_DEAL;
-  return monkDeal();
+  const cade=CHAR().id==="cade";
+  const meet=[
+    {who:"oldman",text:"Glad to see you made it here in one piece."},
+    {who:"hero",text:cade?"How did you get down here before me?":"Who are you? How did you get all the way down here?"},
+    {who:"oldman",text:"I have always been here."},
+    {who:"thing",text:"I am the hill, and the hill is me.",mood:"anger",act:()=>oldManTurnsAt20()}];
+  const deal=(CHAR().id!=="monk"?THING_DEAL:monkDeal()).map(l=>l.who?l:Object.assign({who:"thing"},l));
+  return meet.concat(deal);
+}
+// the hood falls back, in smoke, and it is standing there instead
+function oldManTurnsAt20(){
+  if(!ARRIVE)return;
+  ARRIVE.thing=true;quake(12);
+  burst(ARRIVE.x,ARRIVE.y,"#2a1a45",32,3.8);burst(ARRIVE.x,ARRIVE.y,"#566173",16,2.6);
+  for(let i=0;i<14;i++)ARRIVE.puffs.push({x:ARRIVE.x+.5+(Math.random()-.5)*.8,y:ARRIVE.y+.6+(Math.random()-.5)*.4,t:0,life:1.4+Math.random(),drift:(Math.random()-.5)*.6});
+  playGrowl();if(typeof sfxPhase==="function")sfxPhase();
 }
 function monkDeal(){
   return THING_DEAL.map(l=>l.who==="hero"&&l.text!=="No."?{who:"hero",text:"My soul is not mine to sell. It belongs to God."}:l)
@@ -3451,8 +3465,7 @@ function thingArrives(){
   ARRIVE={stage:"walk",x:best[0],y:best[1],path,leg:1,t:0,puffT:0,stepT:0,puffs:[],walk:0};
   held.clear();S.dashT=0;
   for(const m of mons)m.cool=Math.max(m.cool||0,3);
-  say("You set your foot on the first step. Behind you, unhurried footsteps, and the smell of smoke.","c-hit");
-  playGrowl();
+  say("You set your foot on the first step. Behind you, unhurried footsteps, and the tap of a walking staff.","c-cold");
 }
 function arriveTick(dt){
   const A=ARRIVE;
@@ -3467,8 +3480,8 @@ function arriveTick(dt){
   }
   A.walk+=dt*ARRIVE_SPEED;
   A.puffT-=dt;
-  if(A.puffT<=0){A.puffT=.06;A.puffs.push({x:A.x+.5+(Math.random()-.5)*.25,y:A.y+.55+(Math.random()-.5)*.15,t:0,life:1.6+Math.random()*.8,drift:(Math.random()-.5)*.3});}
-  A.stepT-=dt;if(A.stepT<=0){A.stepT=.75;playMonsterStep(4);}
+  if(A.thing&&A.puffT<=0){A.puffT=.06;A.puffs.push({x:A.x+.5+(Math.random()-.5)*.25,y:A.y+.55+(Math.random()-.5)*.15,t:0,life:1.6+Math.random()*.8,drift:(Math.random()-.5)*.3});}
+  A.stepT-=dt;if(A.stepT<=0){A.stepT=.75;playFootstep();}
   computeFOV();
   if(A.leg>=A.path.length){
     A.stage="talk";
@@ -3476,7 +3489,7 @@ function arriveTick(dt){
       A.stage="done";
       spawnMon("thing",Math.round(A.x),Math.round(A.y));
       const m=mons[mons.length-1];m.seenYou=true;held.clear();computeFOV();startBattle(m);
-    },"Fight","thing");
+    },"Fight","oldman");
   }
 }
 // Him, walking in his robe, and the thin smoke he leaves behind: a few art pixels each, rising and thinning.
@@ -3495,7 +3508,7 @@ function drawArrive(R){
   const tx=Math.round(A.x),ty=Math.round(A.y);
   if(!visible.has(tx+","+ty))return;
   const b=Math.max(.6,bright(tx,ty,R)),bob=RM?0:Math.sin(A.walk*Math.PI*1.4)*.03;
-  blit("thing",A.x,A.y+bob,b,0,1+(RM?0:Math.sin(tclock*1.8)*.02),1);
+  blit(A.thing?"thing":"oldman",A.x,A.y+bob,b,0,A.thing?1+(RM?0:Math.sin(tclock*1.8)*.02):1,1,!A.thing&&S.vx<A.x);
 }
 
 /* ============================ end states ============================ */
@@ -6440,18 +6453,14 @@ const TUT_TAM={
       {text:"And if you are very lucky, black and yellow. Strength like you have never known. You'll never need the small pale cards again."},
       {text:"Take them, child. Take every one. What harm could a gift do?"},
       {text:"Oh, and further down, mind the roots. They mean no harm. They only want to hold on to you."}],
- // At the stair he comes over to see you off, still the old man; then he isn't.
  bye:[{text:"Off you go, then. Twenty floors, all the way to the bottom."},
-      {text:"I'll be waiting for you there, you know."},
-      {who:"hero",text:"At the bottom? How could you get down there before me?"},
-      {text:"Oh, child.",act:()=>oldManTurns()},
-      {who:"thing",text:"I have always been at the bottom."},
-      {who:"thing",text:"The hill, the stair, the crown, the King's poor Queen. All mine. I am the Thing under the hill, and I keep very good books."},
-      {who:"thing",text:"Take the gifts. Every one. We will settle up when you arrive.",mood:"anger",act:()=>oldManGoes()}]
+      {text:"Mind the dark, keep your torch lit, and don't let anything down there tell you you're not enough."},
+      {who:"hero",text:"Thank you. For all of it."},
+      {text:"Oh, it was nothing. Truly. Go on, child. Perhaps we'll meet again someday."}]
 };
 // where he stands for each lesson
 let OLDMAN=null;
-const OLDMAN_AT={intro:[9,13],fight:[37,13],stair:[35,12]};
+const OLDMAN_AT={intro:[9,13],fight:[37,13],stair:[39,17]};
 function tutStep(){return S&&S.tut?TUT_STEPS[S.tut.step]:null;}
 function tutGo(id){
   const i=TUT_STEPS.findIndex(x=>x.id===id);S.tut.step=i;S.tut.t=0;S.tut.flags={};
@@ -6495,7 +6504,6 @@ function tutReadNote(pr){
   S.tut.flags.read=true;
 }
 function tutTick(dt){
-  oldManTick(dt);
   const st=tutStep();if(!st)return;
   S.tut.t+=dt;
   const F=S.tut.flags,at=([x,y])=>S.px===x&&S.py===y;
@@ -6530,36 +6538,15 @@ function tutBanner(){
   if(el.dataset.h!==html){el.dataset.h=html;el.innerHTML=html;}
   el.classList.add("show");
 }
-// You stand on the stair and press Enter: he walks over to see you off, then the farewell.
-const OLDMAN_WALK=1.8;   // tiles a second: an old man's pace
+// You stand on the stair and press Enter: he sees you off, kindly, and you go down.
 function tutFinish(){
   if(!S.tut||S.tut.step>=TUT_STEPS.length)return;
   S.tut.step=TUT_STEPS.length;held.clear();
-  const tx=S.px-1,ty=S.py;   // the tile beside you
-  OLDMAN.walk={tx,ty};
   const el=$("tutcard");if(el)el.classList.remove("show");
-}
-function oldManTick(dt){
-  if(!OLDMAN||!OLDMAN.walk)return;
-  const w=OLDMAN.walk,dx=w.tx-OLDMAN.x,dy=w.ty-OLDMAN.y,d=Math.hypot(dx,dy),st=OLDMAN_WALK*dt;
-  if(d<=st){OLDMAN.x=w.tx;OLDMAN.y=w.ty;OLDMAN.walk=null;OLDMAN.arrived=true;
-    startDialogue(TUT_TAM.bye,tutDone,"Go down","oldman");return;}
-  OLDMAN.x+=dx/d*st;OLDMAN.y+=dy/d*st;OLDMAN.step=(OLDMAN.step||0)+dt;
-}
-// The hood falls back and there is no old man under it.
-function oldManTurns(){
-  if(!OLDMAN)return;
-  OLDMAN.thing=true;quake(10);
-  burst(OLDMAN.x,OLDMAN.y,"#2a1a45",30,3.8);burst(OLDMAN.x,OLDMAN.y,"#566173",16,2.6);
-  if(typeof playGrowl==="function")playGrowl();if(typeof sfxPhase==="function")sfxPhase();
-}
-function oldManGoes(){
-  if(!OLDMAN)return;
-  OLDMAN.gone=true;quake(8);
-  burst(OLDMAN.x,OLDMAN.y,"#2a1a45",26,3.5);burst(OLDMAN.x,OLDMAN.y,"#8a5fc4",12,2.5);
+  startDialogue(TUT_TAM.bye,tutDone,"Go down","oldman");
 }
 function tutDone(){
-  say("Where it stood there is only a smell of smoke, and something like laughter, very far below.","c-cold");
+  say("The old man raises a hand as you start down the stair, and keeps it raised until the dark comes between you.","c-cold");
   OLDMAN=null;
   META.tutorialDone=true;metaSave();
   const el=$("tutcard");if(el)el.classList.remove("show");
@@ -6577,8 +6564,7 @@ function tutTarget(){
 function drawTutMark(){
   if(S.tut&&OLDMAN&&!OLDMAN.gone&&S.mode==="map"){
     const b=RM?0:Math.round(Math.sin(tclock*1.6)*.6)/16;
-    const hop=OLDMAN.walk&&!RM?-Math.abs(Math.sin(OLDMAN.step*9))/16:0;
-    blit(OLDMAN.thing?"thing":"oldman",OLDMAN.x,OLDMAN.y+b+hop,1,0,1,1,S.vx<OLDMAN.x);
+    blit("oldman",OLDMAN.x,OLDMAN.y+b,1,0,1,1,S.vx<OLDMAN.x);
   }
   const t=tutTarget();if(!t)return;
   const b=RM?0:Math.round(Math.sin(tclock*5)*1.5)/16;
@@ -9252,7 +9238,7 @@ for(const k in KEYS){
 const held=new Set();
 let freeClock=0,freeBumpT=0,freeWindedT=0;
 function freeMode(){return !!S;}   // every hero walks freely now; the grid code stays for "." (rest) and as a fallback
-function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()||monkChoiceOpen||wispTalkOpen||snareGrab()||!!(OLDMAN&&OLDMAN.walk)||!!MAPD.dlg||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
+function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()||monkChoiceOpen||wispTalkOpen||snareGrab()||!!MAPD.dlg||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
 // What a box of half-width r centred on (cx,cy) overlaps: {wall:true}, {chasm:[x,y]}, or null.
 function boxHit(cx,cy,r){
   const e=1e-6;
