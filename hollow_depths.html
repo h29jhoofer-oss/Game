@@ -2759,7 +2759,7 @@ function resolveParry(result){
   });
 }
 function autoParry(sp){
-  const m=B.mon;
+  const m=B.mon;sfxParry();
   if(S.tut)S.tut.flags.parried=true;
   B.phase="anim";
   B.pStat.parry=true;                 // hold the parry pose
@@ -2819,7 +2819,10 @@ function gainXp(n){
   S.xp+=n;
   while(S.lvl<XPTABLE.length-1&&S.xp>=XPTABLE[S.lvl]){
     S.lvl++;
-    for(const mv of newMovesAt(S.lvl))say(`You learn ${mv.name}.`,"c-lvl");
+    sfxLevelUp();
+    const learnt=newMovesAt(S.lvl);
+    for(const mv of learnt)say(`You learn ${mv.name}.`,"c-lvl");
+    if(learnt.length)setTimeout(sfxLearnMove,650);
     // Levelling no longer raises every stat a little: it heals a bit, then deals a hand of
     // upgrade cards to choose from (see openLevelUp).
     S.hp=Math.min(S.maxhp,S.hp+(CHAR().hpLevel||9));
@@ -3435,6 +3438,7 @@ function showBest(){
   $("best").textContent=b?`best run  ${b}`:"";
 }
 function die(by){
+  sfxDeath();
   S.over=true;S.hp=0;packOpen=false;codexOpen=false;shrineOpen=false;refresh();
   const sc=score(),b=saveBest(sc);showBest();
   const lede=by==="trap"
@@ -3771,7 +3775,7 @@ function noteBeast(t){
   const id=beastId(t);if(!BEASTS.some(b=>b.id===id))return;
   META.beasts=META.beasts||{};
   if(META.beasts[id])return;
-  META.beasts[id]=true;metaSave();
+  META.beasts[id]=true;metaSave();setTimeout(sfxCardNew,700);
   const L=B&&B.layout;
   (B?blog:say)(`A new card for the bestiary: ${beastName(BEASTS.find(b=>b.id===id))}.`,"c-item");
 }
@@ -4803,7 +4807,7 @@ function loop(now){
   syncTalking();
   const dt=Math.min(.05,(now-last)/1000||0);last=now;
   lastFrameAt=performance.now();if(audioHidden)updateAudioVisibility();
-  tick(dt);render();
+  tick(dt);render();musTick();
   requestAnimationFrame(loop);
 }
 
@@ -4923,7 +4927,7 @@ function bumpStat(stat,n){
   META.stats[stat]=(META.stats[stat]||0)+(n||1);
   for(const q of QUESTS){
     if(META.done[q.id]||q.stat!==stat||META.stats[stat]<q.goal)continue;
-    META.done[q.id]=true;META.unlocked[q.unlock]=true;
+    META.done[q.id]=true;META.unlocked[q.unlock]=true;setTimeout(sfxUnlock,300);
     const msg=`Quest complete: ${q.name}. ${charById(q.unlock).name} can now be chosen at the start of a run.`;
     if(B)blog(msg,"c-lvl");else say(msg,"c-lvl");
     const L=B&&B.layout;if(L)snum(L.px,L.py-L.psz*.9,"QUEST COMPLETE","#f0c060",true);
@@ -5420,7 +5424,7 @@ function mDamage(sp){
   return{dmg:Math.max(1,base-Math.max(0,def-pierce))};
 }
 function hurtMon(dmg,crit){
-  B.mhp-=dmg;B.mFlash=1;
+  B.mhp-=dmg;B.mFlash=1;sfxHit(crit);
   const L=B.layout;
   if(L){
     sburst(L.ex,L.ey,cssv("--blood"),crit?14:8,crit?260:170);
@@ -5441,7 +5445,7 @@ function checkBossPhase(){
   if(B.mhp<=B.mmax*.5) triggerPhase2();
 }
 function triggerPhase2(){
-  B.phaseNum=2;
+  B.phaseNum=2;sfxPhase();
   if(B.mon.t.ghost){
     const L=B.layout;quake(16);playGhostWail(1.6);B.iceFlash=1;
     if(L){sburst(L.ex,L.ey,"#e87aa0",30,340);sring(L.ex,L.ey,"rgba(232,122,160,.9)",L.esz*1.3);}
@@ -5459,7 +5463,7 @@ function triggerPhase2(){
   if(B.mon.t.id==="king")startDialogue(KING_LINES.phase2,null,"Fight","king");
 }
 function hurtPlayer(dmg,crit){
-  S.hp-=dmg;B.pFlash=1;
+  S.hp-=dmg;B.pFlash=1;sfxHurt();
   if(hasPerk("second")&&!B.secondWind&&S.hp>0&&S.hp<=S.maxhp*.25){
     B.secondWind=true;const h=Math.round(S.maxhp*.35);S.hp=Math.min(S.maxhp,S.hp+h);
     blog(`Second Wind! You catch your breath and recover ${h} HP.`,"c-good");
@@ -6228,7 +6232,7 @@ function snareBurst(){
     say("Roots burst out of the stone where you were standing, and grasp at nothing.","c-good");
     R.stage="broken";R.t=0;R.missed=true;S.snareCD=8;return;
   }
-  R.stage="grab";R.t=0;R.tries=0;R.next=.35;R.bar=null;
+  R.stage="grab";R.t=0;R.tries=0;R.next=.35;R.bar=null;sfxSnare();
   held.clear();S.dashT=0;
   burst(S.px,S.py,"#a87fe0",18,4);
   say("Roots burst out of the floor and coil round your legs!","c-hit");
@@ -6261,7 +6265,7 @@ function snareResolve(result){
   if(result==="perfect"){
     burst(S.px,S.py,"#c8a8f0",26,5.5);burst(S.px,S.py,"#5e3a24",14,4);
     num(S.px,S.py,"FREE!","#c8a8f0",true);quake(8);
-    say("You tear free! The roots snap like wet wood and shrink back into the floor.","c-good");
+    say("You tear free! The roots snap like wet wood and shrink back into the floor.","c-good");sfxSnap();
     R.stage="broken";R.t=0;S.snareCD=10;refresh();return;
   }
   const full=3+(S.depth-11),dmg=Math.max(1,Math.round((result==="mistimed"?.5:1)*full)-Math.floor(armorDef()/3));
@@ -6545,6 +6549,7 @@ function winBattle(){
   if(B.mon.t.thing===1){thingUnveils();return;}
   if(B.mon.t.thing===2){noteBeast(B.mon.t);thingEnrages();return;}
   noteBeast(B.mon.t);
+  if(!(S.tut&&!S.tut.flags.parried))(B.mon.t.boss?sfxBossDown:sfxVictory)();
   if(B.mon.guard&&B.mon.who&&!B.lastWord&&guardLastWords(B.mon)){
     B.lastWord=true;S.guardsSorry=true;B.phase="anim";drawMoves();
     startDialogue(guardLastWords(B.mon),()=>winBattle(),"Continue",B.mon.who);
@@ -7490,7 +7495,7 @@ function drawGiftFx(L){
   for(let j=0;j<rows;j++)for(let i=0;i<cols;i++)if(gl[j][i]==="#")ctx.fillRect(-cols*u/2+i*u,-rows*u/2+j*u,Math.ceil(u),Math.ceil(u));
   ctx.restore();ctx.globalAlpha=1;
 }
-function thingUnveils(){
+function thingUnveils(){sfxPhase();
   B.dlg=null;B.giftFx=null;
   B.phase="anim";
   const m=B.mon,L=B.layout;
@@ -7515,7 +7520,7 @@ function thingUnveils(){
   });
 }
 // Phase 2 -> 3: it will not die, so it stops fighting fair. The battle ends and the chase begins.
-function thingEnrages(){
+function thingEnrages(){sfxPhase();
   B.phase="over";drawMoves();
   const m=B.mon,L=B.layout;
   blog("It staggers, and for the first time it does not get straight back up.","c-good");
@@ -8762,6 +8767,195 @@ function playCardSound(loud){
     o.connect(og);og.connect(out);o.start(t+dur*.75);o.stop(t+dur+.2);
   }
 }
+/* ============================ the score ============================ */
+// Music written in code: a small step sequencer that schedules notes a beat ahead on the Web Audio clock.
+// Each scene has its own piece (exploring the castle, the deep floors below the throne, an ordinary fight,
+// the Ghost Queen's waltz, the Hollow King's march, the Thing, the chase, and the light at the end), and the
+// score crossfades from one to the next as the game changes. Everything goes through the music bus, so the
+// Music button silences it; the stingers (level up, a new attack, victory...) are sound effects and don't.
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+const MUS={bus:null,track:null,want:null,step:0,next:0,fade:0,bar:0};
+function musBus(){
+  if(!amb)return null;
+  if(!MUS.bus){MUS.bus=actx.createGain();MUS.bus.gain.value=0.0001;MUS.bus.connect(amb.dry);
+    const s=actx.createGain();s.gain.value=.45;MUS.bus.connect(s);s.connect(amb.send);}
+  return MUS.bus;
+}
+// --- instruments ---
+function mNote(type,f,t,dur,vol,opt){
+  opt=opt||{};const out=opt.out||MUS.bus;if(!out)return;
+  const o=actx.createOscillator();o.type=type;o.frequency.setValueAtTime(f,t);
+  if(opt.detune)o.detune.value=opt.detune;
+  if(opt.slide)o.frequency.exponentialRampToValueAtTime(opt.slide,t+dur);
+  const g=actx.createGain(),a=opt.a||.005,r=opt.r||dur;
+  g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(vol,t+a);
+  if(opt.hold)g.gain.setValueAtTime(vol,t+a+opt.hold);
+  g.gain.exponentialRampToValueAtTime(.0001,t+a+(opt.hold||0)+r);
+  let node=o;
+  if(opt.lp){const f2=actx.createBiquadFilter();f2.type="lowpass";f2.frequency.value=opt.lp;f2.Q.value=opt.q||.7;node.connect(f2);node=f2;}
+  if(opt.bp){const f2=actx.createBiquadFilter();f2.type="bandpass";f2.frequency.value=opt.bp;f2.Q.value=opt.q||3;node.connect(f2);node=f2;}
+  node.connect(g);g.connect(out);o.start(t);o.stop(t+a+(opt.hold||0)+r+.05);
+}
+function mNoise(t,dur,vol,opt){
+  opt=opt||{};const out=opt.out||MUS.bus;if(!out)return;
+  const b=actx.createBuffer(1,Math.max(1,Math.floor(actx.sampleRate*dur)),actx.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,opt.shape||2);
+  const src=actx.createBufferSource();src.buffer=b;
+  const f=actx.createBiquadFilter();f.type=opt.type||"bandpass";f.frequency.value=opt.f||2000;f.Q.value=opt.q||1;
+  const g=actx.createGain();g.gain.value=vol;src.connect(f);f.connect(g);g.connect(out);src.start(t);
+}
+const I={
+  bell:(m,t,v,len)=>{mNote("sine",mtof(m),t,len||2.4,v,{a:.004});mNote("sine",mtof(m)*2.76,t,(len||2.4)*.4,v*.25,{a:.002});},
+  box:(m,t,v)=>{mNote("triangle",mtof(m),t,1.1,v,{a:.003});mNote("sine",mtof(m)*4,t,.25,v*.2,{a:.002});},
+  pluck:(m,t,v,lp)=>mNote("sawtooth",mtof(m),t,.28,v,{a:.003,lp:lp||1400,q:2}),
+  bass:(m,t,dur,v,lp)=>{mNote("sawtooth",mtof(m),t,dur,v,{a:.01,lp:lp||420,hold:dur*.5,r:dur*.5});mNote("sine",mtof(m-12),t,dur,v*.8,{a:.01,hold:dur*.5,r:dur*.5});},
+  pad:(ms,t,dur,v,lp)=>{for(const m of ms){mNote("sawtooth",mtof(m),t,dur,v,{a:dur*.35,hold:dur*.2,r:dur*.6,lp:lp||900,detune:-7});mNote("sawtooth",mtof(m),t,dur,v,{a:dur*.35,hold:dur*.2,r:dur*.6,lp:lp||900,detune:7});}},
+  choir:(ms,t,dur,v)=>{for(const m of ms)for(const fm of [700,1150])mNote("sawtooth",mtof(m),t,dur,v,{a:dur*.4,hold:dur*.2,r:dur*.5,bp:fm,q:4,detune:(Math.random()-.5)*14});},
+  brass:(ms,t,dur,v)=>{for(const m of ms){mNote("sawtooth",mtof(m),t,dur,v,{a:.04,hold:dur*.4,r:dur*.6,lp:1100,q:1.5});mNote("square",mtof(m),t,dur,v*.35,{a:.05,hold:dur*.4,r:dur*.6,lp:800});}},
+  kick:(t,v)=>{mNote("sine",120,t,.32,v,{a:.002,slide:40});},
+  tom:(t,v,f)=>{mNote("sine",f||95,t,.4,v,{a:.002,slide:(f||95)*.55});mNoise(t,.12,v*.3,{f:400,q:.8});},
+  timp:(t,v,m)=>{mNote("sine",mtof(m||38),t,1.1,v,{a:.003,slide:mtof(m||38)*.92});mNote("sine",mtof((m||38)+7),t,.6,v*.3,{a:.003});mNoise(t,.3,v*.35,{type:"lowpass",f:300,shape:3});},
+  snare:(t,v)=>{mNoise(t,.16,v,{f:1800,q:.7,shape:3});mNote("triangle",190,t,.08,v*.4,{a:.002});},
+  hat:(t,v)=>mNoise(t,.05,v,{type:"highpass",f:7000,shape:4}),
+  heart:(t,v)=>{I.kick(t,v);I.kick(t+.16,v*.7);},
+  shriek:(m,t,v,dur)=>{mNote("sawtooth",mtof(m),t,dur,v,{a:dur*.3,r:dur*.7,bp:mtof(m)*1.5,q:6,detune:-20});mNote("sawtooth",mtof(m+1),t,dur,v,{a:dur*.3,r:dur*.7,bp:mtof(m)*1.5,q:6,detune:25});}
+};
+// --- the pieces. bpm, steps per beat, steps per bar, and step(i,t,beat) which plays step i of the loop ---
+const ch=(root,q)=>q==="m"?[root,root+3,root+7]:q==="M"?[root,root+4,root+7]:q==="d"?[root,root+3,root+6]:[root,root+4,root+7,root+10];
+const TRACKS={
+ // the castle: slow D minor, a pad each bar and a few bells falling into the dark
+ explore:{bpm:58,spb:2,bar:8,vol:.55,prog:[[50,"m"],[46,"M"],[43,"m"],[45,"M"]],
+  step(i,t,B){const bar=Math.floor(i/8)%4,s=i%8,[r,q]=this.prog[bar],c=ch(r,q);
+   if(s===0){I.pad(c.map(x=>x+12),t,B*4.2,.018,700);I.bass(r-12,t,B*3.5,.05,180);}
+   if(s%2===0&&Math.random()<.42)I.bell(pick(c)+24+(Math.random()<.3?12:0),t,.045);}},
+ // the crash course: the same castle, warmer (D dorian, rising)
+ courtyard:{bpm:66,spb:2,bar:8,vol:.55,prog:[[50,"m"],[55,"M"],[50,"m"],[57,"M"]],
+  step(i,t,B){const bar=Math.floor(i/8)%4,s=i%8,[r,q]=this.prog[bar],c=ch(r,q);
+   if(s===0){I.pad(c.map(x=>x+12),t,B*4,.016,900);I.bass(r-12,t,B*3,.045,200);}
+   if(s===2||s===5||(s===7&&Math.random()<.5))I.box(c[(s+bar)%3]+24,t,.05);}},
+ // below the throne: E phrygian, a slow heartbeat, a cluster now and then
+ deep:{bpm:48,spb:2,bar:8,vol:.6,prog:[[40,"m"],[41,"M"],[40,"m"],[38,"m"]],
+  step(i,t,B){const bar=Math.floor(i/8)%4,s=i%8,[r,q]=this.prog[bar],c=ch(r,q);
+   if(s===0){I.pad([r+12,r+13,r+19],t,B*4.5,.016,520);I.bass(r-12,t,B*4,.06,150);I.heart(t,.12);}
+   if(s===4)I.heart(t,.08);
+   if(s%2===1&&Math.random()<.22)I.bell(pick([r+24,r+25,r+31,r+30]),t,.035,3.4);}},
+ // an ordinary fight: A harmonic minor, driving bass, drums, a plucked arpeggio
+ battle:{bpm:116,spb:4,bar:16,vol:1.0,prog:[[45,"m"],[41,"M"],[43,"M"],[40,"7"]],
+  step(i,t,B){const bar=Math.floor(i/16)%4,s=i%16,[r,q]=this.prog[bar],c=ch(r,q),dk=S&&S.depth>10?-1:0;
+   if(s===0||s===6||s===8||(s===14&&bar===3))I.kick(t,.32);
+   if(s===4||s===12)I.snare(t,.14);
+   if(s%2===1)I.hat(t,.035);
+   if(s%2===0)I.bass(r-12+dk+(s===6||s===14?12:0),t,B*.45,.07,520);
+   if(s%2===0)I.pluck(c[(s/2)%3]+24+dk,t,.032,1600);
+   if(s===0)I.pad(c.map(x=>x+12+dk),t,B*4,.012,1200);}},
+ // the Ghost Queen: a music-box waltz in E minor, a choir under it. Phase 2 quickens and darkens.
+ queen:{bpm:84,spb:1,bar:3,vol:2.2,prog:[[40,"m"],[45,"m"],[47,"7"],[40,"m"],[48,"M"],[45,"m"],[47,"M"],[47,"7"]],
+  mel:[71,74,72, 71,69,67, 66,67,69, 71,-1,64, 72,71,69, 69,67,64, 66,67,71, 71,-1,-1],
+  step(i,t,B){const p2=B_phase()===2,bar=Math.floor(i/3)%8,s=i%3,[r,q]=this.prog[bar],c=ch(r,q),m=this.mel[i%24];
+   if(s===0){I.bass(r-12,t,B*2.6,.05,300);I.choir(c.map(x=>x+12),t,B*3.2,p2?.02:.014);if(p2)I.timp(t,.18,r-12);}
+   else{I.box(c[1]+12,t,.022);I.box(c[2]+12,t,.02);}
+   if(m>0)I.box(m+(p2?-1:0)*0,t,p2?.07:.06);
+   if(p2&&s===2&&Math.random()<.5)I.shriek(m>0?m+12:88,t,.012,B*1.5);}},
+ // the Hollow King: a funeral march in C minor. Timpani, brass, an organ pedal. Phase 2: snare rolls and a bigger brass line.
+ king:{bpm:86,spb:2,bar:8,vol:2.0,prog:[[48,"m"],[44,"M"],[41,"m"],[43,"7"]],
+  mel:[67,-1,-1,67,68,-1,67,-1, 68,-1,-1,67,65,-1,63,-1, 65,-1,-1,63,62,-1,60,-1, 62,-1,63,-1,62,-1,59,-1],
+  step(i,t,B){const p2=B_phase()===2,bar=Math.floor(i/8)%4,s=i%8,[r,q]=this.prog[bar],c=ch(r,q),m=this.mel[i%32];
+   if(s===0||s===4)I.timp(t,.3,r-12);
+   if(s===7)I.timp(t,.16,r-12);
+   if(s===0){I.brass(c,t,B*1.6,.03);I.bass(r-24,t,B*3.8,.06,160);}
+   if(s===3)I.brass(c,t,B*.5,.02);
+   if(m>0)I.brass([m+(p2?12:0)],t,B*1.3,p2?.03:.024);
+   if(p2){if(s%2===1)I.snare(t,.07);if(s===6){I.snare(t,.09);I.snare(t+B/4,.09);}}}},
+ // the Thing: a tritone grinding under a doubled heartbeat; it shrieks. Phase 2 doubles everything.
+ thing:{bpm:124,spb:4,bar:16,vol:1.3,
+  step(i,t,B){const p2=B_phase()===2,s=i%16,bar=Math.floor(i/16)%2,root=bar?37:36;
+   if(s%4===0)I.heart(t,.3);
+   if(s%2===0)I.bass(s%8<4?root:root+6,t,B*.45,.075,p2?700:380);
+   if(p2&&s%4===2)I.snare(t,.08);
+   if(s===0)I.pad([root+12,root+18,root+19],t,B*4,.014,600);
+   if(Math.random()<(p2?.16:.07))I.shriek(pick([84,85,90,91]),t,.012,B*2);
+   if(s===8&&Math.random()<.5)mNoise(t,.6,.06,{f:3000,q:8,shape:1});}},
+ // the chase up the floor: everything at once, as fast as it goes
+ chase:{bpm:152,spb:4,bar:16,vol:1.5,
+  step(i,t,B){const s=i%16,bar=Math.floor(i/16)%4,root=[36,36,34,35][bar];
+   if(s%4===0)I.kick(t,.36);if(s%4===2)I.snare(t,.1);I.hat(t,.03);
+   if(s%2===0)I.bass(root+(s%4?12:0),t,B*.4,.075,600);
+   if(s===0)I.shriek(72+bar,t,.014,B*4);}},
+ // the light: what the monk's cross sounds like. C major, bells and choir.
+ holy:{bpm:70,spb:2,bar:8,vol:1.2,prog:[[48,"M"],[53,"M"],[45,"m"],[55,"M"]],
+  step(i,t,B){const bar=Math.floor(i/8)%4,s=i%8,[r,q]=this.prog[bar],c=ch(r,q);
+   if(s===0){I.choir(c.map(x=>x+12),t,B*4.2,.02);I.bass(r-12,t,B*3.5,.04,250);}
+   if(s%2===0)I.bell(c[(s/2)%3]+24,t,.04);}}
+};
+function B_phase(){return B&&B.phaseNum||1;}
+// Which piece this moment calls for.
+function musWanted(){
+  if(!S||S.over||menuQuiet)return null;
+  if(S.chase)return"chase";
+  if(S.monkStand||(S.jump&&S.jump.holy)||(B&&B.mon.t.shade))return"holy";
+  if(S.mode==="battle"&&B){const t=B.mon.t;
+    if(t.thing)return"thing";if(t.id==="queen")return"queen";if(t.id==="king")return"king";return"battle";}
+  if(S.tut)return"courtyard";
+  return S.depth>10?"deep":"explore";
+}
+// how loud the old drone sits under each piece
+const DRONE_UNDER={explore:.45,courtyard:.35,deep:.6,battle:.3,queen:.15,king:.15,thing:.3,chase:.2,holy:.1};
+function musTick(){
+  if(!amb||!actx||actx.state!=="running")return;
+  const bus=musBus();if(!bus)return;
+  const want=musWanted();
+  if(want!==MUS.want){
+    MUS.want=want;const t=actx.currentTime;
+    bus.gain.cancelScheduledValues(t);bus.gain.setValueAtTime(Math.max(.0001,bus.gain.value),t);
+    bus.gain.exponentialRampToValueAtTime(.0001,t+.6);
+    MUS.fade=t+.6;
+    if(want){amb.tension.gain.cancelScheduledValues(t);amb.tension.gain.setTargetAtTime(DRONE_UNDER[want]||1,t,1);}
+  }
+  const now=actx.currentTime;
+  if(MUS.track!==MUS.want&&now>=MUS.fade){
+    MUS.track=MUS.want;MUS.step=0;MUS.next=now+.05;
+    if(MUS.track){const tr=TRACKS[MUS.track];bus.gain.cancelScheduledValues(now);bus.gain.setValueAtTime(.0001,now);bus.gain.exponentialRampToValueAtTime(tr.vol,now+.9);
+      if(["queen","king","thing"].includes(MUS.track))stingBoss();}
+  }
+  const tr=MUS.track&&TRACKS[MUS.track];if(!tr)return;
+  if(MUS.next<now-.2)MUS.next=now+.05;                  // we were away: pick up from now
+  const dt=60/tr.bpm/tr.spb;
+  while(MUS.next<now+.2){tr.step(MUS.step,MUS.next,60/tr.bpm);MUS.step++;MUS.next+=dt;}
+}
+
+/* ---------- stingers: short pieces of music that mark an event. Sound effects, so Music off doesn't mute them ---------- */
+function sfxOut(vol){if(!AUDIO_OK)return null;ensureAudio();if(!actx)return null;const g=actx.createGain();g.gain.value=vol;g.connect(actx.destination);
+  if(amb){const s=actx.createGain();s.gain.value=.3;g.connect(s);s.connect(amb.send);}return g;}
+function sfxArp(notes,gap,type,vol,len){const out=sfxOut(1);if(!out)return;const t=actx.currentTime+.02;
+  notes.forEach((m,k)=>{if(m<0)return;mNote(type||"triangle",mtof(m),t+k*gap,len||.6,vol,{a:.004,out});mNote("sine",mtof(m)*2,t+k*gap,(len||.6)*.5,vol*.25,{a:.003,out});});}
+function sfxLevelUp(){sfxArp([62,66,69,74,78,81],.07,"triangle",.14,.9);}
+function sfxLearnMove(){const out=sfxOut(1);if(!out)return;const t=actx.currentTime+.05;playCardSound(true);
+  [74,79,83,86].forEach((m,k)=>mNote("sine",mtof(m),t+.2+k*.09,1.4,.12,{a:.003,out}));
+  mNote("triangle",mtof(62),t+.2,1.6,.09,{a:.01,out});mNoise(t+.2,.5,.05,{type:"highpass",f:6000,shape:2,out});}
+function sfxVictory(){sfxArp([57,64,69,-1,72,-1,76],.09,"triangle",.12,1.1);}
+function sfxBossDown(){sfxArp([48,55,60,64,67,72],.12,"sawtooth",.06,1.6);const out=sfxOut(1);if(out){const t=actx.currentTime;I.timp(t+.02,.5,36);mNote("sine",mtof(36),t,2.5,.2,{a:.01,out});}}
+function sfxDeath(){const out=sfxOut(1);if(!out)return;const t=actx.currentTime+.02;
+  [57,56,53,50,45].forEach((m,k)=>mNote("sawtooth",mtof(m),t+k*.32,.9,.07,{a:.02,lp:900,out}));mNote("sine",mtof(33),t,3.2,.2,{a:.05,out});}
+function sfxUnlock(){sfxArp([60,64,67,72,-1,67,72,76,79,84],.08,"square",.05,.8);const out=sfxOut(1);if(out)mNote("sine",mtof(48),actx.currentTime,1.6,.15,{a:.01,out});}
+function sfxCardNew(){playCardSound(true);sfxArp([-1,-1,-1,79,86],.06,"sine",.1,1.2);}
+function sfxPhase(){const out=sfxOut(1);if(!out)return;const t=actx.currentTime+.01;
+  mNote("sine",90,t,1.3,.5,{a:.003,slide:30,out});mNoise(t,.9,.25,{type:"lowpass",f:600,shape:2,out});
+  [0,1,6].forEach(d=>mNote("sawtooth",mtof(43+d),t+.05,1.6,.05,{a:.08,lp:1200,out}));}
+function stingBoss(){const out=sfxOut(1);if(!out)return;const t=actx.currentTime+.01;
+  mNote("sine",70,t,1.1,.45,{a:.003,slide:32,out});mNoise(t,.5,.18,{type:"lowpass",f:500,shape:2,out});}
+let lastHitSfx=0;
+function sfxHit(crit){const now=performance.now();if(now-lastHitSfx<40)return;lastHitSfx=now;const out=sfxOut(crit?.9:.6);if(!out)return;const t=actx.currentTime+.005;
+  mNoise(t,.09,.6,{f:crit?2600:1600,q:1.2,shape:3,out});mNote("sine",crit?160:120,t,.14,.5,{a:.002,slide:55,out});
+  if(crit)mNote("triangle",mtof(88),t,.35,.12,{a:.002,out});}
+function sfxHurt(){const out=sfxOut(.7);if(!out)return;const t=actx.currentTime+.005;
+  mNoise(t,.14,.5,{type:"lowpass",f:700,shape:2.5,out});mNote("sawtooth",110,t,.18,.12,{a:.003,slide:70,lp:500,out});}
+function sfxParry(){const out=sfxOut(.8);if(!out)return;const t=actx.currentTime+.005;
+  [2093,2637,3136].forEach((f,k)=>mNote("sine",f,t,.7-k*.15,.12,{a:.001,out}));mNoise(t,.06,.4,{f:5000,q:2,shape:4,out});}
+function sfxSnare(){const out=sfxOut(.8);if(!out)return;const t=actx.currentTime+.005;
+  for(let k=0;k<5;k++)mNoise(t+k*.05+Math.random()*.02,.08,.35,{f:400+Math.random()*300,q:4,shape:2,out});
+  mNote("sawtooth",60,t,.6,.12,{a:.02,slide:40,lp:300,out});}
+function sfxSnap(){const out=sfxOut(.8);if(!out)return;const t=actx.currentTime+.005;
+  for(let k=0;k<3;k++)mNoise(t+k*.04,.05,.5,{f:1200+k*500,q:3,shape:4,out});}
 function toggleMusic(){
   if(!AUDIO_OK)return;
   musicOn=!musicOn;
