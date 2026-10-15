@@ -521,6 +521,35 @@ body.talking .tutcard{display:none}
 .moveslot.mcard.blood::before{border-color:#8f2f28}
 .moveslot.mcard.blood .mc-pip{color:#ff6a52}
 .moveslot.mcard.blood .mc-art{background:#0a0505;box-shadow:0 0 0 2px #b8433a}
+/* sulphur gifts: black and yellow, very rare */
+.charcard.black.sulphur{--rule:#a8873a;--red:#f0c060;--gold-d:#d4af52;background-color:#0f0d07;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%231c180c' d='M1 1h1v1h-1zM3 3h1v1h-1z'/%3E%3C/svg%3E")}
+.charcard.black.sulphur::before{box-shadow:inset 0 0 0 2px #0f0d07,inset 0 0 0 4px #d4af52}
+.charcard.black.sulphur::after{background:#2a2410;box-shadow:150px 30px 0 #2a2410,100px 190px 0 #221d0d,170px 250px 0 #2a2410,30px 300px 0 #221d0d}
+.charcard.black.sulphur .cname{color:#fff27a}
+.charcard.black.sulphur .cgain{color:#fff27a;font-size:17px}
+.charcard.black.sulphur .cport{background-color:#080702}
+.charcard.black.sulphur .cport svg{color:#f0c060;filter:drop-shadow(0 0 7px rgba(255,220,90,.7))}
+.charcard.black.sulphur .cprice{border-top-color:#a8873a;color:#e8d8a0}.charcard.black.sulphur .cprice b{color:#fff27a}
+.chargrid.fan .charcard.black.sulphur.lift{box-shadow:0 -4px 0 0 #f0c060,0 4px 0 0 #f0c060,-4px 0 0 0 #f0c060,4px 0 0 0 #f0c060,0 -6px 0 0 #0a0c10,0 6px 0 0 #0a0c10,-6px 0 0 0 #0a0c10,6px 0 0 0 #0a0c10,0 0 30px 8px rgba(255,214,80,.45),10px 10px 0 0 rgba(0,0,0,.55)}
+/* a burnt blessing: the card is gone, three scorched pieces lie where it was */
+.charcard.torn{background:none!important;box-shadow:none!important;cursor:not-allowed;padding:0;overflow:visible}
+.charcard.torn::before,.charcard.torn::after{display:none}
+.tchunk{position:absolute;inset:0;filter:drop-shadow(0 0 1px #e8842a) drop-shadow(0 0 2px #7a2a10) drop-shadow(5px 6px 0 rgba(0,0,0,.5))}
+.tface{position:absolute;inset:0;display:flex;flex-direction:column;align-items:stretch;padding:30px 16px 26px;text-align:center;
+  background-color:#cbbf9f;background-image:radial-gradient(ellipse at 50% 50%,transparent 45%,rgba(90,40,10,.45) 75%,rgba(20,8,2,.95) 100%),
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%23b9ac88' d='M1 1h1v1h-1zM3 3h1v1h-1z'/%3E%3C/svg%3E");
+  background-size:auto,8px 8px;box-shadow:inset 0 0 22px 8px rgba(30,12,4,.85);filter:sepia(.35) saturate(.8)}
+.tface .cport,.tface .cname,.tface .ctitle,.tface .cbody{opacity:.75}
+.tface .ctitle{color:#7a2a10}
+.t1 .tface{clip-path:polygon(0 0,100% 0,100% 30%,86% 35%,71% 28%,55% 37%,38% 30%,21% 36%,7% 30%,0 33%)}
+.t2 .tface{clip-path:polygon(0 33%,7% 30%,21% 36%,38% 30%,55% 37%,71% 28%,86% 35%,100% 30%,100% 64%,84% 70%,66% 62%,48% 70%,31% 63%,14% 69%,0 62%)}
+.t3 .tface{clip-path:polygon(0 62%,14% 69%,31% 63%,48% 70%,66% 62%,84% 70%,100% 64%,100% 100%,0 100%)}
+.t1{transform:translate(-5px,-9px) rotate(-3deg)}
+.t2{transform:translate(6px,1px) rotate(2deg)}
+.t3{transform:translate(-3px,11px) rotate(-1.5deg)}
+.charcard.torn.shake{animation:tornShake .35s}
+@keyframes tornShake{0%,100%{translate:0}25%{translate:-6px}75%{translate:6px}}
 /* ---------- the bestiary: a binder of monster cards ---------- */
 .bestiary{display:flex;flex-direction:column;gap:10px}
 .pk-best{font-size:12px;padding:4px 10px;margin-left:auto;margin-right:12px}
@@ -7338,11 +7367,20 @@ const GIFT_TAUNT={
  second: "Your Second Wind. You got up when you should have stayed down. So will I.",
  feast:  "Your Bloodfeast. You ate well on the way down. Now you are the meal.",
  fleet:  "Your Fleetfoot. You ran so lightly. Run now.",
- mercy:  "Your Mercy Stroke. You never showed any. Neither will I."
+ mercy:  "Your Mercy Stroke. You never showed any. Neither will I.",
+ harvest:"My Red Harvest. You reaped so well with my blade. Give it here.",
+ butcher:"My Butcher's Due. Meat is meat, you agreed. You are made of it too.",
+ hunger: "My Hunger. I let you eat first. That was the courtesy. This is the bill.",
+ debt:   "Paid in Full. You paid in blood every time, and never once read the rate.",
+ wrath:  "My sulphur in your arm. Heavy, wasn't it? It was never your arm doing the work.",
+ marrow: "My sulphur in your bones. You did not bleed easily. Let us see how you bleed now.",
+ smoke:  "My smoke. You were never where they looked. You were always where I put you.",
+ lungs:  "My sulphur in your lungs. You breathed so easily down here. Breathe now."
 };
 // At the start of the final fight it tells you whose the dark gifts were, in dialogue boxes you read at your
 // own pace (Space, Enter or a click moves on). Each gift it names flies out of you and into it.
 function thingReveal(){
+  if(!S.betrayed)for(const id in S.perks||{})if(S.perks[id]&&PERKS[id]&&PERKS[id].sulphur)applyMods(PERKS[id].gold,-1);   // its sulphur goes back to it (once)
   S.betrayed=true;
   const owned=stolenGifts();
   const lines=[];
@@ -8156,6 +8194,8 @@ function glyphSvg(name,px){
   return `<svg width="${Math.round(w*px)}" height="${Math.round(rows.length*px)}" viewBox="0 0 ${w} ${rows.length}" shape-rendering="crispEdges" fill="currentColor"><path d="${d}"/></svg>`;
 }
 const vitAmt=()=>(CHAR().hpLevel||9)+4;
+// only dealt when every blessing you could be offered has been burnt
+const RESPITE={id:"respite",name:"Respite",glyph:"heart",gain:()=>"Heal to full",text:"Nothing else is left for you. Sit a while.",apply(){S.hp=S.maxhp;S.stam=S.maxstam;}};
 const LVL_CARDS=[
  {id:"might", name:"Might",     glyph:"sword", gain:()=>"+2 Strike",          text:"Every swing and stab lands harder.", apply(){S.str+=2;}},
  {id:"vit",   name:"Vitality",  glyph:"heart", gain:()=>`+${vitAmt()} max HP`, text:"Tougher, and healed by the same amount.", apply(){const a=vitAmt();S.maxhp+=a;S.hp=Math.min(S.maxhp,S.hp+a);}},
@@ -8180,6 +8220,12 @@ const PERKS={
  harvest:{name:"Red Harvest",      glyph:"scythe", blood:true,hp:10,move:"reap",   gain:"Reaping Cut: a blow of 220%, often critical",       text:"The blade was always in your hand. You only had to ask."},
  butcher:{name:"The Butcher's Due",glyph:"cleaver",blood:true,hp:8, move:"cleave", gain:"Butcher's Cleave: 160%, through any armour, staggers",text:"Meat is meat. Armour is only a slower kind of meat."},
  hunger: {name:"Hunger of the Hill",glyph:"fang",  blood:true,hp:12,move:"gorge",  gain:"Gorge: 150%, opens a wound and drinks it back",      text:"Something under the hill is hungry, and it lets you eat first."},
+ // Sulphur gifts: black and yellow, and very rare. A great deal of one thing at once, but the blessing that
+ // would have given you a little of it is burnt for good: it still turns up in your hand, torn in three.
+ wrath:  {name:"Sulphur Wrath",  glyph:"sword",sulphur:true,seals:"might", gold:{str:8},   gain:"+8 Strike",        text:"Your arm is heavier than it should be, and it lands like a hammer."},
+ marrow: {name:"Sulphur Marrow", glyph:"heart",sulphur:true,seals:"vit",   gold:{hp:45},   gain:"+45 max health",   text:"Something thick and yellow runs in your bones now. It does not bleed easily."},
+ smoke:  {name:"Sulphur Smoke",  glyph:"wind", sulphur:true,seals:"evade", gold:{dodge:.15},gain:"+15% dodge",       text:"You are never quite where they think you are. Neither is the smell."},
+ lungs:  {name:"Sulphur Lungs",  glyph:"bolt", sulphur:true,seals:"endure",gold:{stam:80}, gain:"+80 max stamina",  text:"You breathe the bad air down here like it was spring."},
  debt:   {name:"Paid in Full",     glyph:"debt",   blood:true,hp:6, move:"payfull",gain:"Pay in Full: 300%, but each one costs you blood",     text:"Every blow is a payment. The terms are very reasonable."}
 };
 function hasPerk(id){return !!(S&&S.perks&&S.perks[id]&&!S.betrayed);}
@@ -8198,6 +8244,10 @@ const TURNED={
  fleet:  "It is quicker than you now (8% of your blows find nothing).",
  mercy:  "It shows none (+50% damage when you are below 30% health).",
  harvest:"It takes back the Reaping Cut, and hits harder for it (+10%).",
+ wrath:  "It takes back its sulphur: your arm is only an arm again (-8 Strike).",
+ marrow: "It takes back its sulphur: your bones go thin (-45 max health).",
+ smoke:  "It takes back its sulphur: you are exactly where it thinks you are (-15% dodge).",
+ lungs:  "It takes back its sulphur: the air down here is bad again (-80 max stamina).",
  butcher:"It takes back the Butcher's Cleave, and hits harder for it (+10%).",
  hunger: "It takes back Gorge, and hits harder for it (+10%).",
  debt:   "It takes back Pay in Full, and hits harder for it (+10%)."
@@ -8212,14 +8262,25 @@ function feastHeal(){
 let levelOpen=false,levelPicked=false;
 // Three different white cards, and sometimes a black one in a random slot. The chance grows with each
 // level that goes by without one, so a black card turns up at least every few levels.
+const SULPHUR_CHANCE=.05;   // per level-up: very rare
+function sealedBy(cardId){const id=Object.keys(S.perks||{}).find(k=>S.perks[k]&&PERKS[k]&&PERKS[k].seals===cardId);return id?PERKS[id]:null;}
 function dealLevelHand(){
-  const pool=LVL_CARDS.filter(c=>!c.ok||c.ok()).map(c=>({kind:"white",c}));
+  const pool=LVL_CARDS.filter(c=>!c.ok||c.ok()).map(c=>sealedBy(c.id)?{kind:"torn",c,by:sealedBy(c.id)}:{kind:"white",c});
   for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
   const hand=pool.slice(0,3);
-  const left=S.betrayed?[]:Object.keys(PERKS).filter(id=>!S.perks[id]&&(!PERKS[id].blood||bloodPrice()));
+  // there must always be something you can take
+  if(!hand.some(h=>h.kind==="white")){const ok=pool.slice(3).find(h=>h.kind==="white");hand[0]=ok||{kind:"white",c:RESPITE};}
+  const sul=S.betrayed?[]:Object.keys(PERKS).filter(id=>PERKS[id].sulphur&&!S.perks[id]);
+  const slot=()=>{const free=hand.map((h,i)=>i).filter(i=>hand[i].kind!=="white"||hand.filter(x=>x.kind==="white").length>1);return free[Math.floor(Math.random()*free.length)];};
+  if(sul.length&&Math.random()<SULPHUR_CHANCE){
+    const id=sul[Math.floor(Math.random()*sul.length)];
+    hand[slot()]={kind:"black",id,c:PERKS[id]};
+    return hand;
+  }
+  const left=S.betrayed?[]:Object.keys(PERKS).filter(id=>!PERKS[id].sulphur&&!S.perks[id]&&(!PERKS[id].blood||bloodPrice()));
   if(left.length&&Math.random()<.3+.25*(S.blackPity||0)){
     const id=left[Math.floor(Math.random()*left.length)];
-    hand[Math.floor(Math.random()*hand.length)]={kind:"black",id,c:PERKS[id],price:PERKS[id].blood?bloodPrice():null};
+    hand[slot()]={kind:"black",id,c:PERKS[id],price:PERKS[id].blood?bloodPrice():null};
     S.blackPity=0;
   }else S.blackPity=(S.blackPity||0)+1;
   return hand;
@@ -8232,15 +8293,16 @@ function openLevelUp(){
   const mid=(hand.length-1)/2;
   const cards=hand.map((h,i)=>{
     const c=h.c,black=h.kind==="black";
+    if(h.kind==="torn")return tornCard(h,i,mid,lvl);
     const pip=`<b>${lvl}</b>${glyphSvg(c.glyph,1.3)}`;
-    const blood=black&&c.blood;
-    return `<div class="charcard lvlcard${black?" black":""}${blood?" blood":""}" data-kind="${h.kind}" data-id="${black?h.id:c.id}"${blood?` data-price="${h.price.id}"`:""} role="button" tabindex="0" style="--i:${i};--t:${(i-mid).toFixed(2)}">
+    const blood=black&&c.blood,sul=black&&c.sulphur;
+    return `<div class="charcard lvlcard${black?" black":""}${blood?" blood":""}${sul?" sulphur":""}" data-kind="${h.kind}" data-id="${black?h.id:c.id}"${blood?` data-price="${h.price.id}"`:""} role="button" tabindex="0" style="--i:${i};--t:${(i-mid).toFixed(2)}">
       <div class="cpip tl${black?"":" red"}">${pip}</div><div class="cpip br${black?"":" red"}">${pip}</div>
       <div class="cport">${glyphSvg(c.glyph,6)}</div>
       <div class="cname">${c.name}</div>
-      <div class="ctitle">${blood?"Blood gift":black?"Dark gift":"Blessing"}</div>
+      <div class="ctitle">${blood?"Blood gift":sul?"Sulphur gift":black?"Dark gift":"Blessing"}</div>
       <div class="cbody"><div class="cgain">${typeof c.gain==="function"?c.gain():c.gain}</div>
-        <div class="cblurb">${c.text}</div>${blood?`<div class="cprice">The price: <b>${c.hp} max health</b>, and <b>${h.price.name}</b>${h.price.lvl>S.lvl?`, the attack you would learn at level ${h.price.lvl}`:""}. Never again.</div>`:""}<div class="ckey">PRESS ${i+1}</div></div></div>`;
+        <div class="cblurb">${c.text}</div>${sul?`<div class="cprice">The price: <b>${LVL_CARDS.find(x=>x.id===c.seals).name}</b> burns. You will never take it again.</div>`:""}${blood?`<div class="cprice">The price: <b>${c.hp} max health</b>, and <b>${h.price.name}</b>${h.price.lvl>S.lvl?`, the attack you would learn at level ${h.price.lvl}`:""}. Never again.</div>`:""}<div class="ckey">PRESS ${i+1}</div></div></div>`;
   }).join("");
   overlay(`<h3>Level ${lvl}</h3>
     <p class="lede">Choose one card.${hand.some(h=>h.kind==="black")?" A black card has been dealt.":""}</p>
@@ -8252,15 +8314,30 @@ function openLevelUp(){
   if(window.ResizeObserver){if(fanRO)fanRO.disconnect();fanRO=new ResizeObserver(()=>layoutFan(grid));fanRO.observe($("card"));}
   wireHand(grid,()=>levelPicked,pickLevelCard);
 }
+// A blessing a sulphur gift burnt: still dealt, scorched at the edges and torn in three, and it can't be taken.
+function tornCard(h,i,mid,lvl){
+  const c=h.c,pip=`<b>${lvl}</b>${glyphSvg(c.glyph,1.3)}`;
+  const face=`<div class="cpip tl red">${pip}</div><div class="cpip br red">${pip}</div>
+      <div class="cport">${glyphSvg(c.glyph,6)}</div><div class="cname">${c.name}</div><div class="ctitle">Burnt</div>
+      <div class="cbody"><div class="cgain">${c.gain()}</div><div class="cblurb">${h.by.name} burnt this. It will never be yours.</div><div class="ckey">BURNT</div></div>`;
+  return `<div class="charcard lvlcard torn" data-kind="torn" data-id="${c.id}" role="button" tabindex="0" aria-label="${c.name}, burnt" style="--i:${i};--t:${(i-mid).toFixed(2)}">`
+    +[1,2,3].map(k=>`<div class="tchunk t${k}"><div class="tface">${face}</div></div>`).join("")+`</div>`;
+}
 function pickLevelCard(el){
   if(levelPicked||!levelOpen)return;
+  if(el.dataset.kind==="torn"){el.classList.remove("shake");void el.offsetWidth;el.classList.add("shake");say("That card is burnt. It will never be yours.","c-hit");return;}
   levelPicked=true;
   playCardSound(true);
   el.classList.add("chosen");el.closest(".chargrid").classList.add("picked");
   const id=el.dataset.id;
   if(el.dataset.kind==="black"){
     S.perks[id]=true;const p=PERKS[id];
-    if(p.blood){
+    if(p.sulphur){
+      applyMods(p.gold,1);
+      say(`Sulphur gift: ${p.name}. ${p.gain}.`,"c-lvl");
+      say(`${LVL_CARDS.find(x=>x.id===p.seals).name} burns. It will never be offered to you whole again.`,"c-hit");
+      setTimeout(sfxSulphur,350);
+    }else if(p.blood){
       const mv=MOVES.find(m=>m.id===p.move),lost=moveListFor(CHAR()).find(m=>m.id===el.dataset.price);
       S.maxhp=Math.max(5,S.maxhp-p.hp);S.hp=Math.min(S.hp,S.maxhp);
       if(lost)(S.forfeit=S.forfeit||{})[lost.id]=true;
@@ -8270,7 +8347,7 @@ function pickLevelCard(el){
     }else
     say(`Dark gift: ${p.name}. ${p.text}`,"c-lvl");
   }else{
-    const c=LVL_CARDS.find(x=>x.id===id);c.apply();
+    const c=LVL_CARDS.find(x=>x.id===id)||RESPITE;c.apply();
     say(`${c.name}: ${c.gain()}.`,"c-lvl");
   }
   refresh();
@@ -8997,6 +9074,9 @@ function sfxDeath(){const out=sfxOut(1);if(!out)return;const t=actx.currentTime+
 function sfxBloodGift(){const out=sfxOut(1);if(!out)return;const t=actx.currentTime+.02;
   mNote("sine",mtof(33),t,2.4,.3,{a:.02,out});[45,46,51].forEach((m,k)=>mNote("sawtooth",mtof(m),t+k*.12,1.8,.05,{a:.05,lp:900,out}));
   mNoise(t,.8,.15,{type:"lowpass",f:400,shape:1.5,out});setTimeout(()=>{if(actx)mNote("triangle",mtof(81),actx.currentTime,1.2,.06,{a:.004,out});},500);}
+function sfxSulphur(){const out=sfxOut(1);if(!out)return;const t=actx.currentTime+.02;
+  mNoise(t,.35,.4,{f:3500,q:1.5,shape:1.2,out});mNoise(t+.05,1.2,.12,{type:"lowpass",f:900,shape:1,out});
+  [64,68,71,75].forEach((m,k)=>mNote("triangle",mtof(m+12),t+.15+k*.06,1.6,.06,{a:.004,out}));mNote("sine",mtof(40),t+.1,2,.2,{a:.02,out});}
 function sfxUnlock(){sfxArp([60,64,67,72,-1,67,72,76,79,84],.08,"square",.05,.8);const out=sfxOut(1);if(out)mNote("sine",mtof(48),actx.currentTime,1.6,.15,{a:.01,out});}
 function sfxCardNew(){playCardSound(true);sfxArp([-1,-1,-1,79,86],.06,"sine",.1,1.2);}
 function sfxPhase(){const out=sfxOut(1);if(!out)return;const t=actx.currentTime+.01;

@@ -40,6 +40,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await ev('(()=>{endBattle();S.betrayed=true;})()');
   check('when the Thing takes the gifts back, the blows leave your hand', await ev('!moveList().some(m=>m.blood)'));
   check('the attacks they ate stay gone', await ev('!moveList().some(m=>m.id==="ember")'));
+  check('every new gift has a taunt for when the Thing takes it back', await ev('Object.keys(PERKS).every(id=>GIFT_TAUNT[id]&&TURNED[id])'));
   check('and it hits harder for each blood gift it took', await ev('(()=>{mons=[];spawnMon("thing",S.px+1,S.py);startBattle(mons[0]);B.dlg=null;const r0=Math.random;Math.random=()=>.0;const a=mDamage(null).dmg;S.perks.harvest=false;S.perks.debt=false;const b=mDamage(null).dmg;Math.random=r0;return a>b;})()'));
   await ev('(()=>{endBattle();start("monk");S.perks={butcher:true};})()');
   check('a blood gift breaks the monk\'s faith like any dark gift', await ev('!monkFaith()'));
