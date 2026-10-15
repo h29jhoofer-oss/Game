@@ -506,6 +506,21 @@ body.talking .tutcard{display:none}
 .tut-again{text-align:center;margin:10px 0 0;font-size:12.5px}
 .tut-again a{color:var(--slate)}
 .tut-again a:hover{color:var(--bone)}
+/* blood gifts: black cards, but red where the dark gifts are violet */
+.charcard.black.blood{--rule:#8f2f28;--red:#ff6a52;--gold-d:#b8433a;background-color:#120a0b;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%231e0e10' d='M1 1h1v1h-1zM3 3h1v1h-1z'/%3E%3C/svg%3E")}
+.charcard.black.blood::before{box-shadow:inset 0 0 0 2px #120a0b,inset 0 0 0 4px var(--rule)}
+.charcard.black.blood::after{background:#2a1114;box-shadow:150px 30px 0 #2a1114,100px 190px 0 #22100f,170px 250px 0 #2a1114,30px 300px 0 #22100f}
+.charcard.black.blood .cgain{color:#ff8f80}
+.charcard.black.blood .cport svg{color:#e8685a;filter:drop-shadow(0 0 6px rgba(232,80,60,.6))}
+.charcard.black.blood .cport{background-color:#0a0505}
+.cprice{margin-top:8px;font-size:11px;line-height:1.4;color:#d8a8a0;border-top:1px dashed #8f2f28;padding-top:6px}
+.cprice b{color:#ff8f80}
+.chargrid.fan .charcard.black.blood.lift{box-shadow:0 -4px 0 0 #b8433a,0 4px 0 0 #b8433a,-4px 0 0 0 #b8433a,4px 0 0 0 #b8433a,0 -6px 0 0 #0a0c10,0 6px 0 0 #0a0c10,-6px 0 0 0 #0a0c10,6px 0 0 0 #0a0c10,0 0 26px 6px rgba(232,80,60,.45),10px 10px 0 0 rgba(0,0,0,.55)}
+.moveslot.mcard.blood{background:#1a0b0d;--gold-d:#b8433a}
+.moveslot.mcard.blood::before{border-color:#8f2f28}
+.moveslot.mcard.blood .mc-pip{color:#ff6a52}
+.moveslot.mcard.blood .mc-art{background:#0a0505;box-shadow:0 0 0 2px #b8433a}
 /* ---------- the bestiary: a binder of monster cards ---------- */
 .bestiary{display:flex;flex-direction:column;gap:10px}
 .pk-best{font-size:12px;padding:4px 10px;margin-left:auto;margin-right:12px}
@@ -3133,8 +3148,8 @@ function renderMoveBar(){
   const mid=(list.length-1)/2;
   el.innerHTML=list.map((m,i)=>{
     const cd=S.cds[m.id]||0,down=cd>0,t=(i-mid).toFixed(2);
-    return `<button type="button" tabindex="-1" class="moveslot mcard${down?" down":""}${!down&&dry(m)?" cool":""}" data-mv="${m.id}" style="--t:${t};--i:${i}" title="${m.name} — ${m.desc}" aria-label="${m.name}">`
-      +(down?`<span class="mc-back"><b>${cd}</b></span>`:`<span class="mc-pip">${m.lvl}</span><span class="mc-art">${icon("move_"+m.id,32)}</span><span class="mc-key">${i+1}</span>`)+`</button>`;
+    return `<button type="button" tabindex="-1" class="moveslot mcard${down?" down":""}${!down&&dry(m)?" cool":""}${m.blood?" blood":""}" data-mv="${m.id}" style="--t:${t};--i:${i}" title="${m.name} — ${m.desc}" aria-label="${m.name}">`
+      +(down?`<span class="mc-back"><b>${cd}</b></span>`:`<span class="mc-pip">${m.blood?"♥":m.lvl}</span><span class="mc-art">${icon("move_"+m.id,32)}</span><span class="mc-key">${i+1}</span>`)+`</button>`;
   }).join("");
 }
 cv.addEventListener("pointerdown",e=>{if(DH().dlg){e.preventDefault();dlgAdvance();}});
@@ -4038,7 +4053,7 @@ const ART={"rook":["............kk..","...........kZlk.",".....kkkk..kwGk.","...
 "move_miasma":["................","......mm........","....mmMMm..m....","...mMMWWMmmMm...","..mMWWXWMMMWMm..","..mMWXXWWMWWMm..",".mMMWWWMMMWWMMm.",".mMWWkkWMkkWWMm.",".mMWWkkWMkkWWMm.",".mMMWWWWMWWWMMm.","..mMMWWkkkWWMm..","..mmMMWWWWWMMm..","...mmMMMMMMMm...",".....mmmmmmm....","..m.....m....m..","................"],
 "move_letting":["...........kk...","..........kwGk..",".........kwGk...","........kwGk....",".......kwGk.....","......kRGk......",".....kNRk.......","....kNnk..k.....","...kNnk..kRk....","..kOnk...kRk....","..kOk...kRARk...","...k.....kRk....","..kkkkkkkkkkkk..","..kGlllllllRRk..","...kGllllllGk...","....kkkkkkkk...."],
 "move_transfuse":["......kkkk......","......kNNk......",".....kkkkkk.....","......kGlk......","......kGlk......",".....kGxxlk.....","....kGxxxxlk....","...kGxxxxxxlk...","..kGRRRRRRRRlk..","..kGRAARRRRRlk..","..kGRABRRRRrlk..","..kGRRRRRRrrlk..","..kGrRRRRrrrlk..","...kGrrrrrrlk...","....kkkkkkkk....","R.............R."],
-"move_crosssign":["................",".......hh.......","......kOOk......",".....hkYOkh.....","......kYOk......","..hkkkkYOkkkkh..",".hkOOOOYYOOOOkh.",".hkYYYYhhYYYYkh.","..hkkkkYOkkkkh..","......kYOk......","......kYOk......","......kYOk......","......kYOk......","......kYOk......",".....hkOOkh.....","......kkkk......"],"move_holywater":["......kkkk......",".....kNDDNk.....","......kllk......","......klwk......",".....klwwlk.....","....kl4444lk....","...kl443Z44lk...","...k44ZZZ344k...","...k4433Z344k...","...k3443Z433k...","....k333333k..4.",".....kkkkkk..k4k","..4..........k3k",".k4k..........k.",".k3k....4.......","..k....k3k......"],"move_sanctuary":["................","......hhhh......","....hhYYYYhh....","...hYOkkkkOYh...","..hYOk....kOYh..","..hOk..kk..kOh..",".hYOk.kTTk.kOYh.",".hOk..kPPk..kOh.",".hOk.kTTTTk.kOh.",".hOk.kTDTTk.kOh.",".hOk.kTTTTk.kOh.",".hOk.kTTTTk.kOh.",".hOk.kkkkkk.kOh.","hOOOOOOOOOOOOOOh","kkkkkkkkkkkkkkkk","................"],"move_penance":["................","..kkk...........",".kNDNk..........",".kDkDNk.........","..kNkDNk........","....kNDNk.......",".....kNDNk......","......kNDk......",".....kDkNk..R...","....kDk.kNk.....","...kNk...kNk.R..","..kDk..R..kDk...",".kNk.......kNk..",".kDk...R...kDk..","..k...RAR...k...","......kRk......."],"move_litany":["......kkkk......","....kkDLLDkk....","...kDk....kDk...","..kLk......kLk..","..kDk......kDk..",".kLk........kLk.",".kDk........kDk.","..kLk......kLk..","..kDk......kDk..","...kLkk..kkLk...","....kkDLLDkk....","......kYOk......","....kkkYOkkk....","....kYYhhYYk....","......kYOk......","......kkkk......"],"move_rites":["................",".......h........","......hJh.......","......JYJ.......",".....hJYJh......","......JhJ.......",".......k........","......kwk.......",".....kwwlk......",".....kwllk......",".....kwllk......",".....kwllk......",".....kwllk......","...kkkkkkkkk....","..kDLLLLLLLDk...","...kkkkkkkkk...."],"snare_crack_0":["................","................","................","................","................","................","................","................","................","................",".......k.kk.....","......k7k77k....",".....k7878k.....","......kk.k......","................","................"],"snare_crack_1":["................","................","................","................","................","................","................","................","................","................",".....kkk.kk.....","....k878k87kk...","...k7kV878k87k..","....k.k7k7kkk...",".......k.k......","................"],"snare_crack_2":["................","................","................","................","................","................","................","................","................","....kk.....kk...","...k78kk.kk87k..",".k.kk8V8k8Vkk.kk","k7k8VkV777k8VkV7",".kVkkk78k87kk8kk","..k...kk.kk..k..","................"],"snare_ring_0":["........................","........................","........................","........................","........................","........................","........................","........................","........................","........................","...V77VV777VV777VV777...",".7VV................V77.",".7....................V.",".7....................V.","..V7V..............VV7..","....VV77VVV777VV777V...."],"snare_ring_1":["........................","........................","........................","........................","........................","........................","........................","........................","........................","........................","...777777777777777777...",".777................777.",".7....................7.",".7....................7.","..777..............777..","....7777777777777777...."],"snare_roots_back_0":["................","................","................","................","................","................","................","................","................","................","................","................",".bb..........bb.","b7ub........bTub","bTub........bT7b","TTub........bTub","TTub........bTuu","TVub........bTuu","TTub........bTVu","TTub........bTuu","TTuub.......bTuu","TTuub......bTTub","bTuub......bTTub","bTVub......bTVub"],"snare_roots_front_0":["................","................","................","................","................","................","................","................","................","................","................","....bb..........","...b7ub...bbb...","..bTVubb.bT7ub..","..bTubb7b.buub..",".bTTubTuVbbTuub."],"snare_roots_back_1":["................","................","................","................","................","...b............","..bub...........",".bT7b.......bb..",".bTub......b7ub.",".bTub......bTub.","bTuub......bTub.","bTub........buub","bTVb........bVub","bTub........bTub","bTub........bTub","TTub........bTub","TTub........bTuu","TVub........bTuu","TTub........bTVu","TTub........bTuu","TTuub.......bTuu","TTuub......bTTub","bTuub......bTTub","bTVub......bTVub"],"snare_roots_front_1":["................","................","................","................","................","................","................","................","................",".......b........",".....bbTb.......","....bTT7ubb.....","...bTTuT7uubb...","..bTVubT7uuuub..","..bTubbTubbuub..",".bTTubTuVbbTuub."],"snare_roots_back_2":["................",".....b..........","....b7b...b.....","...bTub..bub....","..bTTb...b7ub...","..bTub...bVub...","..bTub....buVb..",".bTVb.....bTub..",".bTub......buub.",".bTub......bTub.","bTub.......bTub.","bTub........buub","bTVb........bVub","bTub........bTub","bTub........bTub","TTub........bTub","TTub........bTuu","TVub........bTuu","TTub........bTVu","TTub........bTuu","TTuub.......bTuu","TTuub......bTTub","bTuub......bTTub","bTVub......bTVub"],"snare_roots_front_2":["................","................","................","................","................","................","................","................","...........bb...",".......bbbbTub..","...bbbbTTVTT7b..","..bT7uuuTbbbb...","...bTuuuuT7bb...","..bTVubTTTuuub..","..bTubbTubbuub..",".bTTubTuVbbTuub."],"tut_arrow":["................","................","................","......kkkk......","......kOOk......","......kOOk......","......kOOk......","...kkkkOOkkkk...","...kOOOhhOOOk...","....kOhhhhOk....",".....kOhhOk.....","......kOOk......",".......kk.......","................","................","................"],"tut_spot":["................","................","................","................","................","................","................","................","................","................","....OoOoOoOo....","..oO........Oo..",".O............O.","..oO........Oo..","....OoOoOoOo....","................"],"move_blackdeath":["................",".....kkkkkk.....","....kwwwwwwk....","...kwwwwwwwwk...","..kwwwwwwwwwwk..","..kwkkkwwkkkwk..","..kwkMWkkWMkwk..","..kwkkkwwkkkwk..","..kwwwwkkwwwwk..","...kwwwkkwwwk...","....kwwwwwwk....","....kwkwkwkk....","....kkkkkkkk....","..m..mMm.mMm..m.",".mMm.mWm.mWMm.m.","..m...m...m...m."],
+"move_crosssign":["................",".......hh.......","......kOOk......",".....hkYOkh.....","......kYOk......","..hkkkkYOkkkkh..",".hkOOOOYYOOOOkh.",".hkYYYYhhYYYYkh.","..hkkkkYOkkkkh..","......kYOk......","......kYOk......","......kYOk......","......kYOk......","......kYOk......",".....hkOOkh.....","......kkkk......"],"move_holywater":["......kkkk......",".....kNDDNk.....","......kllk......","......klwk......",".....klwwlk.....","....kl4444lk....","...kl443Z44lk...","...k44ZZZ344k...","...k4433Z344k...","...k3443Z433k...","....k333333k..4.",".....kkkkkk..k4k","..4..........k3k",".k4k..........k.",".k3k....4.......","..k....k3k......"],"move_sanctuary":["................","......hhhh......","....hhYYYYhh....","...hYOkkkkOYh...","..hYOk....kOYh..","..hOk..kk..kOh..",".hYOk.kTTk.kOYh.",".hOk..kPPk..kOh.",".hOk.kTTTTk.kOh.",".hOk.kTDTTk.kOh.",".hOk.kTTTTk.kOh.",".hOk.kTTTTk.kOh.",".hOk.kkkkkk.kOh.","hOOOOOOOOOOOOOOh","kkkkkkkkkkkkkkkk","................"],"move_penance":["................","..kkk...........",".kNDNk..........",".kDkDNk.........","..kNkDNk........","....kNDNk.......",".....kNDNk......","......kNDk......",".....kDkNk..R...","....kDk.kNk.....","...kNk...kNk.R..","..kDk..R..kDk...",".kNk.......kNk..",".kDk...R...kDk..","..k...RAR...k...","......kRk......."],"move_litany":["......kkkk......","....kkDLLDkk....","...kDk....kDk...","..kLk......kLk..","..kDk......kDk..",".kLk........kLk.",".kDk........kDk.","..kLk......kLk..","..kDk......kDk..","...kLkk..kkLk...","....kkDLLDkk....","......kYOk......","....kkkYOkkk....","....kYYhhYYk....","......kYOk......","......kkkk......"],"move_rites":["................",".......h........","......hJh.......","......JYJ.......",".....hJYJh......","......JhJ.......",".......k........","......kwk.......",".....kwwlk......",".....kwllk......",".....kwllk......",".....kwllk......",".....kwllk......","...kkkkkkkkk....","..kDLLLLLLLDk...","...kkkkkkkkk...."],"snare_crack_0":["................","................","................","................","................","................","................","................","................","................",".......k.kk.....","......k7k77k....",".....k7878k.....","......kk.k......","................","................"],"snare_crack_1":["................","................","................","................","................","................","................","................","................","................",".....kkk.kk.....","....k878k87kk...","...k7kV878k87k..","....k.k7k7kkk...",".......k.k......","................"],"snare_crack_2":["................","................","................","................","................","................","................","................","................","....kk.....kk...","...k78kk.kk87k..",".k.kk8V8k8Vkk.kk","k7k8VkV777k8VkV7",".kVkkk78k87kk8kk","..k...kk.kk..k..","................"],"snare_ring_0":["........................","........................","........................","........................","........................","........................","........................","........................","........................","........................","...V77VV777VV777VV777...",".7VV................V77.",".7....................V.",".7....................V.","..V7V..............VV7..","....VV77VVV777VV777V...."],"snare_ring_1":["........................","........................","........................","........................","........................","........................","........................","........................","........................","........................","...777777777777777777...",".777................777.",".7....................7.",".7....................7.","..777..............777..","....7777777777777777...."],"snare_roots_back_0":["................","................","................","................","................","................","................","................","................","................","................","................",".bb..........bb.","b7ub........bTub","bTub........bT7b","TTub........bTub","TTub........bTuu","TVub........bTuu","TTub........bTVu","TTub........bTuu","TTuub.......bTuu","TTuub......bTTub","bTuub......bTTub","bTVub......bTVub"],"snare_roots_front_0":["................","................","................","................","................","................","................","................","................","................","................","....bb..........","...b7ub...bbb...","..bTVubb.bT7ub..","..bTubb7b.buub..",".bTTubTuVbbTuub."],"snare_roots_back_1":["................","................","................","................","................","...b............","..bub...........",".bT7b.......bb..",".bTub......b7ub.",".bTub......bTub.","bTuub......bTub.","bTub........buub","bTVb........bVub","bTub........bTub","bTub........bTub","TTub........bTub","TTub........bTuu","TVub........bTuu","TTub........bTVu","TTub........bTuu","TTuub.......bTuu","TTuub......bTTub","bTuub......bTTub","bTVub......bTVub"],"snare_roots_front_1":["................","................","................","................","................","................","................","................","................",".......b........",".....bbTb.......","....bTT7ubb.....","...bTTuT7uubb...","..bTVubT7uuuub..","..bTubbTubbuub..",".bTTubTuVbbTuub."],"snare_roots_back_2":["................",".....b..........","....b7b...b.....","...bTub..bub....","..bTTb...b7ub...","..bTub...bVub...","..bTub....buVb..",".bTVb.....bTub..",".bTub......buub.",".bTub......bTub.","bTub.......bTub.","bTub........buub","bTVb........bVub","bTub........bTub","bTub........bTub","TTub........bTub","TTub........bTuu","TVub........bTuu","TTub........bTVu","TTub........bTuu","TTuub.......bTuu","TTuub......bTTub","bTuub......bTTub","bTVub......bTVub"],"snare_roots_front_2":["................","................","................","................","................","................","................","................","...........bb...",".......bbbbTub..","...bbbbTTVTT7b..","..bT7uuuTbbbb...","...bTuuuuT7bb...","..bTVubTTTuuub..","..bTubbTubbuub..",".bTTubTuVbbTuub."],"tut_arrow":["................","................","................","......kkkk......","......kOOk......","......kOOk......","......kOOk......","...kkkkOOkkkk...","...kOOOhhOOOk...","....kOhhhhOk....",".....kOhhOk.....","......kOOk......",".......kk.......","................","................","................"],"tut_spot":["................","................","................","................","................","................","................","................","................","................","....OoOoOoOo....","..oO........Oo..",".O............O.","..oO........Oo..","....OoOoOoOo....","................"],"move_reap":["................","................","....kkkkkkk.....","...kAAAAAAAkk...","..kAkkkkkkkAAk..","...k.......krk..","..........kAk...",".........kAk....","........kAk.....",".......kAk......","......kAk.......",".....kAk........","....kAk.........","...kAk..........","....k...........","................"],"move_cleave":["................","................","..kkkkkkk.......",".kAAAAAAAk......",".kRRRRRRRAk.....",".kRRRRRRRRAk....",".kRRRRRRRRRk....",".kRRRRRRRRrk....",".krrrrRRrrk.....","..kkkkRRkk......",".....kRRk.......",".....kRRk.......",".....kRRk.......",".....krrk.......","......kk........","................"],"move_gorge":["................","................","..kkkkkkkkkkk...",".kAAAAAAAAAAAk..",".kRrRrrrrrRrRk..",".kRkRkkkkkRkRk..",".krkRk...kRkrk..","..kkRk...kRkk...","...krk...krk....","....k.....k.....","...kAk...kAk....","....k.....k.....","...kAk...kAk....","....k.....k.....","................","................"],"move_payfull":["................","................","...kkk...kkk....","..kAAAk.kAAAk...",".kARRRAkARRRAk..",".kRRRRrkRRRRRk..",".kRRRRkArRRRRk..",".krRRRkrkRRRrk..","..krRRAkkRRrk...","...krRRkARrk....","....krRkRrk.....",".....krkrk......","......kAk.......",".......k........","................","................"],"move_blackdeath":["................",".....kkkkkk.....","....kwwwwwwk....","...kwwwwwwwwk...","..kwwwwwwwwwwk..","..kwkkkwwkkkwk..","..kwkMWkkWMkwk..","..kwkkkwwkkkwk..","..kwwwwkkwwwwk..","...kwwwkkwwwk...","....kwwwwwwk....","....kwkwkwkk....","....kkkkkkkk....","..m..mMm.mMm..m.",".mMm.mWm.mWMm.m.","..m...m...m...m."],
 "player":["............y...","...........OyO..","..........EEyEE.","...........eee..","....gGGGGg..N...","...gGkPPkGgPN...","...GgPPPPggPN...","....ggggggggN...","..gGcCCCCcGgN...",".GgGCCwwCCgGN...",".gGcCCCCCCcg....","..knddddddnk....","....dddddd......","....dddddd......","....NNN..NNN....","...nnnn..nnnn..."],
 "rat":["................","................","................","................","................","......k.........",".....kgkkkkk...k","...kkgIgGGGGkkkI",".kkGGGgGGGGGGGkI","kGkRkgGggggggggI","kGgggggqggggggqI","IqqqqqqqGGGGGgqk","kkkqqqqGGGGGGGk.","...kktPklllllk..","....kPpkkkkPpk..",".....kk....kk..."],
 "bat":["................",".....k....k.....","....kvk..kvk....","..k.kivkkvik.k..",".kVkkv9vv96kkVk.","k6VVkva99a6kVV6k","Vv66VvR99R6V66vv","Vv666999996666v9","Vvvvv66ww66vvvv9","V9v66v9669966v99","9kv99999996999k9","kk9kv9666699k9kk","..kk9kG66Gk9kk..","....k.kkkk.k....","................","................"],
@@ -4937,10 +4952,22 @@ function bumpStat(stat,n){
 function charById(id){return CHARACTERS.find(c=>c.id===id)||CHARACTERS[0];}
 function CHAR(){return charById(S&&S.char);}
 function moveListFor(c){
-  if(!c.moves)return MOVES.filter(m=>!m.only||m.only===c.id);
+  if(!c.moves)return MOVES.filter(m=>!m.blood&&(!m.only||m.only===c.id));
   return c.moves.map(o=>{const m=MOVES.find(x=>x.id===o[0]);return o[1]||o[2]?Object.assign({},m,o[1]?{lvl:o[1]}:{},o[2]||{}):m;});
 }
-function moveList(){return moveListFor(CHAR());}
+// Your hand: the hero's own moves, less any an attack a blood gift has eaten, plus the blows the blood gifts give.
+function moveList(){
+  const own=moveListFor(CHAR()).filter(m=>!(S&&S.forfeit&&S.forfeit[m.id]));
+  if(!S||S.betrayed)return own;
+  const blood=Object.keys(S.perks||{}).filter(id=>S.perks[id]&&PERKS[id]&&PERKS[id].blood).map(id=>MOVES.find(m=>m.id===PERKS[id].move)).filter(Boolean);
+  return own.concat(blood);
+}
+// The attack a blood gift will take: the next one you would learn, or if you have learned them all, your best.
+function bloodPrice(){
+  const own=moveListFor(CHAR()).filter(m=>m.id!=="strike"&&!(S.forfeit&&S.forfeit[m.id]));
+  const next=own.filter(m=>m.lvl>S.lvl).sort((a,b)=>a.lvl-b.lvl)[0];
+  return next||own.filter(m=>m.lvl<=S.lvl).sort((a,b)=>b.lvl-a.lvl)[0]||null;
+}
 function armorDef(){return Math.floor(S.armor.def*(CHAR().armorMult||1));}
 // Which sprite to draw for the player: "" (idle) / "_atk" / "_parry". Falls back to Cade's if a hero has none.
 function pspr(suffix){
@@ -5127,6 +5154,11 @@ const MOVES=[
  {id:"transfuse", only:"doctor", name:"Transfusion",    lvl:7, cd:5, desc:"Empty every vial of Ichor into the foe: 2 damage per Ichor, ignoring armour.", transfuse:true},
  {id:"channel",   only:"mage",   name:"Channel",        lvl:2, cd:3, desc:"A slow, sure bolt that pulls 12 mana back in with it.", mult:.6, sure:true, mana:12},
  {id:"arcane",    only:"mage",   name:"Arcane Lance",   lvl:5, cd:4, desc:"A spear of pure force. Can't miss and ignores armour.", mult:1.3, sure:true, pierce:99},
+ // blood-gift blows: only in your hand while you hold the gift (see moveList)
+ {id:"reap",    blood:true, name:"Reaping Cut",     lvl:1, cd:4, desc:"Blood gift. A blow of 220%, with a high chance to crit.", mult:2.2, crit:.35},
+ {id:"cleave",  blood:true, name:"Butcher's Cleave",lvl:1, cd:3, desc:"Blood gift. 160%, ignores all armour, and hits the foe's poise hard.", mult:1.6, pierce:99, poise:18},
+ {id:"gorge",   blood:true, name:"Gorge",           lvl:1, cd:4, desc:"Blood gift. 150%, always opens a wound, and drinks 60% back.", mult:1.5, bleed:true, drain:.6},
+ {id:"payfull", blood:true, name:"Pay in Full",     lvl:1, cd:5, desc:"Blood gift. 300%, but costs you 8% of your health each time.", mult:3, selfHurt:.08},
  {id:"blackdeath",only:"doctor", name:"The Black Death",lvl:9, cd:8, desc:"Can't miss. Drinks its full damage and poisons the foe for 6 turns.", mult:1.3, drain:1, poison:6, sure:true},
  // Brother Anselm's own rites, one for every level he survives. The dead fear them most.
  {id:"crosssign", only:"monk",   name:"Sign of the Cross",lvl:3, cd:3, desc:"A blow behind the raised cross. Can't miss. The dead take half again as much, through any armour.", mult:.95, sure:true, smite:true},
@@ -5419,6 +5451,7 @@ function mDamage(sp){
   let base=rint(m.t.min,m.t.max);
   if(sp&&sp.mult)base=Math.round(base*sp.mult);
   if(turned("mercy")&&S.hp<=S.maxhp*.3)base=Math.round(base*1.5);
+  {const nb=B.mon.t.thing&&S.betrayed?Object.keys(S.perks||{}).filter(id=>S.perks[id]&&PERKS[id]&&PERKS[id].blood).length:0;if(nb)base=Math.round(base*(1+.1*nb));}
   const pierce=(m.t.pierce||0)+((sp&&sp.pierce)||0);
   const def=Math.max(0,guardVal()-(B.pStat.guardDown>0?3:0));
   return{dmg:Math.max(1,base-Math.max(0,def-pierce))};
@@ -5517,6 +5550,7 @@ function strikeOnce(mv){
             blog(CHAR().ichor?`You drink deep from the wound (+${h}).`:`The light knits your wounds (+${h}).`,"c-good");}
   }
   if(mv.waltz&&B.mhp>0)cashOutBleed();
+  if(mv.selfHurt&&S.hp>1){const d=Math.min(S.hp-1,Math.max(1,Math.round(S.maxhp*mv.selfHurt)));hurtPlayer(d,false);blog(`The debt is paid in your blood (${d}).`,"c-hit");}
   if(mv.mana){gainMana(mv.mana);const L=B.layout;if(L)snum(L.px,L.py-L.psz*.5,"+"+mv.mana+" mana","#6fa0e8");blog(`The bolt pulls ${mv.mana} mana back with it.`,"c-cold");}
 }
 // Crimson Waltz: make sure the foe is bleeding, then collect every remaining turn of it at once.
@@ -8098,6 +8132,11 @@ function drawChase(){
 // a one-time special ability. Black cards with "mods" feed gearMod(); the rest are checked with
 // hasPerk() where they apply.
 const LVL_GLYPH={
+  scythe:["..#######..", ".#.......##", "..........#", ".........#.", "........#..", ".......#...", "......#....", ".....#.....", "....#......", "...#.......", "..#........"],
+  cleaver:["#######....", "########...", "#########..", "#########..", "#########..", "########...", "....##.....", "....##.....", "....##.....", "....##.....", "....##....."],
+  fang:["###########", "###########", "#.#.....#.#", "#.#.....#.#", "..#.....#..", "..#.....#..", "...........", "..#.....#..", "...........", "..#.....#..", "..........."],
+  debt:[".###...###.", "#####.#####", "#####.#####", "####.######", "####.#.####", ".####..###.", "..###.###..", "...##.##...", "....#.#....", ".....#.....", "..........."],
+
   sword:["..........#",".........##","........##.",".......##..","..#...##...","...#.##....","....##.....","...##.#....","..##...#...",".##........","##........."],
   heart:[".###...###.","#####.#####","###########","###########",".#########.","..#######..","...#####...","....###....",".....#....."],
   bolt:["......###..",".....###...","....###....","...#######.","......###..",".....###...","....###....","...##......","..#........"],
@@ -8135,7 +8174,13 @@ const PERKS={
  second: {name:"Second Wind",  glyph:"heart", gain:"Once per fight",         text:"When you drop below 25% health, recover 35% of it."},
  feast:  {name:"Bloodfeast",   glyph:"skull", gain:"Heal after each kill",   text:"Every foe you finish restores 15% of your health."},
  fleet:  {name:"Fleetfoot",    glyph:"bolt",  gain:"Lighter steps",          text:"Walking costs less stamina, and it returns twice as fast."},
- mercy:  {name:"Mercy Stroke", glyph:"skull", gain:"+50% vs the weak",       text:"Foes below 30% health take half again as much damage."}
+ mercy:  {name:"Mercy Stroke", glyph:"skull", gain:"+50% vs the weak",       text:"Foes below 30% health take half again as much damage."},
+ // Blood gifts: black and red. Each puts a savage blow in your hand, paid for in health and in an attack you
+ // would have learned. They are dark gifts like the rest, and the Thing will want them back.
+ harvest:{name:"Red Harvest",      glyph:"scythe", blood:true,hp:10,move:"reap",   gain:"Reaping Cut: a blow of 220%, often critical",       text:"The blade was always in your hand. You only had to ask."},
+ butcher:{name:"The Butcher's Due",glyph:"cleaver",blood:true,hp:8, move:"cleave", gain:"Butcher's Cleave: 160%, through any armour, staggers",text:"Meat is meat. Armour is only a slower kind of meat."},
+ hunger: {name:"Hunger of the Hill",glyph:"fang",  blood:true,hp:12,move:"gorge",  gain:"Gorge: 150%, opens a wound and drinks it back",      text:"Something under the hill is hungry, and it lets you eat first."},
+ debt:   {name:"Paid in Full",     glyph:"debt",   blood:true,hp:6, move:"payfull",gain:"Pay in Full: 300%, but each one costs you blood",     text:"Every blow is a payment. The terms are very reasonable."}
 };
 function hasPerk(id){return !!(S&&S.perks&&S.perks[id]&&!S.betrayed);}
 // The dark gifts were the Thing's all along. Once it reveals this (at the start of the final fight) they stop
@@ -8151,7 +8196,11 @@ const TURNED={
  second: "Once in each shape, near death, it gets its breath back.",
  feast:  "It feeds on every blow that lands on you.",
  fleet:  "It is quicker than you now (8% of your blows find nothing).",
- mercy:  "It shows none (+50% damage when you are below 30% health)."
+ mercy:  "It shows none (+50% damage when you are below 30% health).",
+ harvest:"It takes back the Reaping Cut, and hits harder for it (+10%).",
+ butcher:"It takes back the Butcher's Cleave, and hits harder for it (+10%).",
+ hunger: "It takes back Gorge, and hits harder for it (+10%).",
+ debt:   "It takes back Pay in Full, and hits harder for it (+10%)."
 };
 function turned(id){return !!(B&&B.mon.t.thing&&S.betrayed&&S.perks&&S.perks[id]);}
 function stolenGifts(){return S.betrayed?Object.keys(S.perks||{}).filter(id=>PERKS[id]):[];}
@@ -8167,10 +8216,10 @@ function dealLevelHand(){
   const pool=LVL_CARDS.filter(c=>!c.ok||c.ok()).map(c=>({kind:"white",c}));
   for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
   const hand=pool.slice(0,3);
-  const left=S.betrayed?[]:Object.keys(PERKS).filter(id=>!S.perks[id]);
+  const left=S.betrayed?[]:Object.keys(PERKS).filter(id=>!S.perks[id]&&(!PERKS[id].blood||bloodPrice()));
   if(left.length&&Math.random()<.3+.25*(S.blackPity||0)){
     const id=left[Math.floor(Math.random()*left.length)];
-    hand[Math.floor(Math.random()*hand.length)]={kind:"black",id,c:PERKS[id]};
+    hand[Math.floor(Math.random()*hand.length)]={kind:"black",id,c:PERKS[id],price:PERKS[id].blood?bloodPrice():null};
     S.blackPity=0;
   }else S.blackPity=(S.blackPity||0)+1;
   return hand;
@@ -8184,13 +8233,14 @@ function openLevelUp(){
   const cards=hand.map((h,i)=>{
     const c=h.c,black=h.kind==="black";
     const pip=`<b>${lvl}</b>${glyphSvg(c.glyph,1.3)}`;
-    return `<div class="charcard lvlcard${black?" black":""}" data-kind="${h.kind}" data-id="${black?h.id:c.id}" role="button" tabindex="0" style="--i:${i};--t:${(i-mid).toFixed(2)}">
+    const blood=black&&c.blood;
+    return `<div class="charcard lvlcard${black?" black":""}${blood?" blood":""}" data-kind="${h.kind}" data-id="${black?h.id:c.id}"${blood?` data-price="${h.price.id}"`:""} role="button" tabindex="0" style="--i:${i};--t:${(i-mid).toFixed(2)}">
       <div class="cpip tl${black?"":" red"}">${pip}</div><div class="cpip br${black?"":" red"}">${pip}</div>
       <div class="cport">${glyphSvg(c.glyph,6)}</div>
       <div class="cname">${c.name}</div>
-      <div class="ctitle">${black?"Dark gift":"Blessing"}</div>
+      <div class="ctitle">${blood?"Blood gift":black?"Dark gift":"Blessing"}</div>
       <div class="cbody"><div class="cgain">${typeof c.gain==="function"?c.gain():c.gain}</div>
-        <div class="cblurb">${c.text}</div><div class="ckey">PRESS ${i+1}</div></div></div>`;
+        <div class="cblurb">${c.text}</div>${blood?`<div class="cprice">The price: <b>${c.hp} max health</b>, and <b>${h.price.name}</b>${h.price.lvl>S.lvl?`, the attack you would learn at level ${h.price.lvl}`:""}. Never again.</div>`:""}<div class="ckey">PRESS ${i+1}</div></div></div>`;
   }).join("");
   overlay(`<h3>Level ${lvl}</h3>
     <p class="lede">Choose one card.${hand.some(h=>h.kind==="black")?" A black card has been dealt.":""}</p>
@@ -8210,6 +8260,14 @@ function pickLevelCard(el){
   const id=el.dataset.id;
   if(el.dataset.kind==="black"){
     S.perks[id]=true;const p=PERKS[id];
+    if(p.blood){
+      const mv=MOVES.find(m=>m.id===p.move),lost=moveListFor(CHAR()).find(m=>m.id===el.dataset.price);
+      S.maxhp=Math.max(5,S.maxhp-p.hp);S.hp=Math.min(S.hp,S.maxhp);
+      if(lost)(S.forfeit=S.forfeit||{})[lost.id]=true;
+      say(`Blood gift: ${p.name}. ${mv.name} is in your hand now.`,"c-lvl");
+      say(`It took ${p.hp} of your health${lost?`, and ${lost.name}. You will never learn it now`:""}.`,"c-hit");
+      setTimeout(sfxBloodGift,350);
+    }else
     say(`Dark gift: ${p.name}. ${p.text}`,"c-lvl");
   }else{
     const c=LVL_CARDS.find(x=>x.id===id);c.apply();
@@ -8936,6 +8994,9 @@ function sfxVictory(){sfxArp([57,64,69,-1,72,-1,76],.09,"triangle",.12,1.1);}
 function sfxBossDown(){sfxArp([48,55,60,64,67,72],.12,"sawtooth",.06,1.6);const out=sfxOut(1);if(out){const t=actx.currentTime;I.timp(t+.02,.5,36);mNote("sine",mtof(36),t,2.5,.2,{a:.01,out});}}
 function sfxDeath(){const out=sfxOut(1);if(!out)return;const t=actx.currentTime+.02;
   [57,56,53,50,45].forEach((m,k)=>mNote("sawtooth",mtof(m),t+k*.32,.9,.07,{a:.02,lp:900,out}));mNote("sine",mtof(33),t,3.2,.2,{a:.05,out});}
+function sfxBloodGift(){const out=sfxOut(1);if(!out)return;const t=actx.currentTime+.02;
+  mNote("sine",mtof(33),t,2.4,.3,{a:.02,out});[45,46,51].forEach((m,k)=>mNote("sawtooth",mtof(m),t+k*.12,1.8,.05,{a:.05,lp:900,out}));
+  mNoise(t,.8,.15,{type:"lowpass",f:400,shape:1.5,out});setTimeout(()=>{if(actx)mNote("triangle",mtof(81),actx.currentTime,1.2,.06,{a:.004,out});},500);}
 function sfxUnlock(){sfxArp([60,64,67,72,-1,67,72,76,79,84],.08,"square",.05,.8);const out=sfxOut(1);if(out)mNote("sine",mtof(48),actx.currentTime,1.6,.15,{a:.01,out});}
 function sfxCardNew(){playCardSound(true);sfxArp([-1,-1,-1,79,86],.06,"sine",.1,1.2);}
 function sfxPhase(){const out=sfxOut(1);if(!out)return;const t=actx.currentTime+.01;
