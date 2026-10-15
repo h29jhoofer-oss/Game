@@ -6433,20 +6433,25 @@ const TUT_TAM={
         {text:"When you fight, the floor falls away and it's only you and it. Your moves are cards in your hand. Play one each turn."},
         {text:"Watch it as it swings. When the bar comes up, press Space in the glow and turn the blow aside. Timing is everything. In fights, and in bargains."}],
  won:[{text:"Splendid. Splendid! You'll do very well down there."},
-      {text:"As you grow stronger you'll be dealt cards to choose from. The red ones are blessings. Small things. Honest things."},
-      {text:"And now and then, a black one. A gift. It asks for nothing at all."},
-      {text:"Take those, child. Take every one. What harm could a gift do?"},
+      {text:"As you grow stronger you'll be dealt cards to choose from. The pale ones are blessings. Small things. Honest things."},
+      {text:"And now and then, a black one. A gift. They ask for nothing at all. Well. Next to nothing."},
+      {text:"Black and purple: a little something that works for you always, and never tires. A keener eye. Thicker skin. Coin in your pocket."},
+      {text:"Black and red: a blow that would fell a troll. It costs a little of your blood, and a lesson you'd only have learned the hard way."},
+      {text:"And if you are very lucky, black and yellow. Strength like you have never known. You'll never need the small pale cards again."},
+      {text:"Take them, child. Take every one. What harm could a gift do?"},
       {text:"Oh, and further down, mind the roots. They mean no harm. They only want to hold on to you."}],
+ // At the stair he comes over to see you off, still the old man; then he isn't.
  bye:[{text:"Off you go, then. Twenty floors, all the way to the bottom."},
       {text:"I'll be waiting for you there, you know."},
-      {who:"hero",text:"At the bottom? How will you get down there before me?"},
-      {who:"oldman2",text:"Child.",act:()=>{if(OLDMAN)OLDMAN.eyes=true;quake(4);}},
-      {who:"oldman2",text:"I have always been at the bottom."},
-      {who:"thing",text:"Take the gifts. Every one. We will settle up when you arrive.",mood:"anger",act:()=>{if(OLDMAN){OLDMAN.gone=true;burst(OLDMAN.x,OLDMAN.y,"#2a1a45",26,3.5);burst(OLDMAN.x,OLDMAN.y,"#566173",14,2.5);}quake(8);if(typeof playGrowl==="function")playGrowl();}}]
+      {who:"hero",text:"At the bottom? How could you get down there before me?"},
+      {text:"Oh, child.",act:()=>oldManTurns()},
+      {who:"thing",text:"I have always been at the bottom."},
+      {who:"thing",text:"The hill, the stair, the crown, the King's poor Queen. All mine. I am the Thing under the hill, and I keep very good books."},
+      {who:"thing",text:"Take the gifts. Every one. We will settle up when you arrive.",mood:"anger",act:()=>oldManGoes()}]
 };
 // where he stands for each lesson
 let OLDMAN=null;
-const OLDMAN_AT={intro:[9,13],fight:[37,13],stair:[39,18]};
+const OLDMAN_AT={intro:[9,13],fight:[37,13],stair:[35,12]};
 function tutStep(){return S&&S.tut?TUT_STEPS[S.tut.step]:null;}
 function tutGo(id){
   const i=TUT_STEPS.findIndex(x=>x.id===id);S.tut.step=i;S.tut.t=0;S.tut.flags={};
@@ -6490,6 +6495,7 @@ function tutReadNote(pr){
   S.tut.flags.read=true;
 }
 function tutTick(dt){
+  oldManTick(dt);
   const st=tutStep();if(!st)return;
   S.tut.t+=dt;
   const F=S.tut.flags,at=([x,y])=>S.px===x&&S.py===y;
@@ -6524,18 +6530,42 @@ function tutBanner(){
   if(el.dataset.h!==html){el.dataset.h=html;el.innerHTML=html;}
   el.classList.add("show");
 }
+// You stand on the stair and press Enter: he walks over to see you off, then the farewell.
+const OLDMAN_WALK=1.8;   // tiles a second: an old man's pace
 function tutFinish(){
-  if(!S.tut)return;
-  S.tut.step=TUT_STEPS.length;
-  startDialogue(TUT_TAM.bye,()=>{
-    say("When you look up, the old man is gone. There is only a smell of smoke, and something like laughter, very far below.","c-cold");
-    OLDMAN=null;
-    META.tutorialDone=true;metaSave();
-    const el=$("tutcard");if(el)el.classList.remove("show");
-    S.tut=null;S.over=true;
-    say("The crash course is done. Choose who goes down.","c-lvl");
-    descentT=0;chooseHero();
-  },"Go down","oldman");
+  if(!S.tut||S.tut.step>=TUT_STEPS.length)return;
+  S.tut.step=TUT_STEPS.length;held.clear();
+  const tx=S.px-1,ty=S.py;   // the tile beside you
+  OLDMAN.walk={tx,ty};
+  const el=$("tutcard");if(el)el.classList.remove("show");
+}
+function oldManTick(dt){
+  if(!OLDMAN||!OLDMAN.walk)return;
+  const w=OLDMAN.walk,dx=w.tx-OLDMAN.x,dy=w.ty-OLDMAN.y,d=Math.hypot(dx,dy),st=OLDMAN_WALK*dt;
+  if(d<=st){OLDMAN.x=w.tx;OLDMAN.y=w.ty;OLDMAN.walk=null;OLDMAN.arrived=true;
+    startDialogue(TUT_TAM.bye,tutDone,"Go down","oldman");return;}
+  OLDMAN.x+=dx/d*st;OLDMAN.y+=dy/d*st;OLDMAN.step=(OLDMAN.step||0)+dt;
+}
+// The hood falls back and there is no old man under it.
+function oldManTurns(){
+  if(!OLDMAN)return;
+  OLDMAN.thing=true;quake(10);
+  burst(OLDMAN.x,OLDMAN.y,"#2a1a45",30,3.8);burst(OLDMAN.x,OLDMAN.y,"#566173",16,2.6);
+  if(typeof playGrowl==="function")playGrowl();if(typeof sfxPhase==="function")sfxPhase();
+}
+function oldManGoes(){
+  if(!OLDMAN)return;
+  OLDMAN.gone=true;quake(8);
+  burst(OLDMAN.x,OLDMAN.y,"#2a1a45",26,3.5);burst(OLDMAN.x,OLDMAN.y,"#8a5fc4",12,2.5);
+}
+function tutDone(){
+  say("Where it stood there is only a smell of smoke, and something like laughter, very far below.","c-cold");
+  OLDMAN=null;
+  META.tutorialDone=true;metaSave();
+  const el=$("tutcard");if(el)el.classList.remove("show");
+  S.tut=null;S.over=true;
+  say("The crash course is done. Choose who goes down.","c-lvl");
+  descentT=0;chooseHero();
 }
 // Where it should look next: a little gold arrow bobbing over the mark, the draught, the page, the rat or the stair.
 function tutTarget(){
@@ -6547,7 +6577,8 @@ function tutTarget(){
 function drawTutMark(){
   if(S.tut&&OLDMAN&&!OLDMAN.gone&&S.mode==="map"){
     const b=RM?0:Math.round(Math.sin(tclock*1.6)*.6)/16;
-    blit(OLDMAN.eyes?"oldman_eyes":"oldman",OLDMAN.x,OLDMAN.y+b,1,0,1,1,S.vx<OLDMAN.x);
+    const hop=OLDMAN.walk&&!RM?-Math.abs(Math.sin(OLDMAN.step*9))/16:0;
+    blit(OLDMAN.thing?"thing":"oldman",OLDMAN.x,OLDMAN.y+b+hop,1,0,1,1,S.vx<OLDMAN.x);
   }
   const t=tutTarget();if(!t)return;
   const b=RM?0:Math.round(Math.sin(tclock*5)*1.5)/16;
@@ -9221,7 +9252,7 @@ for(const k in KEYS){
 const held=new Set();
 let freeClock=0,freeBumpT=0,freeWindedT=0;
 function freeMode(){return !!S;}   // every hero walks freely now; the grid code stays for "." (rest) and as a fallback
-function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()||monkChoiceOpen||wispTalkOpen||snareGrab()||!!MAPD.dlg||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
+function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()||monkChoiceOpen||wispTalkOpen||snareGrab()||!!(OLDMAN&&OLDMAN.walk)||!!MAPD.dlg||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
 // What a box of half-width r centred on (cx,cy) overlaps: {wall:true}, {chasm:[x,y]}, or null.
 function boxHit(cx,cy,r){
   const e=1e-6;
