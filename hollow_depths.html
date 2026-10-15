@@ -550,6 +550,30 @@ body.talking .tutcard{display:none}
 .t3{transform:translate(-3px,11px) rotate(-1.5deg)}
 .charcard.torn.shake{animation:tornShake .35s}
 @keyframes tornShake{0%,100%{translate:0}25%{translate:-6px}75%{translate:6px}}
+/* ---------- the title screen ---------- */
+#card.titlecard{background:#07080c;padding:0;max-width:880px;overflow:hidden;box-shadow:0 0 0 3px #3d2a1c,0 0 0 5px #5e3a24,0 0 0 7px #0a0c10,10px 12px 0 4px rgba(0,0,0,.55)}
+.titlescreen{position:relative;display:flex;flex-direction:column;align-items:center}
+.titlescreen canvas{display:block;width:100%;aspect-ratio:16/9;image-rendering:pixelated;image-rendering:crisp-edges}
+.ttl{position:absolute;top:4%;left:0;right:0;text-align:center;pointer-events:none}
+.ttl h1{margin:0;font-size:clamp(22px,4.6vw,40px);letter-spacing:.2em;color:#f0c060;text-shadow:3px 3px 0 #0a0c10,0 0 18px rgba(240,192,96,.25)}
+.ttl p{margin:6px 0 0;font-size:clamp(11px,1.6vw,13.5px);color:#b9c2cf;text-shadow:2px 2px 0 #0a0c10}
+.tbtns{position:absolute;left:5%;bottom:9%;display:flex;flex-direction:column;gap:12px;width:min(220px,27%)}
+@media (max-width:760px){.tbtns{position:static;width:auto;align-self:stretch;margin:16px 18px 18px}.ttl p{padding:0 12px}}
+#card .tbtns button,#card .setrow button{font:700 14px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;padding:11px 0;cursor:pointer;
+  color:#161b23;background:#d9d2c0;border:0;border-radius:0;
+  box-shadow:0 -3px 0 0 #a8873a,0 3px 0 0 #a8873a,-3px 0 0 0 #a8873a,3px 0 0 0 #a8873a,0 -5px 0 0 #0a0c10,0 5px 0 0 #0a0c10,-5px 0 0 0 #0a0c10,5px 0 0 0 #0a0c10,6px 7px 0 2px rgba(0,0,0,.5)}
+#card .tbtns button:hover,#card .setrow button:hover{background:#efe6cc;transform:translateY(-1px)}
+#card .tbtns button:active,#card .setrow button:active{transform:translateY(1px)}
+#card .tbtns #tPlay{background:#f0c060}
+.settings{display:flex;flex-direction:column;gap:14px;max-width:520px;margin:0 auto}
+.settings h3{margin:0 0 4px}
+.setrow{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px dashed #333d4a}
+.setrow span{display:flex;flex-direction:column;gap:2px}
+.setrow i{font-style:normal;font-size:12px;color:var(--slate)}
+#card .setrow button{width:128px;font-size:12.5px;padding:9px 0}
+#card .settings #setBack{margin-top:6px;background:#1e242e;color:var(--bone);border:1px solid #4a5765;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
+#card .settings #setBack:hover{border-color:var(--gold);color:#f0dfae}
+.setrow button:disabled{opacity:.5;cursor:default}
 /* ---------- the bestiary: a binder of monster cards ---------- */
 .bestiary{display:flex;flex-direction:column;gap:10px}
 .pk-best{font-size:12px;padding:4px 10px;margin-left:auto;margin-right:12px}
@@ -3396,7 +3420,12 @@ const THING_DEAL=[
 ];
 function arriveBusy(){return !!ARRIVE&&ARRIVE.stage!=="done";}
 function dealLines(){
+  if(META.tutorialDone){const met={text:"We've met, you know. At the top of the stair. I was an old man then, with a hood. I did say I'd be waiting at the bottom."};
+    const L=CHAR().id!=="monk"?THING_DEAL:monkDeal();return [THING_DEAL[0],met].concat(L.slice(1));}
   if(CHAR().id!=="monk")return THING_DEAL;
+  return monkDeal();
+}
+function monkDeal(){
   return THING_DEAL.map(l=>l.who==="hero"&&l.text!=="No."?{who:"hero",text:"My soul is not mine to sell. It belongs to God."}:l)
     .flatMap(l=>/^I see\./.test(l.text)?[{text:"God. Ha. He does not come down this far, holy man. Ask the Queen. Ask the King. Ask the knights."},l]:[l]);
 }
@@ -4082,7 +4111,7 @@ const ART={"rook":["............kk..","...........kZlk.",".....kkkk..kwGk.","...
 "move_miasma":["................","......mm........","....mmMMm..m....","...mMMWWMmmMm...","..mMWWXWMMMWMm..","..mMWXXWWMWWMm..",".mMMWWWMMMWWMMm.",".mMWWkkWMkkWWMm.",".mMWWkkWMkkWWMm.",".mMMWWWWMWWWMMm.","..mMMWWkkkWWMm..","..mmMMWWWWWMMm..","...mmMMMMMMMm...",".....mmmmmmm....","..m.....m....m..","................"],
 "move_letting":["...........kk...","..........kwGk..",".........kwGk...","........kwGk....",".......kwGk.....","......kRGk......",".....kNRk.......","....kNnk..k.....","...kNnk..kRk....","..kOnk...kRk....","..kOk...kRARk...","...k.....kRk....","..kkkkkkkkkkkk..","..kGlllllllRRk..","...kGllllllGk...","....kkkkkkkk...."],
 "move_transfuse":["......kkkk......","......kNNk......",".....kkkkkk.....","......kGlk......","......kGlk......",".....kGxxlk.....","....kGxxxxlk....","...kGxxxxxxlk...","..kGRRRRRRRRlk..","..kGRAARRRRRlk..","..kGRABRRRRrlk..","..kGRRRRRRrrlk..","..kGrRRRRrrrlk..","...kGrrrrrrlk...","....kkkkkkkk....","R.............R."],
-"move_crosssign":["................",".......hh.......","......kOOk......",".....hkYOkh.....","......kYOk......","..hkkkkYOkkkkh..",".hkOOOOYYOOOOkh.",".hkYYYYhhYYYYkh.","..hkkkkYOkkkkh..","......kYOk......","......kYOk......","......kYOk......","......kYOk......","......kYOk......",".....hkOOkh.....","......kkkk......"],"move_holywater":["......kkkk......",".....kNDDNk.....","......kllk......","......klwk......",".....klwwlk.....","....kl4444lk....","...kl443Z44lk...","...k44ZZZ344k...","...k4433Z344k...","...k3443Z433k...","....k333333k..4.",".....kkkkkk..k4k","..4..........k3k",".k4k..........k.",".k3k....4.......","..k....k3k......"],"move_sanctuary":["................","......hhhh......","....hhYYYYhh....","...hYOkkkkOYh...","..hYOk....kOYh..","..hOk..kk..kOh..",".hYOk.kTTk.kOYh.",".hOk..kPPk..kOh.",".hOk.kTTTTk.kOh.",".hOk.kTDTTk.kOh.",".hOk.kTTTTk.kOh.",".hOk.kTTTTk.kOh.",".hOk.kkkkkk.kOh.","hOOOOOOOOOOOOOOh","kkkkkkkkkkkkkkkk","................"],"move_penance":["................","..kkk...........",".kNDNk..........",".kDkDNk.........","..kNkDNk........","....kNDNk.......",".....kNDNk......","......kNDk......",".....kDkNk..R...","....kDk.kNk.....","...kNk...kNk.R..","..kDk..R..kDk...",".kNk.......kNk..",".kDk...R...kDk..","..k...RAR...k...","......kRk......."],"move_litany":["......kkkk......","....kkDLLDkk....","...kDk....kDk...","..kLk......kLk..","..kDk......kDk..",".kLk........kLk.",".kDk........kDk.","..kLk......kLk..","..kDk......kDk..","...kLkk..kkLk...","....kkDLLDkk....","......kYOk......","....kkkYOkkk....","....kYYhhYYk....","......kYOk......","......kkkk......"],"move_rites":["................",".......h........","......hJh.......","......JYJ.......",".....hJYJh......","......JhJ.......",".......k........","......kwk.......",".....kwwlk......",".....kwllk......",".....kwllk......",".....kwllk......",".....kwllk......","...kkkkkkkkk....","..kDLLLLLLLDk...","...kkkkkkkkk...."],"snare_crack_0":["................","................","................","................","................","................","................","................","................","................",".......k.kk.....","......k7k77k....",".....k7878k.....","......kk.k......","................","................"],"snare_crack_1":["................","................","................","................","................","................","................","................","................","................",".....kkk.kk.....","....k878k87kk...","...k7kV878k87k..","....k.k7k7kkk...",".......k.k......","................"],"snare_crack_2":["................","................","................","................","................","................","................","................","................","....kk.....kk...","...k78kk.kk87k..",".k.kk8V8k8Vkk.kk","k7k8VkV777k8VkV7",".kVkkk78k87kk8kk","..k...kk.kk..k..","................"],"snare_ring_0":["........................","........................","........................","........................","........................","........................","........................","........................","........................","........................","...V77VV777VV777VV777...",".7VV................V77.",".7....................V.",".7....................V.","..V7V..............VV7..","....VV77VVV777VV777V...."],"snare_ring_1":["........................","........................","........................","........................","........................","........................","........................","........................","........................","........................","...777777777777777777...",".777................777.",".7....................7.",".7....................7.","..777..............777..","....7777777777777777...."],"snare_roots_back_0":["................","................","................","................","................","................","................","................","................","................","................","................",".bb..........bb.","b7ub........bTub","bTub........bT7b","TTub........bTub","TTub........bTuu","TVub........bTuu","TTub........bTVu","TTub........bTuu","TTuub.......bTuu","TTuub......bTTub","bTuub......bTTub","bTVub......bTVub"],"snare_roots_front_0":["................","................","................","................","................","................","................","................","................","................","................","....bb..........","...b7ub...bbb...","..bTVubb.bT7ub..","..bTubb7b.buub..",".bTTubTuVbbTuub."],"snare_roots_back_1":["................","................","................","................","................","...b............","..bub...........",".bT7b.......bb..",".bTub......b7ub.",".bTub......bTub.","bTuub......bTub.","bTub........buub","bTVb........bVub","bTub........bTub","bTub........bTub","TTub........bTub","TTub........bTuu","TVub........bTuu","TTub........bTVu","TTub........bTuu","TTuub.......bTuu","TTuub......bTTub","bTuub......bTTub","bTVub......bTVub"],"snare_roots_front_1":["................","................","................","................","................","................","................","................","................",".......b........",".....bbTb.......","....bTT7ubb.....","...bTTuT7uubb...","..bTVubT7uuuub..","..bTubbTubbuub..",".bTTubTuVbbTuub."],"snare_roots_back_2":["................",".....b..........","....b7b...b.....","...bTub..bub....","..bTTb...b7ub...","..bTub...bVub...","..bTub....buVb..",".bTVb.....bTub..",".bTub......buub.",".bTub......bTub.","bTub.......bTub.","bTub........buub","bTVb........bVub","bTub........bTub","bTub........bTub","TTub........bTub","TTub........bTuu","TVub........bTuu","TTub........bTVu","TTub........bTuu","TTuub.......bTuu","TTuub......bTTub","bTuub......bTTub","bTVub......bTVub"],"snare_roots_front_2":["................","................","................","................","................","................","................","................","...........bb...",".......bbbbTub..","...bbbbTTVTT7b..","..bT7uuuTbbbb...","...bTuuuuT7bb...","..bTVubTTTuuub..","..bTubbTubbuub..",".bTTubTuVbbTuub."],"tut_arrow":["................","................","................","......kkkk......","......kOOk......","......kOOk......","......kOOk......","...kkkkOOkkkk...","...kOOOhhOOOk...","....kOhhhhOk....",".....kOhhOk.....","......kOOk......",".......kk.......","................","................","................"],"tut_spot":["................","................","................","................","................","................","................","................","................","................","....OoOoOoOo....","..oO........Oo..",".O............O.","..oO........Oo..","....OoOoOoOo....","................"],"move_reap":["................","................","....kkkkkkk.....","...kAAAAAAAkk...","..kAkkkkkkkAAk..","...k.......krk..","..........kAk...",".........kAk....","........kAk.....",".......kAk......","......kAk.......",".....kAk........","....kAk.........","...kAk..........","....k...........","................"],"move_cleave":["................","................","..kkkkkkk.......",".kAAAAAAAk......",".kRRRRRRRAk.....",".kRRRRRRRRAk....",".kRRRRRRRRRk....",".kRRRRRRRRrk....",".krrrrRRrrk.....","..kkkkRRkk......",".....kRRk.......",".....kRRk.......",".....kRRk.......",".....krrk.......","......kk........","................"],"move_gorge":["................","................","..kkkkkkkkkkk...",".kAAAAAAAAAAAk..",".kRrRrrrrrRrRk..",".kRkRkkkkkRkRk..",".krkRk...kRkrk..","..kkRk...kRkk...","...krk...krk....","....k.....k.....","...kAk...kAk....","....k.....k.....","...kAk...kAk....","....k.....k.....","................","................"],"move_payfull":["................","................","...kkk...kkk....","..kAAAk.kAAAk...",".kARRRAkARRRAk..",".kRRRRrkRRRRRk..",".kRRRRkArRRRRk..",".krRRRkrkRRRrk..","..krRRAkkRRrk...","...krRRkARrk....","....krRkRrk.....",".....krkrk......","......kAk.......",".......k........","................","................"],"move_blackdeath":["................",".....kkkkkk.....","....kwwwwwwk....","...kwwwwwwwwk...","..kwwwwwwwwwwk..","..kwkkkwwkkkwk..","..kwkMWkkWMkwk..","..kwkkkwwkkkwk..","..kwwwwkkwwwwk..","...kwwwkkwwwk...","....kwwwwwwk....","....kwkwkwkk....","....kkkkkkkk....","..m..mMm.mMm..m.",".mMm.mWm.mWMm.m.","..m...m...m...m."],
+"move_crosssign":["................",".......hh.......","......kOOk......",".....hkYOkh.....","......kYOk......","..hkkkkYOkkkkh..",".hkOOOOYYOOOOkh.",".hkYYYYhhYYYYkh.","..hkkkkYOkkkkh..","......kYOk......","......kYOk......","......kYOk......","......kYOk......","......kYOk......",".....hkOOkh.....","......kkkk......"],"move_holywater":["......kkkk......",".....kNDDNk.....","......kllk......","......klwk......",".....klwwlk.....","....kl4444lk....","...kl443Z44lk...","...k44ZZZ344k...","...k4433Z344k...","...k3443Z433k...","....k333333k..4.",".....kkkkkk..k4k","..4..........k3k",".k4k..........k.",".k3k....4.......","..k....k3k......"],"move_sanctuary":["................","......hhhh......","....hhYYYYhh....","...hYOkkkkOYh...","..hYOk....kOYh..","..hOk..kk..kOh..",".hYOk.kTTk.kOYh.",".hOk..kPPk..kOh.",".hOk.kTTTTk.kOh.",".hOk.kTDTTk.kOh.",".hOk.kTTTTk.kOh.",".hOk.kTTTTk.kOh.",".hOk.kkkkkk.kOh.","hOOOOOOOOOOOOOOh","kkkkkkkkkkkkkkkk","................"],"move_penance":["................","..kkk...........",".kNDNk..........",".kDkDNk.........","..kNkDNk........","....kNDNk.......",".....kNDNk......","......kNDk......",".....kDkNk..R...","....kDk.kNk.....","...kNk...kNk.R..","..kDk..R..kDk...",".kNk.......kNk..",".kDk...R...kDk..","..k...RAR...k...","......kRk......."],"move_litany":["......kkkk......","....kkDLLDkk....","...kDk....kDk...","..kLk......kLk..","..kDk......kDk..",".kLk........kLk.",".kDk........kDk.","..kLk......kLk..","..kDk......kDk..","...kLkk..kkLk...","....kkDLLDkk....","......kYOk......","....kkkYOkkk....","....kYYhhYYk....","......kYOk......","......kkkk......"],"move_rites":["................",".......h........","......hJh.......","......JYJ.......",".....hJYJh......","......JhJ.......",".......k........","......kwk.......",".....kwwlk......",".....kwllk......",".....kwllk......",".....kwllk......",".....kwllk......","...kkkkkkkkk....","..kDLLLLLLLDk...","...kkkkkkkkk...."],"snare_crack_0":["................","................","................","................","................","................","................","................","................","................",".......k.kk.....","......k7k77k....",".....k7878k.....","......kk.k......","................","................"],"snare_crack_1":["................","................","................","................","................","................","................","................","................","................",".....kkk.kk.....","....k878k87kk...","...k7kV878k87k..","....k.k7k7kkk...",".......k.k......","................"],"snare_crack_2":["................","................","................","................","................","................","................","................","................","....kk.....kk...","...k78kk.kk87k..",".k.kk8V8k8Vkk.kk","k7k8VkV777k8VkV7",".kVkkk78k87kk8kk","..k...kk.kk..k..","................"],"snare_ring_0":["........................","........................","........................","........................","........................","........................","........................","........................","........................","........................","...V77VV777VV777VV777...",".7VV................V77.",".7....................V.",".7....................V.","..V7V..............VV7..","....VV77VVV777VV777V...."],"snare_ring_1":["........................","........................","........................","........................","........................","........................","........................","........................","........................","........................","...777777777777777777...",".777................777.",".7....................7.",".7....................7.","..777..............777..","....7777777777777777...."],"snare_roots_back_0":["................","................","................","................","................","................","................","................","................","................","................","................",".bb..........bb.","b7ub........bTub","bTub........bT7b","TTub........bTub","TTub........bTuu","TVub........bTuu","TTub........bTVu","TTub........bTuu","TTuub.......bTuu","TTuub......bTTub","bTuub......bTTub","bTVub......bTVub"],"snare_roots_front_0":["................","................","................","................","................","................","................","................","................","................","................","....bb..........","...b7ub...bbb...","..bTVubb.bT7ub..","..bTubb7b.buub..",".bTTubTuVbbTuub."],"snare_roots_back_1":["................","................","................","................","................","...b............","..bub...........",".bT7b.......bb..",".bTub......b7ub.",".bTub......bTub.","bTuub......bTub.","bTub........buub","bTVb........bVub","bTub........bTub","bTub........bTub","TTub........bTub","TTub........bTuu","TVub........bTuu","TTub........bTVu","TTub........bTuu","TTuub.......bTuu","TTuub......bTTub","bTuub......bTTub","bTVub......bTVub"],"snare_roots_front_1":["................","................","................","................","................","................","................","................","................",".......b........",".....bbTb.......","....bTT7ubb.....","...bTTuT7uubb...","..bTVubT7uuuub..","..bTubbTubbuub..",".bTTubTuVbbTuub."],"snare_roots_back_2":["................",".....b..........","....b7b...b.....","...bTub..bub....","..bTTb...b7ub...","..bTub...bVub...","..bTub....buVb..",".bTVb.....bTub..",".bTub......buub.",".bTub......bTub.","bTub.......bTub.","bTub........buub","bTVb........bVub","bTub........bTub","bTub........bTub","TTub........bTub","TTub........bTuu","TVub........bTuu","TTub........bTVu","TTub........bTuu","TTuub.......bTuu","TTuub......bTTub","bTuub......bTTub","bTVub......bTVub"],"snare_roots_front_2":["................","................","................","................","................","................","................","................","...........bb...",".......bbbbTub..","...bbbbTTVTT7b..","..bT7uuuTbbbb...","...bTuuuuT7bb...","..bTVubTTTuuub..","..bTubbTubbuub..",".bTTubTuVbbTuub."],"tut_arrow":["................","................","................","......kkkk......","......kOOk......","......kOOk......","......kOOk......","...kkkkOOkkkk...","...kOOOhhOOOk...","....kOhhhhOk....",".....kOhhOk.....","......kOOk......",".......kk.......","................","................","................"],"tut_spot":["................","................","................","................","................","................","................","................","................","................","....OoOoOoOo....","..oO........Oo..",".O............O.","..oO........Oo..","....OoOoOoOo....","................"],"move_reap":["................","................","....kkkkkkk.....","...kAAAAAAAkk...","..kAkkkkkkkAAk..","...k.......krk..","..........kAk...",".........kAk....","........kAk.....",".......kAk......","......kAk.......",".....kAk........","....kAk.........","...kAk..........","....k...........","................"],"move_cleave":["................","................","..kkkkkkk.......",".kAAAAAAAk......",".kRRRRRRRAk.....",".kRRRRRRRRAk....",".kRRRRRRRRRk....",".kRRRRRRRRrk....",".krrrrRRrrk.....","..kkkkRRkk......",".....kRRk.......",".....kRRk.......",".....kRRk.......",".....krrk.......","......kk........","................"],"move_gorge":["................","................","..kkkkkkkkkkk...",".kAAAAAAAAAAAk..",".kRrRrrrrrRrRk..",".kRkRkkkkkRkRk..",".krkRk...kRkrk..","..kkRk...kRkk...","...krk...krk....","....k.....k.....","...kAk...kAk....","....k.....k.....","...kAk...kAk....","....k.....k.....","................","................"],"move_payfull":["................","................","...kkk...kkk....","..kAAAk.kAAAk...",".kARRRAkARRRAk..",".kRRRRrkRRRRRk..",".kRRRRkArRRRRk..",".krRRRkrkRRRrk..","..krRRAkkRRrk...","...krRRkARrk....","....krRkRrk.....",".....krkrk......","......kAk.......",".......k........","................","................"],"oldman":["................",".....kkkkk......","....kqqqqqk.....","...kqddddqqk.kk.","...kqdkdkdqk.kOk","...kqdwwwdqk.kYk","...kqwwwwwqk..N.","..kqqwwwwwqqk.N.","..kqgqwwwqgqkkN.","..kqgqqwqqgqPPN.",".kqgqqqqqqgqk.N.",".kqgqqgqqqgqk.N.",".kqgqqgqqqgqk.N.","kqggqqgqqqggqkN.","kqqqqqqqqqqqqkN.",".kkkkkkkkkkkk.N."],"oldman_eyes":["................",".....kkkkk......","....kqqqqqk.....","...kqddddqqk.kk.","...kqdRdRdqk.kOk","...kqdwwwdqk.kYk","...kqwwwwwqk..N.","..kqqwwwwwqqk.N.","..kqgqwwwqgqkkN.","..kqgqqwqqgqPPN.",".kqgqqqqqqgqk.N.",".kqgqqgqqqgqk.N.",".kqgqqgqqqgqk.N.","kqggqqgqqqggqkN.","kqqqqqqqqqqqqkN.",".kkkkkkkkkkkk.N."],"move_blackdeath":["................",".....kkkkkk.....","....kwwwwwwk....","...kwwwwwwwwk...","..kwwwwwwwwwwk..","..kwkkkwwkkkwk..","..kwkMWkkWMkwk..","..kwkkkwwkkkwk..","..kwwwwkkwwwwk..","...kwwwkkwwwk...","....kwwwwwwk....","....kwkwkwkk....","....kkkkkkkk....","..m..mMm.mMm..m.",".mMm.mWm.mWMm.m.","..m...m...m...m."],
 "player":["............y...","...........OyO..","..........EEyEE.","...........eee..","....gGGGGg..N...","...gGkPPkGgPN...","...GgPPPPggPN...","....ggggggggN...","..gGcCCCCcGgN...",".GgGCCwwCCgGN...",".gGcCCCCCCcg....","..knddddddnk....","....dddddd......","....dddddd......","....NNN..NNN....","...nnnn..nnnn..."],
 "rat":["................","................","................","................","................","......k.........",".....kgkkkkk...k","...kkgIgGGGGkkkI",".kkGGGgGGGGGGGkI","kGkRkgGggggggggI","kGgggggqggggggqI","IqqqqqqqGGGGGgqk","kkkqqqqGGGGGGGk.","...kktPklllllk..","....kPpkkkkPpk..",".....kk....kk..."],
 "bat":["................",".....k....k.....","....kvk..kvk....","..k.kivkkvik.k..",".kVkkv9vv96kkVk.","k6VVkva99a6kVV6k","Vv66VvR99R6V66vv","Vv666999996666v9","Vvvvv66ww66vvvv9","V9v66v9669966v99","9kv99999996999k9","kk9kv9666699k9kk","..kk9kG66Gk9kk..","....k.kkkk.k....","................","................"],
@@ -4419,7 +4448,7 @@ function burst(tx,ty,col,n,spd){
 function ring(tx,ty,col,r,life){
   fx.push({k:"ring",x:tx+.5,y:ty+.5,t:0,life:life||.55,col:col,r:r||2.4});
 }
-function quake(n){if(!RM)shake=Math.min(15,shake+n);}
+function quake(n){if(!RM&&(typeof SET==="undefined"||SET.shake))shake=Math.min(15,shake+n);}
 function lunge(e,dx,dy){e.lunge={x:dx,y:dy,t:1};}
 function flash(x,y,col){burst(x,y,cssv(col),5,3);}
 
@@ -5097,7 +5126,7 @@ function chooseHero(){
     <p class="lede">Each one fights differently. Complete quests to meet more of them.</p>
     <div class="chargrid fan">${cards}</div>`);
   $("card").classList.add("wide");
-  menuQuiet=true;setMusicVolume();
+  menuQuiet=false;menuMusic=true;setMusicVolume();
   heroPicked=false;
   const grid=document.querySelector("#card .chargrid");
   layoutFan(grid);
@@ -6390,45 +6419,52 @@ const TUT_STEPS=[
  {id:"pickup",text:"Walk over the healing draught to pick it up.",keys:"Walk over it"},
  {id:"pack",  text:"Open your pack, then close it again.",keys:"I"},
  {id:"note",  text:"Something is written on the page by the old well. Walk into it, or stand beside it and press E.",keys:"E"},
- {id:"talk",  text:"Talk to Tam. Ask him anything, then put the cards away.",keys:"H, then Esc"},
  {id:"fight", text:"A rat. Walk into it to start a fight.",keys:"Walk into it"},
  {id:"stair", text:"The stair is open. Stand on it and press Enter to go down.",keys:"Enter"}
 ];
+// The crash course is kept by a kindly old man in a hood, who has been here as long as anyone can remember.
+// He is the Thing under the hill. He means every word, in his way.
 const TUT_TAM={
- intro:[{text:"You came! You're Cade, from the outer wall. You used to save me your bread crusts."},
-        {text:"I'm Tam. I lit the Queen's candles, before. Now I'm mostly the candle."},
-        {text:"This was the courtyard. Three years ago, in one night, the whole castle dropped into the hill and left this stair behind."},
-        {text:"Something down there is still wearing the King's crown. Before you go after it, let me show you how not to die. Most people skip that part."}],
- fight:[{text:"That rat came up the stair. They do that now."},
-        {text:"When you walk into something, the floor falls away and it's a duel. Your moves are cards in your hand. Play one each turn."},
-        {text:"Now and then it leaves an opening as it swings. A bar comes up: hit Space while the marker's in the glow and you'll turn the blow aside."}],
- won:[{text:"See? You're better at this than you think."},
-      {text:"Every time you level up, you're dealt cards to choose from. Red ones are blessings."},
-      {text:"Black ones come from the dark. Gifts that ask for nothing.",mood:"fear"},
-      {text:"Nothing down there gives without counting. Remember I said that, later."},
-      {text:"And the deeper you go, the more the roots come up through the floor. If one grabs you, pull. Hard."}],
- bye:[{text:"That's everything I know that helps. The rest you'll have to find out."},
-      {text:"I can't come down with you. Not yet. The scroll's only paper, and I'm only a little light."},
-      {text:"But I'll go looking for you. If you find a scroll down there with something violet in it, that'll be me."},
-      {who:"hero",text:"Goodbye, Tam."},
-      {text:"Not goodbye. Just... see you later. Probably. Maybe. Go on."}]
+ intro:[{text:"Ah! A visitor. Mind the edge, child. The stair is steeper than it looks."},
+        {text:"Me? Just an old man. I keep the courtyard, or what the hill left of it. Three years now, since the castle sank in a single night."},
+        {text:"Something down there still wears the King's crown, they say. Terrible business. Terrible."},
+        {text:"You're going down, aren't you? Everyone does, in the end. Let an old man show you how to keep your skin on. Free of charge. I insist."}],
+ fight:[{text:"Oh dear. A rat. They come up from below these days. Walk into it, there's a good child."},
+        {text:"When you fight, the floor falls away and it's only you and it. Your moves are cards in your hand. Play one each turn."},
+        {text:"Watch it as it swings. When the bar comes up, press Space in the glow and turn the blow aside. Timing is everything. In fights, and in bargains."}],
+ won:[{text:"Splendid. Splendid! You'll do very well down there."},
+      {text:"As you grow stronger you'll be dealt cards to choose from. The red ones are blessings. Small things. Honest things."},
+      {text:"And now and then, a black one. A gift. It asks for nothing at all."},
+      {text:"Take those, child. Take every one. What harm could a gift do?"},
+      {text:"Oh, and further down, mind the roots. They mean no harm. They only want to hold on to you."}],
+ bye:[{text:"Off you go, then. Twenty floors, all the way to the bottom."},
+      {text:"I'll be waiting for you there, you know."},
+      {who:"hero",text:"At the bottom? How will you get down there before me?"},
+      {who:"oldman2",text:"Child.",act:()=>{if(OLDMAN)OLDMAN.eyes=true;quake(4);}},
+      {who:"oldman2",text:"I have always been at the bottom."},
+      {who:"thing",text:"Take the gifts. Every one. We will settle up when you arrive.",mood:"anger",act:()=>{if(OLDMAN){OLDMAN.gone=true;burst(OLDMAN.x,OLDMAN.y,"#2a1a45",26,3.5);burst(OLDMAN.x,OLDMAN.y,"#566173",14,2.5);}quake(8);if(typeof playGrowl==="function")playGrowl();}}]
 };
+// where he stands for each lesson
+let OLDMAN=null;
+const OLDMAN_AT={intro:[9,13],fight:[37,13],stair:[39,18]};
 function tutStep(){return S&&S.tut?TUT_STEPS[S.tut.step]:null;}
 function tutGo(id){
   const i=TUT_STEPS.findIndex(x=>x.id===id);S.tut.step=i;S.tut.t=0;S.tut.flags={};
   if(id==="fight"){
     spawnMon("rat",TUT_RAT[0],TUT_RAT[1]);const m=mons[mons.length-1];
     m.t=Object.assign({},m.t,{hp:20,min:1,max:2,acc:1,tut:true});m.hp=m.max=20;m.seenYou=true;
-    startDialogue(TUT_TAM.fight,null,"Go on","wisp");
+    OLDMAN.x=OLDMAN_AT.fight[0];OLDMAN.y=OLDMAN_AT.fight[1];
+    startDialogue(TUT_TAM.fight,null,"Go on","oldman");
   }
   if(id==="stair"){S.sx=TUT_STAIR[0];S.sy=TUT_STAIR[1];map[S.sy][S.sx]=STAIRS;computeFOV();dirty=true;
-    startDialogue(TUT_TAM.won,null,"Go on","wisp");}
+    OLDMAN.x=OLDMAN_AT.stair[0];OLDMAN.y=OLDMAN_AT.stair[1];
+    startDialogue(TUT_TAM.won,null,"Go on","oldman");}
   tutBanner();
 }
 function startTutorial(){
   start("cade");
-  S.pack.push(tamScroll());    // Tam is with you for the crash course; after it, you go down alone
   S.tamNext=0;S.tut={step:0,t:0,flags:{}};
+  OLDMAN={x:OLDMAN_AT.intro[0],y:OLDMAN_AT.intro[1],eyes:false,gone:false};
   // lay the courtyard out by hand: three rooms in a row, joined by short passages
   for(let y=0;y<H;y++)for(let x=0;x<W;x++)map[y][x]=WALL;
   mons=[];items=[];traps=[];SHR=null;DOORS=[];LEVERS=[];CHASMS=[];CHM=new Map();PROPS=new Map();DL=new Map();
@@ -6441,9 +6477,9 @@ function startTutorial(){
   items.push({kind:"use",ref:h,glyph:h.glyph,col:h.col,name:h.name,note:h.note,x:TUT_DRAUGHT[0],y:TUT_DRAUGHT[1]});
   map[TUT_NOTE[1]][TUT_NOTE[0]]=WALL;PROPS.set(TUT_NOTE.join(","),{x:TUT_NOTE[0],y:TUT_NOTE[1],spr:"ward_papers",tnote:true});
   computeFOV();dirty=true;S.log=[];
-  say("The top of the black stair, where the courtyard used to be. Tam will show you the ropes.","c-cold");
+  say("The top of the black stair, where the courtyard used to be. An old man in a hood is waiting by the wall.","c-cold");
   refresh();
-  startDialogue(TUT_TAM.intro,()=>tutGo("move"),"Go on","wisp");
+  startDialogue(TUT_TAM.intro,()=>tutGo("move"),"Go on","oldman");
   tutBanner();
 }
 function tutReadNote(pr){
@@ -6464,8 +6500,7 @@ function tutTick(dt){
     case"rest":if(S.stam>=S.maxstam&&S.tut.t>.6)tutGo("pickup");break;
     case"pickup":if(S.pack.some(it=>it.kind==="use"&&it.ref.id==="heal"))tutGo("pack");break;
     case"pack":if(packOpen)F.open=true;else if(F.open)tutGo("note");break;
-    case"note":if(F.read&&!paperOpen){say("Tam: \"The notary wrote that. He wrote everything.\"","c-cold");tutGo("talk");}break;
-    case"talk":if(wispTalkOpen)F.open=true;else if(F.open&&!MAPD.dlg)tutGo("fight");break;
+    case"note":if(F.read&&!paperOpen){say("The old man chuckles: \"Lovely handwriting, that notary. I always thought so.\"","c-cold");tutGo("fight");}break;
     case"fight":if(F.won&&S.mode==="map")tutGo("stair");break;
   }
   tutBanner();
@@ -6493,14 +6528,14 @@ function tutFinish(){
   if(!S.tut)return;
   S.tut.step=TUT_STEPS.length;
   startDialogue(TUT_TAM.bye,()=>{
-    S.pack=S.pack.filter(it=>!isWisp(it));S.wisp=null;
-    say("Tam's scroll curls up in your hands and goes dark. When you look again, it is gone.","c-cold");
+    say("When you look up, the old man is gone. There is only a smell of smoke, and something like laughter, very far below.","c-cold");
+    OLDMAN=null;
     META.tutorialDone=true;metaSave();
     const el=$("tutcard");if(el)el.classList.remove("show");
     S.tut=null;S.over=true;
     say("The crash course is done. Choose who goes down.","c-lvl");
     descentT=0;chooseHero();
-  },"Go down","wisp");
+  },"Go down","oldman");
 }
 // Where it should look next: a little gold arrow bobbing over the mark, the draught, the page, the rat or the stair.
 function tutTarget(){
@@ -6510,6 +6545,10 @@ function tutTarget(){
   if(st.id==="stair")return TUT_STAIR;return null;
 }
 function drawTutMark(){
+  if(S.tut&&OLDMAN&&!OLDMAN.gone&&S.mode==="map"){
+    const b=RM?0:Math.round(Math.sin(tclock*1.6)*.6)/16;
+    blit(OLDMAN.eyes?"oldman_eyes":"oldman",OLDMAN.x,OLDMAN.y+b,1,0,1,1,S.vx<OLDMAN.x);
+  }
   const t=tutTarget();if(!t)return;
   const b=RM?0:Math.round(Math.sin(tclock*5)*1.5)/16;
   blit("tut_arrow",t[0],t[1]-.8+b,1,0,1,1);
@@ -6607,7 +6646,7 @@ function endRound(){
 /* ============================ outcomes ============================ */
 function winBattle(){
   if(!B||B.phase==="over")return;
-  if(S.tut&&!S.tut.flags.parried){B.mhp=1;refresh();blog("Tam: \"Not yet! Let it swing at you, and parry it first.\"","c-cold");enemyTurn();return;}
+  if(S.tut&&!S.tut.flags.parried){B.mhp=1;refresh();blog("The old man calls: \"Not yet, child! Let it swing, and turn the blow aside first.\"","c-cold");enemyTurn();return;}
   if(S.tut)S.tut.flags.won=true;
   if(B.mon.t.thing===1){thingUnveils();return;}
   if(B.mon.t.thing===2){noteBeast(B.mon.t);thingEnrages();return;}
@@ -7430,6 +7469,8 @@ const DLG_WHO={
  knight:{name:"THE LAST KNIGHT",spr:()=>"knight",crop:[1,0,12,9],frame:"#8e9aad",inner:"#2b3243",bg:"#0c0f16",text:"#e9e5d9",voice:"hero"},
  hero:{get name(){return CHAR().name.toUpperCase();},spr:()=>CHAR().spr,crop:[2,0,12,10],frame:"#c4622d",inner:"#3d2410",bg:"#120c08",text:"#e9e5d9",voice:"hero"},
  grub:{name:"GRUB, TROLL GUARD",spr:()=>"troll",scarred:true,crop:[3,1,14,12],eyes:[[8,7],[11,7]],frame:"#6f8a4a",inner:"#24301a",bg:"#0e140a",text:"#e2ead0",voice:"troll"},
+ oldman:{name:"THE OLD MAN",spr:()=>"oldman",crop:[2,1,12,11],frame:"#8c6a43",inner:"#3d2a1c",bg:"#120c08",text:"#efe6d2",voice:"old"},
+ oldman2:{name:"THE OLD MAN",spr:()=>"oldman_eyes",crop:[2,1,12,11],frame:"#8f2f28",inner:"#2a0c0a",bg:"#0c0606",text:"#f0d0c8",voice:"low"},
  wisp:{name:"TAM, THE WISP",spr:()=>"wisp_0",crop:[2,1,12,13],frame:"#a87fe0",inner:"#3a2a52",bg:"#120c1c",text:"#efe6ff",voice:"wisp"},
  mog:{name:"MOG, TROLL GUARD",spr:()=>"troll",scarred:true,crop:[3,1,14,12],eyes:[[8,7],[11,7]],flip:true,frame:"#8a7a4a",inner:"#302a1a",bg:"#14110a",text:"#ece4cc",voice:"troll2"}
 };
@@ -7547,7 +7588,7 @@ function drawDialogue(vw,vh){
 function playTalkBlip(voice){
   if(!AUDIO_OK)return;ensureAudio();if(!actx)return;
   const t=actx.currentTime+.005,osc=actx.createOscillator(),g=actx.createGain();let o=osc;
-  const f0=voice==="ghost"?380+Math.random()*90:voice==="wisp"?520+Math.random()*140:voice==="king"?120+Math.random()*30:voice==="troll"?92+Math.random()*22:voice==="troll2"?118+Math.random()*26:voice==="snore"?46+Math.random()*10:voice==="hero"?165+Math.random()*30:70+Math.random()*30;
+  const f0=voice==="ghost"?380+Math.random()*90:voice==="old"?104+Math.random()*22:voice==="wisp"?520+Math.random()*140:voice==="king"?120+Math.random()*30:voice==="troll"?92+Math.random()*22:voice==="troll2"?118+Math.random()*26:voice==="snore"?46+Math.random()*10:voice==="hero"?165+Math.random()*30:70+Math.random()*30;
   osc.type=voice==="ghost"?"sine":voice==="troll"||voice==="troll2"?"square":"triangle";
   if(voice==="troll"||voice==="troll2"||voice==="snore"){const lp=actx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=voice==="snore"?260:700;o.connect(lp);o=lp;}osc.frequency.setValueAtTime(f0,t);osc.frequency.exponentialRampToValueAtTime(f0*(voice==="ghost"?1.15:.68),t+.09);
   g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(.18,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+.11);
@@ -8650,7 +8691,7 @@ function playFootstep(){
 // speakers (and the reverb), so the Music button does not silence it.
 let lastMonsterStep=0;
 function playMonsterStep(dist){
-  if(!AUDIO_OK)return;
+  if(!AUDIO_OK||!SET.sfx)return;
   ensureAudio();
   if(!actx)return;
   const now=performance.now();if(now-lastMonsterStep<300)return;lastMonsterStep=now;
@@ -8813,7 +8854,11 @@ for(const evName of ["pointerdown","pointermove","keydown"])
   window.addEventListener(evName,()=>{lastFrameAt=performance.now();inView=true;if(audioHidden)updateAudioVisibility();},{capture:true,passive:true});
 setInterval(updateAudioVisibility,400);
 // The title and hero-select screens are quiet; the music swells in when a hero is picked.
-let menuQuiet=true;
+let menuQuiet=true,menuMusic=false;
+// Settings, kept between visits: sound effects and screen shake can be switched off (music has its own button).
+const SET={sfx:true,shake:true};
+try{const v=JSON.parse(localStorage.getItem("hd-settings")||"null");if(v&&typeof v==="object")Object.assign(SET,v);}catch(e){}
+function saveSettings(){try{localStorage.setItem("hd-settings",JSON.stringify(SET));}catch(e){}}
 function setMusicVolume(){
   if(!amb)return;
   const t=actx.currentTime;
@@ -8851,7 +8896,7 @@ function loadSample(name){
 }
 function loadSamples(){for(const k in SAMPLES)loadSample(k);}
 function playSample(name){
-  if(!AUDIO_OK)return;
+  if(!AUDIO_OK||!SET.sfx)return;
   ensureAudio();
   if(!actx)return;
   const sm=SAMPLES[name];if(!sm)return;
@@ -8880,7 +8925,7 @@ function gateLen(){const b=SAMPLES.gate.buf;return b?b.duration:GATE_LEN;}
 // the menu's silenced music nor the Music button mutes it.
 let lastCardSnd=0;
 function playCardSound(loud){
-  if(!AUDIO_OK)return;
+  if(!AUDIO_OK||!SET.sfx)return;
   ensureAudio();
   if(!actx)return;
   const now=performance.now();if(!loud&&now-lastCardSnd<70)return;lastCardSnd=now;
@@ -8958,6 +9003,13 @@ const I={
 // --- the pieces. bpm, steps per beat, steps per bar, and step(i,t,beat) which plays step i of the loop ---
 const ch=(root,q)=>q==="m"?[root,root+3,root+7]:q==="M"?[root,root+4,root+7]:q==="d"?[root,root+3,root+6]:[root,root+4,root+7,root+10];
 const TRACKS={
+ // the title: a slow harp over the hill at night, A minor
+ title:{bpm:64,spb:2,bar:8,vol:.8,prog:[[45,"m"],[41,"M"],[48,"M"],[43,"M"],[45,"m"],[41,"M"],[40,"m"],[40,"7"]],
+  step(i,t,B){const bar=Math.floor(i/8)%8,s=i%8,[r,q]=this.prog[bar],c=ch(r,q);
+   if(s===0){I.pad(c.map(x=>x+12),t,B*4.3,.014,800);I.bass(r-12,t,B*3.6,.045,200);}
+   const arp=[c[0]+24,c[1]+24,c[2]+24,c[0]+36,c[2]+24,c[1]+24,c[0]+24,c[1]+12];
+   I.box(arp[s],t,s===0?.055:.035);
+   if(s===4&&bar%2===1)I.bell(c[2]+36,t,.03,3);}},
  // the castle: slow D minor, a pad each bar and a few bells falling into the dark
  explore:{bpm:58,spb:2,bar:8,vol:.55,prog:[[50,"m"],[46,"M"],[43,"m"],[45,"M"]],
   step(i,t,B){const bar=Math.floor(i/8)%4,s=i%8,[r,q]=this.prog[bar],c=ch(r,q);
@@ -9025,6 +9077,7 @@ const TRACKS={
 function B_phase(){return B&&B.phaseNum||1;}
 // Which piece this moment calls for.
 function musWanted(){
+  if(menuMusic)return"title";
   if(!S||S.over||menuQuiet)return null;
   if(S.chase)return"chase";
   if(S.monkStand||(S.jump&&S.jump.holy)||(B&&B.mon.t.shade))return"holy";
@@ -9034,7 +9087,7 @@ function musWanted(){
   return S.depth>10?"deep":"explore";
 }
 // how loud the old drone sits under each piece
-const DRONE_UNDER={explore:.45,courtyard:.35,deep:.6,battle:.3,queen:.15,king:.15,thing:.3,chase:.2,holy:.1};
+const DRONE_UNDER={title:.25,explore:.45,courtyard:.35,deep:.6,battle:.3,queen:.15,king:.15,thing:.3,chase:.2,holy:.1};
 function musTick(){
   if(!amb||!actx||actx.state!=="running")return;
   const bus=musBus();if(!bus)return;
@@ -9059,7 +9112,7 @@ function musTick(){
 }
 
 /* ---------- stingers: short pieces of music that mark an event. Sound effects, so Music off doesn't mute them ---------- */
-function sfxOut(vol){if(!AUDIO_OK)return null;ensureAudio();if(!actx)return null;const g=actx.createGain();g.gain.value=vol;g.connect(actx.destination);
+function sfxOut(vol){if(!AUDIO_OK||!SET.sfx)return null;ensureAudio();if(!actx)return null;const g=actx.createGain();g.gain.value=vol;g.connect(actx.destination);
   if(amb){const s=actx.createGain();s.gain.value=.3;g.connect(s);s.connect(amb.send);}return g;}
 function sfxArp(notes,gap,type,vol,len){const out=sfxOut(1);if(!out)return;const t=actx.currentTime+.02;
   notes.forEach((m,k)=>{if(m<0)return;mNote(type||"triangle",mtof(m),t+k*gap,len||.6,vol,{a:.004,out});mNote("sine",mtof(m)*2,t+k*gap,(len||.6)*.5,vol*.25,{a:.003,out});});}
@@ -9097,6 +9150,8 @@ function sfxSnare(){const out=sfxOut(.8);if(!out)return;const t=actx.currentTime
   mNote("sawtooth",60,t,.6,.12,{a:.02,slide:40,lp:300,out});}
 function sfxSnap(){const out=sfxOut(.8);if(!out)return;const t=actx.currentTime+.005;
   for(let k=0;k<3;k++)mNoise(t+k*.04,.05,.5,{f:1200+k*500,q:3,shape:4,out});}
+// the first click or key anywhere wakes the audio (browsers won't before that), so the title can play its music
+for(const evName of ["pointerdown","keydown"])window.addEventListener(evName,function wake(){ensureAudio();setMusicVolume();window.removeEventListener(evName,wake,true);},true);
 function toggleMusic(){
   if(!AUDIO_OK)return;
   musicOn=!musicOn;
@@ -9109,6 +9164,8 @@ function refreshMusicBtn(){
   const b=$("btnMusic"); if(!b)return;
   if(!AUDIO_OK){ b.textContent="Music: n/a"; b.disabled=true; return; }
   b.textContent="Music: "+(musicOn?"On":"Off");
+  const tb=$("tMus");if(tb)tb.textContent="Music: "+(musicOn?"On":"Off");
+  const sb=$("setMus");if(sb)sb.textContent=musicOn?"On":"Off";
 }
 
 /* ============================ hud ============================ */
@@ -10287,7 +10344,7 @@ function toggleEditor(){
 /* ============================ boot ============================ */
 function start(id){
   monkChoiceOpen=false;wispTalkOpen=false;snareReset();descentT=0;levelOpen=false;levelPicked=false;paperOpen=false;
-  menuQuiet=false;setMusicVolume();
+  menuQuiet=false;menuMusic=false;setMusicVolume();
   hideOverlay();packOpen=false;codexOpen=false;
   ensureAudio();
   B=null;seq=[];sfx=[];PK=null;document.body.classList.remove("inbattle","inchasm");requestAnimationFrame(resize);
@@ -10298,19 +10355,87 @@ function start(id){
   resize();refresh();
   say(CHAR().intro||"You climb down into the first floor. The torch holds.","c-cold");
 }
+// The title: castle ruins on a hill at night, drawn in pixels, with a violet glow where the stair goes down.
+let titleOpen=false,titleRAF=0;
+function drawTitleArt(cv,tm){
+  const c=cv.getContext("2d"),W2=cv.width,H2=cv.height;
+  let seed=7;const rnd2=()=>((seed=(seed*16807)%2147483647)/2147483647);
+  const P=(x,y,w,h,col)=>{c.fillStyle=col;c.fillRect(x,y,w,h);};
+  // sky: bands, dithered where they meet
+  const sky=["#07080c","#0b0d14","#10121c","#151628","#1c1830","#241a38"];
+  for(let y=0;y<H2;y++){const f=y/(H2*.8)*(sky.length-1),i=Math.min(sky.length-1,Math.floor(f)),fr=f-i;
+    for(let x=0;x<W2;x++)P(x,y,1,1,(fr>.5&&((x+y)%2===0)&&i<sky.length-1)?sky[i+1]:sky[i]);}
+  // stars, twinkling
+  for(let i=0;i<70;i++){const x=Math.floor(rnd2()*W2),y=Math.floor(rnd2()*H2*.55),tw=Math.sin(tm*2+i*1.7)>.6;P(x,y,1,1,tw?"#e9e5d9":(i%3?"#566173":"#8e9aad"));}
+  // the moon, low and pale
+  const mx=W2*.85,my=H2*.4;for(let y=-7;y<=7;y++)for(let x=-7;x<=7;x++){const d=x*x+y*y;if(d<=50)P(mx+x,my+y,1,1,d>38?"#b9c2cf":(x+y)%5===0?"#cfc8b4":"#e9e5d9");}
+  P(mx-2,my-1,2,2,"#b9c2cf");P(mx+2,my+2,2,1,"#b9c2cf");
+  // far hills
+  for(let x=0;x<W2;x++){const h=H2*.62+Math.sin(x*.05)*4+Math.sin(x*.13+1)*2;for(let y=Math.floor(h);y<H2;y++)P(x,y,1,1,"#0d1018");}
+  // the hill
+  const hx=W2*.5,top=H2*.5;
+  for(let x=0;x<W2;x++){const d=(x-hx)/(W2*.42),h=top+d*d*H2*.55+Math.sin(x*.3)*.8;for(let y=Math.max(0,Math.floor(h));y<H2;y++)P(x,y,1,1,y-h<1.5?"#1c2a22":((x*7+y*3)%11===0?"#13201a":"#0e1712"));}
+  // the ruins: broken towers and walls along the crown of the hill
+  const stone="#2b3243",lit="#39414f",dark="#161b23";
+  const tower=(x,w,h,broken)=>{const base=Math.floor(top+((x+w/2-hx)/(W2*.42))**2*H2*.55)+2;
+    for(let y=base-h;y<base;y++)for(let i=0;i<w;i++){const jag=broken&&y<base-h+4&&((i*5+y)%7<3);if(!jag)P(x+i,y,1,1,i===0?lit:stone);}
+    if(!broken)for(let i=0;i<w;i+=2)P(x+i,base-h-2,1,2,stone);
+    for(let y=base-h+4;y<base-4;y+=6)P(x+Math.floor(w/2),y,1,2,dark);};
+  const wall=(x0,x1,h)=>{for(let x=x0;x<x1;x++){const base=Math.floor(top+((x-hx)/(W2*.42))**2*H2*.55)+2,gap=(x%9<2)||(x%13===5);const hh=gap?h-4-(x%3):h-((x*3)%4===0?2:0);for(let y=base-hh;y<base;y++)P(x,y,1,1,y===base-hh?lit:stone);}};
+  wall(hx-34,hx+30,9);
+  tower(hx-38,7,22,false);tower(hx-14,6,30,true);tower(hx+2,9,38,false);tower(hx+24,6,18,true);
+  // the great tower's window: dark, empty
+  P(hx+5,top-30,3,4,dark);P(hx+6,top-31,1,1,dark);
+  // the stair: a crack in the hill below the ruins, with violet light coming up out of it
+  const glow=.6+.4*Math.sin(tm*1.8);
+  const cx0=Math.floor(hx-2),cy0=Math.floor(top+12);
+  for(let y=0;y<20;y++){const w=1+Math.floor(y/5);const x=cx0+Math.round(Math.sin(y*.7)*2);P(x-w,cy0+y,w*2+1,1,"#05040a");if(y%3===0)P(x,cy0+y,1,1,glow>.8?"#c8a8f0":"#8a5fc4");}
+  c.globalCompositeOperation="lighter";const g=c.createRadialGradient(cx0,cy0+10,0,cx0,cy0+10,26);g.addColorStop(0,`rgba(138,95,196,${.35*glow})`);g.addColorStop(1,"rgba(138,95,196,0)");
+  c.fillStyle=g;c.fillRect(cx0-30,cy0-20,60,60);c.globalCompositeOperation="source-over";
+  // a dead tree on the slope, and a low mist
+  const tx=Math.floor(W2*.18),ty=Math.floor(top+((tx-hx)/(W2*.42))**2*H2*.55);
+  for(let y=0;y<12;y++)P(tx,ty-y,1,1,"#0b0d12");P(tx-3,ty-9,3,1,"#0b0d12");P(tx+1,ty-7,3,1,"#0b0d12");P(tx-4,ty-10,1,1,"#0b0d12");P(tx+4,ty-8,1,1,"#0b0d12");
+  for(let x=0;x<W2;x++)for(let k=0;k<4;k++){const y=Math.floor(H2*.84+k+Math.sin(x*.06+tm*.35+k)*2);if((x*3+k*5+Math.floor(tm*2))%4===0)P(x,y,1,1,"rgba(142,154,173,.12)");}
+}
 function title(){
   S.over=true;   // keys and buttons must not play the demo floor behind the title card
-  const lede="Three years ago the King's castle sank into the hill in a single night. Something down there is still wearing the crown.";
-  const done=!!META.tutorialDone;
-  overlay(`
-    <h3>The Hollow Depths</h3>
-    <p class="lede">${lede}</p>
-    ${done?`<p>Choose who goes down.</p>`:`<p>Before your first descent, Tam will walk you through the ruined courtyard at the top of the stair. It doesn't take long.</p>`}
-    <button id="go">${done?"Choose your hero":"Begin the crash course"}</button>
-    ${done?`<p class="tut-again"><a href="#" id="tutAgain">Take the crash course again</a></p>`:""}`);
-  $("go").onclick=()=>{ensureAudio();if(done)chooseHero();else{hideOverlay();startTutorial();}};
-  const again=$("tutAgain");
-  if(again)again.onclick=e=>{e.preventDefault();ensureAudio();hideOverlay();startTutorial();};
+  titleOpen=true;menuQuiet=false;menuMusic=true;setMusicVolume();
+  overlay(`<div class="titlescreen">
+    <canvas id="titleArt" width="192" height="108" aria-label="Castle ruins on a hill at night"></canvas>
+    <div class="ttl"><h1>The Hollow Depths</h1><p>Three years ago the King's castle sank into the hill in a single night.</p></div>
+    <div class="tbtns">
+      <button id="tPlay" type="button">Play</button>
+      <button id="tSet" type="button">Settings</button>
+      <button id="tMus" type="button">Music: ${musicOn?"On":"Off"}</button>
+    </div></div>`);
+  $("card").classList.add("wide","titlecard");
+  const art=$("titleArt"),t0=performance.now();
+  const frame=()=>{if(!titleOpen||!art.isConnected)return;drawTitleArt(art,(performance.now()-t0)/1000);titleRAF=setTimeout(frame,120);};
+  frame();
+  $("tPlay").onclick=()=>{ensureAudio();closeTitle();if(META.tutorialDone)chooseHero();else{hideOverlay();startTutorial();}};
+  $("tSet").onclick=()=>{ensureAudio();openSettings();};
+  $("tMus").onclick=()=>{toggleMusic();};
+}
+function closeTitle(){titleOpen=false;clearTimeout(titleRAF);const c=$("card");if(c)c.classList.remove("titlecard");}
+function openSettings(){
+  closeTitle();
+  const row=(label,id,val,note)=>`<div class="setrow"><span><b>${label}</b>${note?`<i>${note}</i>`:""}</span><button id="${id}" type="button">${val}</button></div>`;
+  overlay(`<div class="settings"><h3>Settings</h3>
+    ${row("Music","setMus",musicOn?"On":"Off","The score")}
+    ${row("Sound effects","setSfx",SET.sfx?"On":"Off","Blows, cards, doors, roars")}
+    ${row("Screen shake","setShake",SET.shake?"On":"Off","When things hit hard")}
+    ${META.tutorialDone?row("Crash course","setTut","Replay","Walk through the basics again"):""}
+    ${row("Progress","setErase","Erase…","Heroes, bestiary, papers, the crash course")}
+    <button class="close" id="setBack" type="button">Back</button></div>`);
+  $("card").classList.add("wide");
+  $("setMus").onclick=()=>{toggleMusic();};
+  $("setSfx").onclick=()=>{SET.sfx=!SET.sfx;saveSettings();$("setSfx").textContent=SET.sfx?"On":"Off";if(SET.sfx)playCardSound(true);};
+  $("setShake").onclick=()=>{SET.shake=!SET.shake;saveSettings();$("setShake").textContent=SET.shake?"On":"Off";};
+  if($("setTut"))$("setTut").onclick=()=>{hideOverlay();startTutorial();};
+  $("setErase").onclick=()=>{const b=$("setErase");if(b.dataset.armed){try{localStorage.removeItem(META_KEY);}catch(e){}
+      META.unlocked={cade:true};META.stats={};META.done={};META.beasts={};META.papers=[];META.tutorialDone=false;metaSave();b.textContent="Erased";b.disabled=true;}
+    else{b.dataset.armed="1";b.textContent="Sure? Click again";}};
+  $("setBack").onclick=()=>{title();};
 }
 seLoadSavedSprites();
 buildSprites();

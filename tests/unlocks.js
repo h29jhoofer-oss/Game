@@ -27,7 +27,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await reload();
   check('and Rook is still there after a reload, the others still locked', await ev('isUnlocked("rook")&&!["doctor","mage","monk"].some(isUnlocked)'));
   await ev('META.tutorialDone=true;metaSave()'); await reload();
-  check('finishing the crash course survives a reload', await ev('META.tutorialDone===true&&/Choose your hero/.test(document.getElementById("go").textContent)'));
+  check('finishing the crash course survives a reload', await ev('META.tutorialDone===true&&(openSettings(),!!document.getElementById("setTut"))'));
   check('no page errors', errors.length === 0, errors);
   let pass = 0;
   for (const r of results) { console.log((r.ok ? 'ok   ' : 'FAIL ') + r.name + (r.ok ? '' : '  ' + JSON.stringify(r.detail))); if (r.ok) pass++; }

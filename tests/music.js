@@ -23,7 +23,9 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('the chase has its own', await want('B=null;S.mode="map";S.chase={wait:9,wait0:9}') === 'chase');
   check('the monk standing firm brings the light', await want('S.chase=null;S.monkStand=true') === 'holy');
   check('the crash course is gentler', await want('S.monkStand=false;S.tut={step:1,t:0,flags:{}}') === 'courtyard');
-  check('the menus are quiet', await want('S.tut=null;menuQuiet=true') === null);
+  check('the title has its own piece', await want('S.tut=null;menuMusic=true') === 'title');
+  check('and the death screen is quiet', await want('menuMusic=false;S.over=true') === null);
+  await ev('S.over=false');
   check('every piece exists and can play a bar', await ev('(()=>{ensureAudio();if(!amb)return "noaudio";musBus();const t=actx.currentTime;for(const k in TRACKS)for(let i=0;i<TRACKS[k].bar*4;i++)TRACKS[k].step(i,t+i*.01,.5);return true;})()'));
   // stingers fire on their events
   await ev('(()=>{window._s=[];for(const f of ["sfxLevelUp","sfxLearnMove","sfxVictory","sfxBossDown","sfxDeath","sfxUnlock","sfxCardNew","sfxPhase","sfxHit","sfxHurt","sfxParry","sfxSnare"]){const o=window[f];window[f]=(...a)=>{_s.push(f);};}})()');
