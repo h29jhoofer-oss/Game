@@ -464,15 +464,6 @@ body.inchasm .dice-tray{display:none}
   100%{transform:translate(var(--dx),var(--dy)) scale(1.9) scaleX(0);opacity:0}}
 @media (max-width:760px){.moveslot.mcard{width:38px;height:54px;margin-left:-8px}.mc-art{width:28px;height:28px}.mc-art img{width:24px!important;height:24px!important}}
 
-/* ---------- a card turned over the table between the map and a fight ---------- */
-.flipwipe{position:absolute;inset:0;z-index:7;pointer-events:none;display:flex;align-items:center;justify-content:center}
-.flipwipe i{display:block;height:86%;aspect-ratio:2/3;transform:scaleX(0);background-color:#4a1418;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' shape-rendering='crispEdges'%3E%3Cpath fill='%23a8873a' d='M5 0h2v1h-2zM4 1h1v1h-1zM7 1h1v1h-1zM3 2h1v1h-1zM8 2h1v1h-1zM2 3h1v1h-1zM9 3h1v1h-1zM1 4h1v1h-1zM10 4h1v1h-1zM0 5h1v2h-1zM11 5h1v2h-1zM1 7h1v1h-1zM10 7h1v1h-1zM2 8h1v1h-1zM9 8h1v1h-1zM3 9h1v1h-1zM8 9h1v1h-1zM4 10h1v1h-1zM7 10h1v1h-1zM5 11h2v1h-2z'/%3E%3C/svg%3E");
-  background-size:36px 36px;image-rendering:pixelated;
-  box-shadow:0 0 0 6px #a8873a,0 0 0 10px #0a0c10,14px 16px 0 rgba(0,0,0,.5)}
-.flipwipe.go i{animation:flipWipe .55s ease-in-out}
-@keyframes flipWipe{0%{transform:scaleX(0)}40%{transform:scaleX(1)}60%{transform:scaleX(1)}100%{transform:scaleX(0)}}
-
 /* ---------- the table: green baize in a wooden rail, and the log kept on a scorepad ---------- */
 body{background-color:#0c0907;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Cpath fill='%23130e0a' d='M0 1h5v1h-5zM3 5h5v1h-5z'/%3E%3C/svg%3E");background-size:16px 16px}
@@ -838,16 +829,6 @@ body.inbattle #hint{display:none}
           <div class="stat"><span>Gold</span><span id="gold">0</span></div>
         </div>
       </div>
-      <div class="panel gearpanel">
-        <h2>Carried &amp; Abilities</h2>
-        <div class="gear">
-          <div><span class="nm" id="wname">Rusty Dagger</span><span class="vl" id="wval">2-4</span></div>
-          <div><span class="nm" id="aname">Torn Rags</span><span class="vl" id="aval">0</span></div>
-        </div>
-        <div class="gear" id="gearline"></div>
-        <div class="gear" id="packlist"></div>
-        <div class="gear" id="abilities"></div>
-      </div>
     </div>
 
     <div class="main">
@@ -875,7 +856,6 @@ body.inbattle #hint{display:none}
           <div class="parry-track" id="parryTrack"><div class="parry-zone" id="parryZone"></div><div class="parry-marker" id="parryMarker"></div></div>
           <button class="parry-btn" id="parryBtn" type="button">PARRY</button>
         </div>
-        <div class="flipwipe" id="flipwipe"><i></i></div>
         <div class="tutcard" id="tutcard"></div>
         <div class="veil" id="veil">
           <div class="card" id="card"></div>
@@ -3139,12 +3119,6 @@ function playMoveCard(mv){
   if(typeof playCardSound==="function")playCardSound(true);
   setTimeout(()=>c.remove(),RM?100:700);
 }
-// Between the map and a fight, a card is turned over the whole table.
-function flipWipe(){
-  const f=$("flipwipe");if(!f||RM)return;
-  f.classList.remove("go");void f.offsetWidth;f.classList.add("go");
-  if(typeof playCardSound==="function")playCardSound(false);
-}
 function renderMoveBar(){
   const el=$("movebar");if(!el)return;
   const list=(S&&S.mode==="battle"&&B)?unlocked():[];
@@ -5357,7 +5331,7 @@ function startBattle(m){
   if(m.t.boss)B.maxPoise=Math.min(B.maxPoise,70);
   B.poise=B.maxPoise;
   seq=[];sfx=[];
-  document.body.classList.add("inbattle");flipWipe();
+  document.body.classList.add("inbattle");
   requestAnimationFrame(resize);
   $("log").innerHTML="";
   blog(`${aName(m.t)} blocks the way!`,"c-lvl");
@@ -5373,7 +5347,7 @@ function endBattle(){
   if(qte){if(qte.timer)clearInterval(qte.timer);qte=null;}
   hideQteOverlay();clearParry();
   S.mode="map";B=null;seq=[];sfx=[];
-  document.body.classList.remove("inbattle");flipWipe();
+  document.body.classList.remove("inbattle");
   requestAnimationFrame(resize);
   $("log").innerHTML="";
   for(const m of S.log.slice(-12))say0(m.text,m.cls);
@@ -6450,7 +6424,7 @@ function tutFinish(){
     const el=$("tutcard");if(el)el.classList.remove("show");
     S.tut=null;S.over=true;
     say("The crash course is done. Choose who goes down.","c-lvl");
-    descentT=0;flipWipe();chooseHero();
+    descentT=0;chooseHero();
   },"Go down","wisp");
 }
 // Where it should look next: a little gold arrow bobbing over the mark, the draught, the page, the rat or the stair.
@@ -8815,39 +8789,7 @@ function refresh(){
   if(dodgeEl) dodgeEl.textContent=Math.round((S.dodge||0)*100)+"%";
   const parryEl=$("parrystat");
   if(parryEl) parryEl.textContent=Math.round(parryChance(false)*100)+"%";
-  $("wname").innerHTML=icon("weapon",15)+" "+S.weapon.name;
-  $("wval").textContent=`${a.min}-${a.max}`;
-  $("aname").innerHTML=icon("armor",15)+" "+S.armor.name;
-  $("aval").textContent=guardVal();
-  const gl=$("gearline");
-  if(gl){
-    const parts=[];
-    const oh=S.offhand;
-    parts.push(`<div><span class="nm">${icon(oh.type==="torch"?"weapon_torch":"offhand_"+oh.id,15)} ${oh.name}</span><span class="vl">${offhandLabel(oh)}</span></div>`);
-    if(S.altOffhand&&S.offhand!==S.altOffhand)parts.push(`<div><span class="nm" style="color:var(--slate)">&nbsp;&nbsp;T swaps to ${S.altOffhand.name}</span></div>`);
-    if(S.altOffhand&&S.offhand===S.altOffhand)parts.push(`<div><span class="nm" style="color:var(--slate)">&nbsp;&nbsp;T swaps back to the torch</span></div>`);
-    if(S.amulet)parts.push(`<div><span class="nm">${icon("amulet_"+S.amulet.id,15)} ${S.amulet.name}</span></div>`);
-    for(const r of S.rings)if(r)parts.push(`<div><span class="nm">${icon("ring_"+r.id,15)} ${r.name}</span></div>`);
-    if(CHAR().ichor)parts.push(`<div><span class="nm" style="color:#e8685a">${icon("move_transfuse",15)} Ichor</span><span class="vl" style="color:#e8685a">${S.ichor||0} / ${ICHOR_MAX}</span></div>`);
-    if(CHAR().learns){
-      const known=LEARNABLE.filter(id=>S.spells[id]!==undefined);
-      parts.push(known.length?known.map(id=>{const g=grimoireItem(id);return `<div><span class="nm" style="color:#c8a8f0">${icon(itemSpr(g),15)} ${g.name}</span><span class="vl" style="color:var(--mana)">${spellCost(g)} mp</span></div>`;}).join("")
-        :`<div><span class="nm" style="color:var(--slate)">no spells learned</span></div>`);
-    }
-    const tb=thirstBonus(S.weapon);
-    if(tb>0)parts.push(`<div><span class="nm" style="color:var(--slate)">&nbsp;&nbsp;${S.weapon.name}: +${tb} from blood drunk</span></div>`);
-    gl.innerHTML=parts.join("");
-  }
-  $("packlist").innerHTML=S.pack.length
-    ? S.pack.map(i=>`<div><span class="nm">${icon(itemSpr(i),15)} ${i.name}</span></div>`).join("")
-    : `<div><span class="nm" style="color:var(--slate)">pack empty</span></div>`;
   if(S.mode==="battle"&&B)drawMoves();
-  const ab=unlocked().filter(m=>m.cd);
-  $("abilities").innerHTML=ab.length
-    ? ab.map(m=>{const c=S.cds[m.id]||0;
-        return `<div><span class="nm" style="color:${c?"var(--slate)":"var(--bone)"}">${m.name}</span>`
-          +`<span class="vl" style="color:${c?"var(--slate)":"var(--moss)"}">${c?c:"ready"}</span></div>`;}).join("")
-    : `<div><span class="nm" style="color:var(--slate)">no abilities yet</span></div>`;
   const onStairs=S.mode==="map"&&S.px===S.sx&&S.py===S.sy;
   $("btnStairs").disabled=!onStairs||S.over;
   $("hint").innerHTML=onStairs

@@ -48,7 +48,6 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('playing one sends its card up off the hand', await ev('!!document.querySelector("#mapwrap .mcard.fly")'));
 
   // the table
-  check('a card turns over the table when a fight starts', await ev('document.getElementById("flipwipe").classList.contains("go")'));
   check('the log is kept on a scorepad', await ev('getComputedStyle(document.getElementById("log")).backgroundColor==="rgb(230, 223, 203)"'));
   check('the panels are baize in a wooden rail', await ev('getComputedStyle(document.querySelector(".rail .panel")).backgroundColor==="rgb(20, 35, 27)"'));
 
