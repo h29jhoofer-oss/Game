@@ -7623,10 +7623,12 @@ const FIRE_FRAMES=[["....k.......","...k#k......","...k#k...k..","..k##k..k#k.",
   [".......k....","......k#k...","..k...k#k...",".k#k..k##k..",".k##kk###k..",".k###k####k.","k#########k.","k####@@####k","k###@@@@###k","k##@@@@@###k","k##@@@@@@##k","k##@@@@@@##k",".k##@@@@##k.","..kkkkkkkk.."],
   ["......k.....",".....k#k....","..k..k#k.k..",".k#k.k##k#k.",".k##k###k#k.",".k########k.",".k#########k","k####@@####k","k###@@@@###k","k###@@@@@##k","k##@@@@@@##k","k##@@@@@@##k",".k##@@@@##k.","..kkkkkkkk.."]];
 const FIRE_SEQ=[0,2,1,2,0,1];          // the order the frames flicker through
-// Stamina is a brown leather boot with speed-line wings trailing off its heel; it empties as you walk and
+// Stamina is a brown leather boot with white speed-line wings trailing off its heel; it empties as you walk and
 // dash, and fills as you rest.
 const VESSEL_STAM={empty:"#241810",lag:"#ead2a4",top:"#e0b878",lit:"#b08050",mid:"#8c6a43",dark:"#5e3a24",glow:"#c49a2a"};
-const STAM_BOOT=["...kkkkkkkkkk...","...kLLLLk####k..","kkkkLLLLk####k..","kLLLLLLLk####k..","kkkkkLLLk####k..",".kLLLLLLk####k..",".kkkkLLLk####k..","..kLLLLLk#####k.","..kkkkkkk######k",".....k#########k","kkkk.k#########k","kLLk.kNNNNNNNNNk","kkkk.kkkkkkkkkkk"];
+const STAM_BOOT=["...kkkkkkkkkk...","...kwwwwk####k..","kkkkwwwwk####k..","kwwwwwwwk####k..","kkkkkwwwk####k..",".kwwwwwwk####k..",".kkkkwwwk####k..","..kwwwwwk#####k.","..kkkkkkk######k",".....k#########k","kkkk.k#########k","kwwk.kNNNNNNNNNk","kkkk.kkkkkkkkkkk"];
+// The wings beat while you dash: raised, level, lowered, level.
+const BOOT_FLAP=[["kkkkkkkkkkkkk...","kwwwwwwwk####k..","kkkkwwwwk####k..",".kwwwwwwk####k..",".kkkkwwwk####k..","..kwwwwwk####k..","...kkkkwk####k..","......kkk#####k.","........k######k",".....k#########k","kkkk.k#########k","kwwk.kNNNNNNNNNk","kkkk.kkkkkkkkkkk"],STAM_BOOT,["........kkkkk...","....kkkkk####k..","....kwwwk####k..","kkkkkwwwk####k..","kwwwwwwwk####k..","kkkkkwwwk####k..",".kwwwwwwk####k..",".kkkkwwwk#####k.","..kwwwkkk######k","..kkkk#########k","kkkk.k#########k","kwwk.kNNNNNNNNNk","kkkk.kkkkkkkkkkk"],STAM_BOOT];
 // Mana is a small faceted gem, the same for everyone.
 const MANA_GEM=["....kkkk....","...k####k...","..k######k..",".k########k.","k##########k","k##########k",".k########k.",
   ".k########k.","..k######k..","..k######k..","...k####k...","....k##k....",".....kk....."];
@@ -7668,7 +7670,7 @@ function drawVessel(g2,grid,ox,oy,u,ratio,lag,hit,C,bubbly){
 }
 // What the crystals show: they follow health and mana quickly, and the pale "just lost" part holds a moment
 // before it drains after them. A drop in health shakes the vessel.
-const HV={hp:null,hpLag:0,hpT:0,mp:null,mpLag:0,mpT:0,fl:null,flLag:0,flT:0,st:null,stLag:0,stT:0,hit:0,prevHp:null,chips:""};
+const HV={hp:null,hpLag:0,hpT:0,mp:null,mpLag:0,mpT:0,fl:null,flLag:0,flT:0,st:null,stLag:0,stT:0,flap:0,hit:0,prevHp:null,chips:""};
 function hudTick(dt){
   if(!S)return;
   const k=RM?1:1-Math.pow(1e-4,dt),drain=RM?1:1-Math.pow(.02,dt);
@@ -7687,6 +7689,7 @@ function hudTick(dt){
   HV.hp+=(hp-HV.hp)*k;HV.mp+=(mp-HV.mp)*k;
   if(hp>=HV.hpLag){HV.hpLag=hp;HV.hpT=0;}else if((HV.hpT+=dt)>.45)HV.hpLag+=(hp-HV.hpLag)*drain;
   if(mp>=HV.mpLag){HV.mpLag=mp;HV.mpT=0;}else if((HV.mpT+=dt)>.45)HV.mpLag+=(mp-HV.mpLag)*drain;
+  HV.flap=Math.max(0,HV.flap-dt);
   drawHudCrystals();
   // in a fight the hero's statuses (burning, combo...) sit under the crystals
   const el=$("hudChips");
@@ -7734,7 +7737,8 @@ function drawHudCrystals(){
   paintCrystal("hpcry",VESSELS[CHAR().id]||VESSELS.cade,small?3:4,HV.hp/S.maxhp,HV.hpLag/S.maxhp,HV.hit,VESSEL_RED,CHAR().id==="mage");
   const fr=S.flame>0&&!RM?FIRE_SEQ[Math.floor(tclock*7+Math.sin(tclock*2.3)*.8)%FIRE_SEQ.length]:0;
   paintCrystal("ficry",FIRE_FRAMES[fr],small?2:3,HV.fl/Math.max(1,S.maxflame),HV.flLag/Math.max(1,S.maxflame),0,VESSEL_FIRE,false);
-  paintCrystal("stcry",STAM_BOOT,small?2:3,HV.st/Math.max(1,S.maxstam),HV.stLag/Math.max(1,S.maxstam),0,VESSEL_STAM,false);
+  const boot=HV.flap>0&&!RM?BOOT_FLAP[Math.floor(tclock*16)%BOOT_FLAP.length]:STAM_BOOT;
+  paintCrystal("stcry",boot,small?2:3,HV.st/Math.max(1,S.maxstam),HV.stLag/Math.max(1,S.maxstam),0,VESSEL_STAM,false);
   if(!CHAR().noMana)paintCrystal("mpcry",MANA_GEM,small?2:3,HV.mp/Math.max(1,S.maxmana),HV.mpLag/Math.max(1,S.maxmana),0,VESSEL_MANA,false,gemShine);
 }
 // On a phone the side panel is hidden in a fight, so the crystals stand in the corner of the arena instead.
@@ -10082,6 +10086,7 @@ function dash(){
   const n=dx&&dy?Math.SQRT1_2:1;
   S.dashDir=[dx*n,dy*n];S.dashT=DASH_TIME;S.dashCD=DASH_CD;S.ghostT=0;
   S.stam-=DASH_COST;refreshStamina();
+  HV.flap=.6;                                  // the boot's wings beat in the side panel
   burst(S.px,S.py+.3,"#8e9aad",8,2.2);
   playFootstep();
 }
