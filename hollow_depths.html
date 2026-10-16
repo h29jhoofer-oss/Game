@@ -7623,9 +7623,10 @@ const FIRE_FRAMES=[["....k.......","...k#k......","...k#k...k..","..k##k..k#k.",
   [".......k....","......k#k...","..k...k#k...",".k#k..k##k..",".k##kk###k..",".k###k####k.","k#########k.","k####@@####k","k###@@@@###k","k##@@@@@###k","k##@@@@@@##k","k##@@@@@@##k",".k##@@@@##k.","..kkkkkkkk.."],
   ["......k.....",".....k#k....","..k..k#k.k..",".k#k.k##k#k.",".k##k###k#k.",".k########k.",".k#########k","k####@@####k","k###@@@@###k","k###@@@@@##k","k##@@@@@@##k","k##@@@@@@##k",".k##@@@@##k.","..kkkkkkkk.."]];
 const FIRE_SEQ=[0,2,1,2,0,1];          // the order the frames flicker through
-// Stamina is a little winged boot, green, that empties as you walk and dash and fills as you rest.
-const VESSEL_STAM={empty:"#14281c",lag:"#d4f5a0",top:"#a8e063",lit:"#8fd46a",mid:"#4fae5a",dark:"#2f6b3a",glow:"#c49a2a"};
-const STAM_BOOT=[".........kkkkk..","kkkk.....kLLLk..","kwwwkkk..k###k..",".kwwwwlkkk###k..","kkkwwwwllk###k..","kwwwwllGGk###k..",".kkwwlGGkk###k..","..kwwlGkkk####k.","...kkkk.k#####kk","........k######k","........k######k",".......kkNNNNNNk","........kkkkkkk."];
+// Stamina is a brown leather boot with speed-line wings trailing off its heel; it empties as you walk and
+// dash, and fills as you rest.
+const VESSEL_STAM={empty:"#241810",lag:"#ead2a4",top:"#e0b878",lit:"#b08050",mid:"#8c6a43",dark:"#5e3a24",glow:"#c49a2a"};
+const STAM_BOOT=["...kkkkkkkkkk...","...kLLLLk####k..","kkkkLLLLk####k..","kLLLLLLLk####k..","kkkkkLLLk####k..",".kLLLLLLk####k..",".kkkkLLLk####k..","..kLLLLLk#####k.","..kkkkkkk######k",".....k#########k","kkkk.k#########k","kLLk.kNNNNNNNNNk","kkkk.kkkkkkkkkkk"];
 // Mana is a small faceted gem, the same for everyone.
 const MANA_GEM=["....kkkk....","...k####k...","..k######k..",".k########k.","k##########k","k##########k",".k########k.",
   ".k########k.","..k######k..","..k######k..","...k####k...","....k##k....",".....kk....."];
