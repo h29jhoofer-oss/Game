@@ -5221,7 +5221,7 @@ function pickHero(el){
   menuQuiet=false;ensureAudio();setMusicVolume();
   el.classList.add("chosen");
   el.closest(".chargrid").classList.add("picked");
-  setTimeout(()=>start(el.dataset.id),RM?250:750);
+  setTimeout(()=>{start(el.dataset.id);if(PLAYTEST&&S.char==="cade"){playtestKit();refresh();}},RM?250:750);
 }
 
 const MOVES=[
@@ -9976,6 +9976,7 @@ window.addEventListener("keydown",ev=>{
     if(k==="i"||k==="I"){if(S.pack.length&&B&&B.phase==="choose")togglePack();ev.preventDefault();return;}
     return;
   }
+  if(PLAYTEST&&(k==="n"||k==="N")&&S.mode==="map"&&!S.chase&&!S.tut&&S.depth<20){playtestSkip();ev.preventDefault();return;}
   if(freeMode()&&FREE_CODES[ev.code]){held.add(ev.code);ev.preventDefault();return;}
   if(KEYS[k]){tryMove(KEYS[k][0],KEYS[k][1]);ev.preventDefault();return;}
   if(k==="."){tryMove(0,0);ev.preventDefault();return;}
@@ -10491,6 +10492,31 @@ function drawTitleArt(cv,tm){
   const tx=Math.floor(W2*.18),ty=Math.floor(top+((tx-hx)/(W2*.42))**2*H2*.55);
   for(let y=0;y<12;y++)P(tx,ty-y,1,1,"#0b0d12");P(tx-3,ty-9,3,1,"#0b0d12");P(tx+1,ty-7,3,1,"#0b0d12");P(tx-4,ty-10,1,1,"#0b0d12");P(tx+4,ty-8,1,1,"#0b0d12");
   for(let x=0;x<W2;x++)for(let k=0;k<4;k++){const y=Math.floor(H2*.84+k+Math.sin(x*.06+tm*.35+k)*2);if((x*3+k*5+Math.floor(tm*2))%4===0)P(x,y,1,1,"rgba(142,154,173,.12)");}
+}
+// Playtest builds only. N goes down a floor and grants a level (its cards come up as usual), and Cade
+// starts with the best gear, top-tier scrolls and healing, so the deep floors can be tried quickly.
+let PLAYTEST=true;   // tests switch it off to see the game as players will
+function playtestSkip(){
+  S.depth++;if(S.depth>10)S.kingSlain=true;
+  newFloor(S.depth);S.tamNext=S.depth;S.tamWait=0;snareReset();S.snareCD=6;
+  say(`Playtest: skipped to floor ${S.depth}.`,"c-cold");
+  if(S.lvl<XPTABLE.length-1){S.xp=Math.max(S.xp,XPTABLE[S.lvl]-1);gainXp(1);S.lvlWait=.2;}
+  refresh();
+}
+function playtestKit(){
+  const cons=(id,t)=>{const r=t?Object.assign({},UPGRADED_CONSUMABLES[id][t]):POTIONS.find(p=>p.id===id);
+    return{kind:"use",ref:r,glyph:r.glyph,col:r.col,name:r.name,note:r.note};};
+  S.weapon=upgradeWeapon("great",3);
+  S.armor=upgradeArmor("plate",3);
+  S.altOffhand=S.offhand;                                 // the torch goes on the belt (T swaps)
+  S.offhand=OFFHAND_ITEMS.find(o=>o.id==="aegis");
+  S.amulet=AMULETS.find(a=>a.id==="heart");applyMods(S.amulet.mods,1);
+  S.rings=[RINGS.find(r=>r.id==="storm"),RINGS.find(r=>r.id==="mending")];
+  for(const r of S.rings)applyMods(r.mods,1);
+  S.hp=S.maxhp;
+  S.pack=S.pack.concat([cons("heal",2),cons("heal",2),cons("heal",2),cons("heal",1),cons("heal",1),
+    cons("flame",2),cons("bolt",2),cons("ice",2),cons("dark",2)]);
+  say("Playtest kit: the best gear, scrolls and healing. Press N to go down a floor and gain a level.","c-cold");
 }
 function title(){
   S.over=true;   // keys and buttons must not play the demo floor behind the title card
