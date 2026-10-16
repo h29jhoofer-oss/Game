@@ -286,7 +286,7 @@ canvas{display:block;max-width:100%;max-height:100%;touch-action:manipulation;
 }
 body.inbattle .movebar{display:flex}
 /* while anyone is talking, the move icons and spell bar step aside so the whole dialogue box can be read */
-body.talking .movebar,body.talking .spellbar,body.talking .dice-tray{display:none!important}
+body.talking .movebar,body.talking .spellbar{display:none!important}
 .moveslot{
   pointer-events:auto;position:relative;
   width:44px;height:44px;padding:0;margin:0;
@@ -337,52 +337,36 @@ body.inbattle .spellbar{display:flex}
   .spellbar{left:5px;top:5px;bottom:5px;gap:4px}
 }
 
-/* ---------- dice tray ---------- */
-.dice-tray{
-  position:absolute;top:8px;right:8px;z-index:5;pointer-events:none;
-  display:flex;gap:9px;
+/* ---------- dice tray: pixel d20s roll into a wooden tray in the bottom-left corner ---------- */
+.dicetray{
+  position:absolute;left:12px;bottom:12px;z-index:5;display:none;pointer-events:none;
+  width:252px;height:88px;padding:6px;box-sizing:border-box;
+  background:repeating-linear-gradient(0deg,#5e3a24 0 3px,#523220 3px 4px);
+  box-shadow:0 0 0 3px #3d2a1c,0 0 0 5px #0a0c10,7px 7px 0 5px rgba(0,0,0,.45);
 }
-.die-slot{display:flex;flex-direction:column;align-items:center;gap:3px}
-.die{
-  width:42px;height:42px;border-radius:8px;
-  display:flex;align-items:center;justify-content:center;
-  font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:700;font-size:16px;
-  position:relative;perspective:200px;
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.10), 0 3px 0 rgba(0,0,0,.45), 0 4px 8px rgba(0,0,0,.35);
-  opacity:.55;transition:opacity .25s, box-shadow .2s;
-}
-.die-red{background:linear-gradient(155deg,#c94a3c 0%,#7a2a22 100%);color:#fff0ec;border:1px solid #8f2f28}
-.die-green{background:linear-gradient(155deg,#7fa650 0%,#3d5c28 100%);color:#eefbe4;border:1px solid #4a6b2e}
-.die.active{opacity:1}
-.die.rolling{animation:diceTumble .6s cubic-bezier(.36,.07,.19,.97)}
-.die.settled{animation:diceSettle .45s ease-out}
-.die-red.settled{box-shadow:inset 0 0 0 1px rgba(255,255,255,.15),0 3px 0 rgba(0,0,0,.45),0 0 14px 2px rgba(201,74,60,.75)}
-.die-green.settled{box-shadow:inset 0 0 0 1px rgba(255,255,255,.15),0 3px 0 rgba(0,0,0,.45),0 0 14px 2px rgba(127,166,80,.75)}
-@keyframes diceTumble{
-  0%{transform:rotate(0deg) scale(1)}
-  12%{transform:rotate(-32deg) scale(1.12)}
-  26%{transform:rotate(26deg) scale(.9)}
-  40%{transform:rotate(-20deg) scale(1.08)}
-  54%{transform:rotate(15deg) scale(.94)}
-  68%{transform:rotate(-10deg) scale(1.04)}
-  82%{transform:rotate(6deg) scale(.98)}
-  100%{transform:rotate(0deg) scale(1)}
-}
-@keyframes diceSettle{
-  0%{transform:scale(1.28)}
-  55%{transform:scale(.92)}
-  100%{transform:scale(1)}
-}
-.die-val{opacity:0;transform:scale(.5);transition:opacity .1s,transform .1s;line-height:1}
-.die-val.show{opacity:1;transform:scale(1)}
-.die-val.plus::before{content:"+";opacity:.65;font-weight:500;margin-right:1px}
-.die-label{font-size:9px;letter-spacing:.14em;color:var(--slate);text-transform:uppercase;
-  background:rgba(6,8,13,.55);padding:1px 5px;border-radius:2px}
+body.inbattle .dicetray{display:block}
+body.talking .dicetray,body.inchasm .dicetray{display:none!important}
+.dfelt{position:relative;width:100%;height:100%;overflow:hidden;
+  background-color:#211c1f;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%23282226' d='M1 1h1v1h-1zM3 3h1v1h-1z'/%3E%3C/svg%3E");background-size:8px 8px;
+  box-shadow:inset 0 4px 0 rgba(0,0,0,.5),inset 4px 0 0 rgba(0,0,0,.35)}
+.die3{position:absolute;left:0;top:0;width:52px;height:60px;will-change:transform}
+.die3.placed{transition:transform .22s ease-out}
+.die3 canvas{display:block;width:52px;height:52px;image-rendering:pixelated;image-rendering:crisp-edges;
+  filter:drop-shadow(3px 3px 0 rgba(0,0,0,.55))}
+.die3.settled canvas{animation:dieLand .32s steps(4)}
+.die3.crit canvas{filter:drop-shadow(0 0 0 #f0c060) drop-shadow(2px 0 0 #f0c060) drop-shadow(-2px 0 0 #f0c060) drop-shadow(0 2px 0 #f0c060) drop-shadow(0 -2px 0 #f0c060) drop-shadow(3px 3px 0 rgba(0,0,0,.55))}
+.die3.miss canvas{opacity:.6}
+.die3.gone{opacity:0;transition:opacity .2s,transform .2s;transform:translateY(16px)!important}
+.dcap{position:absolute;left:0;right:0;top:50px;text-align:center;font:700 9px/1 "IBM Plex Mono",ui-monospace,monospace;
+  letter-spacing:.14em;color:#f0c060;text-shadow:1px 1px 0 #000;opacity:0}
+.die3.miss .dcap{color:#b8c0cc}
+.die3.settled .dcap{opacity:1}
+@keyframes dieLand{0%{transform:scale(1.25)}50%{transform:scale(.9)}100%{transform:scale(1)}}
 @media(max-width:760px){
-  .dice-tray{top:5px;right:5px;gap:6px}
-  .die{width:34px;height:34px;font-size:13px;border-radius:6px}
-  .die-label{font-size:8px}
+  .dicetray{left:8px;bottom:84px;width:212px;height:80px;padding:5px}
 }
+@media (prefers-reduced-motion:reduce){.die3.settled canvas{animation:none}.die3.placed{transition:none}}
 
 /* ---------- boss sword QTE ---------- */
 .qte-overlay{
@@ -392,7 +376,6 @@ body.inbattle .spellbar{display:flex}
   pointer-events:none;
 }
 .qte-overlay.show{display:flex}
-body.inchasm .dice-tray{display:none}
 .qte-warn{
   font-size:clamp(15px,3.4vw,24px);font-weight:800;color:#ff5a48;letter-spacing:.12em;
   text-shadow:0 0 14px rgba(255,60,40,.85);
@@ -919,16 +902,7 @@ body.inbattle #hint{display:none}
         <canvas id="cv"></canvas>
         <div class="spellbar" id="spellbar"></div>
         <div class="movebar" id="movebar"></div>
-        <div class="dice-tray" id="diceTray">
-          <div class="die-slot">
-            <div class="die die-red" id="dieRed"><span class="die-val" id="dieRedVal">–</span></div>
-            <div class="die-label">Attack</div>
-          </div>
-          <div class="die-slot">
-            <div class="die die-green" id="dieGreen"><span class="die-val" id="dieGreenVal">–</span></div>
-            <div class="die-label">Heal</div>
-          </div>
-        </div>
+        <div class="dicetray" id="diceTray" aria-hidden="true"><div class="dfelt" id="diceFelt"></div></div>
         <div class="qte-overlay" id="qteOverlay">
           <div class="qte-warn">⚔ DODGE THE SLAM! ⚔</div>
           <div class="qte-keys" id="qteKeys"></div>
@@ -2123,10 +2097,7 @@ function ghostCast(sp){
 }
 function ghostTalons(sp){
   blog(`The ${B.mon.t.name} uses ${sp.name}!`,"c-hit");
-  for(let i=0;i<sp.hits;i++){
-    queue(i?.26:.12,()=>{if(B&&S.hp>0){B.lunge=1;B.lungeSide=-1;}});
-    queue(.13,()=>{if(B&&S.hp>0){enemyStrike(sp,1,false);refresh();}});
-  }
+  for(let i=0;i<sp.hits;i++)queue(i?.2:.12,()=>{if(B&&S.hp>0){enemyStrike(sp,1,false);refresh();}});
   queue(.45,()=>{if(!B)return;refresh();if(S.hp<=0){loseBattle(B.mon.t.name);return;}endRound();});
 }
 // Sounds: a candle pinched out, the lid grinding aside, and her wail.
@@ -2548,36 +2519,147 @@ function say(text,cls){
 }
 
 /* ============================ dice tray ============================ */
-// Rolls a themed die: red for damage dealt on attack, green for HP recovered on heal.
-// Purely visual — tumbles through random digits, then settles on the real value.
-const DICE_TIMERS={red:null,green:null};
-function rollDie(kind,value,plus){
-  const dieEl=$(kind==="red"?"dieRed":"dieGreen");
-  const valEl=$(kind==="red"?"dieRedVal":"dieGreenVal");
-  if(!dieEl||!valEl)return;
-  if(DICE_TIMERS[kind]) clearInterval(DICE_TIMERS[kind]);
-  dieEl.classList.remove("rolling","settled");
-  dieEl.classList.add("active");
-  void dieEl.offsetWidth; // restart CSS animation
-  dieEl.classList.add("rolling");
-  valEl.classList.remove("show");
-  let ticks=0;
-  const totalTicks=7;
-  const spread=Math.max(9,value+5);
-  DICE_TIMERS[kind]=setInterval(()=>{
-    ticks++;
-    valEl.textContent=String(rint(1,spread));
-    valEl.classList.add("show");
-    if(ticks>=totalTicks){
-      clearInterval(DICE_TIMERS[kind]);
-      DICE_TIMERS[kind]=null;
-      valEl.textContent=String(value);
-      valEl.classList.toggle("plus",!!plus);
-      dieEl.classList.remove("rolling");
-      dieEl.classList.add("settled");
-      setTimeout(()=>dieEl.classList.remove("settled"),480);
-    }
-  },50);
+// The table, as at a game of D&D: every blow and every heal in a fight is rolled first, on a pixel d20 that
+// tumbles into the tray in the bottom-left corner. Blue: your attacks. Green: your heals. Red: the monster's
+// attacks. Black: the monster healing itself. Nothing lands until the die stops: diceThen() holds the
+// battle's queue for the roll, then plays the swing and lands the blow. When the other side rolls (or after a
+// pause) the old dice are swept off the felt first.
+let DICE_ROLL=.8;          // seconds a die takes to stop (0 lands at once: the tests use it)
+const DICE_GAP=700;        // ms after the last die stopped before a roll by the same side starts a fresh tray
+const DIE_N=26;            // the d20 is drawn on a 26x26 pixel grid and shown at 2x
+const DIE_COLS={
+  blue: {face:"#cfe8ff",hi:"#8cc0f2",mid:"#4f8cd4",lo:"#2c5799",edge:"#163868",line:"#0a1830",ink:"#0d2148"},
+  green:{face:"#dcf5c4",hi:"#9ad472",mid:"#61aa48",lo:"#3a7430",edge:"#22501d",line:"#0b200a",ink:"#10300e"},
+  red:  {face:"#ffd3ca",hi:"#f08070",mid:"#c94a3c",lo:"#8a2a20",edge:"#58160f",line:"#1e0503",ink:"#3a0a06"},
+  black:{face:"#6c6c7a",hi:"#4c4c58",mid:"#363640",lo:"#24242c",edge:"#121216",line:"#000000",ink:"#f2ecd8"}
+};
+const DIE_FONT={"0":["111","101","101","101","111"],"1":["010","110","010","010","111"],"2":["111","001","111","100","111"],
+  "3":["111","001","111","001","111"],"4":["101","101","111","001","001"],"5":["111","100","111","001","111"],
+  "6":["111","100","111","101","111"],"7":["111","001","001","010","010"],"8":["111","101","111","101","111"],
+  "9":["111","101","111","001","111"],"x":["10001","01010","00100","01010","10001"]};
+const DIE_ANGLES=[0,20,40,60,80,100];   // tumble frames; at 60 the face triangle points down (another face up)
+const DIE_ART={};
+// One frame of a d20 seen face-on: a hexagon outline, the face triangle in the middle, three faces off its
+// edges and six round the rim, lit from the upper left.
+function dieArt(kind,ang){
+  const key=kind+ang;if(DIE_ART[key])return DIE_ART[key];
+  const C=DIE_COLS[kind],N=DIE_N,cx=N/2,cy=N/2,R=12.4,r=R*.66,a0=ang*Math.PI/180;
+  const at=(rad,a)=>[cx+Math.cos(a)*rad,cy+Math.sin(a)*rad];
+  const hx=[0,1,2,3,4,5].map(k=>at(R,a0-Math.PI/2+k*Math.PI/3));        // top, upper-right, lower-right, bottom, lower-left, upper-left
+  const tr=[0,1,2].map(k=>at(r,a0-Math.PI/2+k*2*Math.PI/3));             // top, lower-right, lower-left
+  const faces=[[tr[0],tr[1],tr[2],"face"],
+    [tr[0],tr[1],hx[1],1],[tr[1],tr[2],hx[3],1],[tr[2],tr[0],hx[5],1],
+    [hx[0],hx[1],tr[0],0],[hx[5],hx[0],tr[0],0],[hx[1],hx[2],tr[1],0],[hx[2],hx[3],tr[1],0],[hx[3],hx[4],tr[2],0],[hx[4],hx[5],tr[2],0]];
+  const lx=-.62,ly=-.78;
+  const tone=f=>{if(f[3]==="face")return C.face;
+    const mx=(f[0][0]+f[1][0]+f[2][0])/3-cx,my=(f[0][1]+f[1][1]+f[2][1])/3-cy,l=Math.hypot(mx,my)||1;
+    const v=(mx*lx+my*ly)/l+(f[3]?.35:-.15);
+    return v>.45?C.hi:v>-.2?C.mid:v>-.75?C.lo:C.edge;};
+  const side=(p,a,b)=>(b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]);
+  const inTri=(p,t)=>{const d1=side(p,t[0],t[1]),d2=side(p,t[1],t[2]),d3=side(p,t[2],t[0]);return !((d1<0||d2<0||d3<0)&&(d1>0||d2>0||d3>0));};
+  const grid=[];
+  for(let y=0;y<N;y++){grid.push([]);for(let x=0;x<N;x++){const p=[x+.5,y+.5],f=faces.find(t=>inTri(p,t));grid[y].push(f?tone(f):null);}}
+  // the ridges between faces, then a hard outline round the silhouette
+  const segs=[[tr[0],tr[1]],[tr[1],tr[2]],[tr[2],tr[0]],[tr[0],hx[0]],[tr[0],hx[1]],[tr[0],hx[5]],[tr[1],hx[1]],[tr[1],hx[2]],[tr[1],hx[3]],[tr[2],hx[3]],[tr[2],hx[4]],[tr[2],hx[5]]];
+  for(const [a,b] of segs){const n=Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1])/.3);
+    for(let k=0;k<=n;k++){const x=Math.floor(a[0]+(b[0]-a[0])*k/n),y=Math.floor(a[1]+(b[1]-a[1])*k/n);if(grid[y]&&grid[y][x])grid[y][x]=C.edge;}}
+  const out=grid.map((row,y)=>row.map((c,x)=>c&&[[1,0],[-1,0],[0,1],[0,-1]].some(([u,v])=>!(grid[y+v]&&grid[y+v][x+u]))?C.line:c));
+  const cv=document.createElement("canvas");cv.width=cv.height=N;const g=cv.getContext("2d");
+  out.forEach((row,y)=>row.forEach((c,x)=>{if(c){g.fillStyle=c;g.fillRect(x,y,1,1);}}));
+  return DIE_ART[key]=cv;
+}
+function dieDraw(d,frame,text){
+  const g=d.cv.getContext("2d"),C=DIE_COLS[d.kind];
+  g.clearRect(0,0,DIE_N,DIE_N);g.drawImage(dieArt(d.kind,DIE_ANGLES[frame]),0,0);
+  const glyphs=String(text).split("").map(ch=>DIE_FONT[ch]).filter(Boolean);
+  if(!glyphs.length)return;
+  const w=glyphs.reduce((s,gl)=>s+gl[0].length,0)+glyphs.length-1;
+  let x=Math.round(DIE_N/2-w/2);const y=Math.round(DIE_N/2-2)+(frame===3?-1:1);
+  g.fillStyle=C.face;g.fillRect(x-1,y-1,w+2,7);          // the number sits on a clean patch of the face
+  g.fillStyle=C.ink;
+  for(const gl of glyphs){gl.forEach((row,j)=>{for(let i=0;i<row.length;i++)if(row[i]==="1")g.fillRect(x+i,y+j,1,1);});x+=gl[0].length+1;}
+}
+const DICE={dice:[],actor:null,settledAt:0,raf:0};
+function diceActor(kind){return kind==="blue"||kind==="green"?"you":"foe";}
+function diceClear(){
+  for(const d of DICE.dice){const el=d.el;el.classList.add("gone");setTimeout(()=>el.remove(),230);}
+  DICE.dice=[];DICE.actor=null;
+}
+function diceSlots(){
+  const felt=$("diceFelt");if(!felt)return;
+  const W=felt.clientWidth||238,n=DICE.dice.length,step=n>1?Math.min(56,(W-52-8)/(n-1)):0;
+  DICE.dice.forEach((d,i)=>{d.tx=4+i*step;});
+}
+function diceSound(){
+  const out=sfxOut(.7);if(!out)return;const t=actx.currentTime+.01;
+  [0,.13,.24,.33,.4,.45].forEach((k,i)=>{mNoise(t+k*DICE_ROLL/.5,.03,.5*(1-i*.13),{f:2400+Math.random()*1600,q:3,shape:3,out});
+    if(i<3)mNote("sine",170-i*20,t+k*DICE_ROLL/.5,.06,.18*(1-i*.25),{a:.002,out});});
+}
+// Rolls one die into the tray. value: the number it lands on, or "miss".
+function trayRoll(kind,value,o){
+  o=o||{};
+  const felt=$("diceFelt");if(!felt)return null;
+  const now=performance.now(),actor=diceActor(kind);
+  const rolling=DICE.dice.some(d=>!d.done);
+  if(DICE.dice.length&&(DICE.actor!==actor||(!rolling&&now-DICE.settledAt>DICE_GAP)))diceClear();
+  DICE.actor=actor;
+  const el=document.createElement("div");el.className="die3 "+kind;
+  const cv=document.createElement("canvas");cv.width=cv.height=DIE_N;el.appendChild(cv);
+  const cap=document.createElement("i");cap.className="dcap";el.appendChild(cap);
+  const miss=value==="miss";
+  cap.textContent=miss?"MISS":o.crit?"CRIT":"";
+  const d={el,cv,kind,value:miss?"x":String(Math.max(0,Math.round(value))),miss,crit:!!o.crit,
+    t0:now,dur:Math.max(1,DICE_ROLL*1000),sx:-60,tx:0,ty:3+Math.random()*6,frame:-1,flick:"",done:false};
+  felt.appendChild(el);DICE.dice.push(d);diceSlots();
+  for(const o2 of DICE.dice)if(o2.done)o2.el.style.transform=`translate(${o2.tx}px,${o2.ty}px)`;
+  diceSound();
+  if(!DICE_ROLL||RM){diceFinish(d);return d;}
+  if(!DICE.raf)DICE.raf=requestAnimationFrame(diceAnim);
+  return d;
+}
+function diceFinish(d){
+  d.done=true;DICE.settledAt=performance.now();
+  dieDraw(d,0,d.value);
+  d.el.style.transform=`translate(${d.tx}px,${d.ty}px)`;
+  d.el.classList.add("placed","settled");if(d.miss)d.el.classList.add("miss");if(d.crit)d.el.classList.add("crit");
+}
+// Each die runs in from the left edge of the tray, bouncing and tumbling face over face, slowing as it goes.
+function diceAnim(){
+  DICE.raf=0;
+  const now=performance.now();let busy=false;
+  for(const d of DICE.dice){
+    if(d.done)continue;
+    const p=Math.min(1,(now-d.t0)/d.dur);
+    if(p>=1){diceFinish(d);continue;}
+    busy=true;
+    const e=1-Math.pow(1-p,3),x=d.sx+(d.tx-d.sx)*e,hop=(1-p)*16*Math.abs(Math.sin(p*Math.PI*3.2));
+    d.el.style.transform=`translate(${x.toFixed(1)}px,${(d.ty-hop).toFixed(1)}px)`;
+    const f=Math.floor(e*15)%DIE_ANGLES.length;
+    if(f!==d.frame){d.frame=f;d.flick=String(1+Math.floor(Math.random()*20));dieDraw(d,f,d.flick);}
+  }
+  if(busy)DICE.raf=requestAnimationFrame(diceAnim);
+}
+// Roll, and hold the fight until the die stops. Then o.lead (the swing, the spell's wind-up) plays, and
+// o.leadT later the blow lands. Rolls made together (an attack and the life it drinks back) share one wait.
+let diceBatch=null;
+function diceThen(kind,value,land,o){
+  o=o||{};
+  if(!B){land();return;}
+  trayRoll(kind,value,o);
+  const item={land,lead:o.lead,leadT:o.leadT||0};
+  if(!DICE_ROLL){if(item.lead)item.lead();land();return;}
+  if(diceBatch&&diceBatch.open&&seq[0]===diceBatch.step){diceBatch.items.push(item);return;}
+  const batch={open:true,items:[item]};
+  batch.step={d:DICE_ROLL,f:()=>{
+    if(!B)return;
+    let wait=0;
+    for(const it of batch.items)if(it.lead){it.lead();wait=Math.max(wait,it.leadT);}
+    const all=()=>{if(B)for(const it of batch.items)it.land();};
+    if(wait>0)seq.unshift({d:wait,f:all});else all();
+  }};
+  seq.unshift(batch.step);
+  diceBatch=batch;
+  Promise.resolve().then(()=>{batch.open=false;});
 }
 
 /* ============================ combat ============================ */
@@ -2735,8 +2817,14 @@ function lifesteal(r,dealt){
   let rate=C.lifesteal||0;
   if(!r.off&&S.weapon.leech)rate+=S.weapon.leech;
   if(rate<=0||dealt<=0)return;
-  const h=leechHeal(dealt*rate);
-  if(h>0)rollDie("green",h,true);
+  leechRoll(dealt*rate);
+}
+// A heal that drinks from the foe rolls its green die first. At full health nothing is rolled: only Vell's
+// vials fill, quietly, at once.
+function leechRoll(amount,after){
+  const h=Math.min(S.maxhp-S.hp,Math.round(amount));
+  if(h<=0){const g=leechHeal(amount);if(after)after(g);return;}
+  diceThen("green",h,()=>{const g=leechHeal(amount);if(after)after(g);});
 }
 // Any damaging player attack lands through here: damage, crit flair, combo and poise.
 function hitFx(r,flavour){
@@ -2744,7 +2832,6 @@ function hitFx(r,flavour){
   const dealt=Math.min(r.dmg,Math.max(0,B.mhp));   // no drinking from overkill
   hurtMon(r.dmg,r.crit);
   lifesteal(r,dealt);
-  rollDie("red",r.dmg);
   if(r.exposed)B.mStat.exposed=0;
   if(r.finisher)critBanner("FINISHER!","#ff9a52");
   else if(r.crit)critBanner("CRITICAL!","#f0c060");
@@ -2832,9 +2919,8 @@ function resolveParry(result){
   if(result==="perfect"){autoParry(sp);return;}
   B.pStat.parry=false;B.phase="anim";
   const blocked=result==="mistimed";
-  B.lunge=1;B.lungeSide=-1;
   blog(blocked?"Mistimed! You only half-block it.":`You miss the opening. The ${m.t.name}'s blow lands.`,"c-hit");
-  queue(strikeDelay(),()=>enemyStrike(sp,blocked?.6:1,blocked));
+  queue(.15,()=>enemyStrike(sp,blocked?.6:1,blocked));
   queue(.5,()=>{
     refresh();
     if(S.hp<=0){loseBattle(B.mon.t.name);return;}
@@ -2861,10 +2947,11 @@ function autoParry(sp){
   });
   queue(.28,()=>{
     if(!B)return;
-    pSwing();
     const r=pDamage({id:"riposte",mult:hasPerk("riposte")?1.3:.8,poise:8},{noMiss:true});
-    hitFx(r,x=>x.crit?`A brutal riposte — ${x.dmg} damage!`:`Riposte — ${x.dmg} damage.`);
-    sparry();
+    diceThen("blue",r.dmg,()=>{
+      hitFx(r,x=>x.crit?`A brutal riposte — ${x.dmg} damage!`:`Riposte — ${x.dmg} damage.`);
+      sparry();
+    },{lead:()=>pSwing(),leadT:.2,crit:r.crit});
   });
   queue(.6,()=>{
     B.pStat.parry=false;
@@ -2976,8 +3063,7 @@ function useItem(i){
       const h=Math.min(S.maxhp-S.hp,14+S.lvl*4+bonus);
       S.hp+=h;
       if(h){num(S.px,S.py,"+"+h,"#6fa844");ring(S.px,S.py,"rgba(111,168,68,.9)",2.3,.6);
-            burst(S.px,S.py,"#6fa844",tier>=1?18:11,tier>=1?3.2:2.4);
-            rollDie("green",h,true);}
+            burst(S.px,S.py,"#6fa844",tier>=1?18:11,tier>=1?3.2:2.4);}
       say(h?`${tier===2?"Full restoration":tier===1?"Warmth surges through you":"Warmth spreads"}. You recover ${h}.`:"You are already whole.","c-good");
     }else if(id==="might"){
       S.str++;say("Your grip tightens. Strike improved.","c-lvl");
@@ -2996,7 +3082,6 @@ function useItem(i){
         if(m.hp<=0)kill(m);
       }
       if(!n)say("The scroll burns out with nothing to catch.","");
-      else rollDie("red",total);
     }else if(id==="poison"){
       const turns=SPELL_FX.poison.turns[tier],dmg=SPELL_FX.poison.dmg(tier);
       let n=0;
@@ -3034,7 +3119,6 @@ function useItem(i){
         if(m.hp<=0)kill(m);
       }
       if(!n)say("Frost spreads across the floor and finds nothing to freeze.","");
-      else rollDie("red",total);
     }else if(id==="bolt"){
       let n=0,total=0;
       for(const m of [...mons]){
@@ -3048,7 +3132,6 @@ function useItem(i){
         if(m.hp<=0)kill(m);
       }
       if(!n)say("The sky answers, but nothing is in sight to strike.","");
-      else rollDie("red",total);
     }
     endTurn();
     return;
@@ -5457,7 +5540,7 @@ function startBattle(m){
   B.maxPoise=Math.max(12,Math.round((10+m.t.def*3+m.max*.22)*(m.t.boss?1.1:1)));
   if(m.t.boss)B.maxPoise=Math.min(B.maxPoise,70);
   B.poise=B.maxPoise;
-  seq=[];sfx=[];
+  seq=[];sfx=[];diceClear();
   document.body.classList.add("inbattle");
   requestAnimationFrame(resize);
   $("log").innerHTML="";
@@ -5556,9 +5639,12 @@ function hurtMon(dmg,crit){
   quake(crit?10:4);
   if(crit){B.critFlash=1;B.hitstop=Math.max(B.hitstop||0,.09);}
   if(turned("second")&&!B.thingWind&&B.mhp>0&&B.mhp<=B.mmax*.25){
-    B.thingWind=true;const h=Math.round(B.mmax*.3);B.mhp=Math.min(B.mmax,B.mhp+h);
-    if(L)snum(L.ex,L.ey-L.esz*.8,"+"+h,"#c8a8f0",true);
-    blog(`Your Second Wind fills its lungs instead of yours (+${h}).`,"c-hit");
+    B.thingWind=true;const h=Math.min(B.mmax-B.mhp,Math.round(B.mmax*.3));
+    diceThen("black",h,()=>{
+      B.mhp=Math.min(B.mmax,B.mhp+h);
+      const L=B.layout;if(L)snum(L.ex,L.ey-L.esz*.8,"+"+h,"#c8a8f0",true);
+      blog(`Your Second Wind fills its lungs instead of yours (+${h}).`,"c-hit");
+    });
   }
   checkBossPhase();
 }
@@ -5587,9 +5673,12 @@ function triggerPhase2(){
 function hurtPlayer(dmg,crit){
   S.hp-=dmg;B.pFlash=1;sfxHurt();
   if(hasPerk("second")&&!B.secondWind&&S.hp>0&&S.hp<=S.maxhp*.25){
-    B.secondWind=true;const h=Math.round(S.maxhp*.35);S.hp=Math.min(S.maxhp,S.hp+h);
-    blog(`Second Wind! You catch your breath and recover ${h} HP.`,"c-good");
-    if(B.layout)snum(B.layout.px,B.layout.py-B.layout.psz*.8,"+"+h,"#7fd08a");
+    B.secondWind=true;const h=Math.min(S.maxhp-S.hp,Math.round(S.maxhp*.35));
+    diceThen("green",h,()=>{
+      S.hp=Math.min(S.maxhp,S.hp+h);
+      blog(`Second Wind! You catch your breath and recover ${h} HP.`,"c-good");
+      if(B.layout)snum(B.layout.px,B.layout.py-B.layout.psz*.8,"+"+h,"#7fd08a");
+    });
   }
   comboHurt(dmg,crit);
   if(crit){B.hitstop=Math.max(B.hitstop||0,.09);}
@@ -5605,11 +5694,14 @@ function hurtPlayer(dmg,crit){
 // One landed (or missed) hit of a move. Multi-hit moves call this once per hit.
 function strikeOnce(mv){
   const r=pDamage(mv,{noMiss:!!mv.sure});
+  diceThen("blue",r.miss?"miss":r.dmg,()=>strikeLand(mv,r),{lead:()=>pSwing(),leadT:.2,crit:r.crit});
+}
+function strikeLand(mv,r){
   if(r.miss){
     const L=B.layout;
     if(L)snum(L.ex,L.ey-L.esz*.5,r.ghost?"through":r.riposted?"riposte":"miss",r.ghost?"#a8e0f0":r.riposted?"#c8a8f0":"#8e9aad");
     blog(r.ghost?"Your blow passes straight through her.":r.riposted?"It turns your blow aside with your own Riposte.":"You miss.");
-    if(r.riposted&&S.hp>1){const d=Math.min(S.hp-1,rint(5,9));hurtPlayer(d,false);blog(`It answers: ${d} damage.`,"c-hit");}
+    if(r.riposted&&S.hp>1){const d=Math.min(S.hp-1,rint(5,9));diceThen("red",d,()=>{hurtPlayer(d,false);blog(`It answers: ${d} damage.`,"c-hit");});}
     if(B.combo>0){B.combo=0;blog("Your combo is lost.","c-hit");}
     return;
   }
@@ -5633,11 +5725,8 @@ function strikeOnce(mv){
   if(mv.smite&&HOLY_FOES.has(B.mon.t.id)){const L=B.layout;if(L)sring(L.ex,L.ey,"rgba(255,242,122,.9)",L.esz*.9);blog("The dead cannot stand before the cross.","c-lvl");}
   if(mv.stun&&B.mhp>0){B.mStat.stun=Math.max(B.mStat.stun,mv.stun);blog(`The ${B.mon.t.name} reels.`,"c-good");}
   if(mv.sunder){B.mStat.sunder=(B.mStat.sunder||0)+mv.sunder;blog("Its guard splits open.","c-good");}
-  if(mv.drain){
-    const h=leechHeal(r.dmg*mv.drain);
-    if(h>0){rollDie("green",h,true);
-            blog(CHAR().ichor?`You drink deep from the wound (+${h}).`:`The light knits your wounds (+${h}).`,"c-good");}
-  }
+  if(mv.drain)leechRoll(r.dmg*mv.drain,h=>{
+    if(h>0)blog(CHAR().ichor?`You drink deep from the wound (+${h}).`:`The light knits your wounds (+${h}).`,"c-good");});
   if(mv.waltz&&B.mhp>0)cashOutBleed();
   if(mv.selfHurt&&S.hp>1){const d=Math.min(S.hp-1,Math.max(1,Math.round(S.maxhp*mv.selfHurt)));hurtPlayer(d,false);blog(`The debt is paid in your blood (${d}).`,"c-hit");}
   if(mv.mana){gainMana(mv.mana);const L=B.layout;if(L)snum(L.px,L.py-L.psz*.5,"+"+mv.mana+" mana","#6fa0e8");blog(`The bolt pulls ${mv.mana} mana back with it.`,"c-cold");}
@@ -5648,20 +5737,24 @@ function cashOutBleed(){
   const rem=(B.mStat.bleed||0)*(B.mStat.bleedDmg||2);
   if(rem<=0||B.mhp<=0)return;
   B.mStat.bleed=0;B.mStat.bleedDmg=0;
-  B.mhp-=rem;B.mFlash=.8;
-  const L=B.layout;
-  if(L){snum(L.ex,L.ey-L.esz*.9,"-"+rem,"#c94a3c",true);sburst(L.ex,L.ey-L.esz*.3,"#c94a3c",18,220);sring(L.ex,L.ey,"rgba(201,74,60,.9)",L.esz*.8);}
-  blog(`Crimson Waltz: every wound opens at once (${rem}).`,"c-lvl");
-  checkBossPhase();
+  diceThen("blue",rem,()=>{
+    B.mhp-=rem;B.mFlash=.8;
+    const L=B.layout;
+    if(L){snum(L.ex,L.ey-L.esz*.9,"-"+rem,"#c94a3c",true);sburst(L.ex,L.ey-L.esz*.3,"#c94a3c",18,220);sring(L.ex,L.ey,"rgba(201,74,60,.9)",L.esz*.8);}
+    blog(`Crimson Waltz: every wound opens at once (${rem}).`,"c-lvl");
+    checkBossPhase();
+  });
 }
 // Transfusion (Vell): empty every vial of Ichor into the foe. Ignores armour, can't miss, never drinks back.
 const TRANSFUSE_MIN=5;
 function transfuse(){
   const ich=S.ichor||0;
-  S.ichor=0;
   const d=Math.round(ich*2*(B.pStat.atkUp>0?1.25:1));
+  diceThen("blue",d,()=>transfuseLand(ich,d),{lead:()=>pSwing(),leadT:.2});
+}
+function transfuseLand(ich,d){
+  S.ichor=0;
   hurtMon(d,false);
-  rollDie("red",d);
   poiseHit(Math.round(d*.8));
   const L=B.layout;
   if(L){sfirehit(L,FX_POISON);sburst(L.ex,L.ey,"#c94a3c",26,300);sring(L.ex,L.ey,"rgba(201,74,60,.95)",L.esz*.9);}
@@ -5691,7 +5784,6 @@ function chooseMove(id){
   playMoveCard(mv);
   if(mv.cd)S.cds[mv.id]=mv.cd+1;
   drawMoves();
-  if(mv.kind!=="buff")pSwing();   // buffs like Rally are not an attack swing
   blog(`You use ${mv.name}.`,"c-lvl");
   queue(.2,()=>{
     if(mv.ward){
@@ -5703,18 +5795,20 @@ function chooseMove(id){
     }
     if(mv.kind==="buff"){
       const h=Math.min(S.maxhp-S.hp,10+S.lvl*2);
-      S.hp+=h;B.pStat.atkUp=3;
-      const L=B.layout;
-      if(L){snum(L.px,L.py-L.psz*.5,"+"+h,"#6fa844");srally();
-            sburst(L.px,L.py,"#6fa844",10,140);}
-      if(h>0) rollDie("green",h,true);
-      blog(h?`You catch your breath (+${h}) and set your grip.`:"You set your grip.","c-good");
+      const rally=()=>{
+        S.hp+=h;B.pStat.atkUp=3;
+        const L=B.layout;
+        if(L){snum(L.px,L.py-L.psz*.5,"+"+h,"#6fa844");srally();
+              sburst(L.px,L.py,"#6fa844",10,140);}
+        blog(h?`You catch your breath (+${h}) and set your grip.`:"You set your grip.","c-good");
+      };
+      if(h>0)diceThen("green",h,rally);else rally();
       return;
     }
     if(mv.transfuse){transfuse();return;}
     strikeOnce(mv);
   });
-  for(let k=1;k<(mv.hits||1);k++)queue(.17,()=>{if(B&&B.mhp>0){pSwing();strikeOnce(mv);}});
+  for(let k=1;k<(mv.hits||1);k++)queue(.17,()=>{if(B&&B.mhp>0)strikeOnce(mv);});
   queue(.55,()=>{
     refresh();
     if(B.mhp<=0){winBattle();return;}
@@ -5730,7 +5824,6 @@ function offhandAttack(){
   if(oh.type==="torch"&&S.flame<=0){blog("Your torch is out. Lamp oil (F on the map) will relight it.","c-hit");return;}
   B.phase="anim";
   drawMoves();
-  pSwing(oh.type==="torch");
   blog(oh.type==="torch"?"You thrust the torch.":oh.type==="shield"?"You drive your shield forward.":"Your off-hand blade darts out.","c-lvl");
   if(oh.type==="shield")S.cds.bash=2;
   queue(.2,()=>{
@@ -5739,6 +5832,17 @@ function offhandAttack(){
             :oh.type==="shield"?{id:"bash",off:true,mult:1,poise:8}
             :{id:"stab",off:true,mult:1,poise:-3};
     const r=pDamage(mv);
+    diceThen("blue",r.miss?"miss":r.dmg,()=>offhandLand(oh,r),{lead:()=>pSwing(oh.type==="torch"),leadT:.2,crit:r.crit});
+  });
+  queue(.55,()=>{
+    refresh();
+    if(B.mhp<=0){winBattle();return;}
+    enemyTurn();
+  });
+}
+function offhandLand(oh,r){
+  {
+    const L=B.layout;
     if(r.miss){
       if(L)snum(L.ex,L.ey-L.esz*.5,"miss","#8e9aad");
       blog(oh.type==="torch"?"The torch swings wide.":oh.type==="shield"?"The shield glances off.":"The stab finds only air.");
@@ -5765,12 +5869,7 @@ function offhandAttack(){
       hitFx(r,x=>x.finisher?`The off-hand blade finishes it — ${x.dmg} damage!`:x.crit?`A vicious stab — ${x.dmg} damage!`:`A quick stab for ${x.dmg}.`);
       tryBleedMon(true,true);
     }
-  });
-  queue(.55,()=>{
-    refresh();
-    if(B.mhp<=0){winBattle();return;}
-    enemyTurn();
-  });
+  }
 }
 
 /* ============================ enemy turn ============================ */
@@ -5812,9 +5911,8 @@ function enemyTurn(){
   if(sp&&sp.hits){ghostTalons(sp);return;}             // too quick to parry: three rakes in a row
   // A raised guard turns the incoming blow into a timing test.
   if(!self&&Math.random()<parryChance(!!m.t.boss)){startParryWindow(sp);return;}
-  B.lunge=1;B.lungeSide=-1;
   blog(sp?`The ${m.t.name} uses ${sp.name}!`:`The ${m.t.name} attacks.`);
-  queue(strikeDelay(),()=>enemyStrike(sp,1,false));
+  queue(.15,()=>enemyStrike(sp,1,false));
   queue(.5,()=>{
     refresh();
     if(S.hp<=0){loseBattle(B.mon.t.name);return;}
@@ -5826,21 +5924,28 @@ const THING_LUNGE=1.9;
 function strikeDelay(){return B&&B.mon.t.thing?.2*3.4/THING_LUNGE:.2;}
 // The landing of one enemy attack. scale<1 means the player blocked part of it.
 function enemyStrike(sp,scale,blocked){
-  const m=B.mon,L=B.layout;
+  const m=B.mon;
   if(sp&&sp.heal){
     const h=Math.min(B.mmax-B.mhp,Math.round(B.mmax*sp.heal));
-    B.mhp+=h;
-    if(L){snum(L.ex,L.ey-L.esz*.5,"+"+h,"#6fa844");sburst(L.ex,L.ey,"#6fa844",9,140);}
-    blog(`It knits its wounds (+${h}).`,"c-hit");return;
+    diceThen("black",h,()=>{
+      B.mhp+=h;
+      const L=B.layout;
+      if(L){snum(L.ex,L.ey-L.esz*.5,"+"+h,"#6fa844");sburst(L.ex,L.ey,"#6fa844",9,140);}
+      blog(`It knits its wounds (+${h}).`,"c-hit");
+    });
+    return;
   }
   if(sp&&sp.fade){
+    const L=B.layout;
     B.mStat.fade=sp.fade;
     if(L){sring(L.ex,L.ey,"rgba(168,224,240,.8)",L.esz*.9);sburst(L.ex,L.ey,"#a8e0f0",14,160);}
     blog("She thins to a breath of mist. Your blows may pass straight through her.","c-hit");return;
   }
-  if(!blocked&&(scale||1)===1&&wispTakesHit(sp))return;
+  const lunge={lead:()=>{if(B){B.lunge=1;B.lungeSide=-1;}},leadT:strikeDelay()};
+  if(!blocked&&(scale||1)===1&&wispTakesHit(sp,lunge))return;
   const r=mDamage(sp);
-  if(r.miss){
+  if(r.miss){diceThen("red","miss",()=>{
+    const L=B.layout;
     if(r.dodged){
       if(L){snum(L.px,L.py-L.psz*.5,"dodge","#5fa8c4");sring(L.px,L.py,"rgba(95,168,196,.7)",L.psz*.6);}
       blog("You sidestep the blow.","c-cold");
@@ -5848,20 +5953,28 @@ function enemyStrike(sp,scale,blocked){
       if(L)snum(L.px,L.py-L.psz*.5,r.blinded?"blind":"miss",r.blinded?"#8a5fc4":"#8e9aad");
       blog(r.blinded?"It flails blindly in the dark.":"It misses you.",r.blinded?"c-good":"");
     }
-    return;
-  }
+  },lunge);return;}
   let dmg=r.dmg,crit=false;
   const cc=(m.t.crit!==undefined?m.t.crit:.06)+(turned("keen")?.08:0);
   if(!blocked&&Math.random()<cc){crit=true;dmg=Math.round(dmg*1.5);}
   dmg=Math.max(1,Math.round(dmg*(scale||1)));
-  if(B.pStat.ward>0){                                      // Sanctuary: the light takes half of it
-    B.pStat.ward--;dmg=Math.max(1,Math.ceil(dmg/2));
+  const warded=B.pStat.ward>0;
+  if(warded)dmg=Math.max(1,Math.ceil(dmg/2));             // Sanctuary: the light takes half of it
+  const sh=shieldReduce(dmg);
+  diceThen("red",sh.dmg,()=>strikeYou(sp,sh,crit,blocked,warded),Object.assign({crit},lunge));
+}
+// The landing of one enemy attack, once its die has stopped.
+function strikeYou(sp,sh,crit,blocked,warded){
+  const m=B.mon,L=B.layout;
+  if(warded){
+    B.pStat.ward--;
     if(L)sring(L.px,L.py,"rgba(255,242,122,.85)",L.psz*.8);
     blog(B.pStat.ward?"The circle of light takes half the blow.":"The circle of light takes half the blow, and goes out.","c-good");
   }
-  const sh=shieldReduce(dmg);dmg=sh.dmg;
+  const dmg=sh.dmg;
   hurtPlayer(dmg,crit);
-  if(turned("feast")&&B.mhp<B.mmax){const h=Math.min(B.mmax-B.mhp,Math.max(1,Math.round(dmg*.25)));B.mhp+=h;if(L)snum(L.ex,L.ey-L.esz*.5,"+"+h,"#c8a8f0");}
+  if(turned("feast")&&B.mhp<B.mmax){const h=Math.min(B.mmax-B.mhp,Math.max(1,Math.round(dmg*.25)));
+    diceThen("black",h,()=>{B.mhp=Math.min(B.mmax,B.mhp+h);const L2=B.layout;if(L2)snum(L2.ex,L2.ey-L2.esz*.5,"+"+h,"#c8a8f0");});}
   if(sh.absorbed&&L)snum(L.px+L.psz*.25,L.py-L.psz*.2,"-"+sh.absorbed,"#8fd8f0",false);
   if(crit){
     if(L){snum(L.px,L.py-L.psz*1.1,"CRITICAL!","#ff6a52",true);sring(L.px,L.py,"rgba(255,106,82,.95)",L.psz*1.1);}
@@ -5879,7 +5992,7 @@ function enemyStrike(sp,scale,blocked){
   tryBleedPlayer();
   if(sp&&sp.drain&&B.mhp<B.mmax){
     const h=Math.min(B.mmax-B.mhp,Math.round(dmg*sp.drain));
-    B.mhp+=h;blog(`It drinks your strength (+${h}).`,"c-hit");
+    if(h>0)diceThen("black",h,()=>{B.mhp=Math.min(B.mmax,B.mhp+h);blog(`It drinks your strength (+${h}).`,"c-hit");});
   }
 }
 
@@ -5967,22 +6080,22 @@ function resolveQte(success){
   qte=null;
   const m=B.mon;
   queue(.15,()=>{
-    const L=B.layout;
-    if(success){
-      const dmg=shieldReduce(Math.max(1,Math.round(rint(m.t.min,m.t.max)*sp.mult*.22))).dmg;
+    const dmg=shieldReduce(Math.max(1,Math.round(rint(m.t.min,m.t.max)*sp.mult*(success?.22:1)))).dmg;
+    diceThen("red",dmg,()=>{
+      const L=B.layout;
       hurtPlayer(dmg);
-      if(L){snum(L.px,L.py-L.psz*.5,"parried!","#5fa8c4",true);sring(L.px,L.py,"rgba(95,168,196,.9)",L.psz*.9);}
-      blog(`You throw the greatsword aside at the last instant! (-${dmg})`,"c-good");
-    }else{
-      const dmg=shieldReduce(Math.max(1,Math.round(rint(m.t.min,m.t.max)*sp.mult))).dmg;
-      hurtPlayer(dmg);
-      quake(18);
-      if(L){sburst(L.px,L.py,"#c94a3c",28,340);sring(L.px,L.py,"rgba(201,74,60,.95)",L.psz*1.15);}
-      blog(`The greatsword crashes down on you! (-${dmg})`,"c-hit");
-    }
-    refresh();
-    if(S.hp<=0){loseBattle(B.mon.t.name);return;}
-    queue(.5,endRound);
+      if(success){
+        if(L){snum(L.px,L.py-L.psz*.5,"parried!","#5fa8c4",true);sring(L.px,L.py,"rgba(95,168,196,.9)",L.psz*.9);}
+        blog(`You throw the greatsword aside at the last instant! (-${dmg})`,"c-good");
+      }else{
+        quake(18);
+        if(L){sburst(L.px,L.py,"#c94a3c",28,340);sring(L.px,L.py,"rgba(201,74,60,.95)",L.psz*1.15);}
+        blog(`The greatsword crashes down on you! (-${dmg})`,"c-hit");
+      }
+      refresh();
+      if(S.hp<=0){loseBattle(B.mon.t.name);return;}
+      queue(.5,endRound);
+    },{lead:()=>{if(B){B.lunge=1;B.lungeSide=-1;}},leadT:.15});
   });
 }
 
@@ -6021,32 +6134,33 @@ function wispAttack(){
   return B.mhp<=0;
 }
 // An ordinary enemy blow may go for the wisp instead. Returns true if it did (the hero is spared).
-function wispTakesHit(sp){
+function wispTakesHit(sp,lunge){
   const w=activeWisp();
   if(!w||(sp&&(sp.heal||sp.qte))||Math.random()>=WISP_HIT_CHANCE)return false;
   const m=B.mon;
-  if(Math.random()>((sp&&sp.acc!==undefined)?sp.acc:m.t.acc)){blog(`The ${m.t.name} swipes at your wisp and misses.`,"c-cold");return true;}
+  if(Math.random()>((sp&&sp.acc!==undefined)?sp.acc:m.t.acc)){diceThen("red","miss",()=>blog(`The ${m.t.name} swipes at your wisp and misses.`,"c-cold"),lunge);return true;}
   const d=Math.max(1,Math.round(rint(m.t.min,m.t.max)*((sp&&sp.mult)||1)));
-  w.whp=Math.max(0,w.whp-d);B.wispFlash=1;
-  if(B.wispPos)snum(B.wispPos.x,B.wispPos.y-B.wispPos.s*.6,"-"+d,"#c8a8f0");
-  blog(`The ${m.t.name} lashes at your wisp (-${d}).`,"c-hit");
-  if(w.whp<=0)wispDie(w);
+  diceThen("red",d,()=>{
+    w.whp=Math.max(0,w.whp-d);B.wispFlash=1;
+    if(B.wispPos)snum(B.wispPos.x,B.wispPos.y-B.wispPos.s*.6,"-"+d,"#c8a8f0");
+    blog(`The ${m.t.name} lashes at your wisp (-${d}).`,"c-hit");
+    if(w.whp<=0)wispDie(w);
+  },lunge);
   return true;
 }
 // Casting: the wisp itself becomes the orb. Damage scales with its health; ignores armour.
 function castWisp(it){
   wispInit(it);
   const d=Math.round(it.whp*WISP_ORB_MULT)+S.lvl;
-  const L=B.layout,from=B.wispPos||(L&&{x:L.px,y:L.py-L.psz*.8,s:L.psz*.4});
   blog("You loose the wisp. It balls itself into a blazing violet orb...","c-lvl");
-  if(L&&from)sfx.push({k:"wispball",x0:from.x,y0:from.y,x1:L.ex,y1:L.ey-L.esz*.2,arc:L.esz*.35,size:L.esz*.32,t:0,life:.45});
-  queue(.45,()=>{
-    hurtMon(d,true);rollDie("red",d);poiseHit(Math.round(d*.6));
+  diceThen("blue",d,()=>{
+    hurtMon(d,true);poiseHit(Math.round(d*.6));
     const L2=B.layout;
     if(L2){sburst(L2.ex,L2.ey,"#a87fe0",30,330);sburst(L2.ex,L2.ey,"#ffffff",14,240);sring(L2.ex,L2.ey,"rgba(168,127,224,.95)",L2.esz*1.1);}
     quake(12);B.critFlash=.6;
     blog(`The wisp bursts against the ${B.mon.t.name} for ${d}! (It had ${it.whp} health left.)`,"c-lvl");
-  });
+  },{leadT:.45,lead:()=>{const L=B.layout,from=B.wispPos||(L&&{x:L.px,y:L.py-L.psz*.8,s:L.psz*.4});
+    if(L&&from)sfx.push({k:"wispball",x0:from.x,y0:from.y,x1:L.ex,y1:L.ey-L.esz*.2,arc:L.esz*.35,size:L.esz*.32,t:0,life:.45});}});
   queue(.6,()=>{refresh();if(B.mhp<=0){winBattle();return;}enemyTurn();});
 }
 function wispFrame(){return "wisp_"+(Math.floor(tclock*5)%2);}
@@ -6798,11 +6912,14 @@ function useItemBattle(i){
   if(id==="heal"){
     const bonus=tier===1?10:tier===2?28:0;
     const h=Math.min(S.maxhp-S.hp,14+S.lvl*4+bonus);
-    S.hp+=h;
-    if(L){snum(L.px,L.py-L.psz*.5,"+"+h,"#6fa844");sring(L.px,L.py,"rgba(111,168,68,.9)",L.psz*.8);
-          sburst(L.px,L.py,"#6fa844",tier>=1?16:9,tier>=1?180:140);}
-    if(h>0) rollDie("green",h,true);
-    blog(h?`${tier===2?"Full restoration":tier===1?"You surge with warmth":"You drink deep"} (+${h}).`:"You are already whole.","c-good");
+    const drink=()=>{
+      S.hp+=h;
+      const L=B.layout;
+      if(L){snum(L.px,L.py-L.psz*.5,"+"+h,"#6fa844");sring(L.px,L.py,"rgba(111,168,68,.9)",L.psz*.8);
+            sburst(L.px,L.py,"#6fa844",tier>=1?16:9,tier>=1?180:140);}
+      blog(h?`${tier===2?"Full restoration":tier===1?"You surge with warmth":"You drink deep"} (+${h}).`:"You are already whole.","c-good");
+    };
+    if(h>0)diceThen("green",h,drink);else drink();
     queue(.5,enemyTurn);
   }else if(id==="might"){
     S.str++;blog("Your grip tightens. Strike improved.","c-lvl");
@@ -6812,11 +6929,9 @@ function useItemBattle(i){
     const dMax=tier===2?34:tier===1?27:19;
     const burnTurns=tier===2?4:tier===1?3:2;
     const d=rint(dMin,dMax);
-    if(L)sfireball(L);
     blog("A ball of fire tears down out of the dark...","c-lvl");
-    queue(FIRE_FALL,()=>{
+    diceThen("blue",d,()=>{
       hurtMon(d,false);
-      rollDie("red",d);
       const L2=B.layout;
       if(L2){
         sfirehit(L2);
@@ -6827,7 +6942,7 @@ function useItemBattle(i){
       if(B.mhp>0)signite();
       poiseHit(Math.round(d*.7));
       blog(`${tier===2?"Inferno engulfs":"Fire engulfs"} the ${B.mon.t.name} for ${d}. Burns ${burnTurns} turns.`,"c-hit");
-    });
+    },{lead:()=>{if(B.layout)sfireball(B.layout);},leadT:FIRE_FALL});
     queue(.65,()=>{refresh();if(B.mhp<=0){winBattle();return;}enemyTurn();});
   }else if(id==="poison"){
     const turns=SPELL_FX.poison.turns[tier],dmg=SPELL_FX.poison.dmg(tier);
@@ -6847,8 +6962,7 @@ function useItemBattle(i){
     const turns=SPELL_FX.dark.turns[tier],pct=SPELL_FX.dark.pct[tier];
     const d=tier>=2?rint(12+S.lvl,20+S.lvl*2):0;
     blog("The ground trembles. Something stirs beneath the stone...","c-lvl");
-    srumble();
-    queue(FX_DARK.windup,()=>{
+    const shadow=()=>{
       const L2=B.layout;
       if(L2){
         const wide=L2.esz*(B.mon.t.boss?.62:1);
@@ -6858,17 +6972,18 @@ function useItemBattle(i){
       B.darkFlash=1;
       B.mStat.blind=Math.max(B.mStat.blind||0,turns);
       B.mStat.blindPct=Math.max(B.mStat.blindPct||0,pct);
-      if(d){hurtMon(d,false);rollDie("red",d);}
+      if(d)hurtMon(d,false);
       quake(13);B.hitstop=Math.max(B.hitstop||0,.08);
       blog(`Spikes of shadow burst from the floor${d?`, impaling the ${B.mon.t.name} for ${d}`:""}. It misses ${Math.round(pct*100)}% more for ${turns} turns.`,"c-hit");
-    });
+    };
+    if(d)diceThen("blue",d,shadow,{lead:()=>srumble(),leadT:FX_DARK.windup});
+    else{srumble();queue(FX_DARK.windup,shadow);}
     queue(.7,()=>{refresh();if(B.mhp<=0){winBattle();return;}enemyTurn();});
   }else if(id==="ice"){
     const d=rint(SPELL_FX.ice.min[tier],SPELL_FX.ice.max[tier]);
     let fr=SPELL_FX.ice.freeze[tier];if(B.mon.t.boss)fr=Math.min(fr,1);
     blog("Frost creeps across the stones. The air turns to needles...","c-lvl");
-    srumble(FX_ICE);
-    queue(FX_ICE.windup,()=>{
+    diceThen("blue",d,()=>{
       const L2=B.layout;
       if(L2){
         sspikes(L2,L2.esz*(B.mon.t.boss?.62:1),FX_ICE);
@@ -6876,29 +6991,26 @@ function useItemBattle(i){
       }
       B.iceFlash=1;
       hurtMon(d,false);
-      rollDie("red",d);
       poiseHit(Math.round(d*.8));
       B.mStat.frozen=Math.max(B.mStat.frozen||0,fr);
       quake(12);B.hitstop=Math.max(B.hitstop||0,.08);
       blog(`Ice spears up through the floor and impales the ${B.mon.t.name} for ${d}. Frozen for ${fr} turn${fr>1?"s":""}.`,"c-hit");
-    });
+    },{lead:()=>srumble(FX_ICE),leadT:FX_ICE.windup});
     queue(.7,()=>{refresh();if(B.mhp<=0){winBattle();return;}enemyTurn();});
   }else if(id==="bolt"){
     const d=rint(SPELL_FX.bolt.min[tier],SPELL_FX.bolt.max[tier]);
     let st=SPELL_FX.bolt.stun[tier];if(B.mon.t.boss)st=Math.min(st,1);
     blog("The air tightens. Thunder gathers overhead...","c-lvl");
-    B.boltFlash=.4;
-    queue(FX_LIGHTNING.windup,()=>{
+    diceThen("blue",d,()=>{
       const L2=B.layout;
       if(L2){slightning(L2);sburst(L2.ex,L2.ey,"#d9d24a",26,360);}
       B.boltFlash=1;
       hurtMon(d,false);
-      rollDie("red",d);
       poiseHit(Math.round(d*.9));
       B.mStat.stun=Math.max(B.mStat.stun,st);
       quake(15);B.hitstop=Math.max(B.hitstop||0,.1);
       blog(`Lightning rips through the ${B.mon.t.name} for ${d}. Stunned ${st} turn${st>1?"s":""}.`,"c-hit");
-    });
+    },{lead:()=>{B.boltFlash=.4;},leadT:FX_LIGHTNING.windup});
     queue(.75,()=>{refresh();if(B.mhp<=0){winBattle();return;}enemyTurn();});
   }
   refresh();

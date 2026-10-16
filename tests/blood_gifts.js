@@ -11,6 +11,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await page.goto(FILE);
   await page.waitForTimeout(300);
   const ev = s => page.evaluate(s);
+  await ev('DICE_ROLL=0');   // these check what each blow does, so let it land at once (dice.js tests the wait)
   const results = [];
   const check = (name, ok, detail) => results.push({ name, ok: !!ok, detail });
   await ev('tamChatter=false;window.sfxBloodGift=()=>{}');

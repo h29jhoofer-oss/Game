@@ -12,6 +12,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await page.goto(FILE);
   await page.waitForTimeout(300);
   const ev = s => page.evaluate(s);
+  await ev('DICE_ROLL=0');   // these check what each blow does, so let it land at once (dice.js tests the wait)
   const step = async secs => { for (let i = 0; i < Math.ceil(secs / 0.05); i++) await ev('tick(0.05)'); };
   const shot = async n => { if (process.env.SHOTS) await page.screenshot({ path: path.join(process.env.SHOTS, n + '.png') }); };
   const results = [];
