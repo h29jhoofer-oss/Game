@@ -1734,6 +1734,32 @@ function guardsTick(dt){
     held.clear();computeFOV();refresh();
   }
 }
+// The vault guards wear their six keys at the hip, drawn over the troll sprite in its own pixels (x,y,w,h:
+// the sprite's 24x24 box), swinging a pixel either way as it breathes or walks.
+// Two brass keys (bow, shaft, teeth) on an iron ring, hung from a leather belt across the troll's waist.
+const GUARD_KEYS=["..ooo..",".o.d.o.","YYYdyyy","YdYdydy","YYYdyyy",".Yd.dy.",".YYd.yy",".YYd.y."];
+const GUARD_KEY_COL={o:"#b4bac4",Y:"#f0cc58",y:"#c08e2c",d:"#140c06"};
+function drawGuardKeys(x,y,w,h,flip,alpha,ph){
+  const u=w/24,v=h/24,X0=12,Y0=15;
+  const sw=RM?0:Math.round(Math.sin(tclock*3.1+(ph||0))*.7);
+  const px=c=>x+(flip?23-c:c)*u;
+  const on=(c,r)=>{const ch=GUARD_KEYS[r]&&GUARD_KEYS[r][c];return !!ch&&ch!==".";};
+  ctx.globalAlpha=alpha;
+  ctx.fillStyle="#3a2210";ctx.fillRect(Math.min(px(7),px(17)),y+14*v,u*11+.5,v+.5);          // the belt
+  ctx.fillStyle="#5c3a1c";ctx.fillRect(Math.min(px(7),px(17)),y+14*v,u*11+.5,v*.35);
+  ctx.fillStyle="#c8a040";ctx.fillRect(px(flip?16:8),y+14*v,u+.5,v+.5);                     // its buckle
+  for(let r=0;r<GUARD_KEYS.length;r++){
+    const dx=r>=2?sw:0;
+    for(let c=-1;c<=7;c++){
+      const ch=on(c,r)?GUARD_KEYS[r][c]:null;
+      const edge=!ch&&(on(c+1,r)||on(c-1,r)||on(c,r+1)||on(c,r-1));
+      if(!ch&&!edge)continue;
+      ctx.fillStyle=ch?GUARD_KEY_COL[ch]:"#140c06";
+      ctx.fillRect(px(X0+c+dx),y+(Y0+r)*v,u+.5,v+.5);
+    }
+  }
+  ctx.globalAlpha=1;
+}
 // Asleep, they sit slumped against the wall with their eyes shut; as they wake they straighten up.
 function drawSleeper(m,b){
   const V=VAULT,img=SPR.troll;if(!img)return;
@@ -1743,6 +1769,7 @@ function drawSleeper(m,b){
   blit("troll",m.vx,m.vy-.18*(1-e)+.02,b,m.flash||0,sy,sx,m.who==="mog");
   const w=cell*sx*img.width/16,h=cell*sy*img.height/16,px=(m.vx-cam.x)*cell+(cell-w)/2,py=(m.vy-.18*(1-e)+.02-cam.y)*cell+cell-h;
   const kx=w/img.width,ky=h/img.height;
+  if(m.keys>0)drawGuardKeys(px,py,w,h,m.who==="mog",b,m.ph);
   if(e<.5&&!m.eyesOpen){
     ctx.globalAlpha=b;
     for(const [ex,ey] of DLG_WHO.grub.eyes){
@@ -4893,7 +4920,9 @@ function render(){
     }
     const mwk=MONSPR[m.t.id]+"_walk_",mwalk=m.walkT>0&&SPR[mwk+"0"],mf=mwalk?Math.floor(m.walkPhase||0)%4:0;
     knitCheck(m,m.hp/m.max);
-    blit(rootSpr(m.t,hurtSpr(mwalk?mwk+mf:MONSPR[m.t.id],m.hp/m.max)),m.vx+o[0],m.vy+o[1]+bob+(mwalk&&mf%2&&!m.t.erratic?-1/16:0),b,m.flash||0,sy,sx);
+    const mty=m.vy+o[1]+bob+(mwalk&&mf%2&&!m.t.erratic?-1/16:0);
+    blit(rootSpr(m.t,hurtSpr(mwalk?mwk+mf:MONSPR[m.t.id],m.hp/m.max)),m.vx+o[0],mty,b,m.flash||0,sy,sx);
+    if(m.keys>0){const kw=cell*sx*1.5,kh=cell*sy*1.5;drawGuardKeys((m.vx+o[0]-cam.x)*cell+(cell-kw)/2,(mty-cam.y)*cell+cell-kh,kw,kh,false,b,m.ph+(mwalk?mf:0));}
     if(m.hp<m.max){
       const w=Math.round(cell*.66),h=Math.max(2,Math.round(cell*.08));
       const tall=((SPR[MONSPR[m.t.id]]||{height:16}).height/16-1)*cell;
@@ -7172,6 +7201,7 @@ function drawBattle(vw,vh){
   if(m.t.thing)drawThingArena(eSpr,ex+eoffX,ey+eBob,esz,bossScaleW,bossScaleH,eFade);
   else if(m.t.ghost)drawGhostArena(eSpr,ex+eoffX,ey+eBob,esz,bossScaleW,bossScaleH,eFade);
   else drawArenaSprite(eSpr,ex+eoffX,ey+eBob,esz,eFade,B.mFlash,bossScaleW,bossScaleH);
+  if(B.mon.keys>0&&B.faint<=0){const kw=esz*bossScaleW,kh=esz*bossScaleH;drawGuardKeys(ex+eoffX-kw/2,ey+eBob-kh,kw,kh,false,eFade,0);}
 
   // Poison lingers: bubbling green sprites hang over the foe for as long as it stays poisoned.
   if(B.mStat.poison>0&&B.faint<=0){
