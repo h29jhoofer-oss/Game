@@ -4750,6 +4750,9 @@ function tick(dt){
     const hk=RM?1:1-Math.pow(1e-4,dt);
     B.mShown+=(Math.max(0,B.mhp)-B.mShown)*hk;
     B.pShown+=(Math.max(0,S.hp)-B.pShown)*hk;
+    // the pale "just lost" part of the vessel holds a moment, then drains after the red
+    const hp=Math.max(0,S.hp);if(B.pLag===undefined||hp>=B.pLag){B.pLag=hp;B.pLagT=0;}
+    else if((B.pLagT=(B.pLagT||0)+dt)>.45)B.pLag+=(hp-B.pLag)*(RM?1:1-Math.pow(.02,dt));
   }
   for(let i=sfx.length-1;i>=0;i--){
     const f=sfx[i];f.t+=dt;
@@ -7499,8 +7502,7 @@ function drawBattle(vw,vh){
   const small=Math.max(10,Math.min(13,vw*.016));
   plate(vw*.045,vh*.07,vw*.42,cap(m.t.name),B.mShown/B.mmax,null,
         statusText(B.mStat,m.t.name),small,m.t.boss,B.phaseNum,B.mStat.broken>0?0:B.poise/B.maxPoise);
-  plate(vw*.52,vh*.70,vw*.435,CHAR().name+"  Lv "+S.lvl,Math.max(0,B.pShown)/S.maxhp,
-        Math.max(0,Math.round(S.hp))+" / "+S.maxhp+(CHAR().noMana?"":"   ·   MP "+Math.floor(S.mana)),statusText(B.pStat).concat(CHAR().ichor?[["ICHOR "+(S.ichor||0),"#e8685a"]]:[]).concat(B.combo>0?[["COMBO x"+B.combo+(B.combo>=COMBO_MAX?" · FINISHER READY":""),"#f0c060"]]:[]),small,false);
+  playerHud(vw*.52,vh*.70,vw*.435,small,statusText(B.pStat).concat(CHAR().ichor?[["ICHOR "+(S.ichor||0),"#e8685a"]]:[]).concat(B.combo>0?[["COMBO x"+B.combo+(B.combo>=COMBO_MAX?" · FINISHER READY":""),"#f0c060"]]:[]));
 
   ctx.textAlign="center";ctx.textBaseline="middle";
   for(const f of sfx){
@@ -7608,6 +7610,77 @@ function statusText(st,who){
   if(st.bloodPrice)out.push(["SIGNED","#e8685a"]);
   if(st.clauses)for(const c of st.clauses)out.push([CLAUSES[c.id].chip+" "+c.t,CLAUSES[c.id].col]);
   return out;
+}
+/* ---------- the hero's health vessel ---------- */
+// In a fight the hero's health is a vessel of red, one shape per hero (Cade's heart, Rook's drop of blood,
+// Vell's phial, Orrin's bubbling potion, Eric's inkwell and quill, Anselm's chalice, Brannoc's shield).
+// "#" is the inside, which fills from the bottom; every other letter is drawn in its PAL colour.
+const VESSELS={
+ cade:["..kkkk....kkkk..",".k####k..k####k.","k######kk######k","k##############k","k##############k","k##############k","k##############k",".k############k.",".k############k.","..k##########k..","...k########k...","....k######k....",".....k####k.....","......k##k......",".......kk......."],
+ rook:[".......kk.......","......k##k......","......k##k......",".....k####k.....",".....k####k.....","....k######k....","...k########k...","..k##########k..",".k############k.",".k############k.","k##############k","k##############k","k##############k",".k############k.","..k##########k..","...kk######kk...",".....kkkkkk....."],
+ doctor:["....kkkkkk....","....kNNNNk....","....kTNNTk....","...kGllllGk...","....kG##Gk....","....k####k....","...k######k...","..k########k..","..k########k..","..k########k..","..k########k..","..k########k..","..k########k..","..k########k..","..k########k..","..k########k..","...k######k...","....kkkkkk...."],
+ mage:["......kkkkk......","......kNNNk......",".....kGllGGk.....","......k###k......","......k###k......","......k###k......",".....k#####k.....","...kk#######kk...","..k###########k..",".k#############k.",".k#############k.","k###############k","k###############k","k###############k",".k#############k.","..k###########k..","...kk#######kk...",".....kkkkkkk....."],
+ pact_maker:["..............kk..",".............kwlk.","............kwlGk.","...........kwlGk..","..........kwlGk...",".........kwlGk....","........kwGGk.....",".......kklkk......","...kkkkklkkkkk....","..kGGGGklkGGGGk...","...k###klk###k....",".kk####klk####kk..","k######kl######k..","k######kk######k..","k##############k..","k##############k..","k##############k..",".kkkkkkkkkkkkkk..."],
+ monk:["kOOOOOOOOOOOOOOk","kO############ok",".kO##########ok.",".kO##########ok.","..kO########ok..","..kO########ok..","...kOo####Ook...","....kkOOOOkk....","......kOok......","......kOok......",".....kOOOok.....","......kOok......","......kOok......","....kkOOOokk....","..kOOOOOOOOOok..","..kkkkkkkkkkkk.."],
+ brute:["kkkkkkkkkkkkkkkk","kGllllllllllllGk","kGq##########qGk","kGq##########qGk","kGq##########qGk","kGq##########qGk","kGq##########qGk",".kGq########qGk.",".kGq########qGk.","..kGq######qGk..","..kGq######qGk..","...kGq####qGk...","....kGq##qGk....",".....kGqqGk.....","......kGGk......",".......kk......."]
+};
+const VESSEL_COL={empty:"#3a2530",lag:"#f4d2b0",top:"#ff8f80",lit:"#e8685a",mid:"#c94a3c",dark:"#8f2f28"};
+// cx: centre, by: bottom, size: the most pixels across; ratio is the red, lag the pale part above it.
+function drawVessel(id,cx,by,size,ratio,lag,hit){
+  const g=VESSELS[id]||VESSELS.cade,rows=g.length,cols=g[0].length;
+  const u=Math.max(2,Math.floor(size/Math.max(rows,cols)));
+  let ox=Math.round(cx-cols*u/2),oy=Math.round(by-rows*u);
+  if(hit>0&&!RM){ox+=Math.round(Math.sin(tclock*70)*hit*u*.9);oy+=Math.round(Math.cos(tclock*55)*hit*u*.5);}
+  let top=rows,bot=0;
+  for(let r=0;r<rows;r++)if(g[r].includes("#")){top=Math.min(top,r);bot=Math.max(bot,r);}
+  const H=bot-top+1,lvl=bot+1-Math.round(Math.max(0,Math.min(1,ratio))*H),lg=bot+1-Math.round(Math.max(0,Math.min(1,lag))*H);
+  const cell=(c,r,col)=>{ctx.fillStyle=col;ctx.fillRect(ox+c*u,oy+r*u,u,u);};
+  // a faint rim of light so it reads against the dark; close to death it glows red instead
+  {
+    const low=ratio<.25&&ratio>0;
+    ctx.globalAlpha=low?.35+.3*Math.sin(tclock*7):.16;ctx.fillStyle=low?"#c94a3c":"#e9e5d9";
+    const sp=low?1:.5;
+    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)if(g[r][c]!==".")ctx.fillRect(ox+(c-sp)*u,oy+(r-sp)*u,u*(1+2*sp),u*(1+2*sp));
+    ctx.globalAlpha=1;
+  }
+  for(let r=0;r<rows;r++){
+    const row=g[r],a=row.indexOf("#"),b=row.lastIndexOf("#");
+    for(let c=0;c<cols;c++){
+      const ch=row[c];if(ch===".")continue;
+      if(ch!=="#"){cell(c,r,PAL[ch]||"#0b0d12");continue;}
+      cell(c,r,r<lvl?(r>=lg?VESSEL_COL.lag:VESSEL_COL.empty):r===lvl?VESSEL_COL.top:c===a?VESSEL_COL.lit:c===b?VESSEL_COL.dark:VESSEL_COL.mid);
+    }
+  }
+  // Orrin's potion bubbles as it sits
+  if(id==="mage"&&!RM){
+    for(let k=0;k<5;k++){
+      const p=(tclock*.55+k*.23)%1,r=bot-Math.floor(p*H),row=g[r];if(!row||r<=lvl)continue;
+      const a=row.indexOf("#"),b=row.lastIndexOf("#");if(a<0)continue;
+      const c=a+1+Math.floor(((k*7+3)%11)/11*Math.max(1,b-a-1));
+      if(row[c]==="#")cell(c,r,VESSEL_COL.top);
+    }
+  }
+  // a glint of light on the glass
+  ctx.fillStyle="rgba(255,255,255,.38)";
+  for(let r=top+1;r<=Math.min(bot,top+3);r++){const a=g[r].indexOf("#");if(a>=0&&g[r][a+1]==="#")ctx.fillRect(ox+(a+1)*u,oy+r*u,u,u);}
+}
+// The hero's own plate in a fight: no bar, just the vessel, with the name, the numbers and the chips beside it.
+function playerHud(x,y,w,fs,chips){
+  const h=fs*4.4,vs=fs*7.2;
+  ctx.fillStyle="rgba(12,16,22,.86)";ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle="rgba(82,92,110,.5)";ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,w-1,h-1);
+  const narrow=w<fs*22;                        // a phone: the vessel stands just left of the plate instead of in it
+  drawVessel(CHAR().id,narrow?x-vs*.55:x+w-fs*.4-vs*.5,narrow?y+fs*1.4:y+h-fs*.3,vs,Math.max(0,B.pShown)/S.maxhp,(B.pLag===undefined?S.hp:B.pLag)/S.maxhp,B.pFlash||0);
+  ctx.textAlign="left";ctx.textBaseline="alphabetic";
+  ctx.font="600 "+fs+'px "IBM Plex Mono", monospace';ctx.fillStyle="#e9e5d9";
+  ctx.fillText(CHAR().name+"  Lv "+S.lvl,x+fs*.9,y+fs*1.5);
+  ctx.font=Math.round(fs*.92)+'px "IBM Plex Mono", monospace';ctx.fillStyle=S.hp<=S.maxhp*.25?"#e8685a":"#9aa5b1";
+  ctx.fillText("HP "+Math.max(0,Math.round(S.hp))+" / "+S.maxhp+(CHAR().noMana?"":"   ·   MP "+Math.floor(S.mana)),x+fs*.9,y+fs*2.75);
+  if(chips&&chips.length){
+    ctx.font="600 "+Math.round(fs*.78)+'px "IBM Plex Mono", monospace';
+    let cx2=x+fs*.9;
+    for(const c of chips){ctx.fillStyle=c[1];ctx.fillText(c[0],cx2,y+fs*3.85);cx2+=ctx.measureText(c[0]).width+fs*.8;}
+  }
 }
 function plate(x,y,w,title,ratio,sub,chips,fs,boss,phaseNum,poise){
   const h=fs*(sub?4.4:3.5)+(boss?fs*1.05:0)+(poise!==undefined?fs*.6:0);
