@@ -39,6 +39,20 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await ev('S.hp=S.maxhp;refresh();');
   await page.waitForTimeout(100);
   check('healing fills it straight back up', await ev('HV.hpLag===S.hp'));
+  // the torch: a little fire above the mana gem that burns down
+  const fire = () => ev(`(()=>{const c=document.getElementById("ficry"),d=c.getContext("2d").getImageData(0,0,c.width,c.height).data;let n=0;
+    for(let i=0;i<d.length;i+=4)if(d[i]>220&&d[i+1]>120&&d[i+2]<120)n++;return n;})()`);
+  check('the old flame bar is gone', await ev('!document.getElementById("flamebar")'));
+  check('the torch is a little fire, above the mana gem', await ev(`(()=>{const f=document.getElementById("ficry").getBoundingClientRect(),m=document.getElementById("mpcry").getBoundingClientRect();
+    return f.bottom<=m.top+2&&Math.abs(f.left-m.left)<6;})()`));
+  await ev('S.flame=S.maxflame;refreshFlame();');await page.waitForTimeout(1500);
+  const f1 = await fire();
+  await ev('S.flame=Math.round(S.maxflame*.3);refreshFlame();');await page.waitForTimeout(2000);
+  const f2 = await fire();
+  check('it burns down as the flame runs out', f1 > 60 && f2 < f1 * .6, [f1, f2]);
+  const frames = new Set();
+  for (let i = 0; i < 12; i++) { frames.add(await ev('document.getElementById("ficry").toDataURL().length')); await page.waitForTimeout(60); }
+  check('and it flickers', frames.size > 1, frames.size);
   check('a hero with no mana has no gem', await ev('B=null;S.mode="map";start("monk");refreshMana();getComputedStyle(document.getElementById("manarow")).display==="none"'));
 
   check('no page errors', errors.length === 0, errors);

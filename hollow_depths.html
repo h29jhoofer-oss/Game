@@ -80,7 +80,12 @@ h1 .sub{color:var(--slate);letter-spacing:.06em;font-weight:400}
 }
 .hpwrap{margin-bottom:9px}
 /* health and mana are crystals: one vessel of red per hero, and a smaller purple gem */
-.crystals{display:flex;align-items:flex-end;gap:16px;margin:2px 0 10px}
+.crystals{display:flex;align-items:flex-end;gap:6px;margin:2px 0 10px}
+.crycol{display:flex;flex-direction:column;gap:4px}
+.cry.side{flex-direction:row;gap:6px}
+.cry.side .crytx{align-items:flex-start}
+.cry.side .crytx b{white-space:nowrap;font-size:11px}
+.crytx i{font-style:normal;color:var(--slate);font-size:10px}
 .cry{display:flex;flex-direction:column;align-items:center;gap:3px}
 .cry canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 .crytx{display:flex;flex-direction:column;align-items:center;line-height:1.25;font-size:12px}
@@ -879,7 +884,10 @@ body.inbattle #hint{display:none}
         <h2 id="hudname">Cade</h2>
         <div class="crystals">
           <div class="cry"><canvas id="hpcry" width="1" height="1"></canvas><div class="crytx"><span>Health</span><b id="hptxt">24 / 24</b></div></div>
-          <div class="cry mp" id="manarow"><canvas id="mpcry" width="1" height="1"></canvas><div class="crytx"><span>Mana</span><b id="manatxt" style="color:var(--mana)">40 / 40</b></div></div>
+          <div class="crycol">
+            <div class="cry side"><canvas id="ficry" width="1" height="1"></canvas><div class="crytx"><span>Flame</span><b id="flametxt" style="color:var(--flame)">100 / 100</b><i id="oiltxt"></i></div></div>
+            <div class="cry side mp" id="manarow"><canvas id="mpcry" width="1" height="1"></canvas><div class="crytx"><span>Mana</span><b id="manatxt" style="color:var(--mana)">40 / 40</b></div></div>
+          </div>
         </div>
         <div class="hudchips" id="hudChips"></div>
         <div class="hpwrap">
@@ -889,10 +897,6 @@ body.inbattle #hint{display:none}
         <div class="hpwrap">
           <div class="hprow"><span>Stamina</span><b id="stamtxt" style="color:var(--stam)">100 / 100</b></div>
           <div class="bar stam" id="stambar-wrap"><i id="stambar" style="width:100%"></i></div>
-        </div>
-        <div class="hpwrap">
-          <div class="hprow"><span>Flame <span id="oiltxt" style="color:var(--slate);font-size:11px"></span></span><b id="flametxt" style="color:var(--flame)">100 / 100</b></div>
-          <div class="bar flame" id="flamebar-wrap"><i id="flamebar" style="width:100%"></i></div>
         </div>
         <div class="statrow">
           <div class="stat"><span>Depth</span><span id="depth">1</span></div>
@@ -3453,18 +3457,12 @@ function gainFlame(amount){
 }
 
 function refreshFlame(){
-  const pct = Math.max(0, 100 * S.flame / S.maxflame);
-  const el = $("flamebar");
-  const wrap = $("flamebar-wrap");
   const txt = $("flametxt");
-  if(!el||!wrap||!txt) return;
+  if(!txt) return;
   const ot=$("oiltxt");
-  if(ot){const n=S.pack.filter(it=>it.kind==="use"&&it.ref.id==="oil").length;ot.textContent=n?"· oil ×"+n:"· no oil";}
-  el.style.width = pct + "%";
+  if(ot){const n=S.pack.filter(it=>it.kind==="use"&&it.ref.id==="oil").length;ot.textContent=n?"oil ×"+n:"no oil";}
   const lo = S.flame <= FLAME_LOW;
   const out = S.flame === 0;
-  wrap.classList.toggle("lo", lo);
-  wrap.classList.toggle("out", out);
   txt.textContent = Math.ceil(S.flame) + " / " + S.maxflame;
   if(out) txt.style.color = "#666";
   else txt.style.color = lo ? "var(--flame-lo)" : "var(--flame)";
@@ -7627,6 +7625,10 @@ const VESSELS={
 };
 const VESSEL_RED={empty:"#3a2530",lag:"#f4d2b0",top:"#ff8f80",lit:"#e8685a",mid:"#c94a3c",dark:"#8f2f28",glow:"#c94a3c"};
 const VESSEL_MANA={empty:"#2a2038",lag:"#ece2ff",top:"#e6d4ff",lit:"#c8a8f0",mid:"#8a5fc4",dark:"#4a2f6b",glow:"#8a5fc4"};
+const VESSEL_FIRE={empty:"#2a1c14",lag:"#ffe2b4",top:"#fff27a",lit:"#ffb860",mid:"#f0902a",dark:"#b8431f",glow:"#f0902a",core:"#ffd860"};
+// The torch is a little fire that burns down as the flame runs out; two frames, swapped to flicker.
+const FIRE_FRAMES=[["....k.......","...k#k......","...k#k...k..","..k##k..k#k.","..k###kk##k.",".k####k###k.",".k#########k","k####@@####k","k###@@@@###k","k###@@@@@##k","k##@@@@@@##k","k##@@@@@@##k",".k##@@@@##k.","..kkkkkkkk.."],
+  [".......k....","......k#k...","..k...k#k...",".k#k..k##k..",".k##kk###k..",".k###k####k.","k#########k.","k####@@####k","k###@@@@###k","k##@@@@@###k","k##@@@@@@##k","k##@@@@@@##k",".k##@@@@##k.","..kkkkkkkk.."]];
 // Mana is a small faceted gem, the same for everyone.
 const MANA_GEM=["....kkkk....","...k####k...","..k######k..",".k########k.","k##########k","k##########k",".k########k.",
   ".k########k.","..k######k..","..k######k..","...k####k...","....k##k....",".....kk....."];
@@ -7636,7 +7638,8 @@ function drawVessel(g2,grid,ox,oy,u,ratio,lag,hit,C,bubbly){
   const g=grid,rows=g.length,cols=g[0].length;
   if(hit>0&&!RM){ox+=Math.round(Math.sin(tclock*70)*hit*u*.9);oy+=Math.round(Math.cos(tclock*55)*hit*u*.5);}
   let top=rows,bot=0;
-  for(let r=0;r<rows;r++)if(g[r].includes("#")){top=Math.min(top,r);bot=Math.max(bot,r);}
+  const ins=ch=>ch==="#"||ch==="@";                     // "@": inside, drawn in the core colour (the fire's heart)
+  for(let r=0;r<rows;r++)if(/[#@]/.test(g[r])){top=Math.min(top,r);bot=Math.max(bot,r);}
   const H=bot-top+1,cl=v=>Math.max(0,Math.min(1,v)),lvl=bot+1-Math.round(cl(ratio)*H),lg=bot+1-Math.round(cl(lag)*H);
   const cell=(c,r,col)=>{g2.fillStyle=col;g2.fillRect(ox+c*u,oy+r*u,u,u);};
   // a faint rim of light so it reads against the dark; close to empty it pulses instead
@@ -7646,11 +7649,11 @@ function drawVessel(g2,grid,ox,oy,u,ratio,lag,hit,C,bubbly){
   for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)if(g[r][c]!==".")g2.fillRect(ox+(c-sp)*u,oy+(r-sp)*u,u*(1+2*sp),u*(1+2*sp));
   g2.globalAlpha=1;
   for(let r=0;r<rows;r++){
-    const row=g[r],a=row.indexOf("#"),b=row.lastIndexOf("#");
+    const row=g[r],a=row.search(/[#@]/),b=Math.max(row.lastIndexOf("#"),row.lastIndexOf("@"));
     for(let c=0;c<cols;c++){
       const ch=row[c];if(ch===".")continue;
-      if(ch!=="#"){cell(c,r,PAL[ch]||"#0b0d12");continue;}
-      cell(c,r,r<lvl?(r>=lg?C.lag:C.empty):r===lvl?C.top:c===a?C.lit:c===b?C.dark:C.mid);
+      if(!ins(ch)){cell(c,r,PAL[ch]||"#0b0d12");continue;}
+      cell(c,r,r<lvl?(r>=lg?C.lag:C.empty):r===lvl?C.top:ch==="@"&&C.core?C.core:c===a?C.lit:c===b?C.dark:C.mid);
     }
   }
   if(bubbly&&!RM){
@@ -7667,12 +7670,16 @@ function drawVessel(g2,grid,ox,oy,u,ratio,lag,hit,C,bubbly){
 }
 // What the crystals show: they follow health and mana quickly, and the pale "just lost" part holds a moment
 // before it drains after them. A drop in health shakes the vessel.
-const HV={hp:null,hpLag:0,hpT:0,mp:null,mpLag:0,mpT:0,hit:0,prevHp:null,chips:""};
+const HV={hp:null,hpLag:0,hpT:0,mp:null,mpLag:0,mpT:0,fl:null,flLag:0,flT:0,hit:0,prevHp:null,chips:""};
 function hudTick(dt){
   if(!S)return;
   const k=RM?1:1-Math.pow(1e-4,dt),drain=RM?1:1-Math.pow(.02,dt);
   const hp=Math.max(0,S.hp),mp=Math.max(0,S.mana||0);
+  const fl=Math.max(0,S.flame||0);
   if(HV.hp===null){HV.hp=HV.hpLag=HV.prevHp=hp;HV.mp=HV.mpLag=mp;}
+  if(HV.fl===null)HV.fl=HV.flLag=fl;
+  HV.fl+=(fl-HV.fl)*k;
+  if(fl>=HV.flLag){HV.flLag=fl;HV.flT=0;}else if((HV.flT+=dt)>.45)HV.flLag+=(fl-HV.flLag)*drain;
   if(hp<HV.prevHp-.01)HV.hit=1;
   HV.prevHp=hp;HV.hit=Math.max(0,HV.hit-dt*4.5);
   HV.hp+=(hp-HV.hp)*k;HV.mp+=(mp-HV.mp)*k;
@@ -7700,8 +7707,10 @@ function paintCrystal(id,grid,u,ratio,lag,hit,C,bubbly){
 }
 function drawHudCrystals(){
   const small=matchMedia("(max-width:760px)").matches;
-  paintCrystal("hpcry",VESSELS[CHAR().id]||VESSELS.cade,small?3:5,HV.hp/S.maxhp,HV.hpLag/S.maxhp,HV.hit,VESSEL_RED,CHAR().id==="mage");
-  if(!CHAR().noMana)paintCrystal("mpcry",MANA_GEM,small?2:4,HV.mp/Math.max(1,S.maxmana),HV.mpLag/Math.max(1,S.maxmana),0,VESSEL_MANA,false);
+  paintCrystal("hpcry",VESSELS[CHAR().id]||VESSELS.cade,small?3:4,HV.hp/S.maxhp,HV.hpLag/S.maxhp,HV.hit,VESSEL_RED,CHAR().id==="mage");
+  const fr=S.flame>0&&!RM?Math.floor(tclock*5.5+Math.sin(tclock*2.3)*.6)&1:0;
+  paintCrystal("ficry",FIRE_FRAMES[fr],small?2:3,HV.fl/Math.max(1,S.maxflame),HV.flLag/Math.max(1,S.maxflame),0,VESSEL_FIRE,false);
+  if(!CHAR().noMana)paintCrystal("mpcry",MANA_GEM,small?2:3,HV.mp/Math.max(1,S.maxmana),HV.mpLag/Math.max(1,S.maxmana),0,VESSEL_MANA,false);
 }
 // On a phone the side panel is hidden in a fight, so the crystals stand in the corner of the arena instead.
 function arenaCrystals(vw,vh){
