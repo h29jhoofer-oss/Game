@@ -71,6 +71,13 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const log2 = await ev('B.log.map(l=>l.t).join("\\n")');
   check('then fights at once', /You took nothing from me/.test(log2) && await ev('B.phase==="choose"&&!B.mStat.gifts'), log2);
 
+  // the card it pulls out of you keeps its colours
+  check('a stolen blood gift flies out red, a sulphur gift yellow, a dark gift violet', await ev('giftColors("harvest").edge==="#b8433a"&&giftColors("wrath").edge==="#d4af52"&&giftColors("keen").edge==="#8a5fc4"'));
+  // temptation: once one dark gift is taken, black cards come far more often
+  const rate = async owned => ev(`(()=>{start("cade");S.perks={};for(const g of ${JSON.stringify(owned)})S.perks[g]=true;S.lvl=6;let n=0;for(let i=0;i<2000;i++){S.blackPity=0;if(dealLevelHand().some(h=>h.kind==="black"))n++;}return n/2000;})()`);
+  const r0 = await rate([]), r1 = await rate(['keen']);
+  check('a clean soul sees a black card now and then', r0 > .2 && r0 < .45, r0);
+  check('after one dark gift, nearly every hand has one', r1 > .7, r1);
   check('no page errors', errors.length === 0, errors);
   await browser.close();
   let fail = 0;

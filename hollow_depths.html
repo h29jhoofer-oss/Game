@@ -7474,17 +7474,17 @@ function thingReveal(){
   });
 }
 function takeGift(id){
-  const L=B.layout,p=PERKS[id];
+  const L=B.layout,p=PERKS[id],gc=giftColors(id);
   B.giftFx={id,t0:performance.now()};
   playCardSound(true);
-  if(L)sburst(L.px,L.py,"#8a5fc4",16,200);
+  if(L)sburst(L.px,L.py,gc.burst,16,200);
   B.mStat.gifts=(B.mStat.gifts||0)+1;
   if(id==="gilded"){
     const g=Math.min(90,Math.floor((S.gold||0)/4)+20);
     if(S.gold)blog(`Your ${S.gold} gold goes with it.`,"c-hit");
     S.gold=0;B.mmax+=g;B.mhp+=g;B.mon.max+=g;B.mon.hp+=g;
   }
-  setTimeout(()=>{if(!B)return;const L=B.layout;if(L){sburst(L.ex,L.ey,"#c8a8f0",18,240);sring(L.ex,L.ey,"rgba(200,168,240,.85)",L.esz*.8);snum(L.ex,L.ey-L.esz*.9,p.name,"#c8a8f0",true);}quake(5);refresh();},550);
+  setTimeout(()=>{if(!B)return;const L=B.layout;if(L){sburst(L.ex,L.ey,gc.glyph,18,240);sring(L.ex,L.ey,gc.ring,L.esz*.8);snum(L.ex,L.ey-L.esz*.9,p.name,gc.glyph,true);}quake(5);refresh();},550);
   refresh();
 }
 const DLG_CPS=42;   // letters a second as the text types out
@@ -7630,16 +7630,21 @@ function playTalkBlip(voice){
   o.connect(g);g.connect(actx.destination);osc.start(t);osc.stop(t+.13);
 }
 // A stolen gift crossing the arena: a little black card with its glyph, pulled from you into it.
+// The card it pulls out of you keeps its own colours: violet dark gifts, red blood gifts, yellow sulphur.
+function giftColors(id){const p=PERKS[id]||{};
+  return p.blood?{bg:"#120a0b",edge:"#b8433a",glyph:"#ff6a52",burst:"#c94a3c",ring:"rgba(232,104,90,.85)"}
+    :p.sulphur?{bg:"#0f0d07",edge:"#d4af52",glyph:"#fff27a",burst:"#f0c060",ring:"rgba(255,220,90,.85)"}
+    :{bg:"#0b0d12",edge:"#8a5fc4",glyph:"#c8a8f0",burst:"#8a5fc4",ring:"rgba(200,168,240,.85)"};}
 function drawGiftFx(L){
   const G=B.giftFx;if(!G||!L)return;
   const t=(performance.now()-G.t0)/550;if(t>1)return;
   const e=t*t*(3-2*t),x=L.px+(L.ex-L.px)*e,y=L.py-L.psz*.3+(L.ey-L.esz*.4-(L.py-L.psz*.3))*e-Math.sin(e*Math.PI)*L.psz*.2;
-  const w=L.psz*.28,h=w*1.4,gl=LVL_GLYPH[PERKS[G.id].glyph]||[];
+  const w=L.psz*.28,h=w*1.4,gl=LVL_GLYPH[PERKS[G.id].glyph]||[],gc=giftColors(G.id);
   ctx.save();ctx.translate(x,y);ctx.rotate((e-.5)*1.2);ctx.globalAlpha=1-Math.max(0,t-.8)*5;
-  ctx.fillStyle="#0b0d12";ctx.fillRect(-w/2,-h/2,w,h);
-  ctx.strokeStyle="#8a5fc4";ctx.lineWidth=Math.max(1.5,w*.06);ctx.strokeRect(-w/2,-h/2,w,h);
+  ctx.fillStyle=gc.bg;ctx.fillRect(-w/2,-h/2,w,h);
+  ctx.strokeStyle=gc.edge;ctx.lineWidth=Math.max(1.5,w*.06);ctx.strokeRect(-w/2,-h/2,w,h);
   const rows=gl.length,cols=rows?gl[0].length:1,u=w*.7/cols;
-  ctx.fillStyle="#c8a8f0";
+  ctx.fillStyle=gc.glyph;
   for(let j=0;j<rows;j++)for(let i=0;i<cols;i++)if(gl[j][i]==="#")ctx.fillRect(-cols*u/2+i*u,-rows*u/2+j*u,Math.ceil(u),Math.ceil(u));
   ctx.restore();ctx.globalAlpha=1;
 }
@@ -8339,6 +8344,8 @@ let levelOpen=false,levelPicked=false;
 // Three different white cards, and sometimes a black one in a random slot. The chance grows with each
 // level that goes by without one, so a black card turns up at least every few levels.
 const SULPHUR_CHANCE=.05;   // per level-up: very rare
+const SULPHUR_TEMPTED=.12,DARK_TEMPTED=.75;   // ...and once you've taken any dark gift, far likelier
+function darkTaken(){return Object.keys(S.perks||{}).filter(id=>S.perks[id]&&PERKS[id]).length;}
 function sealedBy(cardId){const id=Object.keys(S.perks||{}).find(k=>S.perks[k]&&PERKS[k]&&PERKS[k].seals===cardId);return id?PERKS[id]:null;}
 function dealLevelHand(){
   const pool=LVL_CARDS.filter(c=>!c.ok||c.ok()).map(c=>sealedBy(c.id)?{kind:"torn",c,by:sealedBy(c.id)}:{kind:"white",c});
@@ -8348,13 +8355,15 @@ function dealLevelHand(){
   if(!hand.some(h=>h.kind==="white")){const ok=pool.slice(3).find(h=>h.kind==="white");hand[0]=ok||{kind:"white",c:RESPITE};}
   const sul=S.betrayed?[]:Object.keys(PERKS).filter(id=>PERKS[id].sulphur&&!S.perks[id]);
   const slot=()=>{const free=hand.map((h,i)=>i).filter(i=>hand[i].kind!=="white"||hand.filter(x=>x.kind==="white").length>1);return free[Math.floor(Math.random()*free.length)];};
-  if(sul.length&&Math.random()<SULPHUR_CHANCE){
+  // Once you have taken one, the dark comes looking for you: black cards turn up far more often.
+  const taken=darkTaken();
+  if(sul.length&&Math.random()<(taken?SULPHUR_TEMPTED:SULPHUR_CHANCE)){
     const id=sul[Math.floor(Math.random()*sul.length)];
     hand[slot()]={kind:"black",id,c:PERKS[id]};
     return hand;
   }
   const left=S.betrayed?[]:Object.keys(PERKS).filter(id=>!PERKS[id].sulphur&&!S.perks[id]&&(!PERKS[id].blood||bloodPrice()));
-  if(left.length&&Math.random()<.3+.25*(S.blackPity||0)){
+  if(left.length&&Math.random()<(taken?Math.min(.95,DARK_TEMPTED+.08*(taken-1)):.3+.25*(S.blackPity||0))){
     const id=left[Math.floor(Math.random()*left.length)];
     hand[slot()]={kind:"black",id,c:PERKS[id],price:PERKS[id].blood?bloodPrice():null};
     S.blackPity=0;
@@ -8390,7 +8399,7 @@ function openLevelUp(){
       <div class="cbody">${words}<div class="ckey">PRESS ${i+1}</div></div></div></div>`;
   }).join("");
   overlay(`<h3>Level ${lvl}</h3>
-    <p class="lede">Choose one card.${hand.some(h=>h.kind==="black")?" A black card has been dealt.":""}</p>
+    <p class="lede">Choose one card.${hand.some(h=>h.kind==="black")?(darkTaken()?" Another black card. They come easier now.":" A black card has been dealt."):""}</p>
     <div class="chargrid fan lvlhand">${cards}</div>`);
   $("card").classList.add("wide");
   playCardSound(false);
