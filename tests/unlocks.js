@@ -12,20 +12,21 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const ev = s => page.evaluate(s);
   const results = [];
   const check = (name, ok, detail) => results.push({ name, ok: !!ok, detail });
-  const reload = async () => { await page.reload(); await page.waitForTimeout(300); };
+  const reload = async () => { await page.reload(); await page.waitForTimeout(300); await ev('PLAYTEST=false'); };
 
   await ev('localStorage.clear()'); await reload();
-  check('a new player has only Cade', await ev('isUnlocked("cade")&&!["rook","doctor","mage","monk"].some(isUnlocked)'));
+  check('while playtesting, every hero can be picked', await ev('PLAYTEST=true;const r=CHARACTERS.every(c=>isUnlocked(c.id));PLAYTEST=false;r'));
+  check('a new player has only Cade', await ev('isUnlocked("cade")&&!["rook","doctor","mage","monk","pact_maker","brute"].some(isUnlocked)'));
   // an old playtest save that marked every hero unlocked, with no quests done
   await ev('localStorage.setItem("hd-meta",JSON.stringify({unlocked:{cade:true,rook:true,doctor:true,mage:true,monk:true},stats:{},done:{}}))'); await reload();
-  check('an old save with every hero unlocked but no quests done gets only Cade', await ev('!["rook","doctor","mage","monk"].some(isUnlocked)'), await ev('META.unlocked'));
+  check('an old save with every hero unlocked but no quests done gets only Cade', await ev('!["rook","doctor","mage","monk","pact_maker","brute"].some(isUnlocked)'), await ev('META.unlocked'));
   await ev('(()=>{chooseHero();})()');
-  check('the hero select shows the others locked, with their quests', await ev('document.querySelectorAll("#card .charcard.locked").length===4'));
+  check('the hero select shows the others locked, with their quests', await ev('document.querySelectorAll("#card .charcard.locked").length===6'));
   // finish a quest
   await ev('(()=>{for(let i=0;i<20;i++)bumpStat("wounds");})()');
   check('opening 20 wounds unlocks Rook', await ev('isUnlocked("rook")&&META.done.blood'));
   await reload();
-  check('and Rook is still there after a reload, the others still locked', await ev('isUnlocked("rook")&&!["doctor","mage","monk"].some(isUnlocked)'));
+  check('and Rook is still there after a reload, the others still locked', await ev('isUnlocked("rook")&&!["doctor","mage","monk","pact_maker","brute"].some(isUnlocked)'));
   await ev('META.tutorialDone=true;META.tutorialV=TUT_VER;metaSave()'); await reload();
   check('finishing the crash course survives a reload', await ev('META.tutorialDone===true&&(openSettings(),!!document.getElementById("setTut"))'));
   check('no page errors', errors.length === 0, errors);

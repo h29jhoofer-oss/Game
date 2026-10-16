@@ -1015,6 +1015,9 @@ const WEAPONS=[
  // Orrin's signature staff. Never dropped as loot.
  {id:"staff",   name:"The Ashwood Staff", min:3, max:6,  crit:.08,acc:.97,reach:1,pierce:1,d:0, special:true,
   note:"Thirty years of the court mage's hand worn into the grip. The stone at its head still glows when it is pointed at something that should not be alive."},
+ // Brannoc's signature sword. Never dropped as loot.
+ {id:"oath",    name:"The Oathblade",     min:4, max:8,  crit:.06,acc:.86,reach:1,pierce:2,d:0, special:true,
+  note:"A knight's two-handed sword, notched from the night the castle sank. He swore on it to guard the King. He still does."},
  {id:"pilgrim", name:"Pilgrim's Staff",   min:2, max:5,  crit:.06,acc:.94,reach:1,pierce:1,d:0, special:true,
   note:"Plain ash wood, worn smooth at the grip. It has walked to every shrine in the kingdom."},
  {id:"cane",    name:"The Bloodletter",   min:3, max:5,  crit:.10,acc:.96,reach:1,pierce:1,d:0, special:true,bleeds:true,leech:.2,thirst:50,thirstMax:8,
@@ -1037,6 +1040,8 @@ const OFFHAND_ITEMS=[
  {id:"pdagger", type:"dagger",name:"Parrying Dagger",min:3,max:5, crit:.20,acc:.83,pierce:0,pc:0.1,d:1,note:"Quick Stab [X]. +5% crit, 45% bleed chance, parries often."},
  {id:"stiletto",type:"dagger",name:"Main-Gauche",    min:5,max:8, crit:.24,acc:.86,pierce:1,pc:0.12,d:4,note:"Quick Stab [X]. +5% crit, 45% bleed chance, parries often."},
  {id:"fang",    type:"dagger",name:"Shadowfang",     min:8,max:12,crit:.28,acc:.89,pierce:2,pc:0.1,d:7,note:"Quick Stab [X]. +5% crit, 45% bleed chance, parries often."},
+ // Eric's quill-knife: counts as a dagger for bleeding. d:99 keeps it out of loot.
+ {id:"quill",   type:"dagger",name:"Quill-Knife",    min:2,max:4, crit:.18,acc:.88,pierce:0,pc:0.02,d:99,note:"Quick Stab [X]. A notary's penknife, sharpened past what a pen needs. 45% bleed chance."},
  {id:"buckler", type:"shield",name:"Wooden Buckler", min:3,max:6, crit:.05,acc:.92,pierce:0,block:.12,stun:.30,parry:.03,pc:0.08,d:0,note:"Blocks 12% of damage. Shield Bash [X]."},
  {id:"round",   type:"shield",name:"Iron Roundshield",min:4,max:8,crit:.05,acc:.92,pierce:0,block:.20,stun:.35,parry:.04,pc:0.07,d:2,note:"Blocks 20% of damage. Shield Bash [X]."},
  {id:"tower",   type:"shield",name:"Tower Shield",   min:5,max:10,crit:.05,acc:.90,pierce:0,block:.30,stun:.40,parry:.05,pc:0.05,d:5,note:"Blocks 30% of damage. Shield Bash [X]."},
@@ -1079,6 +1084,7 @@ const POTIONS=[
  {id:"bolt",  name:"Scroll of Lightning",glyph:"?", col:"--rime", note:"A crack of sky. Hits hard and stuns."},
  {id:"ice",   name:"Scroll of Ice",      glyph:"?", col:"--rime", note:"Frost spikes burst from the floor and freeze the foe."},
  {id:"wisp", name:"Scroll of the Wisp", glyph:"?", col:"--rime", note:"A little violet spirit is bound to it. It follows you and fights beside you. Cast it to hurl the wisp at a foe: the healthier it is, the harder it hits. If it dies, the scroll crumbles."},
+ {id:"ink",  name:"Ink Flask",       glyph:"!", col:"--rime",  note:"The Notary's ink. It mends him, and mends him more the deeper in debt he is. Opening it in a fight costs a turn."},
  {id:"oil",  name:"Lamp Oil",        glyph:"~", col:"--torch", note:"Fully rekindles your torch."}
 ];
 const MONSTERS=[
@@ -2759,7 +2765,7 @@ function applyMods(mods,sign){
     else if(k==="dodge")S.dodge=Math.max(0,Math.round((S.dodge+sign*v)*1000)/1000);
   }
 }
-function guardVal(){return Math.max(0,armorDef()+gearMod("def"));}
+function guardVal(){return Math.max(0,armorDef()+gearMod("def")-(hasClause("brittle")?2:0));}
 function shieldBlock(){return S.offhand&&S.offhand.type==="shield"?S.offhand.block:0;}
 function shieldReduce(dmg){
   const b=shieldBlock();
@@ -2948,8 +2954,10 @@ function triggerStagger(){
 const PARRY_BASE=.08,PARRY_MAX=.5;
 function parryChance(boss){
   if(S&&S.tut&&!S.tut.flags.parried&&S.mode==="battle")return 1;     // the crash course rat always leaves an opening, until you take one
+  if(CHAR().noParry)return 0;                // too heavy in his plate to turn a blow aside
   const oh=S.offhand||{};
   let c=PARRY_BASE+(oh.pc||0)+(CHAR().parry||0)*2+gearMod("parry")*2+(S.dodge||0);
+  if(B&&hasClause("unsteady"))c-=.12;
   if(boss)c*=.6;
   return Math.max(0,Math.min(PARRY_MAX,c));
 }
@@ -2959,7 +2967,7 @@ function parryChance(boss){
 function startParryWindow(sp){
   const m=B.mon,boss=!!m.t.boss,oh=S.offhand||{};
   const dur=boss?900:1050;
-  const w=Math.max(.08,(boss?.15:.22)+gearMod("parry")+(oh.parry||0));
+  const w=Math.max(.08,(boss?.15:.22)+gearMod("parry")+(oh.parry||0)-(hasClause("unsteady")?.06:0));
   const z0=.5+Math.random()*(.9-.5-Math.min(.35,w)*.5);
   B.phase="parry";
   B.pStat.parry=true;                                   // raise the guard while the window is open
@@ -3094,6 +3102,11 @@ function stepOn(){
     return;
   }
   if(it.kind==="gold"){const g=Math.round(it.amount*(1+gearMod("gold")));S.gold+=g;items.splice(idx,1);playCoinSound();say(`You pocket ${g} gold.`,"c-item");return;}
+  if(CHAR().pact&&it.kind==="use"&&it.ref.id==="heal"){
+    const ink=POTIONS.find(p=>p.id==="ink");
+    Object.assign(it,{ref:ink,glyph:ink.glyph,col:ink.col,name:ink.name,note:ink.note});
+    say("The draught clouds and darkens as you touch it. It is ink now.","c-cold");
+  }
   if(CHAR().learns&&it.kind==="use"&&LEARNABLE.includes(it.ref.id)){items.splice(idx,1);playItemSound();learnSpell(it);return;}
   if(S.pack.length>=9){say(`Your pack is full. ${it.name} stays put.`,"");return;}
   items.splice(idx,1);S.pack.push(it);playItemSound();
@@ -3128,6 +3141,12 @@ function useItem(i){
     computeFOV();dirty=true;
   }else{
     if(it.ref.id==="heal"&&CHAR().noPotions){say(NO_POTION_MSG,"c-cold");return;}
+    if(it.ref.id==="ink"){
+      let h=useInk(i);
+      if(h){h=Math.min(S.maxhp-S.hp,h);S.hp+=h;num(S.px,S.py,"+"+h,"#6fa844");ring(S.px,S.py,"rgba(111,168,68,.9)",2.3,.6);say(`The ink knits you back together (+${h}).`,"c-good");endTurn();refresh();}
+      if(packOpen)drawPack();
+      return;
+    }
     if(it.ref.id==="wisp"){say("The wisp bobs at your shoulder. It will only be loosed at a foe you are fighting.","c-cold");return;}
     const cost=spellCost(it);
     if(cost&&!canPay(cost)){say(payMsg(it,cost),"c-hit");return;}
@@ -3367,7 +3386,7 @@ function playMoveCard(mv){
 function renderMoveBar(){
   const el=$("movebar");if(!el)return;
   const list=(S&&S.mode==="battle"&&B)?unlocked():[];
-  const dry=m=>m.transfuse&&(S.ichor||0)<TRANSFUSE_MIN;
+  const dry=m=>(m.transfuse&&(S.ichor||0)<TRANSFUSE_MIN)||(m.spend==="terms"&&B&&B.termsUsed);
   const sig=list.map(m=>m.id+":"+(S.cds[m.id]||0)+(dry(m)?"!":"")).join("|");
   if(el.dataset.sig===sig)return;          // nothing changed: leave the buttons alone
   el.dataset.sig=sig;
@@ -3960,6 +3979,7 @@ function itemInfo(it){
     const id=r.id,t=r.tier||0;
     if(spellOf(it)){kind=it.learned?"Spell (learned)":"Scroll";if(id!=="wisp"&&CONS_DESC[id])lines.push(CONS_DESC[id][t]);lines.push(`Costs ${costLabel(spellCost(it))}`);}
     else if(id==="heal"){kind="Potion";lines.push(CHAR().noPotions?"Useless to "+CHAR().name:CONS_DESC.heal[t]);}
+    else if(id==="ink"){kind="Ink flask";lines.push(`Heals ${inkHeal()} right now`);}
     else if(id==="oil"){kind="Lamp oil";lines.push(`Torch at ${Math.ceil(S.flame)}/${S.maxflame}`);}
     else kind="Elixir";
     if(isWisp(it))lines.push(`Wisp: ${wispInit(it).whp}/${it.wmax} health`);
@@ -3978,7 +3998,7 @@ function itemTipHtml(it,extra,sellable){
 function packVerb(it){
   if(it.kind==="weapon"||it.kind==="armor"||it.kind==="offhand"||it.kind==="amulet"||it.kind==="ring")return"Equip";
   if(spellOf(it))return"Cast";
-  if(it.ref.id==="heal"||it.ref.id==="might")return"Drink";
+  if(it.ref.id==="heal"||it.ref.id==="ink"||it.ref.id==="might")return"Drink";
   return"Use";
 }
 function gearActions(slot){
@@ -4080,7 +4100,7 @@ function drawPack(){
     const it=S.pack[i];
     if(!it){cells.push(`<div class="pk-slot empty"></div>`);continue;}
     const sel=packSel&&packSel.at==="pack"&&packSel.i===i;
-    const badge=spellOf(it)?`<span class="pk-badge">${spellCost(it)}</span>`:"";
+    const badge=spellOf(it)?`<span class="pk-badge">${CHAR().noMana?bloodCost(spellCost(it)):spellCost(it)}</span>`:"";
     cells.push(`<button type="button" class="pk-slot${sel?" sel":""}" data-pk="${i}" aria-label="${it.name}">${icon(packIcon(it),40)}<span class="pk-key">${i+1}</span>${badge}</button>`);
   }
   // Orrin's spellbook
@@ -4279,20 +4299,28 @@ const ART={"rook":["............kk..","...........kZlk.",".....kkkk..kwGk.","...
 "magic_orb_1":["................",".......7........","......7777..7...","....77VVVV77....","..77VV3333VV7...","...7V344443V7...","..7V34ZZZZ43V77.",".7V34ZZZZZZ43V7.",".7V34ZZZZZZ43V7.","..7V34ZZZZ43V7..","...7V344443V77..","...7VV3333VV7...","....77VVVV77....","..7...7777......","........7.......","................"],
 "move_channel":["................",".......kk.......","......k34k......",".....k34Z4k.....","......k44k......",".......kk.......","...7...Nk...7...","..7V7..Nk..7V7..","...7...Nk...7...","..7....Nk....7..",".7V7...Nk...7V7.","..7....Nk....7..",".......Nk.......","....7..Nk..7....","...7V7.Nk.7V7...","....7..kk..7...."],
 "move_arcane":["................","......kkkk......","....kk7777kk....","...k77VVVV77k...","..k7VV3333VV7k..","..k7V344443V7k..",".k7V34ZZZZ43V7k.",".k7V34ZZZZ43V7k.",".k7V34ZZZZ43V7k.",".k7V34ZZZZ43V7k.","..k7V344443V7k..","..k7VV3333VV7k..","...k77VVVV77k...","....kk7777kk....","......kkkk......","................"],
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+"brute":["....kkkkk...kkk.","...kRRRRRk.kwlGk","..kqGlllGqkkwlGk","..kGlGGGGgkkwlGk","..kGkkkkkgkkwlGk","..kGlGkGkgkkwlGk",".kkqGGGGgqkkwlGk","kGllkgggkGkOOOOk","kGlGkqqqkGlgkNk.","kgGgRRRRRgGgkNk.",".kkgRrrrRgkkkOk.","..kqLLOLLqk..k..","..kgGggqGgk.....","..kGGk.kGGk.....",".kGlGk.kGlGk....",".kkkkk.kkkkk...."],
+"brute_atk":["....kkkkk.......","...kRRRRRk....kk","..kqGlllGqk..kwk","..kGlGGGGgk.kwlk","..kGkkkkkgkkwlk.","..kGlGkGkgkwlk..",".kkqGGGGgqOwlk..","kGllkgggkNOkk...","kGlGkqqqkGlk....","kgGgRRRRRgGgk...",".kkgRrrrRgkk....","..kqLLOLLqk..k..","..kgGggqGgk.....","..kGGk.kGGk.....",".kGlGk.kGlGk....",".kkkkk.kkkkk...."],
+"brute_walk_0":["....kkkkk...kkk.","...kRRRRRk.kwlGk","..kqGlllGqkkwlGk","..kGlGGGGgkkwlGk","..kGkkkkkgkkwlGk","..kGlGkGkgkkwlGk",".kkqGGGGgqkkwlGk","kGllkgggkGkOOOOk","kGlGkqqqkGlgkNk.","kgGgRRRRRgGgkNk.",".kkgRrrrRgkkkOk.","..kqLLOLLqk..k..","..kgGggqGgk.....",".kGGk..kGGk.....","kGlGk...kGlGk...","kkkkk...kkkkk..."],
+"brute_walk_1":["....kkkkk...kkk.","...kRRRRRk.kwlGk","..kqGlllGqkkwlGk","..kGlGGGGgkkwlGk","..kGkkkkkgkkwlGk","..kGlGkGkgkkwlGk",".kkqGGGGgqkkwlGk","kGllkgggkGkOOOOk","kGlGkqqqkGlgkNk.","kgGgRRRRRgGgkNk.",".kkgRrrrRgkkkOk.","..kqLLOLLqk..k..","..kgGggqGgk.....","..kGGk.kGGk.....",".kGlGk.kGlGk....",".kkkkk.kkkkk...."],
+"brute_walk_2":["....kkkkk...kkk.","...kRRRRRk.kwlGk","..kqGlllGqkkwlGk","..kGlGGGGgkkwlGk","..kGkkkkkgkkwlGk","..kGlGkGkgkkwlGk",".kkqGGGGgqkkwlGk","kGllkgggkGkOOOOk","kGlGkqqqkGlgkNk.","kgGgRRRRRgGgkNk.",".kkgRrrrRgkkkOk.","..kqLLOLLqk..k..","..kgGggqGgk.....","..kGGk.kGGk.....","..kGlGkGlGk.....","..kkkkkkkkk....."],
+"brute_walk_3":["....kkkkk...kkk.","...kRRRRRk.kwlGk","..kqGlllGqkkwlGk","..kGlGGGGgkkwlGk","..kGkkkkkgkkwlGk","..kGlGkGkgkkwlGk",".kkqGGGGgqkkwlGk","kGllkgggkGkOOOOk","kGlGkqqqkGlgkNk.","kgGgRRRRRgGgkNk.",".kkgRrrrRgkkkOk.","..kqLLOLLqk..k..","..kgGggqGgk.....","..kGGk.kGGk.....",".kGlGk.kGlGk....",".kkkkk.kkkkk...."],
+"move_crush":[".......kk.......","......kOOk......","......kNNk......","......kNNk......","...kkkOOOOkkk...","...kOOOOOOOOk...","....kkkwlkkk....","......kwlk......","..k...kwlk...k..",".kJk..kwlk..kJk.","..kEk.kwlk.kEk..","...k..kwlk..k...","kkkkkkkZZkkkkkkk","NDNDNkNkkNkNDNDN","nNnNkNnkknNkNnNn","kkkkkkkkkkkkkkkk"],
+"move_quake":["................","..k....kk....k..",".kJk..kOOk..kJk.","..kEk.kNNk.kEk..","...k.kOOOOk.k...","......kwlk......","...k..kwlk..k...","..kJk.kwlk.kJk..","...k..kZZk..k...","kkkkkkkkkkkkkkkk","NDNDkkNkkNkkDNDN","nNnk.kNkkNk.knNn","Nnk.kNk..kNk.kNn","nk.kNk....kNk.kn","k.kNk......kNk.k",".kkk........kkk."],
+"pact_maker":["............kk..","...kkkkk...kwlk.","..kxxxsssk.kwlk.","..kxxssssxkkwlk.","..kxtttttk.kwlk.","..kxYttYtk..kGk.","..kxtttttk..kGk.",".kllkttkllk.kGk.",".kqqlJRJlqqPPk..","kDLDqkJkqqqPGk..","kDODqqqqqqqkkk..","kDLDqnnOnnqk....",".kkkqqqqqqk.....","..kqqdqqdqk.....","..kNNNkkNNNk....","..knnnkknnnk...."],
+"pact_maker_atk":["................","....kkkkk.......","...kxxxsssk.....","...kxxssssxk....","...kxtttttk.....","...kxYttYtk.....","...kxtttttk.....","..kllkttkllk....","..kqqlJRJlqqkkkk",".kDLDqkJkqqPGwlw",".kDODqqqqqqqkkkk",".kDLDqnnOnnq....","..kkkqqqqqqk....","...kqqdqqdqk....","...kNNNkkNNN....","...knnnkknnn...."],
+"pact_maker_parry":["................","...kkkkk........","..kxxxsssk......","..kxxsssskkkkk..","..kxtttttkDDLk..","k.kxYttYtkDLLk..","kwkxtttttkOJLk..","klllkttklkDLLk..","kwqqlJRJlkDDLk..","kPkDqkJkqkDLLk..","kGkqqqqqqkkkkk..",".kkqnnOnnk......",".kkkqqqqq.......","..kqqdqqdqk.....","..kNNNkkNNNk....","..knnnkknnnk...."],
+"pact_maker_walk_0":["............kk..","...kkkkk...kwlk.","..kxxxsssk.kwlk.","..kxxssssxkkwlk.","..kxtttttk.kwlk.","..kxYttYtk..kGk.","..kxtttttk..kGk.",".kllkttkllk.kGk.",".kqqlJRJlqqPPk..","kDLDqkJkqqqPGk..","kDODqqqqqqqkkk..","kDLDqnnOnnqk....",".kkkqqqqqqk.....","..kqqdqqdqk.....","..knnnnkkNNNk...","..k.....knnnk..."],
+"pact_maker_walk_1":["............kk..","...kkkkk...kwlk.","..kxxxsssk.kwlk.","..kxxssssxkkwlk.","..kxtttttk.kwlk.","..kxYttYtk..kGk.","..kxtttttk..kGk.",".kllkttkllk.kGk.",".kqqlJRJlqqPPk..","kDLDqkJkqqqPGk..","kDODqqqqqqqkkk..","kDLDqnnOnnqk....",".kkkqqqqqqk.....","..kqqdqqdqk.....","..kNNNkkNNNk....","..knnnkknnnk...."],
+"pact_maker_walk_2":["............kk..","...kkkkk...kwlk.","..kxxxsssk.kwlk.","..kxxssssxkkwlk.","..kxtttttk.kwlk.","..kxYttYtk..kGk.","..kxtttttk..kGk.",".kllkttkllk.kGk.",".kqqlJRJlqqPPk..","kDLDqkJkqqqPGk..","kDODqqqqqqqkkk..","kDLDqnnOnnqk....",".kkkqqqqqqk.....","..kqqdqqdqk.....","..kNNNkknnnnk...","..knnnk........."],
+"pact_maker_walk_3":["............kk..","...kkkkk...kwlk.","..kxxxsssk.kwlk.","..kxxssssxkkwlk.","..kxtttttk.kwlk.","..kxYttYtk..kGk.","..kxtttttk..kGk.",".kllkttkllk.kGk.",".kqqlJRJlqqPPk..","kDLDqkJkqqqPGk..","kDODqqqqqqqkkk..","kDLDqnnOnnqk....",".kkkqqqqqqk.....","..kqqdqqdqk.....","..kNNNkkNNNk....","..knnnkknnnk...."],
+"offhand_quill":["............kk..","...........kwlk.","..........kwlk..",".........kwlk...","........kwlk....",".......kwlk.....","......kwlk......",".....kwlk.......","....kOOk........","...kOJk.........","..kNNk..........",".kNNk...........",".kNk............","..k.............","................","................"],
+"potion_ink":["................","......kkkk......","......kOOk......",".......kk.......","......kGGk......",".....kG11Gk.....","....kG1121Gk....","...kG112211Gk...","...kG122221Gk...","...kG112211Gk...","...kG111111Gk...","....kG1111Gk....",".....kkkkkk.....","................","................","................"],
+"move_sign":["..........kk....",".........kwlk...","........kwlk....",".......kwlk.....","......kwlk......",".....kGlk.......","....kGGk........","....kkk.........","..........k.....",".........kRk....","........kRARk...",".......kRRAARk..",".......kRRRRRk..",".......krRRRrk..","........krrrk...",".........kkk...."],
+"move_bind":["................","..kkkkkkkkkkkk..",".kNLLLLLLLLLLNk.","..kwwwwwwwwwwk..","..kwGGkwwkGGwk..","..kGlGGkkGGlGk..","..kwGGkllkGGwk..","..kwwkGGGGkwwk..","..kwwkGllGkwwk..","..kwGGkllkGGwk..","..kGlGGkkGGlGk..","..kwGGkwwkGGwk..",".kNLLLLLLLLLLNk.","..kkkkkkkkkkkk..","................","................"],
+"move_forfeit":["................","..kkkkkk.kkkkk..","..kwwwwk.kwwwk..","..kwGGwk..kGwk..","..kwwwwwk.kwwk..","..kwGGGwk.kGGk..","..kwwwwk..kwwk..","..kwGGwk.kwGwk..","..kwwwwwk.kwwk..","..kwGGGk..kGGk..","..kwwwwk.kwwwk..","..kwRRwwk.kRwk..","..kwRRwk..kwwk..","..kkkkkk.kkkkk..","................","................"],
+"move_seize":["................",".k...k....k.....","..k...k..k..k...","...........k....","....kkkkkkk.....","...kPkPkPkPk....","...kPkPkPkPkk...","...kPPPPPPPPPk..","...kPGPPPPPPPk..","...kPPPPPGPPPk..","...kPPPPPPPPk...","....kPPGPPPPk...","....kPPPPPPk....",".....kTTTTk.....",".....kTTTTk.....","................"],
+"move_terms":["................","....k..k..k.....","...kOk.kOk.kOk..","...kOOkOOOkOOk..","...kOOOOOOOOOk..","...kkkkkkkkkkk..","..kJJJJJJJJJJJk.",".kJRRRRRRRRRRRJk",".kJRAAAAAAAAARJk",".kJRARRRRRRRARJk",".kJRARRRRRRRARJk",".kJRAAAAAAAAARJk",".kJRRRRRRRRRRRJk","..kJJJJJJJJJJJk.","...kkkkkkkkkkk..","................"],
 "doctor_parry":[".....kkkkkk.kOk.",".....kqsssk.kNk.",".....kqsssk..N..",".....krrrrk..N..","..kkqqqqqqqqkN..","...kkwwwwwkk.N..","....kwkMkwlk.N..","....kwwkwwwllNk.","....klwwwllllNGk","....kGlwkkkkknk.","...kqddddqk..N..","..kqdgdddddqkN..","..kqdgdddddqkN..","..kqdgddddddkN..","..kqddddddddqN..","...kNNk..kNNkN.."],
 "weapon_cane":["..............k.",".............kwk","............kGwk","...........kGGk.","..........kNnk..",".........kNnk...","........kNnk....",".......kNnk.....","......kNnk......",".....kNnk.......","..kkkNnk........",".kOOOnk.........","kOhkOOk.........","kOOOOk..........",".kkOOOk.........","....kk.........."],
 "move_leech":["................","......kkkk......",".....kNNNNk.....","....kkkkkkkk....","...kGxxxxxxlk...","...kGxxxxxxlk...","...kGxxrrxxlk...","...kGxrRRrxlk...","...kGrRAARrlk...","...kGrRRRRrlk...","...kGxrrrrxlk...","...kGxxxxxxlk...","...kGRRRRRRlk...","...kGrrrrrrlk...","....kkkkkkkk....","................"],
@@ -4602,6 +4630,7 @@ function consSpr(id,tier){
   if(id==="might")return"potion_might";
   if(id==="oil")return"oil";
   if(id==="wisp")return"scroll_wisp";
+  if(id==="ink")return"potion_ink";
   return"potion_heal";
 }
 function gearSpr(kind,id){
@@ -5135,6 +5164,28 @@ const CHARACTERS=[
   },
   intro:"You descend into the first floor with the staff lit. The light it gives is thin and blue, and it does not flicker.",
   win:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Orrin speaks one last word over the ash. It is not a spell, only the King's name. Then he climbs back toward the light, and for the first time in three years he does not reach for a book."},
+ {id:"pact_maker",name:"Eric",title:"The King's Notary",spr:"pact_maker",
+  blurb:"The man who wrote the King's bargain down, so he could never pretend he hadn't signed it.",
+  buffs:["Patron's Ink: every clause he carries adds 15% damage to his moves (up to three clauses)",
+         "Notary's Eye: +10% crit against a foe that is bleeding, burning or reeling",
+         "Ink Reserve: an Ink Flask heals more for every clause he carries",
+         "His quill-knife opens wounds like a dagger, on his Strikes too"],
+  weak:["Frail: 36 health, and 8 more per level",
+        "No natural healing: he gets his breath back at half speed, and healing draughts turn to ink in his hands",
+        "No mana: scrolls are paid for in blood, 1 health per 2 mana",
+        "Every clause has a cost, and opening a flask in a fight costs his next turn",
+        "Parries less often"],
+  pact:true,noMana:true,noRegen:true,quill:true,notaryEye:true,parry:-.03,hpLevel:8,
+  moves:[["strike"],["sign"],["bind"],["forfeit"],["seize"],["stagger",6],["sunder",7],["execute",8],["terms"]],
+  init:function(st){
+    st.maxhp=36;st.hp=36;st.mana=0;st.maxmana=0;
+    st.offhand=st.altOffhand=OFFHAND_ITEMS.find(o=>o.id==="quill");
+    const ink=POTIONS.find(p=>p.id==="ink");
+    st.pack.push({kind:"use",ref:ink,glyph:ink.glyph,col:ink.col,name:ink.name,note:ink.note});
+  },
+  intro:"You descend into the first floor with the ledger under your arm. Somewhere below, the other party to the contract is waiting.",
+  win:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Eric opens the ledger to the last page, writes out a release in a fair hand, and reads it aloud, word for word, to an empty throne. Then he signs it."}
+,
  {id:"monk",name:"Brother Anselm",title:"The Hermit Monk",spr:"monk",
   blurb:"A monk from the chapel on the hill, who prayed through the night the castle sank. He has come down to finish the prayer.",
   buffs:["Holy: deals 30% more damage to the dead (skeletons, wraiths, the Queen and the King)",
@@ -5156,7 +5207,22 @@ const CHARACTERS=[
     st.weapon=WEAPONS.find(w=>w.id==="pilgrim");
   },
   intro:"You descend into the first floor with your staff in one hand and the little wooden cross in the other. You say a prayer for the stairs.",
-  win:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Anselm kneels in the ash and prays for the King, because somebody has to."}
+  win:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Anselm kneels in the ash and prays for the King, because somebody has to."},
+ {id:"brute",name:"Sir Brannoc",title:"The Iron Knight",spr:"brute",
+  blurb:"The last knight of the King's guard, still in the plate he wore the night the castle sank. Slow as a siege tower, and about as hard to stop.",
+  buffs:["Brute strength: deals 35% more damage",
+         "Iron grip: tears free of the Thing's roots far more easily",
+         "His own blows, one at level 3 and one at level 9: Crushing Blow and Earthbreaker",
+         "Carries the Oathblade, a two-handed sword"],
+  weak:["Heavy plate: walks 35% slower (fear still carries him when it chases)",
+        "Slow to recover: gets his breath back at 60% speed",
+        "Too heavy to parry: he never turns a blow aside",
+        "No healing moves: no Rally and no Last Light"],
+  dmgMult:1.35,speed:.65,stamRate:.6,noParry:true,rootGrip:true,
+  moves:[["strike"],["break"],["crush"],["whirl"],["ember"],["stagger"],["sunder"],["execute"],["quake"]],
+  init:function(st){st.weapon=WEAPONS.find(w=>w.id==="oath");},
+  intro:"You climb down into the first floor, one heavy step at a time. The stairs complain about it.",
+  win:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Brannoc plants the Oathblade in the ash where the throne stood and kneels beside it. His oath was to guard the King. He has, to the end. Then he climbs back toward the light, slowly."}
 ];
 const HOLY_FOES=new Set(["skel","wraith","queen","king","shade"]);
 const QUESTS=[
@@ -5164,6 +5230,10 @@ const QUESTS=[
   text:"Someone is watching from the dark. Open 20 wounds and he'll step out."},
  {id:"spells",name:"Words of Power",stat:"casts",goal:12,unit:"spells cast",unlock:"mage",
   text:"An old voice lingers in the scroll-ink. Cast 12 spells and he'll answer."},
+ {id:"lowhp",name:"Dotted Line",stat:"lowhp",goal:3,unit:"battles survived at 15% health",unlock:"pact_maker",
+  text:"Someone in the dark has been reading over your shoulder, and wants to see how you handle the terms. Survive three battles at 15% health or less, and he'll introduce himself."},
+ {id:"iron",name:"Iron Oath",stat:"giants",goal:5,unit:"ogres and trolls felled",unlock:"brute",
+  text:"Something heavy is still keeping watch in the dark, in rusted plate. Fell five ogres or trolls and he'll know you are worth guarding."},
  {id:"vigil",name:"A Light Below",stat:"kings",goal:1,unit:"Hollow Kings laid to rest",unlock:"monk",
   text:"Someone has been praying for you, all the way down. Lay the Hollow King to rest and he will come looking for you."},
  {id:"alembic",name:"Notes Unfinished",stat:"alembic",goal:1,unit:"visits to floor 5",unlock:"doctor",
@@ -5187,7 +5257,8 @@ function metaLoad(){
 function metaSave(){try{localStorage.setItem(META_KEY,JSON.stringify(META));}catch(e){}}
 metaLoad();
 if(!Array.isArray(META.papers))META.papers=[];
-function isUnlocked(id){return !!META.unlocked[id];}
+// While playtesting, every hero can be picked without finishing their quest.
+function isUnlocked(id){let pt=false;try{pt=PLAYTEST;}catch(e){}return pt||!!META.unlocked[id];}
 // Count something towards the quests. Finishing a quest unlocks its hero for every future run.
 function bumpStat(stat,n){
   META.stats[stat]=(META.stats[stat]||0)+(n||1);
@@ -5255,12 +5326,19 @@ Object.assign(LORE_ALT.end,{doctor:{title:"After",body:"The crown comes apart li
 Object.assign(LORE_ALT.cade,{mage:{title:"Orrin",body:"Orrin Hale was court mage to King Aldric for thirty years. When the King fell sick and the physicians' leeches and draughts failed one after another, Aldric sent for him at midnight. Orrin read every book in the tower and spoke every word of mending he knew. None of them took. Three nights later the King stopped asking for him, and started listening to something under the hill instead."}});
 LORE_ALT.floor10={mage:{title:"The Hollow King",body:"When his mage could not save him, King Aldric struck a bargain with something under the hill, and paid for it with everything a king is supposed to have on the inside. Orrin has spent three years wondering which word he got wrong. He suspects, now, that there was never a right one."}};
 Object.assign(LORE_ALT.end,{mage:{title:"After",body:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Orrin speaks one last word over the ash. It is not a spell, only the King's name. It is the first thing he has said to Aldric in three years that did not need to work."}});
+Object.assign(LORE_ALT.cade,{pact_maker:{title:"Eric",body:"Eric Vale was court notary to King Aldric. When the Queen fell to the sickness and the King found something under the hill willing to trade, Eric was in the room. He wrote the terms out in a fair copy, read them back word for word, and watched the King sign. He thought nobody would ever read the fine print. The payment came due the night the castle sank. It took the garrison, the household, and Eric's own name from the rolls. It kept him, the way the terms keep everything they touch."}});
+LORE_ALT.floor4={pact_maker:{title:"The War Host",body:"The paymaster's ledger is still nailed to the wall, listing every debt the King ran up and never settled. The last page is in Eric's handwriting. He reads it twice, the way he was trained to, and notes that the orcs are owed interest."}};
+Object.assign(LORE_ALT.floor5,{pact_maker:{title:"The Alembic Wing",body:"Eric's own notes are pinned to the physicians' workbench: the dates of every remedy they tried on the Queen, witnessed and initialled in his hand. He was present for all of them. The last entry reads only 'no further treatment', and under it, 'see terms'."}});
+Object.assign(LORE_ALT.floor8,{pact_maker:{title:"The Vault",body:"Twelve locks, and none of them turning. Eric knows the combination. He wrote it into the terms himself, as clause forty-one, because the thing under the hill insisted that the Queen be kept somewhere safe. He has never been sure whether that was mercy or storage."}});
+LORE_ALT.ledger={pact_maker:{title:"The Ledger",body:"Eric's ledger is open on the throne room floor. The last page is no longer blank."}};
+Object.assign(LORE_ALT.end,{pact_maker:{title:"A Signed Release",body:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Eric opens the ledger to the last page and writes out a release in a fair hand: the King, the Queen, the garrison, discharged in full. He reads it aloud, word for word, to an empty throne. Then he signs it, and for the first time, the terms let go of him too."}});
 function loreView(l){
   const a=LORE_ALT[l.id]&&LORE_ALT[l.id][CHAR().id];
   const n=CHAR().name;
   return a||{title:l.title,body:l.body.replace(/\bCade\b/g,n)};
 }
-const FLAVOR_ALT={mage:{5:"The air turns sharp, like a struck match. Orrin knows this smell. It is the night the doctors gave up and sent for him.",
+const FLAVOR_ALT={pact_maker:{4:"A ledger is nailed to the wall, listing the King's debts. Eric recognises the handwriting on the last page. It is his.",
+          8:"A door with twelve locks, and none of them turning. Eric could open it. Clause forty-one says he may not."},mage:{5:"The air turns sharp, like a struck match. Orrin knows this smell. It is the night the doctors gave up and sent for him.",
           8:"A door with twelve locks, and none of them turning. Orrin knows a word for doors. He decides not to say it here.",
           10:"The stair ends in a vaulted hall. The King is still sitting up, the way he was the last time Orrin failed him."},rook:{8:"A door with twelve locks, and none of them turning. Rook tries it anyway. Twice."},
   doctor:{2:"The bunks are still made. Vell checks each one for fever out of habit, and finds only dust.",
@@ -5403,8 +5481,15 @@ const MOVES=[
  {id:"miasma",    only:"doctor", name:"Miasma",         lvl:3, cd:5, desc:"A puff from the beak. Can't miss; poisons the foe for 5 turns.", mult:.45, poison:5, sure:true},
  {id:"letting",   only:"doctor", name:"Bloodletting",   lvl:5, cd:3, desc:"Opens a vein. Always draws blood, and every drop feeds you.", mult:.75, bleed:true},
  {id:"transfuse", only:"doctor", name:"Transfusion",    lvl:7, cd:5, desc:"Empty every vial of Ichor into the foe: 2 damage per Ichor, ignoring armour.", transfuse:true},
+ {id:"crush",  only:"brute",  name:"Crushing Blow",  lvl:3, cd:4, desc:"A two-handed overhead chop. Hits hard and batters the foe's poise.", mult:1.6, poise:16},
+ {id:"quake",  only:"brute",  name:"Earthbreaker",   lvl:9, cd:8, desc:"The Oathblade comes down hard enough to split the floor. Huge damage, and the foe loses its next turn.", mult:2.3, stun:1, poise:20},
  {id:"channel",   only:"mage",   name:"Channel",        lvl:2, cd:3, desc:"A slow, sure bolt that pulls 12 mana back in with it.", mult:.6, sure:true, mana:12},
  {id:"arcane",    only:"mage",   name:"Arcane Lance",   lvl:5, cd:4, desc:"A spear of pure force. Can't miss and ignores armour.", mult:1.3, sure:true, pierce:99},
+ {id:"sign",   only:"pact_maker", name:"Sign in Blood", lvl:2, cd:3, kind:"buff", clause:["blood"], desc:"Take Blood Price (2 damage a turn, 3 turns). Your next move deals +60% and always draws blood."},
+ {id:"bind",   only:"pact_maker", name:"Bind",          lvl:3, cd:4, kind:"buff", clause:["brittle"], bind:2, desc:"Take Brittle Ink (armour 2 lower, 3 turns). The foe deals 25% less damage for 2 turns."},
+ {id:"forfeit",only:"pact_maker", name:"Forfeit",       lvl:4, cd:5, spend:"forfeit", desc:"Spend every clause: 1.4x damage and 6 health per clause spent."},
+ {id:"seize",  only:"pact_maker", name:"Seize",         lvl:5, cd:4, mult:.8, sure:true, stun:1, clause:["sleepless","unsteady"], desc:"Take Sleepless and Unsteady. Can't miss, and stuns the foe for a turn."},
+ {id:"terms",  only:"pact_maker", name:"The Terms",     lvl:9, cd:8, spend:"terms", desc:"Spend every clause: 2.2x damage per clause (at least 1x), then lose 20% of your max health. Once per fight."},
  // blood-gift blows: only in your hand while you hold the gift (see moveList)
  {id:"reap",    blood:true, name:"Reaping Cut",     lvl:1, cd:4, desc:"Blood gift. A blow of 220%, with a high chance to crit.", mult:2.2, crit:.35},
  {id:"cleave",  blood:true, name:"Butcher's Cleave",lvl:1, cd:3, desc:"Blood gift. 160%, ignores all armour, and hits the foe's poise hard.", mult:1.6, pierce:99, poise:18},
@@ -5613,7 +5698,7 @@ function startBattle(m){
      phaseNum:1,
      combo:0,staggerImm:0,hitstop:0,critFlash:0,parry:null,
      poise:0,maxPoise:0,
-     pStat:{burn:0,guardDown:0,atkUp:0,parry:false,bleed:0,bleedDmg:0,skip:0,ward:0},
+     pStat:{burn:0,guardDown:0,atkUp:0,parry:false,bleed:0,bleedDmg:0,skip:0,ward:0,clauses:[],bloodPrice:false},
      mStat:{bleed:0,bleedDmg:0,burn:0,sunder:0,broken:0,exposed:0,stun:m.stunT||0,frozen:m.freezeT||0,poison:m.poisonT||0,poisonDmg:m.poisonD||0,blind:m.blindT||0,blindPct:m.blindP||0},
      lunge:0,lungeSide:0,mFlash:0,pFlash:0,faint:0,intro:1,layout:null};
   B.maxPoise=Math.max(12,Math.round((10+m.t.def*3+m.max*.22)*(m.t.boss?1.1:1)));
@@ -5661,7 +5746,7 @@ function pDamage(mv,opts){
   if(!opts.noMiss&&turned("riposte")&&Math.random()<.12)return{miss:true,riposted:true};
   if(!opts.noMiss&&turned("fleet")&&Math.random()<.08)return{miss:true};
   if(!opts.noMiss&&Math.random()>acc-(turned("ember")?.08:0))return{miss:true};
-  const mult=(mv.mult||1)*(B.pStat.chill>0?.7:1)*(CHAR().dmgMult||1)*(CHAR().holy&&HOLY_FOES.has(B.mon.t.id)?1.3:1);
+  const mult=(mv.mult||1)*(B.pStat.chill>0?.7:1)*(CHAR().dmgMult||1)*(CHAR().holy&&HOLY_FOES.has(B.mon.t.id)?1.3:1)*(offAtk?1:clauseMult())*(!offAtk&&B.pStat.bloodPrice?1.6:1);
   const smite=!!mv.smite&&HOLY_FOES.has(B.mon.t.id);   // the cross does not care how thick the bone is
   const tb=offAtk?0:thirstBonus(w);
   let base=rint(Math.round((w.min+tb+S.str)*mult),Math.round((w.max+tb+S.str)*mult));
@@ -5680,7 +5765,8 @@ function pDamage(mv,opts){
   if(exposed)base=Math.round(base*1.5);
   if(B.mStat.frozen>0)base=Math.round(base*1.25);   // brittle: frozen foes take extra damage
   const baseCrit=mv.crit!==undefined?mv.crit:w.crit;
-  const critChance=baseCrit+.04*stacks+(exposed?.25:0)+gearMod("crit")+(oh.type==="dagger"?.05:0);
+  const critChance=baseCrit+.04*stacks+(exposed?.25:0)+gearMod("crit")+(oh.type==="dagger"?.05:0)
+    +(CHAR().notaryEye&&(B.mStat.bleed>0||B.mStat.burn>0||B.mStat.stun>0||B.mStat.broken>0)?.10:0);
   const crit=!!opts.forceCrit||finisher||Math.random()<critChance;
   if(crit)base=Math.round(base*2);
   const pierce=(mv.pierce||0)+w.pierce+(crit?2:0)+(smite?99:0);
@@ -5785,7 +5871,8 @@ function strikeLand(mv,r){
     return;
   }
   hitFx(r);
-  tryBleedMon(S.weapon.id==="dagger"||!!S.weapon.bleeds,S.weapon.id!=="hammer",!!mv.bleed);
+  const signed=!!B.pStat.bloodPrice;B.pStat.bloodPrice=false;   // Sign in Blood is spent by the next landed blow
+  tryBleedMon(S.weapon.id==="dagger"||!!S.weapon.bleeds||!!CHAR().quill,S.weapon.id!=="hammer",!!mv.bleed||signed);
   if(S.weapon.id==="hammer")sblunt();
   if(mv.poison&&B.mhp>0){
     const pd=3+Math.floor(S.lvl/2);
@@ -5847,17 +5934,90 @@ function pSwing(fire){
   B.lunge=1;B.lungeSide=1;
   if(CHAR().ranged)(B.orbs=B.orbs||[]).push({t:0,fire:!!fire});
 }
-// The monk will not read a scroll at all.
-function canPay(c){return CHAR().noMagic?false:S.mana>=c;}
-function payMsg(it,c){return CHAR().noMagic?`${CHAR().name} will not read the ${it.name}. Magic is not of God.`:`Not enough mana — the ${it.name} needs ${c}.`;}
-function payCost(c){spendMana(c);}
-function costLabel(c){return CHAR().noMagic?"never":`${c} mana`;}
+/* ============================ Eric's clauses ============================ */
+// Self-inflicted debuffs. Each one carried adds CLAUSE_BONUS damage; each one has a cost every turn.
+const CLAUSE_MAX=3,CLAUSE_BONUS=.15;
+const CLAUSES={
+  blood:    {name:"Blood Price",chip:"PRICE",    turns:3,col:"#c94a3c",cost:"2 damage a turn"},
+  brittle:  {name:"Brittle Ink",chip:"BRITTLE",  turns:3,col:"#8e9aad",cost:"armour 2 lower"},
+  sleepless:{name:"Sleepless",  chip:"SLEEPLESS",turns:4,col:"#6fa0e8",cost:"6 stamina a turn"},
+  unsteady: {name:"Unsteady",   chip:"UNSTEADY", turns:2,col:"#d9d24a",cost:"parries less often"}
+};
+function clauses(){return (B&&B.pStat.clauses)||[];}
+function hasClause(id){return clauses().some(c=>c.id===id);}
+function clauseMult(){return 1+CLAUSE_BONUS*clauses().length;}
+function addClause(id){
+  const list=B.pStat.clauses=clauses().filter(c=>c.id!==id);   // re-signing a clause renews it
+  while(list.length>=CLAUSE_MAX){const old=list.shift();blog(`${CLAUSES[old.id].name} lapses to make room.`,"c-cold");}
+  list.push({id:id,t:CLAUSES[id].turns});
+  const L=B.layout;if(L){snum(L.px,L.py-L.psz*1.05,CLAUSES[id].name.toUpperCase(),CLAUSES[id].col,true);sring(L.px,L.py,"rgba(240,192,96,.8)",L.psz*.7);}
+  blog(`You accept ${CLAUSES[id].name}: ${CLAUSES[id].cost}, +${Math.round(CLAUSE_BONUS*100)}% damage.`,"c-lvl");
+}
+// End of round: clauses charge their cost and count down. Returns false if the cost killed him.
+function expireClauses(){
+  const list=clauses();if(!list.length)return true;
+  for(const c of list){
+    if(c.id==="blood"){
+      S.hp-=2;B.pFlash=.5;
+      const L=B.layout;if(L)snum(L.px,L.py-L.psz*.5,"-2","#c94a3c");
+      blog("Blood Price: the ink takes 2.","c-hit");
+      if(S.hp<=0)return false;
+    }
+    if(c.id==="sleepless")drainStamina(6);
+    c.t--;
+    if(c.t<=0)blog(`${CLAUSES[c.id].name} expires.`,"c-cold");
+  }
+  B.pStat.clauses=list.filter(c=>c.t>0);
+  return true;
+}
+function spendClauses(){const n=clauses().length;B.pStat.clauses=[];return n;}
+// Forfeit and The Terms: tear up every clause and turn it into one blow.
+function pactSpend(mv){
+  const n=spendClauses();
+  const mult=mv.spend==="terms"?Math.max(1,2.2*n):Math.max(.7,1.4*n);
+  blog(n?`You tear up ${n} clause${n>1?"s":""}.`:"There are no terms to tear up.","c-lvl");
+  strikeOnce(Object.assign({},mv,{mult:mult,sure:true}));
+  const L=B.layout;
+  if(mv.spend==="forfeit"&&n){
+    diceThen("green",6*n,h=>{
+      h=Math.min(S.maxhp-S.hp,h);S.hp+=h;const L2=B.layout;
+      if(L2)snum(L2.px,L2.py-L2.psz*.5,"+"+h,"#6fa844");blog(`The forfeited terms pay out (+${h}).`,"c-good");refresh();
+    });
+  }
+  if(mv.spend==="terms"){
+    B.termsUsed=true;
+    const cost=Math.min(S.hp-1,Math.round(S.maxhp*.2));
+    if(cost>0){S.hp-=cost;B.pFlash=1;if(L)snum(L.px,L.py-L.psz*.5,"-"+cost,"#c94a3c");}
+    quake(12);B.critFlash=.6;
+    blog(`The Terms are read in full. They take ${cost} from you in payment.`,"c-hit");
+  }
+}
+// The Ink Flask: heals 6 + 2 per level, plus 5 per clause carried. In a fight, opening it costs the next turn.
+function inkHeal(){return 6+2*S.lvl+5*clauses().length;}
+// Takes the flask from the pack and returns what it heals; the caller adds it (in a fight, once its die stops).
+function useInk(i){
+  if(S.hp>=S.maxhp){(B?blog:say)("You are already whole. The ink can wait.","c-cold");return false;}
+  S.pack.splice(i,1);
+  return inkHeal();
+}
+// Spells without mana: the Notary signs for them in blood.
+function bloodCost(c){return Math.ceil(c/2);}
+function canPay(c){return CHAR().noMagic?false:CHAR().noMana?S.hp>bloodCost(c):S.mana>=c;}
+function payMsg(it,c){return CHAR().noMagic?`${CHAR().name} will not read the ${it.name}. Magic is not of God.`:CHAR().noMana?`You can't afford the ${it.name}: it would cost ${bloodCost(c)} health.`:`Not enough mana — the ${it.name} needs ${c}.`;}
+function payCost(c){
+  if(!CHAR().noMana){spendMana(c);return;}
+  const d=bloodCost(c);S.hp-=d;
+  if(B){B.pFlash=.6;const L=B.layout;if(L)snum(L.px,L.py-L.psz*.5,"-"+d,"#c94a3c");blog(`You sign for it in blood (${d}).`,"c-hit");}
+  else{num(S.px,S.py,"-"+d,"#c94a3c");say(`You sign for it in blood (${d}).`,"c-hit");}
+}
+function costLabel(c){return CHAR().noMagic?"never":CHAR().noMana?`${bloodCost(c)} health`:`${c} mana`;}
 function chooseMove(id){
   if(B&&B.dlg)return;
   if(!B||B.phase!=="choose")return;
   const mv=moveList().find(m=>m.id===id);
   if(!mv||S.lvl<mv.lvl||(S.cds[mv.id]||0)>0)return;
   if(mv.transfuse&&(S.ichor||0)<TRANSFUSE_MIN){blog(`Your vials are nearly dry — Transfusion needs at least ${TRANSFUSE_MIN} Ichor.`,"c-cold");return;}
+  if(mv.spend==="terms"&&B.termsUsed){blog("The Terms can only be read once a fight.","c-cold");return;}
   B.phase="anim";
   if(S.tut)S.tut.flags.played=true;
   playMoveCard(mv);
@@ -5865,6 +6025,12 @@ function chooseMove(id){
   drawMoves();
   blog(`You use ${mv.name}.`,"c-lvl");
   queue(.2,()=>{
+    if(mv.clause&&mv.kind==="buff"){
+      for(const c of mv.clause)addClause(c);
+      if(mv.clause.includes("blood"))B.pStat.bloodPrice=true;
+      if(mv.bind){B.mStat.bind=mv.bind;blog(`The ${B.mon.t.name} is bound by the terms: it hits 25% softer for ${mv.bind} turns.`,"c-good");}
+      return;
+    }
     if(mv.ward){
       B.pStat.ward=mv.ward;
       const L=B.layout;
@@ -5886,6 +6052,8 @@ function chooseMove(id){
       return;
     }
     if(mv.transfuse){transfuse();return;}
+    if(mv.spend){pactSpend(mv);return;}
+    if(mv.clause)for(const c of mv.clause)addClause(c);
     strikeOnce(mv);
   });
   for(let k=1;k<(mv.hits||1);k++)queue(.17,()=>{if(B&&B.mhp>0)strikeOnce(mv);});
@@ -6037,7 +6205,7 @@ function enemyStrike(sp,scale,blocked){
   let dmg=r.dmg,crit=false;
   const cc=(m.t.crit!==undefined?m.t.crit:.06)+(turned("keen")?.08:0);
   if(!blocked&&Math.random()<cc){crit=true;dmg=Math.round(dmg*1.5);}
-  dmg=Math.max(1,Math.round(dmg*(scale||1)));
+  dmg=Math.max(1,Math.round(dmg*(scale||1)*(B.mStat.bind>0?.75:1)));
   const warded=B.pStat.ward>0;
   if(warded)dmg=Math.max(1,Math.ceil(dmg/2));             // Sanctuary: the light takes half of it
   const sh=shieldReduce(dmg);
@@ -6556,7 +6724,7 @@ function snareBurst(){
   if(!S.snaredOnce&&activeWisp()){S.snaredOnce=true;say('Tam: "They\'re its fingers! Pull, pull!"',"c-cold");}
 }
 function snareBarStart(){
-  const R=SNARE,w=Math.max(.12,.24-(S.depth-11)*.012);
+  const R=SNARE,w=Math.max(.12,.24-(S.depth-11)*.012)*(CHAR().rootGrip?1.8:1);   // Brannoc's glow is far wider
   R.bar={t0:R.t,z0:.4+Math.random()*(.88-.4-w),w};
   const ov=$("parryOverlay"),zone=$("parryZone"),mk=$("parryMarker"),tt=ov&&ov.querySelector(".parry-title");
   if(tt){if(!tt.dataset.orig)tt.dataset.orig=tt.textContent;tt.textContent="❦ ROOTS! — press SPACE in the glow to tear free!";}
@@ -6574,7 +6742,8 @@ function snareHideBar(){
 function snarePress(){
   if(!snareGrab()||!SNARE.bar)return;
   const p=(SNARE.t-SNARE.bar.t0)/SNARE_BAR;
-  snareResolve(p>=SNARE.bar.z0&&p<=SNARE.bar.z0+SNARE.bar.w?"perfect":"mistimed");
+  const hit=p>=SNARE.bar.z0&&p<=SNARE.bar.z0+SNARE.bar.w;
+  snareResolve(hit||CHAR().rootGrip?"perfect":"mistimed");   // he is strong enough that even a clumsy pull breaks them
 }
 function snareResolve(result){
   const R=SNARE;if(!R||!R.bar)return;
@@ -6853,6 +7022,8 @@ function dotTick(){
 // The rest of the round's upkeep, once every wound has had its turn.
 function roundUpkeep(){
   if(!B)return;
+  if(!expireClauses()){refresh();queue(.4,()=>loseBattle("the terms"));return;}
+  if(B.mStat.bind>0)B.mStat.bind--;
   if(B.mStat.fade>0)B.mStat.fade--;
   if(B.pStat.chill>0)B.pStat.chill--;
   if(turned("troll")&&B.mhp<B.mmax&&B.mhp>0){
@@ -6884,6 +7055,7 @@ function roundUpkeep(){
 }
 
 /* ============================ outcomes ============================ */
+function lowHpCheck(){if(B&&S.hp>0&&S.hp<=S.maxhp*.15)B.lowHp=true;}
 function winBattle(){
   if(!B||B.phase==="over")return;
   if(S.tut&&!S.tut.flags.parried){B.mhp=1;refresh();blog("The old man calls: \"Not yet, child! Let it swing, and turn the blow aside first.\"","c-cold");enemyTurn();return;}
@@ -6903,6 +7075,8 @@ function winBattle(){
     startDialogue(end,()=>winBattle(),B.mon.t.id==="queen"?"Rest":"Continue",B.mon.t.id);
     return;
   }
+  lowHpCheck();if(B.lowHp)bumpStat("lowhp");
+  if(B.mon.t.id==="ogre"||B.mon.t.id==="troll")bumpStat("giants");
   B.phase="over";B.faint=0.0001;
   const m=B.mon;
   blog(`The ${m.t.name} falls.`,"c-good");
@@ -6941,7 +7115,8 @@ function tryFlee(){
   const odds=.55+Math.min(.3,S.lvl*.03);
   if(Math.random()<odds){
     blog("You break away.","c-cold");
-      queue(.5,()=>{
+    lowHpCheck();if(B.lowHp)bumpStat("lowhp");
+    queue(.5,()=>{
       const m=B.mon;m.cool=3;m.seenYou=false;
       // carry the duel's damage and lingering effects back to the map monster
       m.hp=Math.max(1,B.mhp);
@@ -6976,6 +7151,20 @@ function useItemBattle(i){
     return;
   }
   if(it.kind==="use"&&it.ref.id==="heal"&&CHAR().noPotions){blog(NO_POTION_MSG,"c-cold");return;}
+  if(it.kind==="use"&&it.ref.id==="ink"){
+    const roll=useInk(i);if(!roll)return;
+    B.phase="anim";drawMoves();
+    blog("You uncork the ink. The stopper will cost you your next turn.","c-good");
+    B.pStat.skip=1;
+    diceThen("green",roll,()=>{
+      const h=Math.min(S.maxhp-S.hp,roll);S.hp+=h;
+      const L0=B.layout;
+      if(L0){snum(L0.px,L0.py-L0.psz*.5,"+"+h,"#6fa844");sring(L0.px,L0.py,"rgba(111,168,68,.9)",L0.psz*.8);sburst(L0.px,L0.py,"#2f5fa8",12,150);}
+      blog(`The ink knits you back together (+${h}).`,"c-good");refresh();
+    });
+    refresh();queue(.5,enemyTurn);
+    return;
+  }
   const cost=spellCost(it);
   if(cost&&!canPay(cost)){blog(payMsg(it,cost),"c-hit");return;}
   const L=B.layout;
@@ -7415,6 +7604,9 @@ function statusText(st,who){
   if(st.sunder>0)out.push(["SUNDERED","#c94a3c"]);
   if(st.atkUp>0)out.push(["RALLIED "+st.atkUp,"#6fa844"]);
   if(st.guardDown>0)out.push(["GUARD DOWN","#c94a3c"]);
+  if(st.bind>0)out.push(["BOUND "+st.bind,"#f0c060"]);
+  if(st.bloodPrice)out.push(["SIGNED","#e8685a"]);
+  if(st.clauses)for(const c of st.clauses)out.push([CLAUSES[c.id].chip+" "+c.t,CLAUSES[c.id].col]);
   return out;
 }
 function plate(x,y,w,title,ratio,sub,chips,fs,boss,phaseNum,poise){
@@ -7561,6 +7753,8 @@ const ESCAPE_END={
  doctor:"Vell bursts out of the hillside into a grey, ordinary morning. Behind him the hill groans, and settles, and is only a hill again. He sits on the stile and writes the last lines on the slate. Cause of the sickness: a contract. Recommended treatment: leave. Then he walks to the nearest village to wash his hands for a very long time.",
  mage:"Orrin bursts out of the hillside into a grey, ordinary morning. Behind him the hill groans, and settles, and is only a hill again. He says the King's name once, to the open sky. Nothing answers. For once, that is the right answer.",
  monk:"Anselm stumbles out of the hillside into a grey, ordinary morning, out of breath, his staff gone somewhere below. Behind him the hill groans, and settles, and is only a hill again. He kneels in the wet grass and thanks God for the stairs, every one of them. Whatever lives under the hill is still down there. He will pray about that tomorrow.",
+ brute:"Brannoc comes out of the hillside last of all, at a walk, because he cannot run in that plate and would not if he could. Behind him the hill groans, and settles, and is only a hill again. He turns round once, the way a guard does at the end of a watch, and finds nothing left to guard. He takes off the helm and sits down in the grass.",
+ pact_maker:"Eric bursts out of the hillside into a grey, ordinary morning. Behind him the hill groans, and settles, and is only a hill again. He opens the ledger to the last page and finds it blank: the terms are void, every clause discharged. He tears the page out anyway, folds it once, and lets the wind have it."
 };
 function bossDown(m){
   if(m.t.id==="shade"){holyWin();return;}
@@ -9480,6 +9674,7 @@ function refreshMusicBtn(){
 
 /* ============================ hud ============================ */
 function refresh(){
+  lowHpCheck();
   const hn=$("hudname");if(hn&&hn.textContent!==CHAR().name)hn.textContent=CHAR().name;
   renderSpellBar();
   renderMoveBar();
@@ -9721,7 +9916,7 @@ function freeTick(dt){
   if(S.dashT>0||S.fx!==fx0||S.fy!==fy0)S.stillT=0;
   else{
     S.stillT=(S.stillT||0)+dt;
-    if(S.stillT>=STAM_STILL_DELAY&&S.stam<S.maxstam)gainStamina(STAM_STILL_RATE*dt*(hasPerk("fleet")?2:1));
+    if(S.stillT>=STAM_STILL_DELAY&&S.stam<S.maxstam)gainStamina(STAM_STILL_RATE*dt*(CHAR().noRegen?.5:1)*(CHAR().stamRate||1)*(hasPerk("fleet")?2:1));
   }
   freeMonsters(dt);
   if(S.chase)chaseTick(dt);
@@ -10241,19 +10436,19 @@ let SE_W=16,SE_H=16;   // size of the sprite being edited
 
 // Sprite categories for the dropdown
 const SE_CATS={
-  "Characters":["player","rook","doctor","mage","rat","bat","goblin","skeleton","orc","slime","wraith","ogre","troll","knight","king","guardian","ghost_queen","ghost_queen_atk","ghost_queen2","ghost_queen2_atk","thing","thing2","thing3"],
+  "Characters":["player","rook","doctor","mage","pact_maker","brute","rat","bat","goblin","skeleton","orc","slime","wraith","ogre","troll","knight","king","guardian","ghost_queen","ghost_queen_atk","ghost_queen2","ghost_queen2_atk","thing","thing2","thing3"],
   "Wisp":["wisp_0","wisp_1","wisp_orb"],
   "Root Snare":["snare_crack_0","snare_crack_1","snare_crack_2","snare_ring_0","snare_ring_1","snare_roots_back_0","snare_roots_back_1","snare_roots_back_2","snare_roots_front_0","snare_roots_front_1","snare_roots_front_2"],
   "Orrin's Bolt":["magic_orb_0","magic_orb_1"],
-  "Walk Cycles":["player_walk_0", "player_walk_1", "player_walk_2", "player_walk_3", "rook_walk_0", "rook_walk_1", "rook_walk_2", "rook_walk_3", "doctor_walk_0", "doctor_walk_1", "doctor_walk_2", "doctor_walk_3", "mage_walk_0", "mage_walk_1", "mage_walk_2", "mage_walk_3", "rat_walk_0", "rat_walk_1", "rat_walk_2", "rat_walk_3", "bat_walk_0", "bat_walk_1", "bat_walk_2", "bat_walk_3", "goblin_walk_0", "goblin_walk_1", "goblin_walk_2", "goblin_walk_3", "skeleton_walk_0", "skeleton_walk_1", "skeleton_walk_2", "skeleton_walk_3", "orc_walk_0", "orc_walk_1", "orc_walk_2", "orc_walk_3", "slime_walk_0", "slime_walk_1", "slime_walk_2", "slime_walk_3", "wraith_walk_0", "wraith_walk_1", "wraith_walk_2", "wraith_walk_3", "ogre_walk_0", "ogre_walk_1", "ogre_walk_2", "ogre_walk_3", "troll_walk_0", "troll_walk_1", "troll_walk_2", "troll_walk_3", "knight_walk_0", "knight_walk_1", "knight_walk_2", "knight_walk_3", "king_walk_0", "king_walk_1", "king_walk_2", "king_walk_3", "guardian_walk_0", "guardian_walk_1", "guardian_walk_2", "guardian_walk_3"],
-  "Attack Poses":["player_atk","player_parry","rook_atk","rook_parry","doctor_atk","doctor_parry","mage_atk","mage_parry","rat_atk","bat_atk","goblin_atk","skeleton_atk","orc_atk","slime_atk","wraith_atk","ogre_atk","troll_atk","knight_atk","king_atk","guardian_atk"],
+  "Walk Cycles":["player_walk_0", "player_walk_1", "player_walk_2", "player_walk_3", "rook_walk_0", "rook_walk_1", "rook_walk_2", "rook_walk_3", "doctor_walk_0", "doctor_walk_1", "doctor_walk_2", "doctor_walk_3", "mage_walk_0", "mage_walk_1", "mage_walk_2", "mage_walk_3", "pact_maker_walk_0", "pact_maker_walk_1", "pact_maker_walk_2", "pact_maker_walk_3", "rat_walk_0", "rat_walk_1", "rat_walk_2", "rat_walk_3", "bat_walk_0", "bat_walk_1", "bat_walk_2", "bat_walk_3", "goblin_walk_0", "goblin_walk_1", "goblin_walk_2", "goblin_walk_3", "skeleton_walk_0", "skeleton_walk_1", "skeleton_walk_2", "skeleton_walk_3", "orc_walk_0", "orc_walk_1", "orc_walk_2", "orc_walk_3", "slime_walk_0", "slime_walk_1", "slime_walk_2", "slime_walk_3", "wraith_walk_0", "wraith_walk_1", "wraith_walk_2", "wraith_walk_3", "ogre_walk_0", "ogre_walk_1", "ogre_walk_2", "ogre_walk_3", "troll_walk_0", "troll_walk_1", "troll_walk_2", "troll_walk_3", "knight_walk_0", "knight_walk_1", "knight_walk_2", "knight_walk_3", "king_walk_0", "king_walk_1", "king_walk_2", "king_walk_3", "guardian_walk_0", "guardian_walk_1", "guardian_walk_2", "guardian_walk_3", "brute_walk_0", "brute_walk_1", "brute_walk_2", "brute_walk_3"],
+  "Attack Poses":["player_atk","player_parry","rook_atk","rook_parry","doctor_atk","doctor_parry","mage_atk","mage_parry","pact_maker_atk","pact_maker_parry","brute_atk","rat_atk","bat_atk","goblin_atk","skeleton_atk","orc_atk","slime_atk","wraith_atk","ogre_atk","troll_atk","knight_atk","king_atk","guardian_atk"],
   "Weapons":["weapon_dagger","weapon_sword","weapon_axe","weapon_spear","weapon_rapier","weapon_hammer","weapon_great","weapon_ember","weapon_cane","weapon_staff"],
   "Armor":["armor_rags","armor_pad","armor_leath","armor_chain","armor_scale","armor_plate"],
-  "Potions":["potion_heal","potion_heal1","potion_heal2","potion_might"],
+  "Potions":["potion_heal","potion_heal1","potion_heal2","potion_might","potion_ink"],
   "Scrolls":["scroll_flame","scroll_flame1","scroll_flame2","scroll_poison","scroll_poison1","scroll_poison2","scroll_dark","scroll_dark1","scroll_dark2","scroll_bolt","scroll_bolt1","scroll_bolt2","scroll_ice","scroll_ice1","scroll_ice2","scroll_wisp"],
   "Spell FX":["fireball_fall_0","fireball_fall_1","fireball_fall_2","fireball_fall_3","fireball_hit_0","fireball_hit_1","fireball_hit_2","fireball_hit_3","lightning_bolt_0","lightning_bolt_1","lightning_bolt_2","lightning_bolt_3","lightning_hit_0","lightning_hit_1","lightning_hit_2","lightning_hit_3","poison_fall_0","poison_fall_1","poison_fall_2","poison_fall_3","poison_hit_0","poison_hit_1","poison_hit_2","poison_hit_3","poison_cloud_0","poison_cloud_1","poison_cloud_2","poison_cloud_3","darkness_spike_0","darkness_spike_1","darkness_spike_2","darkness_spike_3","darkness_hit_0","darkness_hit_1","darkness_hit_2","darkness_hit_3","ice_spike_0","ice_spike_1","ice_spike_2","ice_spike_3","ice_hit_0","ice_hit_1","ice_hit_2","ice_hit_3","ice_frozen_0","ice_frozen_1","ice_frozen_2","ice_frozen_3","bleed_slash_0","bleed_hit_0","bleed_drip_0","bleed_slash_1","bleed_hit_1","bleed_drip_1","bleed_slash_2","bleed_hit_2","bleed_drip_2","bleed_slash_3","bleed_hit_3","bleed_drip_3","blunt_impact_0","blunt_impact_1","blunt_impact_2","blunt_impact_3","rally_ring_0","rally_ring_1","rally_ring_2","rally_ring_3","rally_ring_4","rally_ring_5","parry_slash_0","parry_slash_1","parry_slash_2","parry_slash_3","burn_ignite_0","burn_ignite_1","burn_ignite_2","burn_ignite_3","burn_flame_0","burn_flame_1","burn_flame_2","burn_flame_3","smoke_puff_0","smoke_puff_1","smoke_puff_2","smoke_puff_3","smoke_puff_4","smoke_puff_5"],
-  "Moves":["move_strike","move_break","move_rally","move_whirl","move_ember","move_stagger","move_sunder","move_execute","move_last","move_vein","move_flurry","move_waltz","move_leech","move_miasma","move_letting","move_transfuse","move_blackdeath","move_channel","move_arcane","move_crosssign","move_holywater","move_sanctuary","move_penance","move_litany","move_rites"],
-  "Offhand":["weapon_torch","offhand_buckler","offhand_round","offhand_tower","offhand_aegis","offhand_pdagger","offhand_stiletto","offhand_fang"],
+  "Moves":["move_strike","move_break","move_rally","move_whirl","move_ember","move_stagger","move_sunder","move_execute","move_last","move_vein","move_flurry","move_waltz","move_leech","move_miasma","move_letting","move_transfuse","move_blackdeath","move_channel","move_arcane","move_crosssign","move_holywater","move_sanctuary","move_penance","move_litany","move_rites","move_sign","move_bind","move_forfeit","move_seize","move_terms","move_crush","move_quake"],
+  "Offhand":["weapon_torch","offhand_buckler","offhand_round","offhand_tower","offhand_aegis","offhand_pdagger","offhand_stiletto","offhand_fang","offhand_quill"],
   "Jewelry":["amulet_vigor","amulet_ward","amulet_ember","amulet_locket","amulet_charm","amulet_coin","amulet_heart","ring_might","ring_swift","ring_focus","ring_fort","ring_warding","ring_insight","ring_mending","ring_parry","ring_storm"],
   "Items":["gold","oil","weapon","armor"],
   "Environment":["wall","floor0","floor1","floor2","stairs","trap","door_closed","door_open","lever_off","lever_on","chasm","bridge_h","bridge_v","shrine_tl","shrine_tr","shrine_bl","shrine_br"],
@@ -10352,9 +10547,11 @@ Object.assign(SE_LABELS,{snare_crack_0:"crack 1",snare_crack_1:"crack 2",snare_c
 Object.assign(SE_LABELS,{wisp_0:"wisp 1",wisp_1:"wisp 2",wisp_orb:"wisp orb",scroll_wisp:"scroll of the wisp"});
 for(const k of SE_CATS["Walk Cycles"]){const m=/^(.+)_walk_(\d)$/.exec(k);if(m&&!SE_LABELS[k])SE_LABELS[k]=(m[1]==="player"?"Cade":m[1])+" walk "+(+m[2]+1);}
 Object.assign(SE_LABELS,{doctor_walk_0:"Vell walk 1",doctor_walk_1:"Vell walk 2",doctor_walk_2:"Vell walk 3",doctor_walk_3:"Vell walk 4"});
+Object.assign(SE_LABELS,{pact_maker:"Eric",pact_maker_atk:"Eric strike",pact_maker_parry:"Eric parry",offhand_quill:"quill-knife",potion_ink:"ink flask",move_sign:"Sign in Blood icon",move_bind:"Bind icon",move_forfeit:"Forfeit icon",move_seize:"Seize icon",move_terms:"The Terms icon"});
 Object.assign(SE_LABELS,{mage:"Orrin",mage_atk:"Orrin strike",mage_parry:"Orrin parry",weapon_staff:"the Ashwood Staff",magic_orb_0:"bolt frame 1",magic_orb_1:"bolt frame 2",move_channel:"Channel icon",move_arcane:"Arcane Lance icon"});
 Object.assign(SE_LABELS,{doctor:"Vell",doctor_atk:"Vell strike",doctor_parry:"Vell parry",weapon_cane:"the Bloodletter",move_leech:"Leech icon",move_miasma:"Miasma icon",move_letting:"Bloodletting icon",move_transfuse:"Transfusion icon",move_blackdeath:"Black Death icon"});
 Object.assign(SE_LABELS,{move_crosssign:"Sign of the Cross icon",move_holywater:"Holy Water icon",move_sanctuary:"Sanctuary icon",move_penance:"Penance icon",move_litany:"Litany icon",move_rites:"Last Rites icon"});
+Object.assign(SE_LABELS,{brute:"Brannoc",brute_atk:"Brannoc strike",brute_walk_0:"Brannoc walk 1",brute_walk_1:"Brannoc walk 2",brute_walk_2:"Brannoc walk 3",brute_walk_3:"Brannoc walk 4",move_crush:"Crushing Blow icon",move_quake:"Earthbreaker icon"});
 Object.assign(SE_LABELS,{rook:"Rook",rook_atk:"Rook strike",rook_parry:"Rook parry",move_vein:"Open Vein icon",move_flurry:"Flurry icon",move_waltz:"Crimson Waltz icon"});
 function seDrawThumb(cv,key){
   const c=cv.getContext("2d");

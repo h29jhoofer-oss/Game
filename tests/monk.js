@@ -19,7 +19,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const check = (name, ok, detail) => results.push({ name, ok: !!ok, detail });
   const skip = async () => { for (let i = 0; i < 40 && await ev('!!(DH().dlg)'); i++) await ev('dlgAdvance();dlgAdvance()'); };
 
-  await ev('localStorage.clear()');
+  await ev('localStorage.clear();PLAYTEST=false;');
   check('he has to be earned: laying the King to rest unlocks him', await ev('!isUnlocked("monk")&&(()=>{bumpStat("kings");return isUnlocked("monk");})()'));
   await ev('start("monk")');
   check('weak: 30 health, 20% less damage', await ev('S.maxhp===30&&CHAR().dmgMult===.8&&S.weapon.id==="pilgrim"'));
