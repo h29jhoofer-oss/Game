@@ -17,13 +17,15 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const results = [];
   const check = (name, ok, detail) => results.push({ name, ok: !!ok, detail });
   const dice = () => ev('DICE.dice.map(d=>({kind:d.kind,value:d.value,done:d.done}))');
+  // wait (up to ms) until the expression is true in the page
+  const until = async (expr, ms = 4000) => { for (let i = 0; i < ms / 25; i++) { if (await ev(expr)) return true; await wait(25); } return false; };
   const ready = async () => { for (let i = 0; i < 80 && !await ev('B&&B.phase==="choose"&&!B.dlg'); i++) await wait(50); };
 
   await ev(`PLAYTEST=false;tamChatter=false;META.tutorialDone=true;hideOverlay();start("rook");descentT=0;fade=0;S.lvl=9;S.hp=S.maxhp=300;
     spawnMon("gob",S.px+1,S.py);const m=mons[mons.length-1];m.hp=m.max=500;startBattle(m);parryChance=()=>0;`);
   await ready();
-  check('the tray sits in the bottom-left corner of the fight', await ev(`(()=>{const t=document.getElementById("diceTray").getBoundingClientRect(),w=document.getElementById("mapwrap").getBoundingClientRect();
-    return getComputedStyle(document.getElementById("diceTray")).display!=="none"&&t.left-w.left<30&&w.bottom-t.bottom<30&&t.width>150;})()`));
+  check('the tray sits under the health, stamina, mana and torch bars', await ev(`(()=>{const el=document.getElementById("diceTray"),t=el.getBoundingClientRect(),p=document.querySelector(".rail .panel").getBoundingClientRect();
+    return getComputedStyle(el).display!=="none"&&el.parentElement.classList.contains("rail")&&t.top>=p.bottom&&t.top-p.bottom<40&&Math.abs(t.left-p.left)<4;})()`));
 
   // your attack: a blue die, and nothing lands until it stops
   const h0 = await ev('B.mhp');
@@ -33,10 +35,15 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('your attack rolls a blue d20', mid.length === 1 && mid[0].kind === 'blue', mid);
   check('while it rolls, the blow has not landed', await ev('B.mhp') === h0 && !mid[0].done, [h0, await ev('B.mhp')]);
   check('it is drawn as a pixel d20 on a canvas', await ev('(()=>{const c=document.querySelector("#diceFelt .die3 canvas");return !!c&&c.width===26&&getComputedStyle(c).imageRendering.includes("pixel")||getComputedStyle(c).imageRendering.includes("crisp");})()'));
-  await wait(900);
+  await until('DICE.dice[0]&&DICE.dice[0].done');
+  check('when it stops it shows its number, and the blow still waits a moment', await ev('B.mhp') === h0);
+  await wait(250);
+  check('...about half a second, so the number can be read', await ev('B.mhp') === h0);
+  const missed = await ev('DICE.dice[0].value==="x"');
+  if (missed) await wait(700); else await until(`B.mhp!==${h0}`);
   const landed = await dice();
   const dealt = h0 - await ev('B.mhp');
-  check('when it stops, it shows the damage, and the blow lands', landed[0].done && (landed[0].value === 'x' ? dealt === 0 : +landed[0].value === dealt), [landed, dealt]);
+  check('then the blow lands for exactly the number shown', landed[0].done && (landed[0].value === 'x' ? dealt === 0 : +landed[0].value === dealt), [landed, dealt]);
 
   // the goblin answers: its red die sweeps yours away
   await wait(500);
@@ -60,17 +67,17 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const g = await dice();
   check('drinking a healing draught rolls green', g.length === 1 && g[0].kind === 'green', g);
   check('the health waits for the die', await ev('S.hp') === 100);
-  await wait(900);
+  await until('S.hp!==100');
   check('then you heal by the number it shows', await ev('S.hp') === 100 + +(await dice())[0].value, [await ev('S.hp'), await dice()]);
   await ready();
 
   // the monster knits its wounds: black
-  await ev('B.phase="anim";B.mhp=100;seq=[];enemyStrike({name:"Knit",heal:.2},1,false);');
+  await ev('B.phase="anim";B.mhp=100;seq=[];diceClear();enemyStrike({name:"Knit",heal:.2},1,false);');
   await wait(300);
   const bk = await dice();
   check('a monster healing itself rolls black', bk.length === 1 && bk[0].kind === 'black', bk);
   check('and its wounds close only when the die stops', await ev('B.mhp') === 100);
-  await wait(900);
+  await until('B.mhp!==100');
   check('by the number on the black die', await ev('B.mhp') === 100 + +(await dice())[0].value, [await ev('B.mhp'), await dice()]);
 
   if (process.env.SHOTS) await page.screenshot({ path: path.join(process.env.SHOTS, 'dice.png') });

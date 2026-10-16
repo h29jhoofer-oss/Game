@@ -339,13 +339,14 @@ body.inbattle .spellbar{display:flex}
 
 /* ---------- dice tray: pixel d20s roll into a wooden tray in the bottom-left corner ---------- */
 .dicetray{
-  position:absolute;left:12px;bottom:12px;z-index:5;display:none;pointer-events:none;
-  width:252px;height:88px;padding:6px;box-sizing:border-box;
+  position:relative;display:none;pointer-events:none;flex:none;
+  width:100%;height:88px;padding:6px;box-sizing:border-box;
   background:repeating-linear-gradient(0deg,#5e3a24 0 3px,#523220 3px 4px);
   box-shadow:0 0 0 3px #3d2a1c,0 0 0 5px #0a0c10,7px 7px 0 5px rgba(0,0,0,.45);
 }
 body.inbattle .dicetray{display:block}
-body.talking .dicetray,body.inchasm .dicetray{display:none!important}
+body.talking .mapwrap .dicetray,body.inchasm .dicetray{display:none!important}
+.mapwrap .dicetray{position:absolute;left:8px;bottom:84px;z-index:5;width:212px;height:80px;padding:5px}
 .dfelt{position:relative;width:100%;height:100%;overflow:hidden;
   background-color:#211c1f;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%23282226' d='M1 1h1v1h-1zM3 3h1v1h-1z'/%3E%3C/svg%3E");background-size:8px 8px;
@@ -363,9 +364,6 @@ body.talking .dicetray,body.inchasm .dicetray{display:none!important}
 .die3.miss .dcap{color:#b8c0cc}
 .die3.settled .dcap{opacity:1}
 @keyframes dieLand{0%{transform:scale(1.25)}50%{transform:scale(.9)}100%{transform:scale(1)}}
-@media(max-width:760px){
-  .dicetray{left:8px;bottom:84px;width:212px;height:80px;padding:5px}
-}
 @media (prefers-reduced-motion:reduce){.die3.settled canvas{animation:none}.die3.placed{transition:none}}
 
 /* ---------- boss sword QTE ---------- */
@@ -895,6 +893,7 @@ body.inbattle #hint{display:none}
           <div class="stat"><span>Gold</span><span id="gold">0</span></div>
         </div>
       </div>
+      <div class="dicetray" id="diceTray" aria-hidden="true"><div class="dfelt" id="diceFelt"></div></div>
     </div>
 
     <div class="main">
@@ -902,7 +901,6 @@ body.inbattle #hint{display:none}
         <canvas id="cv"></canvas>
         <div class="spellbar" id="spellbar"></div>
         <div class="movebar" id="movebar"></div>
-        <div class="dicetray" id="diceTray" aria-hidden="true"><div class="dfelt" id="diceFelt"></div></div>
         <div class="qte-overlay" id="qteOverlay">
           <div class="qte-warn">⚔ DODGE THE SLAM! ⚔</div>
           <div class="qte-keys" id="qteKeys"></div>
@@ -2520,12 +2518,14 @@ function say(text,cls){
 
 /* ============================ dice tray ============================ */
 // The table, as at a game of D&D: every blow and every heal in a fight is rolled first, on a pixel d20 that
-// tumbles into the tray in the bottom-left corner. Blue: your attacks. Green: your heals. Red: the monster's
-// attacks. Black: the monster healing itself. Nothing lands until the die stops: diceThen() holds the
-// battle's queue for the roll, then plays the swing and lands the blow. When the other side rolls (or after a
+// tumbles into the tray under your health and stamina (inside the fight on phones). Blue: your attacks. Green: your heals. Red: the monster's
+// attacks. Black: the monster healing itself. Nothing lands until the die has stopped and its number has
+// sat there a moment to be read: diceThen() holds the battle's queue for that, then plays the swing and lands
+// the blow. When the other side rolls (or after a
 // pause) the old dice are swept off the felt first.
 let DICE_ROLL=.8;          // seconds a die takes to stop (0 lands at once: the tests use it)
-const DICE_GAP=700;        // ms after the last die stopped before a roll by the same side starts a fresh tray
+const DICE_HOLD=.5;        // ...then the number sits there to be read for about this long (0.4-0.65s) before the blow lands
+const DICE_GAP=1400;       // ms after the last die stopped before a roll by the same side starts a fresh tray
 const DIE_N=26;            // the d20 is drawn on a 26x26 pixel grid and shown at 2x
 const DIE_COLS={
   blue: {face:"#cfe8ff",hi:"#8cc0f2",mid:"#4f8cd4",lo:"#2c5799",edge:"#163868",line:"#0a1830",ink:"#0d2148"},
@@ -2581,6 +2581,14 @@ function dieDraw(d,frame,text){
 }
 const DICE={dice:[],actor:null,settledAt:0,raf:0};
 function diceActor(kind){return kind==="blue"||kind==="green"?"you":"foe";}
+function placeDiceTray(){
+  const t=$("diceTray");if(!t)return;
+  const host=matchMedia("(max-width:760px)").matches?$("mapwrap"):document.querySelector(".rail");
+  if(host&&t.parentElement!==host)host.appendChild(t);
+  diceSlots();
+  for(const d of DICE.dice)if(d.done)d.el.style.transform=`translate(${d.tx}px,${d.ty}px)`;
+}
+window.addEventListener("resize",placeDiceTray);
 function diceClear(){
   for(const d of DICE.dice){const el=d.el;el.classList.add("gone");setTimeout(()=>el.remove(),230);}
   DICE.dice=[];DICE.actor=null;
@@ -2650,7 +2658,7 @@ function diceThen(kind,value,land,o){
   if(!DICE_ROLL){if(item.lead)item.lead();land();return;}
   if(diceBatch&&diceBatch.open&&seq[0]===diceBatch.step){diceBatch.items.push(item);return;}
   const batch={open:true,items:[item]};
-  batch.step={d:DICE_ROLL,f:()=>{
+  batch.step={d:DICE_ROLL+DICE_HOLD*(.8+Math.random()*.5),f:()=>{
     if(!B)return;
     let wait=0;
     for(const it of batch.items)if(it.lead){it.lead();wait=Math.max(wait,it.leadT);}
@@ -5540,7 +5548,7 @@ function startBattle(m){
   B.maxPoise=Math.max(12,Math.round((10+m.t.def*3+m.max*.22)*(m.t.boss?1.1:1)));
   if(m.t.boss)B.maxPoise=Math.min(B.maxPoise,70);
   B.poise=B.maxPoise;
-  seq=[];sfx=[];diceClear();
+  seq=[];sfx=[];diceClear();placeDiceTray();
   document.body.classList.add("inbattle");
   requestAnimationFrame(resize);
   $("log").innerHTML="";
