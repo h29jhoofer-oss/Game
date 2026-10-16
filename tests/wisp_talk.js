@@ -63,6 +63,15 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
 
   check('rooted monsters have red eyes', await ev('ROOTED_BASES.every(b=>{const r=SPR[b+"_r"];if(!r.eyes||!r.eyes.length)return false;const d=r.getContext("2d").getImageData(0,0,r.width,r.height).data;return r.eyes.every(([x,y])=>{const i=(y*r.width+x)*4;return d[i]>240&&d[i+1]<100;});})'));
   check('their walk and attack frames too', await ev('["orc_atk_r","troll_walk_2_r","wraith_walk_1_r","troll_s3_r"].every(k=>SPR[k].eyes&&SPR[k].eyes.length===2)'));
+  // every hero gets their own answers from Tam, never Cade's
+  const missing = await ev(`(()=>{const out=[];for(const c of CHARACTERS){
+    for(const t of WISP_TOPICS)if(!WISP_TALK[t][c.id])out.push(c.id+" "+t);
+    for(let d=1;d<=10;d++)if(!TAM_FLOOR[d][c.id])out.push(c.id+" floor "+d);}return out;})()`);
+  check('Tam has his own words for every hero: every question, every castle floor', missing.length === 0, missing);
+  const eric = await ev('(()=>{start("pact_maker");return wispLines("fall").map(l=>l.text).join(" ");})()');
+  check("and he knows Eric was the man with the pen", /held the pen/.test(eric) && !/I heard the stones go/.test(eric), eric);
+  const bran = await ev('(()=>{start("brute");return wispLines("who").map(l=>l.text).join(" ");})()');
+  check('and that Brannoc was the knight on the door', /Brannoc/.test(bran) && !/freckles/.test(bran), bran);
   check('no page errors', errors.length === 0, errors);
   let pass = 0;
   for (const r of results) { console.log((r.ok ? 'ok   ' : 'FAIL ') + r.name + (r.ok ? '' : '  ' + JSON.stringify(r.detail))); if (r.ok) pass++; }
