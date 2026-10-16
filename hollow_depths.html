@@ -7626,9 +7626,11 @@ const VESSELS={
 const VESSEL_RED={empty:"#3a2530",lag:"#f4d2b0",top:"#ff8f80",lit:"#e8685a",mid:"#c94a3c",dark:"#8f2f28",glow:"#c94a3c"};
 const VESSEL_MANA={empty:"#2a2038",lag:"#ece2ff",top:"#e6d4ff",lit:"#c8a8f0",mid:"#8a5fc4",dark:"#4a2f6b",glow:"#8a5fc4"};
 const VESSEL_FIRE={empty:"#2a1c14",lag:"#ffe2b4",top:"#fff27a",lit:"#ffb860",mid:"#f0902a",dark:"#b8431f",glow:"#f0902a",core:"#ffd860"};
-// The torch is a little fire that burns down as the flame runs out; two frames, swapped to flicker.
+// The torch is a little fire that burns down as the flame runs out; three frames, flickered through FIRE_SEQ.
 const FIRE_FRAMES=[["....k.......","...k#k......","...k#k...k..","..k##k..k#k.","..k###kk##k.",".k####k###k.",".k#########k","k####@@####k","k###@@@@###k","k###@@@@@##k","k##@@@@@@##k","k##@@@@@@##k",".k##@@@@##k.","..kkkkkkkk.."],
-  [".......k....","......k#k...","..k...k#k...",".k#k..k##k..",".k##kk###k..",".k###k####k.","k#########k.","k####@@####k","k###@@@@###k","k##@@@@@###k","k##@@@@@@##k","k##@@@@@@##k",".k##@@@@##k.","..kkkkkkkk.."]];
+  [".......k....","......k#k...","..k...k#k...",".k#k..k##k..",".k##kk###k..",".k###k####k.","k#########k.","k####@@####k","k###@@@@###k","k##@@@@@###k","k##@@@@@@##k","k##@@@@@@##k",".k##@@@@##k.","..kkkkkkkk.."],
+  ["......k.....",".....k#k....","..k..k#k.k..",".k#k.k##k#k.",".k##k###k#k.",".k########k.",".k#########k","k####@@####k","k###@@@@###k","k###@@@@@##k","k##@@@@@@##k","k##@@@@@@##k",".k##@@@@##k.","..kkkkkkkk.."]];
+const FIRE_SEQ=[0,2,1,2,0,1];          // the order the frames flicker through
 // Mana is a small faceted gem, the same for everyone.
 const MANA_GEM=["....kkkk....","...k####k...","..k######k..",".k########k.","k##########k","k##########k",".k########k.",
   ".k########k.","..k######k..","..k######k..","...k####k...","....k##k....",".....kk....."];
@@ -7698,19 +7700,41 @@ function heroChips(){
   return statusText(B.pStat).concat(CHAR().ichor?[["ICHOR "+(S.ichor||0),"#e8685a"]]:[])
     .concat(B.combo>0?[["COMBO x"+B.combo+(B.combo>=COMBO_MAX?" · FINISHER READY":""),"#f0c060"]]:[]);
 }
-function paintCrystal(id,grid,u,ratio,lag,hit,C,bubbly){
+// The mana gem catches the light: every couple of seconds a glint sweeps across it corner to corner, and a
+// little four-point sparkle winks on its shoulder as it goes.
+const GEM_SHINE_T=2.6;
+function gemShine(g2,grid,ox,oy,u){
+  if(RM)return;
+  const rows=grid.length,cols=grid[0].length,t=tclock%GEM_SHINE_T,sweep=.5;
+  if(t<sweep){
+    const k=Math.floor(t/sweep*(rows+cols+2))-2;
+    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+      if(grid[r][c]!=="#")continue;const dd=c+r-k;   // a diagonal band, top-left to bottom-right
+      if(dd===0||dd===1){g2.fillStyle=dd===0?"rgba(255,255,255,.75)":"rgba(255,255,255,.35)";g2.fillRect(ox+c*u,oy+r*u,u,u);}
+    }
+  }
+  const sp=(t-sweep*.6)/.45;                              // the sparkle: grows, then shrinks away
+  if(sp>0&&sp<1){
+    const a=Math.sin(sp*Math.PI),arm=a>.66?2:a>.25?1:0,cx=ox+(cols-3)*u,cy=oy+2*u;
+    g2.fillStyle="rgba(255,255,255,"+(.5+.5*a).toFixed(2)+")";g2.fillRect(cx,cy,u,u);
+    g2.fillStyle="rgba(236,226,255,"+(.85*a).toFixed(2)+")";
+    for(let n=1;n<=arm;n++){g2.fillRect(cx-n*u,cy,u,u);g2.fillRect(cx+n*u,cy,u,u);g2.fillRect(cx,cy-n*u,u,u);g2.fillRect(cx,cy+n*u,u,u);}
+  }
+}
+function paintCrystal(id,grid,u,ratio,lag,hit,C,bubbly,after){
   const cv=$(id);if(!cv||!cv.offsetParent)return;
   const w=(grid[0].length+4)*u,h=(grid.length+4)*u;
   if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;}
   const g2=cv.getContext("2d");g2.clearRect(0,0,w,h);
   drawVessel(g2,grid,2*u,2*u,u,ratio,lag,hit,C,bubbly);
+  if(after)after(g2,grid,2*u,2*u,u);
 }
 function drawHudCrystals(){
   const small=matchMedia("(max-width:760px)").matches;
   paintCrystal("hpcry",VESSELS[CHAR().id]||VESSELS.cade,small?3:4,HV.hp/S.maxhp,HV.hpLag/S.maxhp,HV.hit,VESSEL_RED,CHAR().id==="mage");
-  const fr=S.flame>0&&!RM?Math.floor(tclock*5.5+Math.sin(tclock*2.3)*.6)&1:0;
+  const fr=S.flame>0&&!RM?FIRE_SEQ[Math.floor(tclock*7+Math.sin(tclock*2.3)*.8)%FIRE_SEQ.length]:0;
   paintCrystal("ficry",FIRE_FRAMES[fr],small?2:3,HV.fl/Math.max(1,S.maxflame),HV.flLag/Math.max(1,S.maxflame),0,VESSEL_FIRE,false);
-  if(!CHAR().noMana)paintCrystal("mpcry",MANA_GEM,small?2:3,HV.mp/Math.max(1,S.maxmana),HV.mpLag/Math.max(1,S.maxmana),0,VESSEL_MANA,false);
+  if(!CHAR().noMana)paintCrystal("mpcry",MANA_GEM,small?2:3,HV.mp/Math.max(1,S.maxmana),HV.mpLag/Math.max(1,S.maxmana),0,VESSEL_MANA,false,gemShine);
 }
 // On a phone the side panel is hidden in a fight, so the crystals stand in the corner of the arena instead.
 function arenaCrystals(vw,vh){

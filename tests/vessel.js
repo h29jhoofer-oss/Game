@@ -53,6 +53,10 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const frames = new Set();
   for (let i = 0; i < 12; i++) { frames.add(await ev('document.getElementById("ficry").toDataURL().length')); await page.waitForTimeout(60); }
   check('and it flickers', frames.size > 1, frames.size);
+  check('the fire has three frames, and flickers through all of them', await ev('FIRE_FRAMES.length===3&&[0,1,2].every(i=>FIRE_SEQ.includes(i))&&new Set(FIRE_FRAMES.map(f=>f.join())).size===3'));
+  const shine = await ev(`(()=>{const g=document.getElementById("mpcry"),at=t=>{tclock=Math.floor(tclock/GEM_SHINE_T)*GEM_SHINE_T+t;drawHudCrystals();return g.toDataURL();};
+    const a=at(GEM_SHINE_T*.9),b=at(.15),c=at(.45);return [a!==b,b!==c,a===at(GEM_SHINE_T*.95)];})()`);
+  check('the mana gem shines: a glint sweeps across it, then it rests', shine[0] && shine[1] && shine[2], shine);
   check('a hero with no mana has no gem', await ev('B=null;S.mode="map";start("monk");refreshMana();getComputedStyle(document.getElementById("manarow")).display==="none"'));
 
   check('no page errors', errors.length === 0, errors);
