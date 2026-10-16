@@ -58,12 +58,13 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   // roots
   await hero('brute');
   await ev('S.depth=15;newFloor(15);descentT=0;fade=0;mons=[];S.hp=S.maxhp=500;SNARE=null;S.snareCD=0;snareWarn();');
-  for (let i = 0; i < 40; i++) await ev('tick(0.05)');
-  check('the roots still grab him', await ev('SNARE&&SNARE.stage==="grab"&&!!SNARE.bar'));
-  check('but his glow is far wider', await ev('SNARE.bar.w>=Math.max(.12,.24-(S.depth-11)*.012)*1.7'), await ev('SNARE.bar.w'));
-  const hp0 = await ev('S.hp');
-  await ev('(()=>{const b=SNARE.bar;SNARE.t=b.t0+Math.max(0,b.z0-.08)*SNARE_BAR;snarePress();})()');
-  check('and even a clumsy pull tears him free, unhurt', await ev('SNARE.stage==="broken"') && await ev('S.hp') === hp0, [await ev('SNARE&&SNARE.stage'), hp0, await ev('S.hp')]);
+  // (the game keeps running between steps, so the bar is checked and pulled in one go, the moment it is up)
+  for (let i = 0; i < 80 && !(await ev('!!(SNARE&&SNARE.bar)')); i++) await ev('tick(0.05)');
+  const pull = await ev(`(()=>{if(!SNARE||!SNARE.bar)return null;const b=SNARE.bar,hp=S.hp,wide=b.w>=Math.max(.12,.24-(S.depth-11)*.012)*1.7;
+    SNARE.t=b.t0+Math.max(0,b.z0-.08)*SNARE_BAR;snarePress();return {grab:true,wide,w:b.w,free:SNARE.stage==="broken",unhurt:S.hp===hp};})()`);
+  check('the roots still grab him', pull && pull.grab, pull);
+  check('but his glow is far wider', pull && pull.wide, pull);
+  check('and even a clumsy pull tears him free, unhurt', pull && pull.free && pull.unhurt, pull);
   await ev('SNARE=null;');
 
   // no healing among his level-up moves
