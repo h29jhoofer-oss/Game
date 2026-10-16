@@ -60,7 +60,8 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await step(.8);
   check('the rat cannot go down before you have parried', await ev('!!B&&!S.tut.flags.won&&S.tut.flags.played&&!S.tut.flags.parried'), await ev('[!!B,B&&B.mhp,S.tut.flags,B&&B.phase]'));
   for (let i = 0; i < 90 && await ev('B&&B.phase!=="parry"'); i++) await step(.1);   // blows wait for their dice now
-  check('it always leaves an opening until you parry', await ev('B.phase==="parry"&&/PARRY/.test(document.getElementById("tutcard").textContent)'));
+  await step(.05);   // the banner catches up on the next frame
+  check('it always leaves an opening until you parry', await ev('B.phase==="parry"&&/PARRY/.test(document.getElementById("tutcard").textContent)'), await ev('[B&&B.phase,B&&B.mhp,S.tut&&S.tut.flags,B&&B.log.slice(-5).map(l=>l.t)]'));
   await ev('(()=>{const P=B.parry;P.t0=performance.now()-P.dur*(P.z0+P.z1)/2;parryPress();})()'); await step(1);
   check('parry it', await ev('S.tut.flags.parried'));
   for (let i = 0; i < 30 && await ev('!!B'); i++) { if (await ev('B&&B.phase==="choose"')) { await ev('B.mhp=1'); await page.keyboard.press('1'); } await step(.3); }

@@ -340,13 +340,13 @@ body.inbattle .spellbar{display:flex}
 /* ---------- dice tray: pixel d20s roll into a wooden tray in the bottom-left corner ---------- */
 .dicetray{
   position:relative;display:none;pointer-events:none;flex:none;
-  width:100%;height:88px;padding:6px;box-sizing:border-box;
+  width:100%;height:140px;padding:6px;box-sizing:border-box;
   background:repeating-linear-gradient(0deg,#5e3a24 0 3px,#523220 3px 4px);
   box-shadow:0 0 0 3px #3d2a1c,0 0 0 5px #0a0c10,7px 7px 0 5px rgba(0,0,0,.45);
 }
 body.inbattle .dicetray{display:block}
 body.talking .mapwrap .dicetray,body.inchasm .dicetray{display:none!important}
-.mapwrap .dicetray{position:absolute;left:8px;bottom:84px;z-index:5;width:212px;height:80px;padding:5px}
+.mapwrap .dicetray{position:absolute;left:8px;bottom:84px;z-index:5;width:212px;height:132px;padding:5px}
 .dfelt{position:relative;width:100%;height:100%;overflow:hidden;
   background-color:#211c1f;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%23282226' d='M1 1h1v1h-1zM3 3h1v1h-1z'/%3E%3C/svg%3E");background-size:8px 8px;
@@ -2600,8 +2600,16 @@ function diceClear(){
 }
 function diceSlots(){
   const felt=$("diceFelt");if(!felt)return;
-  const W=felt.clientWidth||238,n=DICE.dice.length,step=n>1?Math.min(56,(W-52-8)/(n-1)):0;
-  DICE.dice.forEach((d,i)=>{d.tx=4+i*step;});
+  const W=felt.clientWidth||204,Hf=felt.clientHeight||128,rows=Hf>=110?2:1,rowGap=Math.min(62,Hf-62);
+  for(const side of ["left","right"]){
+    const mine=DICE.dice.filter(d=>d.side===side);
+    const cols=Math.max(3,Math.ceil(mine.length/rows)),step=Math.min(58,(W-56)/Math.max(1,cols-1));
+    mine.forEach((d,i)=>{
+      const col=i%cols,row=Math.min(rows-1,Math.floor(i/cols)),r=side==="left"?row:rows-1-row;
+      d.tx=side==="left"?4+col*step:W-56-col*step;
+      d.ty=2+r*rowGap+d.jy;
+    });
+  }
 }
 function diceSound(){
   const out=sfxOut(.7);if(!out)return;const t=actx.currentTime+.01;
@@ -2621,8 +2629,10 @@ function trayRoll(kind,value,o){
   const cap=document.createElement("i");cap.className="dcap";el.appendChild(cap);
   const miss=value==="miss";
   cap.textContent=miss?"MISS":o.crit?"CRIT":"";
-  const d={el,cv,kind,value:miss?"x":String(Math.max(0,Math.round(value))),miss,crit:!!o.crit,
-    t0:now,dur:Math.max(1,DICE_ROLL*1000),sx:-60,tx:0,ty:3+Math.random()*6,frame:-1,flick:"",done:false};
+  // your dice come in from the left, the monster's from the right; a wound's die from the side of whoever has it
+  const side=o.side||(actor==="foe"?"right":"left");
+  const d={el,cv,kind,value:miss?"x":String(Math.max(0,Math.round(value))),miss,crit:!!o.crit,side,
+    t0:now,dur:Math.max(1,DICE_ROLL*1000),sx:side==="left"?-60:(felt.clientWidth||204)+8,tx:0,ty:0,jy:Math.random()*4-2,frame:-1,flick:"",done:false};
   felt.appendChild(el);DICE.dice.push(d);diceSlots();
   for(const o2 of DICE.dice)if(o2.done)o2.el.style.transform=`translate(${o2.tx}px,${o2.ty}px)`;
   diceSound();
@@ -5807,15 +5817,16 @@ function chooseMove(id){
       return;
     }
     if(mv.kind==="buff"){
-      const h=Math.min(S.maxhp-S.hp,10+S.lvl*2);
+      const roll=10+S.lvl*2;
       const rally=()=>{
+        const h=Math.min(S.maxhp-S.hp,roll);
         S.hp+=h;B.pStat.atkUp=3;
         const L=B.layout;
         if(L){snum(L.px,L.py-L.psz*.5,"+"+h,"#6fa844");srally();
               sburst(L.px,L.py,"#6fa844",10,140);}
         blog(h?`You catch your breath (+${h}) and set your grip.`:"You set your grip.","c-good");
       };
-      if(h>0)diceThen("green",h,rally);else rally();
+      diceThen("green",roll,rally);
       return;
     }
     if(mv.transfuse){transfuse();return;}
@@ -6728,20 +6739,20 @@ function plagueFeed(d){
 function endRound(){
   if(!B)return;
   if(wispAttack()){refresh();queue(.5,winBattle);return;}
-  dotTick(0);
+  dotTick();
 }
-// The end-of-round wounds, in order. Each one that is working rolls its own die (dark red for bleeding,
-// orange for fire, dark green for poison) and lands when it stops; then the next one rolls. A tick that
-// ends the fight stops the chain there.
+// The end-of-round wounds. Every one that is working rolls its own die at once (dark red for bleeding,
+// orange for fire, dark green for poison), in from the side of whoever has it; when they stop they land in
+// this order, and a wound that ends the fight stops the rest.
 const DOT_TICKS=[
-  ()=>B.mStat.burn>0&&{kind:"burn",d:5+S.lvl,land:d=>{
+  ()=>B.mStat.burn>0&&{kind:"burn",side:"right",d:5+S.lvl,land:d=>{
     B.mhp-=d;B.mStat.burn--;B.mFlash=.7;
     const L=B.layout;
     if(L){snum(L.ex,L.ey-L.esz*.5,String(d),"#f0902a");sburst(L.ex,L.ey,"#f0902a",8,150);}
     blog(`The ${B.mon.t.name} burns for ${d}.`,"c-hit");
     checkBossPhase();
     if(B.mhp<=0){refresh();queue(.5,winBattle);return true;}}},
-  ()=>B.mStat.poison>0&&{kind:"poison",d:B.mStat.poisonDmg||3,land:d=>{
+  ()=>B.mStat.poison>0&&{kind:"poison",side:"right",d:B.mStat.poisonDmg||3,land:d=>{
     B.mhp-=d;B.mStat.poison--;B.mFlash=.6;
     const L=B.layout;
     if(L){snum(L.ex,L.ey-L.esz*.5,String(d),"#6fa844");sburst(L.ex,L.ey,"#6fa844",7,130);}
@@ -6749,7 +6760,7 @@ const DOT_TICKS=[
     plagueFeed(d);
     checkBossPhase();
     if(B.mhp<=0){refresh();queue(.5,winBattle);return true;}}},
-  ()=>B.mStat.bleed>0&&{kind:"bleed",d:B.mStat.bleedDmg||2,land:d=>{
+  ()=>B.mStat.bleed>0&&{kind:"bleed",side:"right",d:B.mStat.bleedDmg||2,land:d=>{
     B.mhp-=d;B.mStat.bleed--;B.mFlash=.5;
     if(B.mStat.bleed<=0)B.mStat.bleedDmg=0;
     const L=B.layout;
@@ -6758,13 +6769,13 @@ const DOT_TICKS=[
     plagueFeed(d);
     checkBossPhase();
     if(B.mhp<=0){refresh();queue(.5,winBattle);return true;}}},
-  ()=>B.pStat.burn>0&&{kind:"burn",d:5,land:d=>{
+  ()=>B.pStat.burn>0&&{kind:"burn",side:"left",d:5,land:d=>{
     S.hp-=d;B.pStat.burn--;B.pFlash=.7;
     const L=B.layout;
     if(L){snum(L.px,L.py-L.psz*.5,"-"+d,"#f0902a");sburst(L.px,L.py,"#f0902a",7,140);}
     blog(`You burn for ${d}.`,"c-hit");
     if(S.hp<=0){refresh();queue(.4,()=>loseBattle("flames"));return true;}}},
-  ()=>B.pStat.bleed>0&&{kind:"bleed",d:B.pStat.bleedDmg||2,land:d=>{
+  ()=>B.pStat.bleed>0&&{kind:"bleed",side:"left",d:B.pStat.bleedDmg||2,land:d=>{
     S.hp-=d;B.pStat.bleed--;B.pFlash=.6;
     if(B.pStat.bleed<=0)B.pStat.bleedDmg=0;
     const L=B.layout;
@@ -6772,16 +6783,16 @@ const DOT_TICKS=[
     blog(`You bleed for ${d}.`,"c-hit");
     if(S.hp<=0){refresh();queue(.4,()=>loseBattle("blood loss"));return true;}}}
 ];
-function dotTick(i){
+function dotTick(){
   if(!B)return;
-  for(;i<DOT_TICKS.length;i++){
-    const t=DOT_TICKS[i]();
-    if(!t)continue;
-    const next=i+1;
-    diceThen(t.kind,t.d,()=>{if(!B)return;if(t.land(t.d))return;refresh();dotTick(next);});
-    return;
-  }
-  roundUpkeep();
+  const ticks=DOT_TICKS.map(f=>f()).filter(Boolean);
+  if(!ticks.length){roundUpkeep();return;}
+  let over=false;
+  ticks.forEach((t,k)=>diceThen(t.kind,t.d,()=>{
+    if(!B||over)return;
+    if(t.land(t.d)){over=true;return;}
+    if(k===ticks.length-1){refresh();roundUpkeep();}
+  },{side:t.side}));
 }
 // The rest of the round's upkeep, once every wound has had its turn.
 function roundUpkeep(){
@@ -6935,15 +6946,16 @@ function useItemBattle(i){
   if(id==="wisp"){castWisp(it);return;}
   if(id==="heal"){
     const bonus=tier===1?10:tier===2?28:0;
-    const h=Math.min(S.maxhp-S.hp,14+S.lvl*4+bonus);
+    const roll=14+S.lvl*4+bonus;
     const drink=()=>{
+      const h=Math.min(S.maxhp-S.hp,roll);
       S.hp+=h;
       const L=B.layout;
       if(L){snum(L.px,L.py-L.psz*.5,"+"+h,"#6fa844");sring(L.px,L.py,"rgba(111,168,68,.9)",L.psz*.8);
             sburst(L.px,L.py,"#6fa844",tier>=1?16:9,tier>=1?180:140);}
       blog(h?`${tier===2?"Full restoration":tier===1?"You surge with warmth":"You drink deep"} (+${h}).`:"You are already whole.","c-good");
     };
-    if(h>0)diceThen("green",h,drink);else drink();
+    diceThen("green",roll,drink);
     queue(.5,enemyTurn);
   }else if(id==="might"){
     S.str++;blog("Your grip tightens. Strike improved.","c-lvl");

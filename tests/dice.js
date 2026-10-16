@@ -16,7 +16,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const wait = ms => page.waitForTimeout(ms);
   const results = [];
   const check = (name, ok, detail) => results.push({ name, ok: !!ok, detail });
-  const dice = () => ev('DICE.dice.map(d=>({kind:d.kind,value:d.value,done:d.done}))');
+  const dice = () => ev('DICE.dice.map(d=>({kind:d.kind,value:d.value,done:d.done,side:d.side}))');
   // wait (up to ms) until the expression is true in the page
   const until = async (expr, ms = 4000) => { for (let i = 0; i < ms / 25; i++) { if (await ev(expr)) return true; await wait(25); } return false; };
   const ready = async () => { for (let i = 0; i < 200 && !await ev('B&&B.phase==="choose"&&!B.dlg'); i++) await wait(50); };
@@ -32,7 +32,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await ev('chooseMove("strike")');
   await wait(450);
   const mid = await dice();
-  check('your attack rolls a blue d20', mid.length === 1 && mid[0].kind === 'blue', mid);
+  check('your attack rolls a blue d20, in from the left', mid.length === 1 && mid[0].kind === 'blue' && mid[0].side === 'left', mid);
   check('while it rolls, the blow has not landed', await ev('B.mhp') === h0 && !mid[0].done, [h0, await ev('B.mhp')]);
   check('it is drawn as a pixel d20 on a canvas', await ev('(()=>{const c=document.querySelector("#diceFelt .die3 canvas");return !!c&&c.width===26&&getComputedStyle(c).imageRendering.includes("pixel")||getComputedStyle(c).imageRendering.includes("crisp");})()'));
   await until('DICE.dice[0]&&DICE.dice[0].done');
@@ -49,7 +49,7 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await wait(500);
   for (let i = 0; i < 40 && !(await dice()).some(d => d.kind === 'red'); i++) await wait(50);
   const foe = await dice();
-  check('the monster\'s attack rolls red, and your old dice are gone', foe.length === 1 && foe[0].kind === 'red', foe);
+  check('the monster\'s attack rolls red, in from the right, and your old dice are gone', foe.length === 1 && foe[0].kind === 'red' && foe[0].side === 'right', foe);
   const hp0 = await ev('S.hp');
   check('its blow waits for its die too', !foe[0].done ? await ev('S.hp') === hp0 : true);
   await ready();
@@ -80,23 +80,29 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await until('B.mhp!==100');
   check('by the number on the black die', await ev('B.mhp') === 100 + +(await dice())[0].value, [await ev('B.mhp'), await dice()]);
 
-  // wounds at the end of the round: fire (orange), poison (dark green), bleeding (dark red), one die each
+  // wounds at the end of the round: all roll at once, from the side of whoever has them
   await ready();
-  await ev('B.phase="anim";seq=[];diceClear();B.mhp=300;B.mStat.burn=2;B.mStat.poison=2;B.mStat.poisonDmg=4;B.mStat.bleed=2;B.mStat.bleedDmg=3;S.lvl=9;endRound();');
+  await ev('B.phase="anim";seq=[];diceClear();B.mhp=300;S.hp=200;B.mStat.burn=2;B.mStat.poison=2;B.mStat.poisonDmg=4;B.mStat.bleed=2;B.mStat.bleedDmg=3;B.pStat.burn=1;B.pStat.bleed=0;S.lvl=9;endRound();');
   await wait(300);
-  const w1 = await dice();
-  check('a burning foe rolls an orange die first', w1.length === 1 && w1[0].kind === 'burn', w1);
-  check('and the fire waits for it', await ev('B.mhp') === 300);
+  const w = await dice();
+  check('every wound rolls its die at the same time', w.length === 4 && w.every(d => !d.done), w);
+  check('orange for fire, dark green for poison, dark red for bleeding', w.map(d => d.kind).join() === 'burn,poison,bleed,burn', w);
+  check('the monster\'s wounds come in from the right, yours from the left', w.slice(0, 3).every(d => d.side === 'right') && w[3].side === 'left', w);
+  check('and nothing lands while they roll', await ev('B.mhp') === 300 && await ev('S.hp') === 200);
   await until('B.mhp!==300');
-  check('it burns for the number shown', await ev('B.mhp') === 300 - +(await dice())[0].value, [await ev('B.mhp'), await dice()]);
-  await until('DICE.dice.length>=3&&DICE.dice.every(d=>d.done)', 6000);
-  const w3 = await dice();
-  check('then poison rolls dark green and bleeding dark red, each in turn', w3.map(d => d.kind).join() === 'burn,poison,bleed', w3);
-  await until('B.mStat.bleed===1', 3000);
-  check('all three land: 14 for fire, 4 for poison, 3 for bleeding', await ev('B.mhp') === 300 - 14 - 4 - 3, await ev('B.mhp'));
-  check('the three wound dice have their own colours', await ev('DIE_COLS.bleed.mid!==DIE_COLS.red.mid&&DIE_COLS.poison.mid!==DIE_COLS.green.mid&&!!DIE_COLS.burn'));
+  check('they all land together: 14 fire, 4 poison, 3 bleeding on it, 5 fire on you', await ev('B.mhp') === 300 - 14 - 4 - 3 && await ev('S.hp') === 195, [await ev('B.mhp'), await ev('S.hp')]);
+  check('the wound dice have their own colours', await ev('DIE_COLS.bleed.mid!==DIE_COLS.red.mid&&DIE_COLS.poison.mid!==DIE_COLS.green.mid&&!!DIE_COLS.burn'));
   await until('B.phase==="choose"', 3000);
   check('and then it is your turn again', await ev('B.phase==="choose"'));
+
+  // a heal at full health still rolls its die
+  await ev(`S.hp=S.maxhp;const h=POTIONS.find(p=>p.id==="heal");S.pack.push({kind:"use",ref:h,glyph:h.glyph,col:h.col,name:h.name,note:h.note});useItemBattle(S.pack.length-1);`);
+  await wait(300);
+  const rl = await dice();
+  check('a draught at full health still rolls its green die', rl.length === 1 && rl[0].kind === 'green' && +rl[0].value > 0, rl);
+  await until('B.phase==="choose"', 8000);
+  check('...and does not take you past your maximum', await ev('S.hp<=S.maxhp'));
+  check('the tray is tall enough for two rows of dice', await ev('document.getElementById("diceFelt").clientHeight>=124'));
 
   if (process.env.SHOTS) await page.screenshot({ path: path.join(process.env.SHOTS, 'dice.png') });
   check('no page errors', errors.length === 0, errors);
