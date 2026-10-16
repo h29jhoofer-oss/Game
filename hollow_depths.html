@@ -79,6 +79,15 @@ h1 .sub{color:var(--slate);letter-spacing:.06em;font-weight:400}
   color:var(--slate);letter-spacing:.12em;
 }
 .hpwrap{margin-bottom:9px}
+/* health and mana are crystals: one vessel of red per hero, and a smaller purple gem */
+.crystals{display:flex;align-items:flex-end;gap:16px;margin:2px 0 10px}
+.cry{display:flex;flex-direction:column;align-items:center;gap:3px}
+.cry canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
+.crytx{display:flex;flex-direction:column;align-items:center;line-height:1.25;font-size:12px}
+.crytx span{color:var(--slate);font-size:11px;letter-spacing:.06em}
+.crytx b{font-weight:600;color:var(--blood)}
+.hudchips{display:flex;flex-wrap:wrap;gap:2px 9px;font:600 11px/1.3 "IBM Plex Mono",ui-monospace,monospace;margin:-4px 0 8px}
+.hudchips:empty{display:none}
 .hprow{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
 .hprow b{font-weight:600;color:var(--blood)}
 .bar{height:9px;background:#0c1015;border:1px solid #2a323d;border-radius:2px;overflow:hidden}
@@ -868,10 +877,11 @@ body.inbattle #hint{display:none}
     <div class="rail">
       <div class="panel">
         <h2 id="hudname">Cade</h2>
-        <div class="hpwrap">
-          <div class="hprow"><span>Health</span><b id="hptxt">24 / 24</b></div>
-          <div class="bar"><i id="hpbar" style="width:100%"></i></div>
+        <div class="crystals">
+          <div class="cry"><canvas id="hpcry" width="1" height="1"></canvas><div class="crytx"><span>Health</span><b id="hptxt">24 / 24</b></div></div>
+          <div class="cry mp" id="manarow"><canvas id="mpcry" width="1" height="1"></canvas><div class="crytx"><span>Mana</span><b id="manatxt" style="color:var(--mana)">40 / 40</b></div></div>
         </div>
+        <div class="hudchips" id="hudChips"></div>
         <div class="hpwrap">
           <div class="hprow"><span>Level <span id="lvl">1</span></span><span id="xptxt" style="color:var(--rime)">0 / 20</span></div>
           <div class="bar xp"><i id="xpbar" style="width:0%"></i></div>
@@ -879,10 +889,6 @@ body.inbattle #hint{display:none}
         <div class="hpwrap">
           <div class="hprow"><span>Stamina</span><b id="stamtxt" style="color:var(--stam)">100 / 100</b></div>
           <div class="bar stam" id="stambar-wrap"><i id="stambar" style="width:100%"></i></div>
-        </div>
-        <div class="hpwrap" id="manarow">
-          <div class="hprow"><span>Mana</span><b id="manatxt" style="color:var(--mana)">40 / 40</b></div>
-          <div class="bar mana" id="manabar-wrap"><i id="manabar" style="width:100%"></i></div>
         </div>
         <div class="hpwrap">
           <div class="hprow"><span>Flame <span id="oiltxt" style="color:var(--slate);font-size:11px"></span></span><b id="flametxt" style="color:var(--flame)">100 / 100</b></div>
@@ -3411,11 +3417,9 @@ function refreshMana(){
   renderSpellBar();
   const row=$("manarow");if(row)row.style.display=S&&CHAR().noMana?"none":"";
   if(S&&CHAR().noMana)return;
-  const el=$("manabar"),wrap=$("manabar-wrap"),txt=$("manatxt");
-  if(!el||!wrap||!txt)return;
+  const txt=$("manatxt");
+  if(!txt)return;
   const lo=S.mana<=MANA_LOW;
-  el.style.width=Math.max(0,100*S.mana/S.maxmana)+"%";
-  wrap.classList.toggle("lo",lo);
   txt.textContent=Math.floor(S.mana)+" / "+S.maxmana;
   txt.style.color=lo?"var(--mana-lo)":"var(--mana)";
 }
@@ -4750,9 +4754,6 @@ function tick(dt){
     const hk=RM?1:1-Math.pow(1e-4,dt);
     B.mShown+=(Math.max(0,B.mhp)-B.mShown)*hk;
     B.pShown+=(Math.max(0,S.hp)-B.pShown)*hk;
-    // the pale "just lost" part of the vessel holds a moment, then drains after the red
-    const hp=Math.max(0,S.hp);if(B.pLag===undefined||hp>=B.pLag){B.pLag=hp;B.pLagT=0;}
-    else if((B.pLagT=(B.pLagT||0)+dt)>.45)B.pLag+=(hp-B.pLag)*(RM?1:1-Math.pow(.02,dt));
   }
   for(let i=sfx.length-1;i>=0;i--){
     const f=sfx[i];f.t+=dt;
@@ -5102,7 +5103,7 @@ function loop(now){
   syncTalking();
   const dt=Math.min(.05,(now-last)/1000||0);last=now;
   lastFrameAt=performance.now();if(audioHidden)updateAudioVisibility();
-  tick(dt);render();musTick();
+  tick(dt);render();hudTick(dt);musTick();
   requestAnimationFrame(loop);
 }
 
@@ -7502,7 +7503,7 @@ function drawBattle(vw,vh){
   const small=Math.max(10,Math.min(13,vw*.016));
   plate(vw*.045,vh*.07,vw*.42,cap(m.t.name),B.mShown/B.mmax,null,
         statusText(B.mStat,m.t.name),small,m.t.boss,B.phaseNum,B.mStat.broken>0?0:B.poise/B.maxPoise);
-  playerHud(vw*.52,vh*.70,vw*.435,small,statusText(B.pStat).concat(CHAR().ichor?[["ICHOR "+(S.ichor||0),"#e8685a"]]:[]).concat(B.combo>0?[["COMBO x"+B.combo+(B.combo>=COMBO_MAX?" · FINISHER READY":""),"#f0c060"]]:[]));
+  arenaCrystals(vw,vh);
 
   ctx.textAlign="center";ctx.textBaseline="middle";
   for(const f of sfx){
@@ -7612,7 +7613,7 @@ function statusText(st,who){
   return out;
 }
 /* ---------- the hero's health vessel ---------- */
-// In a fight the hero's health is a vessel of red, one shape per hero (Cade's heart, Rook's drop of blood,
+// The hero's health is a vessel of red in the side panel, one shape per hero (Cade's heart, Rook's drop of blood,
 // Vell's phial, Orrin's bubbling potion, Eric's inkwell and quill, Anselm's chalice, Brannoc's shield).
 // "#" is the inside, which fills from the bottom; every other letter is drawn in its PAL colour.
 const VESSELS={
@@ -7624,62 +7625,95 @@ const VESSELS={
  monk:["kOOOOOOOOOOOOOOk","kO############ok",".kO##########ok.",".kO##########ok.","..kO########ok..","..kO########ok..","...kOo####Ook...","....kkOOOOkk....","......kOok......","......kOok......",".....kOOOok.....","......kOok......","......kOok......","....kkOOOokk....","..kOOOOOOOOOok..","..kkkkkkkkkkkk.."],
  brute:["kkkkkkkkkkkkkkkk","kGllllllllllllGk","kGq##########qGk","kGq##########qGk","kGq##########qGk","kGq##########qGk","kGq##########qGk",".kGq########qGk.",".kGq########qGk.","..kGq######qGk..","..kGq######qGk..","...kGq####qGk...","....kGq##qGk....",".....kGqqGk.....","......kGGk......",".......kk......."]
 };
-const VESSEL_COL={empty:"#3a2530",lag:"#f4d2b0",top:"#ff8f80",lit:"#e8685a",mid:"#c94a3c",dark:"#8f2f28"};
-// cx: centre, by: bottom, size: the most pixels across; ratio is the red, lag the pale part above it.
-function drawVessel(id,cx,by,size,ratio,lag,hit){
-  const g=VESSELS[id]||VESSELS.cade,rows=g.length,cols=g[0].length;
-  const u=Math.max(2,Math.floor(size/Math.max(rows,cols)));
-  let ox=Math.round(cx-cols*u/2),oy=Math.round(by-rows*u);
+const VESSEL_RED={empty:"#3a2530",lag:"#f4d2b0",top:"#ff8f80",lit:"#e8685a",mid:"#c94a3c",dark:"#8f2f28",glow:"#c94a3c"};
+const VESSEL_MANA={empty:"#2a2038",lag:"#ece2ff",top:"#e6d4ff",lit:"#c8a8f0",mid:"#8a5fc4",dark:"#4a2f6b",glow:"#8a5fc4"};
+// Mana is a small faceted gem, the same for everyone.
+const MANA_GEM=["....kkkk....","...k####k...","..k######k..",".k########k.","k##########k","k##########k",".k########k.",
+  ".k########k.","..k######k..","..k######k..","...k####k...","....k##k....",".....kk....."];
+// g2: the context; grid: the shape; (ox, oy): its top-left; u: pixels per cell; ratio: how full; lag: the pale
+// part above it (what was just lost); hit: a shake; C: its colours; bubbly: Orrin's potion bubbles.
+function drawVessel(g2,grid,ox,oy,u,ratio,lag,hit,C,bubbly){
+  const g=grid,rows=g.length,cols=g[0].length;
   if(hit>0&&!RM){ox+=Math.round(Math.sin(tclock*70)*hit*u*.9);oy+=Math.round(Math.cos(tclock*55)*hit*u*.5);}
   let top=rows,bot=0;
   for(let r=0;r<rows;r++)if(g[r].includes("#")){top=Math.min(top,r);bot=Math.max(bot,r);}
-  const H=bot-top+1,lvl=bot+1-Math.round(Math.max(0,Math.min(1,ratio))*H),lg=bot+1-Math.round(Math.max(0,Math.min(1,lag))*H);
-  const cell=(c,r,col)=>{ctx.fillStyle=col;ctx.fillRect(ox+c*u,oy+r*u,u,u);};
-  // a faint rim of light so it reads against the dark; close to death it glows red instead
-  {
-    const low=ratio<.25&&ratio>0;
-    ctx.globalAlpha=low?.35+.3*Math.sin(tclock*7):.16;ctx.fillStyle=low?"#c94a3c":"#e9e5d9";
-    const sp=low?1:.5;
-    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)if(g[r][c]!==".")ctx.fillRect(ox+(c-sp)*u,oy+(r-sp)*u,u*(1+2*sp),u*(1+2*sp));
-    ctx.globalAlpha=1;
-  }
+  const H=bot-top+1,cl=v=>Math.max(0,Math.min(1,v)),lvl=bot+1-Math.round(cl(ratio)*H),lg=bot+1-Math.round(cl(lag)*H);
+  const cell=(c,r,col)=>{g2.fillStyle=col;g2.fillRect(ox+c*u,oy+r*u,u,u);};
+  // a faint rim of light so it reads against the dark; close to empty it pulses instead
+  const low=ratio<.25;
+  g2.globalAlpha=low?.35+.3*Math.sin(tclock*7):.16;g2.fillStyle=low?C.glow:"#e9e5d9";
+  const sp=low?1:.5;
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)if(g[r][c]!==".")g2.fillRect(ox+(c-sp)*u,oy+(r-sp)*u,u*(1+2*sp),u*(1+2*sp));
+  g2.globalAlpha=1;
   for(let r=0;r<rows;r++){
     const row=g[r],a=row.indexOf("#"),b=row.lastIndexOf("#");
     for(let c=0;c<cols;c++){
       const ch=row[c];if(ch===".")continue;
       if(ch!=="#"){cell(c,r,PAL[ch]||"#0b0d12");continue;}
-      cell(c,r,r<lvl?(r>=lg?VESSEL_COL.lag:VESSEL_COL.empty):r===lvl?VESSEL_COL.top:c===a?VESSEL_COL.lit:c===b?VESSEL_COL.dark:VESSEL_COL.mid);
+      cell(c,r,r<lvl?(r>=lg?C.lag:C.empty):r===lvl?C.top:c===a?C.lit:c===b?C.dark:C.mid);
     }
   }
-  // Orrin's potion bubbles as it sits
-  if(id==="mage"&&!RM){
+  if(bubbly&&!RM){
     for(let k=0;k<5;k++){
       const p=(tclock*.55+k*.23)%1,r=bot-Math.floor(p*H),row=g[r];if(!row||r<=lvl)continue;
       const a=row.indexOf("#"),b=row.lastIndexOf("#");if(a<0)continue;
       const c=a+1+Math.floor(((k*7+3)%11)/11*Math.max(1,b-a-1));
-      if(row[c]==="#")cell(c,r,VESSEL_COL.top);
+      if(row[c]==="#")cell(c,r,C.top);
     }
   }
   // a glint of light on the glass
-  ctx.fillStyle="rgba(255,255,255,.38)";
-  for(let r=top+1;r<=Math.min(bot,top+3);r++){const a=g[r].indexOf("#");if(a>=0&&g[r][a+1]==="#")ctx.fillRect(ox+(a+1)*u,oy+r*u,u,u);}
+  g2.fillStyle="rgba(255,255,255,.38)";
+  for(let r=top+1;r<=Math.min(bot,top+3);r++){const a=g[r].indexOf("#");if(a>=0&&g[r][a+1]==="#")g2.fillRect(ox+(a+1)*u,oy+r*u,u,u);}
 }
-// The hero's own plate in a fight: no bar, just the vessel, with the name, the numbers and the chips beside it.
-function playerHud(x,y,w,fs,chips){
-  const h=fs*4.4,vs=fs*7.2;
-  ctx.fillStyle="rgba(12,16,22,.86)";ctx.fillRect(x,y,w,h);
-  ctx.strokeStyle="rgba(82,92,110,.5)";ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,w-1,h-1);
-  const narrow=w<fs*22;                        // a phone: the vessel stands just left of the plate instead of in it
-  drawVessel(CHAR().id,narrow?x-vs*.55:x+w-fs*.4-vs*.5,narrow?y+fs*1.4:y+h-fs*.3,vs,Math.max(0,B.pShown)/S.maxhp,(B.pLag===undefined?S.hp:B.pLag)/S.maxhp,B.pFlash||0);
-  ctx.textAlign="left";ctx.textBaseline="alphabetic";
-  ctx.font="600 "+fs+'px "IBM Plex Mono", monospace';ctx.fillStyle="#e9e5d9";
-  ctx.fillText(CHAR().name+"  Lv "+S.lvl,x+fs*.9,y+fs*1.5);
-  ctx.font=Math.round(fs*.92)+'px "IBM Plex Mono", monospace';ctx.fillStyle=S.hp<=S.maxhp*.25?"#e8685a":"#9aa5b1";
-  ctx.fillText("HP "+Math.max(0,Math.round(S.hp))+" / "+S.maxhp+(CHAR().noMana?"":"   ·   MP "+Math.floor(S.mana)),x+fs*.9,y+fs*2.75);
-  if(chips&&chips.length){
-    ctx.font="600 "+Math.round(fs*.78)+'px "IBM Plex Mono", monospace';
-    let cx2=x+fs*.9;
-    for(const c of chips){ctx.fillStyle=c[1];ctx.fillText(c[0],cx2,y+fs*3.85);cx2+=ctx.measureText(c[0]).width+fs*.8;}
+// What the crystals show: they follow health and mana quickly, and the pale "just lost" part holds a moment
+// before it drains after them. A drop in health shakes the vessel.
+const HV={hp:null,hpLag:0,hpT:0,mp:null,mpLag:0,mpT:0,hit:0,prevHp:null,chips:""};
+function hudTick(dt){
+  if(!S)return;
+  const k=RM?1:1-Math.pow(1e-4,dt),drain=RM?1:1-Math.pow(.02,dt);
+  const hp=Math.max(0,S.hp),mp=Math.max(0,S.mana||0);
+  if(HV.hp===null){HV.hp=HV.hpLag=HV.prevHp=hp;HV.mp=HV.mpLag=mp;}
+  if(hp<HV.prevHp-.01)HV.hit=1;
+  HV.prevHp=hp;HV.hit=Math.max(0,HV.hit-dt*4.5);
+  HV.hp+=(hp-HV.hp)*k;HV.mp+=(mp-HV.mp)*k;
+  if(hp>=HV.hpLag){HV.hpLag=hp;HV.hpT=0;}else if((HV.hpT+=dt)>.45)HV.hpLag+=(hp-HV.hpLag)*drain;
+  if(mp>=HV.mpLag){HV.mpLag=mp;HV.mpT=0;}else if((HV.mpT+=dt)>.45)HV.mpLag+=(mp-HV.mpLag)*drain;
+  drawHudCrystals();
+  // in a fight the hero's statuses (burning, combo...) sit under the crystals
+  const el=$("hudChips");
+  if(el){
+    const chips=S.mode==="battle"&&B?heroChips():[];
+    const key=chips.map(c=>c.join()).join("|");
+    if(key!==HV.chips){HV.chips=key;el.innerHTML=chips.map(c=>`<span style="color:${c[1]}">${c[0]}</span>`).join("");}
+  }
+}
+function heroChips(){
+  return statusText(B.pStat).concat(CHAR().ichor?[["ICHOR "+(S.ichor||0),"#e8685a"]]:[])
+    .concat(B.combo>0?[["COMBO x"+B.combo+(B.combo>=COMBO_MAX?" · FINISHER READY":""),"#f0c060"]]:[]);
+}
+function paintCrystal(id,grid,u,ratio,lag,hit,C,bubbly){
+  const cv=$(id);if(!cv||!cv.offsetParent)return;
+  const w=(grid[0].length+4)*u,h=(grid.length+4)*u;
+  if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;}
+  const g2=cv.getContext("2d");g2.clearRect(0,0,w,h);
+  drawVessel(g2,grid,2*u,2*u,u,ratio,lag,hit,C,bubbly);
+}
+function drawHudCrystals(){
+  const small=matchMedia("(max-width:760px)").matches;
+  paintCrystal("hpcry",VESSELS[CHAR().id]||VESSELS.cade,small?3:5,HV.hp/S.maxhp,HV.hpLag/S.maxhp,HV.hit,VESSEL_RED,CHAR().id==="mage");
+  if(!CHAR().noMana)paintCrystal("mpcry",MANA_GEM,small?2:4,HV.mp/Math.max(1,S.maxmana),HV.mpLag/Math.max(1,S.maxmana),0,VESSEL_MANA,false);
+}
+// On a phone the side panel is hidden in a fight, so the crystals stand in the corner of the arena instead.
+function arenaCrystals(vw,vh){
+  if(!matchMedia("(max-width:760px)").matches)return;
+  const u=3,g=VESSELS[CHAR().id]||VESSELS.cade,x=vw-(g[0].length+2)*u-6,y=6;
+  drawVessel(ctx,g,x,y,u,HV.hp/S.maxhp,HV.hpLag/S.maxhp,HV.hit,VESSEL_RED,CHAR().id==="mage");
+  ctx.font="600 10px \"IBM Plex Mono\", monospace";ctx.textAlign="center";ctx.textBaseline="top";
+  ctx.fillStyle="#e8685a";ctx.fillText(Math.max(0,Math.round(S.hp))+"/"+S.maxhp,x+g[0].length*u/2,y+g.length*u+3);
+  if(!CHAR().noMana){
+    const gx=x-(MANA_GEM[0].length+3)*2;
+    drawVessel(ctx,MANA_GEM,gx,y+u*4,2,HV.mp/Math.max(1,S.maxmana),HV.mpLag/Math.max(1,S.maxmana),0,VESSEL_MANA,false);
+    ctx.fillStyle="#c8a8f0";ctx.fillText(Math.floor(S.mana),gx+MANA_GEM[0].length,y+u*4+MANA_GEM.length*2+3);
   }
 }
 function plate(x,y,w,title,ratio,sub,chips,fs,boss,phaseNum,poise){
@@ -9753,7 +9787,6 @@ function refresh(){
   renderMoveBar();
   const a=playerAtk();
   $("hptxt").textContent=`${Math.max(0,S.hp)} / ${S.maxhp}`;
-  $("hpbar").style.width=Math.max(0,100*S.hp/S.maxhp)+"%";
   const need=XPTABLE[S.lvl]||XPTABLE[XPTABLE.length-1];
   const prev=XPTABLE[S.lvl-1]||0;
   $("xptxt").textContent=`${S.xp} / ${need}`;
