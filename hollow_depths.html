@@ -554,19 +554,15 @@ body.talking .tutcard{display:none}
 /* a burnt blessing: the card is gone, three scorched pieces lie where it was */
 .charcard.torn{background:none!important;box-shadow:none!important;cursor:not-allowed;padding:0;overflow:visible}
 .charcard.torn::before,.charcard.torn::after{display:none}
-.tchunk{position:absolute;inset:0;filter:drop-shadow(0 0 1px #e8842a) drop-shadow(0 0 2px #7a2a10) drop-shadow(5px 6px 0 rgba(0,0,0,.5))}
+.tchunk{position:absolute;inset:0;filter:drop-shadow(3px 4px 0 rgba(0,0,0,.55))}
 .tface{position:absolute;inset:0;display:flex;flex-direction:column;align-items:stretch;padding:30px 16px 26px;text-align:center;
-  background-color:#cbbf9f;background-image:radial-gradient(ellipse at 50% 50%,transparent 45%,rgba(90,40,10,.45) 75%,rgba(20,8,2,.95) 100%),
-  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%23b9ac88' d='M1 1h1v1h-1zM3 3h1v1h-1z'/%3E%3C/svg%3E");
-  background-size:auto,8px 8px;box-shadow:inset 0 0 22px 8px rgba(30,12,4,.85);filter:sepia(.35) saturate(.8)}
+  background-color:#cbbf9f;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%23b9ac88' d='M1 1h1v1h-1zM3 3h1v1h-1z'/%3E%3C/svg%3E");
+  background-size:8px 8px;filter:sepia(.35) saturate(.8);
+  -webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
 .tface .cport,.tface .cname,.tface .ctitle,.tface .cbody{opacity:.75}
 .tface .ctitle{color:#7a2a10}
-.t1 .tface{clip-path:polygon(0 0,100% 0,100% 30%,86% 35%,71% 28%,55% 37%,38% 30%,21% 36%,7% 30%,0 33%)}
-.t2 .tface{clip-path:polygon(0 33%,7% 30%,21% 36%,38% 30%,55% 37%,71% 28%,86% 35%,100% 30%,100% 64%,84% 70%,66% 62%,48% 70%,31% 63%,14% 69%,0 62%)}
-.t3 .tface{clip-path:polygon(0 62%,14% 69%,31% 63%,48% 70%,66% 62%,84% 70%,100% 64%,100% 100%,0 100%)}
-.t1{transform:translate(-5px,-9px) rotate(-3deg)}
-.t2{transform:translate(6px,1px) rotate(2deg)}
-.t3{transform:translate(-3px,11px) rotate(-1.5deg)}
+/* the pixel scorch and torn-paper fringe, drawn over each piece on the same grid as its mask */
+.tedge{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
 .charcard.torn.shake{animation:tornShake .35s}
 @keyframes tornShake{0%,100%{translate:0}25%{translate:-6px}75%{translate:6px}}
 /* ---------- the title screen ---------- */
@@ -8421,7 +8417,47 @@ function tornCard(h,i,mid,lvl){
       <div class="cport">${glyphSvg(c.glyph,6)}</div><div class="cname">${c.name}</div><div class="ctitle">Burnt</div>
       <div class="cbody"><div class="cgain">${c.gain()}</div><div class="cblurb">${h.by.name} burnt this. It will never be yours.</div><div class="ckey">BURNT</div></div>`;
   return `<div class="charcard lvlcard torn" data-kind="torn" data-id="${c.id}" role="button" tabindex="0" aria-label="${c.name}, burnt" style="--i:${i};--t:${(i-mid).toFixed(2)}">`
-    +[1,2,3].map(k=>`<div class="tchunk t${k}"><div class="tface">${face}</div></div>`).join("")+`</div>`;
+    +tearPieces(c.id).map(t=>`<div class="tchunk" style="transform:translate(${t.dx}px,${t.dy}px)"><div class="tface" style="-webkit-mask-image:${t.mask};mask-image:${t.mask}">${t.edge}${face}</div></div>`).join("")+`</div>`;
+}
+// How a burnt card is torn: two ragged rips crossing in an X, on a coarse pixel grid (one cell is about
+// four screen pixels), leaving four pieces with the table showing through the gaps between them. Each
+// piece is a pixel mask, plus an overlay of scorched rim and pale torn-paper fringe on the same grid.
+const TEAR_W=52,TEAR_H=72,TEAR_CACHE={};
+function tearPieces(id){
+  if(TEAR_CACHE[id])return TEAR_CACHE[id];
+  let seed=7;for(const ch of String(id))seed=(seed*31+ch.charCodeAt(0))>>>0;
+  const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
+  const hash=(x,y)=>{let h=(x*374761393+y*668265263+seed)>>>0;h=Math.imul(h^(h>>>13),1274126177)>>>0;return((h^(h>>>16))>>>0)/4294967296;};
+  // a rip: a straight run from a to b that wanders side to side, and is wider in some places than others
+  const rip=(ax,ay,bx,by,w0,w1)=>{
+    const K=24,wob=[0],wid=[];for(let k=1;k<=K;k++)wob.push(Math.max(-2.2,Math.min(2.2,wob[k-1]+(rnd()-.5)*1.6)));
+    for(let k=0;k<=K;k++)wid.push(w0+(w1-w0)*k/K+(rnd()-.5)*.9);
+    const dx=bx-ax,dy=by-ay,L=Math.hypot(dx,dy),nx=-dy/L,ny=dx/L;
+    const at=(arr,t)=>{const f=Math.max(0,Math.min(K,t*K)),i=Math.min(K-1,Math.floor(f));return arr[i]+(arr[i+1]-arr[i])*(f-i);};
+    return (x,y)=>{const px=x-ax,py=y-ay,t=(px*dx+py*dy)/(L*L),d=px*nx+py*ny-at(wob,t);return{d,w:at(wid,t)};};
+  };
+  const A=rip(TEAR_W+3,TEAR_H*.13,-3,TEAR_H*.57,1.9,2.3+rnd()*.6);   // right edge, high, down to the left edge
+  const Bq=rip(-3,TEAR_H*.2,TEAR_W*.58,TEAR_H+3,1.2,2.6);           // left edge, down to the bottom, widening
+  const G=[];   // -1 for the gap, else which piece: 0 top, 1 the little wedge on the left, 2 bottom left, 3 the big right piece
+  for(let y=0;y<TEAR_H;y++){G.push([]);for(let x=0;x<TEAR_W;x++){
+    const cx=x+.5,cy=y+.5,a=A(cx,cy),b=Bq(cx,cy),j=(hash(x,y)-.5)*1.1;
+    // a.d>0 is above the first rip; b.d>0 is the bottom-left side of the second
+    G[y].push(Math.abs(a.d)<a.w+j||Math.abs(b.d)<b.w+j?-1:a.d>0?(b.d>0?1:0):(b.d>0?2:3));}}
+  const svg=(body,attrs="")=>`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${TEAR_W} ${TEAR_H}" preserveAspectRatio="none" shape-rendering="crispEdges"${attrs}>${body}</svg>`;
+  const runs=test=>{let d="";for(let y=0;y<TEAR_H;y++){let x=0;while(x<TEAR_W){if(!test(x,y)){x++;continue;}let e=x;while(e<TEAR_W&&test(e,y))e++;d+=`M${x} ${y}h${e-x}v1h${x-e}z`;x=e;}}return d;};
+  const off=[[-2,-4],[-6,-1],[-4,4],[3,3]];
+  const out=[0,1,2,3].map(k=>{
+    const mine=(x,y)=>x>=0&&y>=0&&x<TEAR_W&&y<TEAR_H&&G[y][x]===k;
+    const gapBy=(x,y)=>[[1,0],[-1,0],[0,1],[0,-1]].some(([u,v])=>{const X=x+u,Y=y+v;return X>=0&&Y>=0&&X<TEAR_W&&Y<TEAR_H&&G[Y][X]===-1;});
+    const rim=(x,y)=>Math.min(x,y,TEAR_W-1-x,TEAR_H-1-y);
+    const fringe=(x,y)=>mine(x,y)&&gapBy(x,y)&&hash(x+9,y)<.8;
+    const char=(x,y)=>mine(x,y)&&(rim(x,y)===0||(rim(x,y)===1&&hash(x,y+5)<.55)||(rim(x,y)===2&&hash(x+3,y)<.18));
+    const ember=(x,y)=>mine(x,y)&&rim(x,y)===1&&hash(x,y+5)>=.55&&hash(x+1,y+2)<.22;
+    const mask=`url('data:image/svg+xml,${encodeURIComponent(svg(`<path d="${runs(mine)}"/>`)).replace(/'/g,"%27")}')`;
+    const edge=svg(`<path fill="#f3ecda" d="${runs(fringe)}"/><path fill="#2a1206" d="${runs(char)}"/><path fill="#d8742a" d="${runs(ember)}"/>`,` class="tedge" aria-hidden="true"`);
+    return{mask,edge,dx:off[k][0],dy:off[k][1]};
+  });
+  return TEAR_CACHE[id]=out;
 }
 function pickLevelCard(el){
   if(levelPicked||!levelOpen)return;
