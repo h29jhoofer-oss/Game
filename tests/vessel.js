@@ -57,6 +57,16 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   const shine = await ev(`(()=>{const g=document.getElementById("mpcry"),at=t=>{tclock=Math.floor(tclock/GEM_SHINE_T)*GEM_SHINE_T+t;drawHudCrystals();return g.toDataURL();};
     const a=at(GEM_SHINE_T*.9),b=at(.15),c=at(.45);return [a!==b,b!==c,a===at(GEM_SHINE_T*.95)];})()`);
   check('the mana gem shines: a glint sweeps across it, then it rests', shine[0] && shine[1] && shine[2], shine);
+  check('the stamina bar is gone: stamina is a little winged boot, beside the fire and above the gem', await ev(`(()=>{if(document.getElementById("stambar"))return false;
+    const f=document.getElementById("ficry").getBoundingClientRect(),b=document.getElementById("stcry").getBoundingClientRect(),m=document.getElementById("mpcry").getBoundingClientRect();
+    return f.bottom<=b.top+2&&b.bottom<=m.top+2&&STAM_BOOT.some(r=>/[wl]/.test(r));})()`));
+  const green = () => ev(`(()=>{const c=document.getElementById("stcry"),d=c.getContext("2d").getImageData(0,0,c.width,c.height).data;let n=0;
+    for(let i=0;i<d.length;i+=4)if(d[i+1]>140&&d[i]<170&&d[i+2]<130&&d[i+1]-d[i]>40)n++;return n;})()`);
+  await ev('S.stam=S.maxstam;refreshStamina();');await page.waitForTimeout(1200);
+  const g1 = await green();
+  await ev('S.stam=Math.round(S.maxstam*.25);refreshStamina();');await page.waitForTimeout(2000);
+  const g2 = await green();
+  check('the boot empties as you tire', g1 > 40 && g2 < g1 * .6, [g1, g2]);
   check('a hero with no mana has no gem', await ev('B=null;S.mode="map";start("monk");refreshMana();getComputedStyle(document.getElementById("manarow")).display==="none"'));
 
   check('no page errors', errors.length === 0, errors);

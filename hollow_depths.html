@@ -886,6 +886,7 @@ body.inbattle #hint{display:none}
           <div class="cry"><canvas id="hpcry" width="1" height="1"></canvas><div class="crytx"><span>Health</span><b id="hptxt">24 / 24</b></div></div>
           <div class="crycol">
             <div class="cry side"><canvas id="ficry" width="1" height="1"></canvas><div class="crytx"><span>Flame</span><b id="flametxt" style="color:var(--flame)">100 / 100</b><i id="oiltxt"></i></div></div>
+            <div class="cry side"><canvas id="stcry" width="1" height="1"></canvas><div class="crytx"><span>Stamina</span><b id="stamtxt" style="color:var(--stam)">100 / 100</b></div></div>
             <div class="cry side mp" id="manarow"><canvas id="mpcry" width="1" height="1"></canvas><div class="crytx"><span>Mana</span><b id="manatxt" style="color:var(--mana)">40 / 40</b></div></div>
           </div>
         </div>
@@ -893,10 +894,6 @@ body.inbattle #hint{display:none}
         <div class="hpwrap">
           <div class="hprow"><span>Level <span id="lvl">1</span></span><span id="xptxt" style="color:var(--rime)">0 / 20</span></div>
           <div class="bar xp"><i id="xpbar" style="width:0%"></i></div>
-        </div>
-        <div class="hpwrap">
-          <div class="hprow"><span>Stamina</span><b id="stamtxt" style="color:var(--stam)">100 / 100</b></div>
-          <div class="bar stam" id="stambar-wrap"><i id="stambar" style="width:100%"></i></div>
         </div>
         <div class="statrow">
           <div class="stat"><span>Depth</span><span id="depth">1</span></div>
@@ -3280,15 +3277,10 @@ function gainStamina(amount){
 }
 
 function refreshStamina(){
-  const pct = Math.max(0, 100 * S.stam / S.maxstam);
-  const el = $("stambar");
-  const wrap = $("stambar-wrap");
   const txt = $("stamtxt");
-  if(!el||!wrap||!txt) return;
-  el.style.width = pct + "%";
+  if(!txt) return;
   const lo = S.stam <= STAM_LOW;
-  wrap.classList.toggle("lo", lo);
-  txt.textContent = Math.ceil(S.stam) + " / " + S.maxstam;
+  txt.textContent = Math.ceil(S.stam) + "/" + S.maxstam;
   txt.style.color = lo ? "var(--stam-lo)" : "var(--stam)";
 }
 
@@ -3424,7 +3416,7 @@ function refreshMana(){
   const txt=$("manatxt");
   if(!txt)return;
   const lo=S.mana<=MANA_LOW;
-  txt.textContent=Math.floor(S.mana)+" / "+S.maxmana;
+  txt.textContent=Math.floor(S.mana)+"/"+S.maxmana;
   txt.style.color=lo?"var(--mana-lo)":"var(--mana)";
 }
 function lightRadius(base){
@@ -3463,7 +3455,7 @@ function refreshFlame(){
   if(ot){const n=S.pack.filter(it=>it.kind==="use"&&it.ref.id==="oil").length;ot.textContent=n?"oil ×"+n:"no oil";}
   const lo = S.flame <= FLAME_LOW;
   const out = S.flame === 0;
-  txt.textContent = Math.ceil(S.flame) + " / " + S.maxflame;
+  txt.textContent = Math.ceil(S.flame) + "/" + S.maxflame;
   if(out) txt.style.color = "#666";
   else txt.style.color = lo ? "var(--flame-lo)" : "var(--flame)";
 }
@@ -7631,6 +7623,9 @@ const FIRE_FRAMES=[["....k.......","...k#k......","...k#k...k..","..k##k..k#k.",
   [".......k....","......k#k...","..k...k#k...",".k#k..k##k..",".k##kk###k..",".k###k####k.","k#########k.","k####@@####k","k###@@@@###k","k##@@@@@###k","k##@@@@@@##k","k##@@@@@@##k",".k##@@@@##k.","..kkkkkkkk.."],
   ["......k.....",".....k#k....","..k..k#k.k..",".k#k.k##k#k.",".k##k###k#k.",".k########k.",".k#########k","k####@@####k","k###@@@@###k","k###@@@@@##k","k##@@@@@@##k","k##@@@@@@##k",".k##@@@@##k.","..kkkkkkkk.."]];
 const FIRE_SEQ=[0,2,1,2,0,1];          // the order the frames flicker through
+// Stamina is a little winged boot, green, that empties as you walk and dash and fills as you rest.
+const VESSEL_STAM={empty:"#14281c",lag:"#d4f5a0",top:"#a8e063",lit:"#8fd46a",mid:"#4fae5a",dark:"#2f6b3a",glow:"#c49a2a"};
+const STAM_BOOT=[".........kkkkk..","kkkk.....kLLLk..","kwwwkkk..k###k..",".kwwwwlkkk###k..","kkkwwwwllk###k..","kwwwwllGGk###k..",".kkwwlGGkk###k..","..kwwlGkkk####k.","...kkkk.k#####kk","........k######k","........k######k",".......kkNNNNNNk","........kkkkkkk."];
 // Mana is a small faceted gem, the same for everyone.
 const MANA_GEM=["....kkkk....","...k####k...","..k######k..",".k########k.","k##########k","k##########k",".k########k.",
   ".k########k.","..k######k..","..k######k..","...k####k...","....k##k....",".....kk....."];
@@ -7672,7 +7667,7 @@ function drawVessel(g2,grid,ox,oy,u,ratio,lag,hit,C,bubbly){
 }
 // What the crystals show: they follow health and mana quickly, and the pale "just lost" part holds a moment
 // before it drains after them. A drop in health shakes the vessel.
-const HV={hp:null,hpLag:0,hpT:0,mp:null,mpLag:0,mpT:0,fl:null,flLag:0,flT:0,hit:0,prevHp:null,chips:""};
+const HV={hp:null,hpLag:0,hpT:0,mp:null,mpLag:0,mpT:0,fl:null,flLag:0,flT:0,st:null,stLag:0,stT:0,hit:0,prevHp:null,chips:""};
 function hudTick(dt){
   if(!S)return;
   const k=RM?1:1-Math.pow(1e-4,dt),drain=RM?1:1-Math.pow(.02,dt);
@@ -7680,6 +7675,10 @@ function hudTick(dt){
   const fl=Math.max(0,S.flame||0);
   if(HV.hp===null){HV.hp=HV.hpLag=HV.prevHp=hp;HV.mp=HV.mpLag=mp;}
   if(HV.fl===null)HV.fl=HV.flLag=fl;
+  const st=Math.max(0,S.stam||0);
+  if(HV.st===null)HV.st=HV.stLag=st;
+  HV.st+=(st-HV.st)*k;
+  if(st>=HV.stLag){HV.stLag=st;HV.stT=0;}else if((HV.stT+=dt)>.45)HV.stLag+=(st-HV.stLag)*drain;
   HV.fl+=(fl-HV.fl)*k;
   if(fl>=HV.flLag){HV.flLag=fl;HV.flT=0;}else if((HV.flT+=dt)>.45)HV.flLag+=(fl-HV.flLag)*drain;
   if(hp<HV.prevHp-.01)HV.hit=1;
@@ -7734,6 +7733,7 @@ function drawHudCrystals(){
   paintCrystal("hpcry",VESSELS[CHAR().id]||VESSELS.cade,small?3:4,HV.hp/S.maxhp,HV.hpLag/S.maxhp,HV.hit,VESSEL_RED,CHAR().id==="mage");
   const fr=S.flame>0&&!RM?FIRE_SEQ[Math.floor(tclock*7+Math.sin(tclock*2.3)*.8)%FIRE_SEQ.length]:0;
   paintCrystal("ficry",FIRE_FRAMES[fr],small?2:3,HV.fl/Math.max(1,S.maxflame),HV.flLag/Math.max(1,S.maxflame),0,VESSEL_FIRE,false);
+  paintCrystal("stcry",STAM_BOOT,small?2:3,HV.st/Math.max(1,S.maxstam),HV.stLag/Math.max(1,S.maxstam),0,VESSEL_STAM,false);
   if(!CHAR().noMana)paintCrystal("mpcry",MANA_GEM,small?2:3,HV.mp/Math.max(1,S.maxmana),HV.mpLag/Math.max(1,S.maxmana),0,VESSEL_MANA,false,gemShine);
 }
 // On a phone the side panel is hidden in a fight, so the crystals stand in the corner of the arena instead.
@@ -8091,13 +8091,13 @@ function drawDialogue(vw,vh){
   const shk=RM?0:M.shake||0;
   ctx.save();
   if(mood==="anger"&&!RM&&dlgShown()<l.text.length)ctx.translate((Math.random()-.5)*4,(Math.random()-.5)*4);
-  ctx.fillStyle="rgba(6,8,13,.94)";ctx.fillRect(bx,by,bw,bh);
-  const u=Math.max(2,Math.round(bh/60));                     // pixel-style double frame
-  ctx.fillStyle=frame;ctx.fillRect(bx,by,bw,u);ctx.fillRect(bx,by+bh-u,bw,u);ctx.fillRect(bx,by,u,bh);ctx.fillRect(bx+bw-u,by,u,bh);
-  ctx.fillStyle=inner;ctx.fillRect(bx+u*2,by+u*2,bw-u*4,u);ctx.fillRect(bx+u*2,by+bh-u*3,bw-u*4,u);ctx.fillRect(bx+u*2,by+u*2,u,bh-u*4);ctx.fillRect(bx+bw-u*3,by+u*2,u,bh-u*4);
+  const u=Math.max(2,Math.round(bh/60));
+  dlgFrame(bx,by,bw,bh,u,frame,inner,true);
   // the portrait: its head, cut from the sprite it is wearing
-  const ph=bh-u*8,pw=Math.round(ph*1.1),px=bx+u*4,py=by+u*4;
+  const ph=bh-u*14,pw=Math.round(ph*1.1),px=bx+u*7,py=by+u*7;
   ctx.fillStyle=W.bg;ctx.fillRect(px,py,pw,ph);
+  {const rg=ctx.createRadialGradient(px+pw/2,py+ph*.45,0,px+pw/2,py+ph*.45,pw*.75);   // a soft light behind the face
+   rg.addColorStop(0,"rgba(255,240,200,.12)");rg.addColorStop(1,"rgba(0,0,0,.25)");ctx.fillStyle=rg;ctx.fillRect(px,py,pw,ph);}
   let spk=W.spr?W.spr():!B?"thing":B.mon.t.thing===2?null:MONSPR[B.mon.t.id]||"thing";
   if(spk&&W.scarred&&l.mood==="fear"&&SPR[spk+"_s3"])spk+="_s3";
   const img=spk?SPR[spk]:null,cr=W.crop||[2,1,12,10];
@@ -8138,26 +8138,89 @@ function drawDialogue(vw,vh){
     if(mood==="fear"){ctx.fillStyle="rgba(40,90,140,.18)";ctx.fillRect(px,py,pw,ph);}
     if(!done&&!RM&&mood!=="sleep"&&Math.floor(tclock*9)%2){if(W.flip){ctx.save();ctx.translate(px*2+pw,0);ctx.scale(-1,1);}ctx.globalAlpha=.25;ctx.drawImage(SPRW[spk],cr[0],cr[1],cr[2],cr[3],px+u,py+u+bob,pw-u*2,ph-u*2);ctx.globalAlpha=1;if(W.flip)ctx.restore();}
   }
-  ctx.strokeStyle=frame;ctx.lineWidth=u;ctx.strokeRect(px-u/2,py-u/2,pw+u,ph+u);
-  // name, text, and the effect line
-  const tx=px+pw+u*6,tw=bx+bw-u*6-tx,fs=Math.max(12,Math.min(19,bh*.13));
-  ctx.textAlign="left";ctx.textBaseline="top";
-  ctx.font=`700 ${Math.round(fs*.8)}px "IBM Plex Mono", monospace`;ctx.fillStyle="#f0c060";
-  ctx.fillText(W.name,tx,py+u*2);
+  dlgBevel(px,py,pw,ph,u,frame);
+  // the speaker's name on a plate sitting on the top edge, then the words, then the effect line
+  const tx=px+pw+u*7,tw=bx+bw-u*7-tx,fs=Math.max(12,Math.min(19,bh*.13));
+  dlgName(W.name,px-u,by,u,fs,frame,inner);
   ctx.textAlign="left";ctx.textBaseline="top";
   ctx.font=`${M.bold?700:500} ${Math.round(fs)}px "IBM Plex Mono", monospace`;ctx.fillStyle=M.text||W.text;
-  const rows=wrapText(l.text,tw);let shown=n,y=py+u*2+fs*1.5;
-  for(const r of rows){if(shown<=0)break;ctx.fillText(r.slice(0,shown),tx,y);shown-=r.length+1;y+=fs*1.3;}
+  const rows=wrapText(l.text,tw);let shown=n,y=py+u*3;
+  ctx.shadowColor="rgba(0,0,0,.6)";ctx.shadowOffsetY=Math.max(1,u/2);
+  for(const r of rows){if(shown<=0)break;ctx.fillText(r.slice(0,shown),tx,y);shown-=r.length+1;y+=fs*1.4;}
+  ctx.shadowColor="transparent";ctx.shadowOffsetY=0;
   if(done&&l.sub){
-    ctx.font=`500 ${Math.round(fs*.72)}px "IBM Plex Mono", monospace`;ctx.fillStyle="#c8a8f0";
-    let yy=Math.max(y+fs*.3,by+bh-u*4-fs*.72*1.25*2);
-    for(const r of wrapText(l.sub,tw-fs*3))  {ctx.fillText(r,tx,yy);yy+=fs*.72*1.25;}
+    const sf=Math.round(fs*.72),lines=wrapText(l.sub,tw-fs*6);
+    let yy=Math.max(y+fs*.5,by+bh-u*5-sf*1.3*lines.length);
+    ctx.fillStyle="rgba(200,168,240,.28)";ctx.fillRect(tx,yy-sf*.55,Math.min(tw*.45,u*40),Math.max(1,Math.round(u/2)));
+    ctx.font=`italic 500 ${sf}px "IBM Plex Mono", monospace`;ctx.fillStyle="#c8a8f0";
+    for(const r of lines){ctx.fillText(r,tx,yy);yy+=sf*1.3;}
   }
-  if(done&&(RM||Math.floor(tclock*2.5)%2)){
-    ctx.font=`700 ${Math.round(fs*.75)}px "IBM Plex Mono", monospace`;ctx.fillStyle="#c8a8f0";ctx.textAlign="right";ctx.textBaseline="bottom";
-    ctx.fillText(D.i<D.lines.length-1?"▼ Space":"▼ "+(D.endLabel||"Fight"),bx+bw-u*5,by+bh-u*4);
-  }
+  if(done)dlgPrompt(D.i<D.lines.length-1?null:(D.endLabel||"Fight"),bx+bw-u*6,by+bh-u*5,u,fs);
   ctx.restore();
+}
+// The box: a drop shadow, a dark panel, and a pixel band in the speaker's colour, lit along the top and left,
+// shaded along the bottom and right, with a faint inner line and gold rivets at the corners.
+function dlgFrame(x,y,w,h,u,frame,inner,rivets){
+  ctx.fillStyle="rgba(0,0,0,.5)";ctx.fillRect(x+u*2,y+u*3,w,h);
+  const g=ctx.createLinearGradient(0,y,0,y+h);g.addColorStop(0,"rgba(24,29,40,.97)");g.addColorStop(1,"rgba(7,9,14,.97)");
+  ctx.fillStyle=g;ctx.fillRect(x,y,w,h);
+  const ring=(o,col,t)=>{t=t||u;ctx.fillStyle=col;ctx.fillRect(x+o,y+o,w-2*o,t);ctx.fillRect(x+o,y+h-o-t,w-2*o,t);ctx.fillRect(x+o,y+o,t,h-2*o);ctx.fillRect(x+w-o-t,y+o,t,h-2*o);};
+  ring(0,"#05070a");ring(u,frame);ring(u*2,"#05070a");
+  const hu=Math.max(1,Math.round(u/2));
+  ctx.fillStyle="rgba(255,255,255,.25)";ctx.fillRect(x+u,y+u,w-2*u,hu);ctx.fillRect(x+u,y+u,hu,h-2*u);
+  ctx.fillStyle="rgba(0,0,0,.35)";ctx.fillRect(x+u,y+h-u-hu,w-2*u,hu);ctx.fillRect(x+w-u-hu,y+u,hu,h-2*u);
+  ctx.globalAlpha=.45;ring(u*4,inner,hu);ctx.globalAlpha=1;
+  if(!rivets)return;
+  for(const [cx,cy] of [[x+u*1.5,y+u*1.5],[x+w-u*1.5,y+u*1.5],[x+u*1.5,y+h-u*1.5],[x+w-u*1.5,y+h-u*1.5]]){
+    const rx=Math.round(cx-u*3),ry=Math.round(cy-u*3);
+    ctx.fillStyle="#05070a";ctx.fillRect(rx+u,ry,u*4,u*6);ctx.fillRect(rx,ry+u,u*6,u*4);   // a round-ish stud
+    ctx.fillStyle="#8a5a1c";ctx.fillRect(rx+u,ry+u,u*4,u*4);
+    ctx.fillStyle="#d9a440";ctx.fillRect(rx+u,ry+u,u*3,u*3);
+    ctx.fillStyle="#fff0b8";ctx.fillRect(rx+u*2,ry+u*2,u,u);
+  }
+}
+// A bevelled pixel frame round the portrait.
+function dlgBevel(x,y,w,h,u,frame){
+  ctx.fillStyle="#05070a";
+  ctx.fillRect(x-u*2,y-u*2,w+u*4,u);ctx.fillRect(x-u*2,y+h+u,w+u*4,u);ctx.fillRect(x-u*2,y-u*2,u,h+u*4);ctx.fillRect(x+w+u,y-u*2,u,h+u*4);
+  ctx.fillStyle=frame;
+  ctx.fillRect(x-u,y-u,w+u*2,u);ctx.fillRect(x-u,y+h,w+u*2,u);ctx.fillRect(x-u,y-u,u,h+u*2);ctx.fillRect(x+w,y-u,u,h+u*2);
+  ctx.fillStyle="rgba(255,255,255,.25)";ctx.fillRect(x-u,y-u,w+u*2,Math.max(1,u/2));
+  ctx.fillStyle="rgba(0,0,0,.35)";ctx.fillRect(x-u,y+h+u/2,w+u*2,Math.max(1,u/2));
+}
+// The nameplate: a small plate of its own, standing on the box's top edge, the name in gold capitals.
+function dlgName(name,x,boxY,u,fs,frame,inner){
+  const f=Math.round(fs*.7);
+  ctx.font=`700 ${f}px "IBM Plex Mono", monospace`;
+  try{ctx.letterSpacing=Math.round(f*.12)+"px";}catch(e){}
+  const label=name.toUpperCase(),w=Math.round(ctx.measureText(label).width+u*12),h=Math.round(f+u*8),y=Math.round(boxY-h+u*3);
+  dlgFrame(x,y,w,h,u,frame,inner,false);
+  ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillStyle="#f0c060";
+  ctx.shadowColor="rgba(0,0,0,.7)";ctx.shadowOffsetY=Math.max(1,u/2);
+  ctx.fillText(label,x+w/2,y+h/2+1);
+  ctx.shadowColor="transparent";ctx.shadowOffsetY=0;
+  try{ctx.letterSpacing="0px";}catch(e){}
+}
+// "Press Space": a little keycap, with a pixel arrow bobbing beside it, and what happens next when it's the end.
+function dlgPrompt(endLabel,rx,by,u,fs){
+  const f=Math.round(fs*.6);
+  ctx.font=`700 ${f}px "IBM Plex Mono", monospace`;
+  try{ctx.letterSpacing=Math.round(f*.1)+"px";}catch(e){}
+  const kw=Math.round(ctx.measureText("SPACE").width+u*6),kh=Math.round(f+u*5),kx=rx-kw,ky=by-kh;
+  ctx.fillStyle="#05070a";ctx.fillRect(kx-u,ky-u,kw+u*2,kh+u*2);
+  ctx.fillStyle="#3a3150";ctx.fillRect(kx,ky,kw,kh);                       // the key's side
+  ctx.fillStyle="#241d33";ctx.fillRect(kx,ky,kw,kh-u);                      // its face
+  ctx.fillStyle="rgba(255,255,255,.18)";ctx.fillRect(kx,ky,kw,Math.max(1,u/2));
+  ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillStyle="#d8c4f4";
+  ctx.fillText("SPACE",kx+kw/2,ky+(kh-u)/2+1);
+  try{ctx.letterSpacing="0px";}catch(e){}
+  let ax=kx-u*3;
+  if(endLabel){
+    ctx.font=`600 ${Math.round(fs*.68)}px "IBM Plex Mono", monospace`;ctx.textAlign="right";ctx.fillStyle="#c8a8f0";
+    ctx.fillText(endLabel,ax,ky+kh/2);ax-=ctx.measureText(endLabel).width+u*3;
+  }
+  const bob=RM?0:Math.round((Math.sin(tclock*6)+1)*u*.6),ay=ky+kh/2-u*1.5+bob;   // a pixel arrow pointing down
+  ctx.fillStyle="#c8a8f0";ctx.fillRect(ax-u*5,ay,u*5,u);ctx.fillRect(ax-u*4,ay+u,u*3,u);ctx.fillRect(ax-u*3,ay+u*2,u,u);
 }
 // Its voice: a low murmur under each few letters.
 function playTalkBlip(voice){
