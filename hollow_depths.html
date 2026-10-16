@@ -2519,7 +2519,8 @@ function say(text,cls){
 /* ============================ dice tray ============================ */
 // The table, as at a game of D&D: every blow and every heal in a fight is rolled first, on a pixel d20 that
 // tumbles into the tray under your health and stamina (inside the fight on phones). Blue: your attacks. Green: your heals. Red: the monster's
-// attacks. Black: the monster healing itself. Nothing lands until the die has stopped and its number has
+// attacks. Black: the monster healing itself. Dark red, orange and dark
+// green: bleeding, burning and poison ticking at the end of a round. Nothing lands until the die has stopped and its number has
 // sat there a moment to be read: diceThen() holds the battle's queue for that, then plays the swing and lands
 // the blow. When the other side rolls (or after a
 // pause) the old dice are swept off the felt first.
@@ -2531,7 +2532,11 @@ const DIE_COLS={
   blue: {face:"#cfe8ff",hi:"#8cc0f2",mid:"#4f8cd4",lo:"#2c5799",edge:"#163868",line:"#0a1830",ink:"#0d2148"},
   green:{face:"#dcf5c4",hi:"#9ad472",mid:"#61aa48",lo:"#3a7430",edge:"#22501d",line:"#0b200a",ink:"#10300e"},
   red:  {face:"#ffd3ca",hi:"#f08070",mid:"#c94a3c",lo:"#8a2a20",edge:"#58160f",line:"#1e0503",ink:"#3a0a06"},
-  black:{face:"#6c6c7a",hi:"#4c4c58",mid:"#363640",lo:"#24242c",edge:"#121216",line:"#000000",ink:"#f2ecd8"}
+  black:{face:"#6c6c7a",hi:"#4c4c58",mid:"#363640",lo:"#24242c",edge:"#121216",line:"#000000",ink:"#f2ecd8"},
+  // the wounds that keep working at the end of every round, on either of you
+  bleed:{face:"#e6a49a",hi:"#a8362c",mid:"#7a1e18",lo:"#521210",edge:"#330a08",line:"#120202",ink:"#2a0604"},
+  burn: {face:"#ffe2b4",hi:"#ffb050",mid:"#f0902a",lo:"#b85e14",edge:"#7a3a0a",line:"#2a1202",ink:"#3a1a04"},
+  poison:{face:"#bcd8a4",hi:"#5e8c3e",mid:"#3e6a2a",lo:"#28481c",edge:"#183012",line:"#060e04",ink:"#0e200a"}
 };
 const DIE_FONT={"0":["111","101","101","101","111"],"1":["010","110","010","010","111"],"2":["111","001","111","100","111"],
   "3":["111","001","111","001","111"],"4":["101","101","111","001","001"],"5":["111","100","111","001","111"],
@@ -2580,7 +2585,7 @@ function dieDraw(d,frame,text){
   for(const gl of glyphs){gl.forEach((row,j)=>{for(let i=0;i<row.length;i++)if(row[i]==="1")g.fillRect(x+i,y+j,1,1);});x+=gl[0].length+1;}
 }
 const DICE={dice:[],actor:null,settledAt:0,raf:0};
-function diceActor(kind){return kind==="blue"||kind==="green"?"you":"foe";}
+function diceActor(kind){return kind==="blue"||kind==="green"?"you":kind==="red"||kind==="black"?"foe":"wounds";}
 function placeDiceTray(){
   const t=$("diceTray");if(!t)return;
   const host=matchMedia("(max-width:760px)").matches?$("mapwrap"):document.querySelector(".rail");
@@ -6723,27 +6728,28 @@ function plagueFeed(d){
 function endRound(){
   if(!B)return;
   if(wispAttack()){refresh();queue(.5,winBattle);return;}
-  if(B.mStat.burn>0){
-    const d=5+S.lvl;
+  dotTick(0);
+}
+// The end-of-round wounds, in order. Each one that is working rolls its own die (dark red for bleeding,
+// orange for fire, dark green for poison) and lands when it stops; then the next one rolls. A tick that
+// ends the fight stops the chain there.
+const DOT_TICKS=[
+  ()=>B.mStat.burn>0&&{kind:"burn",d:5+S.lvl,land:d=>{
     B.mhp-=d;B.mStat.burn--;B.mFlash=.7;
     const L=B.layout;
     if(L){snum(L.ex,L.ey-L.esz*.5,String(d),"#f0902a");sburst(L.ex,L.ey,"#f0902a",8,150);}
     blog(`The ${B.mon.t.name} burns for ${d}.`,"c-hit");
     checkBossPhase();
-    if(B.mhp<=0){refresh();queue(.5,winBattle);return;}
-  }
-  if(B.mStat.poison>0){
-    const d=B.mStat.poisonDmg||3;
+    if(B.mhp<=0){refresh();queue(.5,winBattle);return true;}}},
+  ()=>B.mStat.poison>0&&{kind:"poison",d:B.mStat.poisonDmg||3,land:d=>{
     B.mhp-=d;B.mStat.poison--;B.mFlash=.6;
     const L=B.layout;
     if(L){snum(L.ex,L.ey-L.esz*.5,String(d),"#6fa844");sburst(L.ex,L.ey,"#6fa844",7,130);}
     blog(`Poison gnaws the ${B.mon.t.name} for ${d}.`,"c-hit");
     plagueFeed(d);
     checkBossPhase();
-    if(B.mhp<=0){refresh();queue(.5,winBattle);return;}
-  }
-  if(B.mStat.bleed>0){
-    const d=B.mStat.bleedDmg||2;
+    if(B.mhp<=0){refresh();queue(.5,winBattle);return true;}}},
+  ()=>B.mStat.bleed>0&&{kind:"bleed",d:B.mStat.bleedDmg||2,land:d=>{
     B.mhp-=d;B.mStat.bleed--;B.mFlash=.5;
     if(B.mStat.bleed<=0)B.mStat.bleedDmg=0;
     const L=B.layout;
@@ -6751,25 +6757,35 @@ function endRound(){
     blog(`The ${B.mon.t.name} bleeds for ${d}.`,"c-hit");
     plagueFeed(d);
     checkBossPhase();
-    if(B.mhp<=0){refresh();queue(.5,winBattle);return;}
-  }
-  if(B.pStat.burn>0){
-    const d=5;
+    if(B.mhp<=0){refresh();queue(.5,winBattle);return true;}}},
+  ()=>B.pStat.burn>0&&{kind:"burn",d:5,land:d=>{
     S.hp-=d;B.pStat.burn--;B.pFlash=.7;
     const L=B.layout;
     if(L){snum(L.px,L.py-L.psz*.5,"-"+d,"#f0902a");sburst(L.px,L.py,"#f0902a",7,140);}
     blog(`You burn for ${d}.`,"c-hit");
-    if(S.hp<=0){refresh();queue(.4,()=>loseBattle("flames"));return;}
-  }
-  if(B.pStat.bleed>0){
-    const d=B.pStat.bleedDmg||2;
+    if(S.hp<=0){refresh();queue(.4,()=>loseBattle("flames"));return true;}}},
+  ()=>B.pStat.bleed>0&&{kind:"bleed",d:B.pStat.bleedDmg||2,land:d=>{
     S.hp-=d;B.pStat.bleed--;B.pFlash=.6;
     if(B.pStat.bleed<=0)B.pStat.bleedDmg=0;
     const L=B.layout;
     if(L){snum(L.px,L.py-L.psz*.5,"-"+d,"#c94a3c");sburst(L.px,L.py-L.psz*.3,"#c94a3c",6,120);}
     blog(`You bleed for ${d}.`,"c-hit");
-    if(S.hp<=0){refresh();queue(.4,()=>loseBattle("blood loss"));return;}
+    if(S.hp<=0){refresh();queue(.4,()=>loseBattle("blood loss"));return true;}}}
+];
+function dotTick(i){
+  if(!B)return;
+  for(;i<DOT_TICKS.length;i++){
+    const t=DOT_TICKS[i]();
+    if(!t)continue;
+    const next=i+1;
+    diceThen(t.kind,t.d,()=>{if(!B)return;if(t.land(t.d))return;refresh();dotTick(next);});
+    return;
   }
+  roundUpkeep();
+}
+// The rest of the round's upkeep, once every wound has had its turn.
+function roundUpkeep(){
+  if(!B)return;
   if(B.mStat.fade>0)B.mStat.fade--;
   if(B.pStat.chill>0)B.pStat.chill--;
   if(turned("troll")&&B.mhp<B.mmax&&B.mhp>0){
