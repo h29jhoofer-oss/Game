@@ -104,6 +104,34 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('...and does not take you past your maximum', await ev('S.hp<=S.maxhp'));
   check('the tray is tall enough for two rows of dice', await ev('document.getElementById("diceFelt").clientHeight>=124'));
 
+  // boss hex: against the Queen, the King and the Thing, half your attack dice turn purple and black, a quarter lower
+  await until('B.phase==="choose"', 8000);
+  check('the Ghost Queen, the Hollow King and both shapes of the Thing carry the hex; the goblin does not',
+    await ev('["queen","king","thing","thing2"].every(id=>MONSTERS.find(m=>m.id===id).hex)&&!MONSTERS.find(m=>m.id==="gob").hex'));
+  let plain = 0;
+  for (let i = 0; i < 20; i++) { await ev('B.phase="anim";seq=[];diceClear();diceThen("blue",40,()=>{})'); if ((await dice())[0].kind === 'blue') plain++; }
+  check('an ordinary monster never hexes your dice', plain === 20, plain);
+  await ev('B.mon.t=MONSTERS.find(m=>m.id==="king");B.hexSeen=false;');
+  const kinds = [], landed2 = [];
+  for (let i = 0; i < 40; i++) {
+    await ev('seq=[];diceClear();window._hv=null;diceThen("blue",40,v=>{window._hv=v;})');
+    await until('DICE.dice[0]&&DICE.dice[0].done', 3000);
+    await until('window._hv!==null', 2000);
+    const d = (await dice())[0]; kinds.push(d.kind); landed2.push([d.value, await ev('window._hv')]);
+    if (kinds.includes('hex') && kinds.includes('blue')) break;
+  }
+  check('against the King some attack dice turn hex and some stay blue', kinds.includes('hex') && kinds.includes('blue'), kinds);
+  const hexed = landed2[kinds.indexOf('hex')];
+  check('a hexed die shows a quarter less (40 becomes 30) and the blow lands for that', hexed && hexed[0] === '30' && hexed[1] === 30, landed2);
+  check('an unhexed die lands its full 40', landed2[kinds.indexOf('blue')][1] === 40, landed2);
+  check('the hex is purple and black', await ev('DIE_COLS.hex.mid.startsWith("#6a")&&DIE_COLS.hex.edge==="#0c0812"'));
+  check('the log warns you the first time', await ev('[...document.querySelectorAll("#log *")].some(e=>/curdles your dice/.test(e.textContent))||document.body.textContent.includes("curdles your dice")'));
+  await ev('Math._r=Math.random;Math.random=()=>0;seq=[];diceClear();diceThen("blue",40,()=>{});Math.random=Math._r;');
+  for (let i = 0; i < 80 && !(await ev('DICE.dice[0]&&DICE.dice[0].kind==="hex"&&!DICE.dice[0].done')); i++) await wait(10);
+  check('the die starts blue and turns while still rolling', await ev('DICE.dice[0].kind==="hex"&&!DICE.dice[0].done&&DICE.dice[0].el.classList.contains("hexing")'));
+  await until('DICE.dice[0].done', 3000);
+  if (process.env.SHOTS) await page.screenshot({ path: path.join(process.env.SHOTS, 'dice_hex.png') });
+
   if (process.env.SHOTS) await page.screenshot({ path: path.join(process.env.SHOTS, 'dice.png') });
   check('no page errors', errors.length === 0, errors);
   let pass = 0;

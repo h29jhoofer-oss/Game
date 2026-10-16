@@ -362,6 +362,10 @@ body.talking .mapwrap .dicetray,body.inchasm .dicetray{display:none!important}
 .dcap{position:absolute;left:0;right:0;top:50px;text-align:center;font:700 9px/1 "IBM Plex Mono",ui-monospace,monospace;
   letter-spacing:.14em;color:#f0c060;text-shadow:1px 1px 0 #000;opacity:0}
 .die3.miss .dcap{color:#b8c0cc}
+.die3.hex .dcap{color:#c89af0}
+.die3.hexing canvas{animation:dieHex .4s steps(4)}
+.die3.hex.settled canvas{animation:dieLand .32s steps(4)}
+@keyframes dieHex{0%{filter:drop-shadow(0 0 0 #b070ff) brightness(2.2)}50%{filter:drop-shadow(0 0 0 #6a2ea8) brightness(.4)}100%{filter:drop-shadow(3px 3px 0 rgba(0,0,0,.55))}}
 .die3.settled .dcap{opacity:1}
 @keyframes dieLand{0%{transform:scale(1.25)}50%{transform:scale(.9)}100%{transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){.die3.settled canvas{animation:none}.die3.placed{transition:none}}
@@ -1090,21 +1094,21 @@ const MONSTERS=[
  {id:"knight",g:"K",name:"dark knight",  hp:125,min:12,max:20, def:5,acc:.90,xp:78,lo:8,hi:10,col:"--blood",sp:{name:"Shield Bash",mult:.9,cd:5,stun:1}},
  {id:"guardian",g:"G",name:"gilded guardian",hp:40,min:5,max:9,def:2,acc:.80,xp:30,lo:99,hi:99,col:"--torch",slow:true,still:true,guardian:true,sp:{name:"Gilded Fist",mult:1.5,cd:4,acc:.75}},
  // The Queen's ghost: a mini boss that only rises from her tomb on floor 8 (see placeTomb).
- {id:"queen", g:"Q",name:"Ghost Queen",title:"The Ghost Queen",hp:230,min:9,max:15,def:2,acc:.9,xp:240,lo:99,hi:99,col:"--rime",pierce:2,boss:true,mini:true,ghost:true,
+ {id:"queen", g:"Q",name:"Ghost Queen",title:"The Ghost Queen",hp:230,min:9,max:15,def:2,acc:.9,xp:240,lo:99,hi:99,col:"--rime",pierce:2,boss:true,mini:true,ghost:true,hex:true,
   phaseLabel:"\u2020 THE MOURNING QUEEN",phaseLabel2:"\u2620 PHASE 2 \u2014 SHE REMEMBERS",intro:"She lifts her veil. There is nothing underneath it but cold.",
   sps:[{name:"Mourning Wail",mult:.7,pierce:99,cd:4,dread:1,wail:1},{name:"Grave Chill",mult:.9,cd:3,chill:3},{name:"Fade",cd:4,fade:3},{name:"Cold Embrace",mult:1.1,pierce:99,drain:.7,cd:3}],
   sps2:[{name:"Mourning Wail",mult:.8,pierce:99,cd:4,dread:1,wail:1},{name:"Grave Chill",mult:1,cd:3,chill:3},{name:"Fade",cd:4,fade:3},{name:"Cold Embrace",mult:1.2,pierce:99,drain:.8,cd:3},
         {name:"Spectral Talons",mult:.5,hits:3,cd:3},{name:"Corpse Candles",mult:.7,burn:3,cd:4}]},
- {id:"king",  g:"\u2126",name:"the Hollow King",hp:520,min:20,max:32,def:5,acc:.92,xp:400,lo:99,hi:99,col:"--torch",pierce:6,boss:true,sps:[{name:"Hollow Roar",mult:1.35,cd:3},{name:"Crown of Ash",mult:.95,burn:3,cd:4},{name:"Devour",mult:1.15,drain:.5,cd:4}],qteSp:{name:"Reckoning Slam",qte:true,mult:2.5,cd:5}},
+ {id:"king",  g:"\u2126",name:"the Hollow King",hp:520,min:20,max:32,def:5,acc:.92,xp:400,lo:99,hi:99,col:"--torch",pierce:6,boss:true,hex:true,sps:[{name:"Hollow Roar",mult:1.35,cd:3},{name:"Crown of Ash",mult:.95,burn:3,cd:4},{name:"Devour",mult:1.15,drain:.5,cd:4}],qteSp:{name:"Reckoning Slam",qte:true,mult:2.5,cd:5}},
  // The final foe, on floor 20. Beating its first shape reveals the second; beating that only makes it angry,
  // and the third phase is a chase across the floor (see startChase).
- {id:"thing", g:"\u03A8",name:"Thing Under the Hill",title:"The Thing Under the Hill",hp:960,min:22,max:34,def:5,acc:.9,xp:0,lo:99,hi:99,col:"--rime",pierce:6,boss:true,thing:1,
+ {id:"thing", g:"\u03A8",name:"Thing Under the Hill",title:"The Thing Under the Hill",hp:960,min:22,max:34,def:5,acc:.9,xp:0,lo:99,hi:99,col:"--rime",pierce:6,boss:true,hex:true,thing:1,
   phaseLabel:"\u269C PHASE 1 \u2014 WEARING A SHAPE",intro:"Every eye in the dark opens at once.",
   sps:[{name:"Grasping Roots",mult:1.1,cd:3,guardDown:2},{name:"Fine Print",mult:.9,drain:.5,cd:4},{name:"Weight of the Hill",mult:1.5,cd:4,acc:.78}]},
  // What is left of it after the monk's cross: small, shaking, and mortal.
  {id:"shade", g:"\u03C8",name:"shade of the Thing",title:"What Is Left of It",hp:70,min:3,max:7,def:1,acc:.7,xp:0,lo:99,hi:99,col:"--slate",boss:true,mini:true,shade:true,
   phaseLabel:"\u271D THE LIGHT HAS FOUND IT",intro:"It cowers from the light.",sps:[{name:"Cringe",cd:4,heal:.05},{name:"Last Spite",mult:1.2,cd:3}]},
- {id:"thing2",g:"\u03A8",name:"Thing Under the Hill",title:"The Thing Under the Hill",hp:1120,min:27,max:40,def:6,acc:.93,xp:0,lo:99,hi:99,col:"--blood",pierce:7,boss:true,thing:2,
+ {id:"thing2",g:"\u03A8",name:"Thing Under the Hill",title:"The Thing Under the Hill",hp:1120,min:27,max:40,def:6,acc:.93,xp:0,lo:99,hi:99,col:"--blood",pierce:7,boss:true,hex:true,thing:2,
   phaseLabel:"\u2694 PHASE 2 \u2014 UNVEILED",
   sps:[{name:"Grasping Roots",mult:1.2,cd:3,guardDown:3},{name:"Swallowing Dark",mult:1.1,drain:.6,cd:3},{name:"Ember of the Deep",mult:1,burn:3,cd:4},{name:"Feed on the Hill",cd:6,heal:.06}],
   qteSp:{name:"The Hill Comes Down",qte:true,mult:2.4,cd:4}}
@@ -2536,7 +2540,9 @@ const DIE_COLS={
   // the wounds that keep working at the end of every round, on either of you
   bleed:{face:"#e6a49a",hi:"#a8362c",mid:"#7a1e18",lo:"#521210",edge:"#330a08",line:"#120202",ink:"#2a0604"},
   burn: {face:"#ffe2b4",hi:"#ffb050",mid:"#f0902a",lo:"#b85e14",edge:"#7a3a0a",line:"#2a1202",ink:"#3a1a04"},
-  poison:{face:"#bcd8a4",hi:"#5e8c3e",mid:"#3e6a2a",lo:"#28481c",edge:"#183012",line:"#060e04",ink:"#0e200a"}
+  poison:{face:"#bcd8a4",hi:"#5e8c3e",mid:"#3e6a2a",lo:"#28481c",edge:"#183012",line:"#060e04",ink:"#0e200a"},
+  // a boss's hex: your blue die curdles purple and black mid-roll, and lands a quarter lower
+  hex:  {face:"#d6b8f4",hi:"#9a5ee0",mid:"#6a2ea8",lo:"#1e1428",edge:"#0c0812",line:"#000000",ink:"#1c0830"}
 };
 const DIE_FONT={"0":["111","101","101","101","111"],"1":["010","110","010","010","111"],"2":["111","001","111","100","111"],
   "3":["111","001","111","001","111"],"4":["101","101","111","001","001"],"5":["111","100","111","001","111"],
@@ -2616,6 +2622,12 @@ function diceSound(){
   [0,.13,.24,.33,.4,.45].forEach((k,i)=>{mNoise(t+k*DICE_ROLL/.5,.03,.5*(1-i*.13),{f:2400+Math.random()*1600,q:3,shape:3,out});
     if(i<3)mNote("sine",170-i*20,t+k*DICE_ROLL/.5,.06,.18*(1-i*.25),{a:.002,out});});
 }
+// The hex taking hold of a die: a low sour chord sliding down.
+function shex(){
+  const out=sfxOut(.6);if(!out)return;const t=actx.currentTime+.01;
+  mNote("sawtooth",233,t,.28,.12,{a:.01,out});mNote("sawtooth",220*Math.pow(2,1/12*-6),t+.02,.3,.1,{a:.01,out});
+  mNoise(t,.18,.25,{f:900,q:2,shape:2,out});
+}
 // Rolls one die into the tray. value: the number it lands on, or "miss".
 function trayRoll(kind,value,o){
   o=o||{};
@@ -2632,7 +2644,7 @@ function trayRoll(kind,value,o){
   // your dice come in from the left, the monster's from the right; a wound's die from the side of whoever has it
   const side=o.side||(actor==="foe"?"right":"left");
   const d={el,cv,kind,value:miss?"x":String(Math.max(0,Math.round(value))),miss,crit:!!o.crit,side,
-    t0:now,dur:Math.max(1,DICE_ROLL*1000),sx:side==="left"?-60:(felt.clientWidth||204)+8,tx:0,ty:0,jy:Math.random()*4-2,frame:-1,flick:"",done:false};
+    hexAt:o.hex?.45+Math.random()*.2:0,t0:now,dur:Math.max(1,DICE_ROLL*1000),sx:side==="left"?-60:(felt.clientWidth||204)+8,tx:0,ty:0,jy:Math.random()*4-2,frame:-1,flick:"",done:false};
   felt.appendChild(el);DICE.dice.push(d);diceSlots();
   for(const o2 of DICE.dice)if(o2.done)o2.el.style.transform=`translate(${o2.tx}px,${o2.ty}px)`;
   diceSound();
@@ -2640,7 +2652,12 @@ function trayRoll(kind,value,o){
   if(!DICE.raf)DICE.raf=requestAnimationFrame(diceAnim);
   return d;
 }
+function dieHex(d){
+  d.kind="hex";d.el.classList.remove("blue");d.el.classList.add("hex","hexing");d.frame=-1;
+  d.el.querySelector(".dcap").textContent="HEXED";shex();
+}
 function diceFinish(d){
+  if(d.hexAt&&d.kind!=="hex")dieHex(d);
   d.done=true;DICE.settledAt=performance.now();
   dieDraw(d,0,d.value);
   d.el.style.transform=`translate(${d.tx}px,${d.ty}px)`;
@@ -2657,6 +2674,7 @@ function diceAnim(){
     busy=true;
     const e=1-Math.pow(1-p,3),x=d.sx+(d.tx-d.sx)*e,hop=(1-p)*16*Math.abs(Math.sin(p*Math.PI*3.2));
     d.el.style.transform=`translate(${x.toFixed(1)}px,${(d.ty-hop).toFixed(1)}px)`;
+    if(d.hexAt&&p>=d.hexAt&&d.kind!=="hex")dieHex(d);
     const f=Math.floor(e*15)%DIE_ANGLES.length;
     if(f!==d.frame){d.frame=f;d.flick=String(1+Math.floor(Math.random()*20));dieDraw(d,f,d.flick);}
   }
@@ -2665,12 +2683,21 @@ function diceAnim(){
 // Roll, and hold the fight until the die stops. Then o.lead (the swing, the spell's wind-up) plays, and
 // o.leadT later the blow lands. Rolls made together (an attack and the life it drinks back) share one wait.
 let diceBatch=null;
+// The Ghost Queen, the Hollow King and the Thing hex your attack dice: half of them turn purple and black
+// as they roll and land a quarter lower. land() is given the number the die actually shows.
+const HEX_CHANCE=.5,HEX_MULT=.75;
 function diceThen(kind,value,land,o){
-  o=o||{};
-  if(!B){land();return;}
+  o=Object.assign({},o);
+  if(!B){land(value);return;}
+  if(kind==="blue"&&typeof value==="number"&&value>0&&B.mon&&B.mon.t.hex&&Math.random()<HEX_CHANCE){
+    value=Math.max(1,Math.round(value*HEX_MULT));o.hex=true;
+    if(!B.hexSeen){B.hexSeen=true;const nm=(B.mon.t.title||B.mon.t.name).replace(/^the /i,"");
+      blog(`The ${nm}'s will curdles your dice: hexed rolls land a quarter lower.`,"c-hit");}
+  }
   trayRoll(kind,value,o);
-  const item={land,lead:o.lead,leadT:o.leadT||0};
-  if(!DICE_ROLL){if(item.lead)item.lead();land();return;}
+  const v=value;
+  const item={land:()=>land(v),lead:o.lead,leadT:o.leadT||0};
+  if(!DICE_ROLL){if(item.lead)item.lead();item.land();return;}
   if(diceBatch&&diceBatch.open&&seq[0]===diceBatch.step){diceBatch.items.push(item);return;}
   const batch={open:true,items:[item]};
   batch.step={d:DICE_ROLL+DICE_HOLD*(.8+Math.random()*.5),f:()=>{
@@ -2971,8 +2998,8 @@ function autoParry(sp){
   queue(.28,()=>{
     if(!B)return;
     const r=pDamage({id:"riposte",mult:hasPerk("riposte")?1.3:.8,poise:8},{noMiss:true});
-    diceThen("blue",r.dmg,()=>{
-      hitFx(r,x=>x.crit?`A brutal riposte — ${x.dmg} damage!`:`Riposte — ${x.dmg} damage.`);
+    diceThen("blue",r.dmg,v=>{
+      r.dmg=v;hitFx(r,x=>x.crit?`A brutal riposte — ${x.dmg} damage!`:`Riposte — ${x.dmg} damage.`);
       sparry();
     },{lead:()=>pSwing(),leadT:.2,crit:r.crit});
   });
@@ -5717,7 +5744,7 @@ function hurtPlayer(dmg,crit){
 // One landed (or missed) hit of a move. Multi-hit moves call this once per hit.
 function strikeOnce(mv){
   const r=pDamage(mv,{noMiss:!!mv.sure});
-  diceThen("blue",r.miss?"miss":r.dmg,()=>strikeLand(mv,r),{lead:()=>pSwing(),leadT:.2,crit:r.crit});
+  diceThen("blue",r.miss?"miss":r.dmg,v=>{if(!r.miss)r.dmg=v;strikeLand(mv,r);},{lead:()=>pSwing(),leadT:.2,crit:r.crit});
 }
 function strikeLand(mv,r){
   if(r.miss){
@@ -5760,7 +5787,7 @@ function cashOutBleed(){
   const rem=(B.mStat.bleed||0)*(B.mStat.bleedDmg||2);
   if(rem<=0||B.mhp<=0)return;
   B.mStat.bleed=0;B.mStat.bleedDmg=0;
-  diceThen("blue",rem,()=>{
+  diceThen("blue",rem,rem=>{
     B.mhp-=rem;B.mFlash=.8;
     const L=B.layout;
     if(L){snum(L.ex,L.ey-L.esz*.9,"-"+rem,"#c94a3c",true);sburst(L.ex,L.ey-L.esz*.3,"#c94a3c",18,220);sring(L.ex,L.ey,"rgba(201,74,60,.9)",L.esz*.8);}
@@ -5773,7 +5800,7 @@ const TRANSFUSE_MIN=5;
 function transfuse(){
   const ich=S.ichor||0;
   const d=Math.round(ich*2*(B.pStat.atkUp>0?1.25:1));
-  diceThen("blue",d,()=>transfuseLand(ich,d),{lead:()=>pSwing(),leadT:.2});
+  diceThen("blue",d,d=>transfuseLand(ich,d),{lead:()=>pSwing(),leadT:.2});
 }
 function transfuseLand(ich,d){
   S.ichor=0;
@@ -5856,7 +5883,7 @@ function offhandAttack(){
             :oh.type==="shield"?{id:"bash",off:true,mult:1,poise:8}
             :{id:"stab",off:true,mult:1,poise:-3};
     const r=pDamage(mv);
-    diceThen("blue",r.miss?"miss":r.dmg,()=>offhandLand(oh,r),{lead:()=>pSwing(oh.type==="torch"),leadT:.2,crit:r.crit});
+    diceThen("blue",r.miss?"miss":r.dmg,v=>{if(!r.miss)r.dmg=v;offhandLand(oh,r);},{lead:()=>pSwing(oh.type==="torch"),leadT:.2,crit:r.crit});
   });
   queue(.55,()=>{
     refresh();
@@ -6177,7 +6204,7 @@ function castWisp(it){
   wispInit(it);
   const d=Math.round(it.whp*WISP_ORB_MULT)+S.lvl;
   blog("You loose the wisp. It balls itself into a blazing violet orb...","c-lvl");
-  diceThen("blue",d,()=>{
+  diceThen("blue",d,d=>{
     hurtMon(d,true);poiseHit(Math.round(d*.6));
     const L2=B.layout;
     if(L2){sburst(L2.ex,L2.ey,"#a87fe0",30,330);sburst(L2.ex,L2.ey,"#ffffff",14,240);sring(L2.ex,L2.ey,"rgba(168,127,224,.95)",L2.esz*1.1);}
@@ -6966,7 +6993,7 @@ function useItemBattle(i){
     const burnTurns=tier===2?4:tier===1?3:2;
     const d=rint(dMin,dMax);
     blog("A ball of fire tears down out of the dark...","c-lvl");
-    diceThen("blue",d,()=>{
+    diceThen("blue",d,d=>{
       hurtMon(d,false);
       const L2=B.layout;
       if(L2){
@@ -6996,9 +7023,10 @@ function useItemBattle(i){
     queue(.65,()=>{refresh();enemyTurn();});
   }else if(id==="dark"){
     const turns=SPELL_FX.dark.turns[tier],pct=SPELL_FX.dark.pct[tier];
-    const d=tier>=2?rint(12+S.lvl,20+S.lvl*2):0;
+    let d=tier>=2?rint(12+S.lvl,20+S.lvl*2):0;
     blog("The ground trembles. Something stirs beneath the stone...","c-lvl");
-    const shadow=()=>{
+    const shadow=v=>{
+      if(typeof v==="number")d=v;
       const L2=B.layout;
       if(L2){
         const wide=L2.esz*(B.mon.t.boss?.62:1);
@@ -7019,7 +7047,7 @@ function useItemBattle(i){
     const d=rint(SPELL_FX.ice.min[tier],SPELL_FX.ice.max[tier]);
     let fr=SPELL_FX.ice.freeze[tier];if(B.mon.t.boss)fr=Math.min(fr,1);
     blog("Frost creeps across the stones. The air turns to needles...","c-lvl");
-    diceThen("blue",d,()=>{
+    diceThen("blue",d,d=>{
       const L2=B.layout;
       if(L2){
         sspikes(L2,L2.esz*(B.mon.t.boss?.62:1),FX_ICE);
@@ -7037,7 +7065,7 @@ function useItemBattle(i){
     const d=rint(SPELL_FX.bolt.min[tier],SPELL_FX.bolt.max[tier]);
     let st=SPELL_FX.bolt.stun[tier];if(B.mon.t.boss)st=Math.min(st,1);
     blog("The air tightens. Thunder gathers overhead...","c-lvl");
-    diceThen("blue",d,()=>{
+    diceThen("blue",d,d=>{
       const L2=B.layout;
       if(L2){slightning(L2);sburst(L2.ex,L2.ey,"#d9d24a",26,360);}
       B.boltFlash=1;

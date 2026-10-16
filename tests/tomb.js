@@ -52,14 +52,14 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
 
   // The vault door: shut without the keys, open with all twelve.
   await ev(`(()=>{for(let i=0;i<30&&!VAULT;i++){S.depth=8;newFloor(8);}descentT=0;fade=0;S.hp=S.maxhp=999;
-    const V=VAULT;S.px=V.jx;S.py=V.jy;const [cx,cy]=V.cor[V.cor.length-1];S.px=cx;S.py=cy;
+    const V=VAULT;mons=mons.filter(m=>m.guard);S.px=V.jx;S.py=V.jy;const [cx,cy]=V.cor[V.cor.length-1];S.px=cx;S.py=cy;
     S.px=V.jx;S.py=V.jy+2;if(map[S.py][S.px]!==FLOOR)S.py=V.jy;
     S.fx=S.px+.5;S.fy=S.py+.5;S.vx=S.px;S.vy=S.py;computeFOV();})()`);
   await page.waitForTimeout(150);
   check('the guards sleep until you come near', await ev('VAULT.gstage==="sleep"&&!MAPD.dlg') || await ev('Math.max(Math.abs(VAULT.guards[0].x-S.px),Math.abs(VAULT.guards[0].y-S.py))<=GUARD_WAKE_NEAR'));
   await ev('S.px=VAULT.x;S.py=VAULT.y+2;S.fx=S.px+.5;S.fy=S.py+.5;S.vx=S.px;S.vy=S.py;computeFOV();');
   await page.waitForTimeout(200);
-  check('coming up the passage starts their dialogue, asleep', await ev('VAULT.gstage==="talk"&&MAPD.dlg&&dlgLine().mood==="sleep"&&freePaused()'));
+  check('coming up the passage starts their dialogue, asleep', await ev('VAULT.gstage==="talk"&&MAPD.dlg&&dlgLine().mood==="sleep"&&freePaused()'), await ev('({g:VAULT&&VAULT.gstage,dlg:!!MAPD.dlg,B:!!B,mon:B&&B.mon.t.id,ov:document.querySelector(".overlay.show,#overlay.show")?.id})'));
   await shot('guards_sleep');
   const seen = [];
   for (let i = 0; i < 40 && await ev('!!MAPD.dlg'); i++) {
