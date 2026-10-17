@@ -2968,6 +2968,26 @@ function leechRoll(amount,after){
   diceThen("green",h,()=>{const g=leechHeal(amount);if(after)after(g);});
 }
 // Any damaging player attack lands through here: damage, crit flair, combo and poise.
+/* ---------- table talk ---------- */
+// Now and then a fight is narrated like a hand of cards. Things that can talk say the close-call line
+// themselves; everything else gets the narrator.
+const TABLE_TALK={
+  crit:["Aces.","Read 'em and weep.","A winning hand.","Dealt from the top of the deck."],
+  miss:["A bad beat.","Dealt a dud.","The card turns up blank."],
+  low:["You're all in, huh?","Down to your last chip, are we?","Nothing left on the table but you.","All in. Brave. Foolish, but brave."],
+  win:["You rake in the pot.","The house pays out. This time.","Cash in your chips.","Winner takes the hand."],
+  flee:["You fold, and live to play another hand.","You fold. No shame in it.","You get up from the table and walk away."],
+  fall:["The house always wins.","Bust.","The dealer sweeps your chips away."],
+  big:["You play your best card.","Ace in the hole.","You lay down your trump card."]
+};
+const TALKERS=new Set(["gob","orc","skel","knight","ogre","troll","queen","king","thing","thing2","shade","guardian"]);
+function tableTalk(kind,chance){
+  if(Math.random()>=(chance===undefined?1:chance))return null;
+  const L=TABLE_TALK[kind],line=L[Math.floor(Math.random()*L.length)];
+  const m=B&&B.mon,speak=kind==="low"&&m&&TALKERS.has(m.t.id);
+  blog(speak?`The ${m.t.name} grins: "${line}"`:line,speak?"c-hit":"c-cold");
+  return line;
+}
 function hitFx(r,flavour){
   const L=B.layout;
   const dealt=Math.min(r.dmg,Math.max(0,B.mhp));   // no drinking from overkill
@@ -2975,7 +2995,7 @@ function hitFx(r,flavour){
   lifesteal(r,dealt);
   if(r.exposed)B.mStat.exposed=0;
   if(r.finisher)critBanner("FINISHER!","#ff9a52");
-  else if(r.crit)critBanner("CRITICAL!","#f0c060");
+  else if(r.crit){critBanner("CRITICAL!","#f0c060");tableTalk("crit",.35);}
   const tag=r.finisher?"FINISHER":r.crit?"A clean hit":null;
   if(flavour)blog(flavour(r),"c-hit");
   else blog(tag?`${tag} — ${r.dmg} damage!`:`You deal ${r.dmg} damage.`,"c-hit");
@@ -3692,9 +3712,11 @@ const THING_DEAL=[
  {text:"That stair goes up, and out. Daylight. Grass. A bed with no one in it but you. I can let you walk up it tonight."},
  {text:"In exchange, a small consideration. Your soul. Standard terms. You will hardly notice it is gone. Nobody ever does."},
  {text:"The King signed. The Queen was signed for. Everyone signs, in the end. It is a very good deal. It is the only deal."},
+ {text:"Think of it as a game of cards. You have played your hand beautifully. But I am the house, and the house always wins."},
  {who:"hero",text:"No."},
  {text:"...Sorry? The acoustics down here are terrible."},
- {who:"hero",text:"I said no. I'm not signing anything of yours."},
+ {who:"hero",text:"I said no. I fold. I'm not signing anything of yours."},
+ {mood:"anger",text:"You don't fold at my table. Nobody walks away from my table with their chips."},
  {mood:"anger",text:"I see. That is... disappointing. I did try to do this politely."},
  {mood:"anger",text:"Very well. No contract, then. I will simply take it off your body.",act:()=>{quake(12);playRoarSound();}}
 ];
@@ -4393,6 +4415,13 @@ const ART={"rook":["............kk..","...........kZlk.",".....kkkk..kwGk.","...
 "brute_walk_3":["....kkkkk...kkk.","...kRRRRRk.kwlGk","..kqGlllGqkkwlGk","..kGlGGGGgkkwlGk","..kGkkkkkgkkwlGk","..kGlGkGkgkkwlGk",".kkqGGGGgqkkwlGk","kGllkgggkGkOOOOk","kGlGkqqqkGlgkNk.","kgGgRRRRRgGgkNk.",".kkgRrrrRgkkkOk.","..kqLLOLLqk..k..","..kgGggqGgk.....","..kGGk.kGGk.....",".kGlGk.kGlGk....",".kkkkk.kkkkk...."],
 "move_crush":[".......kk.......","......kOOk......","......kNNk......","......kNNk......","...kkkOOOOkkk...","...kOOOOOOOOk...","....kkkwlkkk....","......kwlk......","..k...kwlk...k..",".kJk..kwlk..kJk.","..kEk.kwlk.kEk..","...k..kwlk..k...","kkkkkkkZZkkkkkkk","NDNDNkNkkNkNDNDN","nNnNkNnkknNkNnNn","kkkkkkkkkkkkkkkk"],
 "move_quake":["................","..k....kk....k..",".kJk..kOOk..kJk.","..kEk.kNNk.kEk..","...k.kOOOOk.k...","......kwlk......","...k..kwlk..k...","..kJk.kwlk.kJk..","...k..kZZk..k...","kkkkkkkkkkkkkkkk","NDNDkkNkkNkkDNDN","nNnk.kNkkNk.knNn","Nnk.kNk..kNk.kNn","nk.kNk....kNk.kn","k.kNk......kNk.k",".kkk........kkk."],
+"player_hang":["................",".PP........PP...",".PP........PP...",".gG........gG...",".gG........gG...",".gG........gG...",".gG........gG...",".gG........gG...",".gG.gGGGGg.gG...",".gGgGkPPkGggG...",".gGGgPPPPgggG...",".gG.ggggggggG...",".gGGcCCCCcGgG...",".GgGCCwwCCg.....",".gGcCCCCCCc.....","..knddddddnk....","....dddddd......","....dddddd......","....NNN..NNN....","...nnnn..nnnn..."],
+"rook_hang":["kkkk......kkkk..","kPPk......kPPk..","kPPk......kPPk..","k6vk......k6vk..","k6vk......k6vk..","k6vk......k6vk..","k6vk.kkkk.k6vk..","k6vkk6666kk6vk..","k6vk6vv996k6vk..","k6v6vkPPk966vk..","k6v6vRRRR966vk..","k6v69rrrrR66vk..","k6v6vvvvvv96vk..","...6vqggq96.....","...6vqqqq96.....","...6DDLLDD6k....","...kddqdddk.....","...kddqdddkk....","...kNNNkkNNNk...","...nnnnkknnnnk.."],
+"doctor_hang":["kkkk........kkkk","kNNk........kNNk","kNNk........kNNk","kqdk........kqdk","kqdk.kkkkkk.kqdk","kqdk.kqsssk.kqdk","kqdk.kqsssk.kqdk","kqdk.krrrrk.kqdk","kqdkqqqqqqqqkqdk","kqdkkwwwwwkkkqdk","kqdkkwkMkwlkkqdk","kqdkkwwkwwwllqdk","kqdkklwwwllllqdk","kqdkkGlwkkkkkqdk","kqdkqddddqk.kqdk","..kqdgdddddqk...","..kqdgdddddqk...","..kqdgddddddk...","..kqddddddddq...","...kNNk..kNNk..."],
+"mage_hang":[".kkkk.....kkkk..",".kPPk.....kPPk..",".kPPk.....kPPk..",".kvVk.....kvVk..",".kvVk..k..kvVk..",".kvVk.kvk.kvVk..",".kvVkkvvVkkvVk..",".kvVkvvvVVkvVk..",".kvVkOOOOOkvVk..",".kvVvvvvvvvvVk..",".kvVkPPPkPkvVk..",".kvVkwwwwwwvVk..",".kvVvwwlwwwvVk..","..kvVvwwlwvV....","..kvVvvwlvvV....","..kvVOOOOOOVk...","..kvVvvvvvvVk...",".kvVvvvvvvvvV...",".k88888888888...","..kNNk...kNNk..."],
+"pact_maker_hang":["kkk......kkkk...","ttk......kttk...","ttk......kttk...","qlk......kqlk...","qlk......kqlk...","qlkkkkkk.kqlk...","qlkxxxssskqlk...","qlkxxssssxqlk...","qlkxtttttkqlk...","qlkxYttYtkqlk...","qlkxtttttkqlk...","qlllkttkllqlk...","qlqqlJRJlqqlk...","kDLDqkJkqqq.....","kDODqqqqqqq.....","kDLDqnnOnnqk....",".kkkqqqqqqk.....","..kqqdqqdqk.....","..kNNNkkNNNk....","..knnnkknnnk...."],
+"monk_hang":["kkkk......kkkk..","kPPk......kPPk..","kPPk......kPPk..","kuTk......kuTk..","kuTk......kuTk..","kuTk.kkkk.kuTk..","kuTkktttPkkuTk..","kuTktttPPPkuTk..","kuTknPPPPnkuTk..","kuTkPkPPkPkuTk..","kuTkPPPPPPkuTk..","kuTkkPppPkkuTk..","kuTkuTTTTukuTk..","kuTuTTDTTTuuTk..","..kuTDDDTTuk....","..kuTTDTTTuk....","..kLLLLLLLLk....","..kuTTTLTTTu....","..kuuTTTTTuu....","...kkbbkkbbk...."],
+"brute_hang":["kkk.......kkkk..","llk.......kllk..","llk.......kllk..","gGk.......kgGk..","gGk.kkkkk.kgGk..","gGkkRRRRRkkgGk..","gGkqGlllGqkgGk..","gGkGlGGGGgkgGk..","gGkGkkkkkgkgGk..","gGkGlGkGkgkgGk..","gGkqGGGGgqkgGk..","gGllkgggkGkgGk..","kGlGkqqqkGl.....","kgGgRRRRRgG.....",".kkgRrrrRgk.....","..kqLLOLLqk.....","..kgGggqGgk.....","..kGGk.kGGk.....",".kGlGk.kGlGk....",".kkkkk.kkkkk...."],
 "pact_maker":["............kk..","...kkkkk...kwlk.","..kxxxsssk.kwlk.","..kxxssssxkkwlk.","..kxtttttk.kwlk.","..kxYttYtk..kGk.","..kxtttttk..kGk.",".kllkttkllk.kGk.",".kqqlJRJlqqPPk..","kDLDqkJkqqqPGk..","kDODqqqqqqqkkk..","kDLDqnnOnnqk....",".kkkqqqqqqk.....","..kqqdqqdqk.....","..kNNNkkNNNk....","..knnnkknnnk...."],
 "pact_maker_atk":["................","....kkkkk.......","...kxxxsssk.....","...kxxssssxk....","...kxtttttk.....","...kxYttYtk.....","...kxtttttk.....","..kllkttkllk....","..kqqlJRJlqqkkkk",".kDLDqkJkqqPGwlw",".kDODqqqqqqqkkkk",".kDLDqnnOnnq....","..kkkqqqqqqk....","...kqqdqqdqk....","...kNNNkkNNN....","...knnnkknnn...."],
 "pact_maker_parry":["................","...kkkkk........","..kxxxsssk......","..kxxsssskkkkk..","..kxtttttkDDLk..","k.kxYttYtkDLLk..","kwkxtttttkOJLk..","klllkttklkDLLk..","kwqqlJRJlkDDLk..","kPkDqkJkqkDLLk..","kGkqqqqqqkkkkk..",".kkqnnOnnk......",".kkkqqqqq.......","..kqqdqqdqk.....","..kNNNkkNNNk....","..knnnkknnnk...."],
@@ -5960,6 +5989,7 @@ function strikeLand(mv,r){
     const L=B.layout;
     if(L)snum(L.ex,L.ey-L.esz*.5,r.ghost?"through":r.riposted?"riposte":"miss",r.ghost?"#a8e0f0":r.riposted?"#c8a8f0":"#8e9aad");
     blog(r.ghost?"Your blow passes straight through her.":r.riposted?"It turns your blow aside with your own Riposte.":"You miss.");
+    if(!r.ghost&&!r.riposted)tableTalk("miss",.25);
     if(r.riposted&&S.hp>1){const d=Math.min(S.hp-1,rint(5,9));diceThen("red",d,()=>{hurtPlayer(d,false);blog(`It answers: ${d} damage.`,"c-hit");});}
     if(B.combo>0){B.combo=0;blog("Your combo is lost.","c-hit");}
     return;
@@ -6118,6 +6148,7 @@ function chooseMove(id){
   if(mv.cd)S.cds[mv.id]=mv.cd+1;
   drawMoves();
   blog(`You use ${mv.name}.`,"c-lvl");
+  if(mv.lvl>=9&&!mv.blood)tableTalk("big",.6);
   queue(.2,()=>{
     if(mv.clause&&mv.kind==="buff"){
       for(const c of mv.clause)addClause(c);
@@ -6315,6 +6346,7 @@ function strikeYou(sp,sh,crit,blocked,warded){
   }
   const dmg=sh.dmg;
   hurtPlayer(dmg,crit);
+  if(B&&!B.allIn&&S.hp>0&&S.hp<=S.maxhp*.2){B.allIn=true;tableTalk("low");}
   if(turned("feast")&&B.mhp<B.mmax){const h=Math.min(B.mmax-B.mhp,Math.max(1,Math.round(dmg*.25)));
     diceThen("black",h,()=>{B.mhp=Math.min(B.mmax,B.mhp+h);const L2=B.layout;if(L2)snum(L2.ex,L2.ey-L2.esz*.5,"+"+h,"#c8a8f0");});}
   if(sh.absorbed&&L)snum(L.px+L.psz*.25,L.py-L.psz*.2,"-"+sh.absorbed,"#8fd8f0",false);
@@ -6758,7 +6790,8 @@ const TAM_FLOOR={
  17:{all:[T_("There's writing on the wall. A fair hand. It's the notary's."),T_("It just says, over and over: 'and the rest'.")],
   pact_maker:[HS("That is my hand. I never wrote this."),T_("It learned your writing. It's been practising.",),{text:"For three years.",mood:"fear"}]},
  18:{all:[T_("It's warm down here. It shouldn't be warm."),{text:"Things that are warm are alive.",mood:"fear"}]},
- 19:{all:[T_("One more floor. I can feel it under us, like a heartbeat in the stone. It knows we're coming.")]},
+ 19:{all:[T_("One more floor. I can feel it under us, like a heartbeat in the stone. It knows we're coming."),
+  T_("The guards used to play cards by the gate. Everybody knew the dealer cheated. They played anyway, every night. I never understood why.")]},
  20:{all:[T_("There's a stair going up. Up! Do you see it?"),{text:"...Why is it so quiet?",mood:"fear"}]}
 };
 function tamFloorLines(d){const F=TAM_FLOOR[d];if(!F)return null;return(F.all||[]).concat(F[CHAR().id]||[]);}
@@ -6975,6 +7008,7 @@ const TUT_TAM={
         {text:"When you fight, the floor falls away and it's only you and it. Your moves are cards in your hand. Play one each turn."},
         {text:"Watch it as it swings. When the bar comes up, press Space in the glow and turn the blow aside. Timing is everything. In fights, and in bargains."}],
  won:[{text:"Splendid. Splendid! You'll do very well down there."},
+      {text:"Life is a game of cards, child. Play the hand you're dealt, and never bet what you can't afford to lose."},
       {text:"As you grow stronger you'll be dealt cards to choose from. The pale ones are blessings. Small things. Honest things."},
       {text:"And now and then, a black one. A gift. They ask for nothing at all. Well. Next to nothing."},
       {text:"Black and purple: a little something that works for you always, and never tires. A keener eye. Thicker skin. Coin in your pocket."},
@@ -6984,6 +7018,7 @@ const TUT_TAM={
       {text:"Oh, and further down, mind the roots. They mean no harm. They only want to hold on to you."}],
  bye:[{text:"Off you go, then. Twenty floors, all the way to the bottom."},
       {text:"Mind the dark, keep your torch lit, and don't let anything down there tell you you're not enough."},
+      {text:"And remember: the house always wins. Ha! Only a saying. Only a saying."},
       {who:"hero",text:"Thank you. For all of it."},
       {text:"Oh, it was nothing. Truly. Go on, child. Perhaps we'll meet again someday."}]
 };
@@ -7228,6 +7263,7 @@ function winBattle(){
   B.phase="over";B.faint=0.0001;
   const m=B.mon;
   blog(`The ${m.t.name} falls.`,"c-good");
+  tableTalk("win",.3);
   ssmoke();                                  // the foe goes up in a puff of smoke
   quake(m.t.boss?15:6);
   queue(m.t.boss?1.3:1.05,()=>{
@@ -7250,6 +7286,7 @@ function loseBattle(by){
   if(!B)return;
   B.phase="over";
   blog("You fall.","c-hit");
+  tableTalk("fall");
   queue(.8,()=>{
     endBattle();   // also calms the combat music and clears any parry / QTE overlay
     die(by);
@@ -7262,7 +7299,7 @@ function tryFlee(){
   B.phase="anim";drawMoves();
   const odds=.55+Math.min(.3,S.lvl*.03);
   if(Math.random()<odds){
-    blog("You break away.","c-cold");
+    tableTalk("flee");
     lowHpCheck();if(B.lowHp)bumpStat("lowhp");
     queue(.5,()=>{
       const m=B.mon;m.cool=3;m.seenYou=false;
@@ -8119,6 +8156,7 @@ const QUEEN_LINES={
         {text:"Then you will stay with me instead."}],
  phase2:[{text:"I remember now. The cold. The notary's pen, scratching and scratching."},
          {text:"He traded me. He traded all of us, and I died anyway.",mood:"anger"},
+         {text:"He gambled me on a single hand, and lost. And I was the stake.",mood:"anger"},
          {text:"GET OUT OF MY TOMB.",mood:"anger",act:()=>{quake(14);playGhostWail(1.2);}}],
  end:[{text:"...Oh. It is so quiet."},
       {text:"If you see him, do not tell him I waited. Let him wonder."},
@@ -8144,8 +8182,10 @@ const KING_LINES={
  intro:[{text:"So. Something finally climbed all the way down to me."},
         {text:"Do you know what I gave for her? Everything above us. Every name on the rolls."},
         {text:"And still she died. And still the terms hold."},
+        {text:"I bet everything I had on one hand. You may as well show me yours."},
         {text:"Kneel, and you may keep your name a little longer.",act:()=>quake(8)}],
  phase2:[{text:"Enough."},
+         {text:"No more bluffing. Let us see what you are really holding."},
          {text:"I have not drawn this blade since the day I signed.",mood:"anger",act:()=>quake(10)},
          {text:"COME, THEN. LET THE HILL HAVE ONE MORE.",mood:"anger",act:()=>quake(16)}],
  end:[{text:"...Is it over? Is it finally over?"},
@@ -9202,7 +9242,7 @@ function openLevelUp(){
       <div class="cbody">${words}<div class="ckey">PRESS ${i+1}</div></div></div></div>`;
   }).join("");
   overlay(`<h3>Level ${lvl}</h3>
-    <p class="lede">Choose one card.${hand.some(h=>h.kind==="black")?(darkTaken()?" Another black card. They come easier now.":" A black card has been dealt."):""}</p>
+    <p class="lede">The dealer lays out your hand. Choose one card.${hand.some(h=>h.kind==="black")?(darkTaken()?" Another black card. They come easier now.":" A black card has been dealt."):""}</p>
     <div class="chargrid fan lvlhand">${cards}</div>`);
   $("card").classList.add("wide");
   playCardSound(false);
@@ -10424,9 +10464,11 @@ function buildCourse(depth){
   return{plats,vines,endX,startY:PK_BASE_Y};
 }
 /* ----- entering / leaving ----- */
-// The hero in the chasm: running on the ground, or else standing (or hanging from a vine) as themselves.
+// The hero in the chasm: running on the ground, or else standing as themselves.
+// On a vine they hang by both hands (<spr>_hang, 16x20: four extra rows above the head for the arms).
 function chasmHeroSprite(p){
   const wk=CHAR().spr+"_walk_";
+  if(p.vine&&SPR[pspr("")+"_hang"])return pspr("")+"_hang";
   return p.ground&&Math.abs(p.vx)>.3&&SPR[wk+"0"]?wk+Math.floor(p.walk)%4:pspr("");
 }
 function startChasm(x,y,dx,dy){
@@ -10681,12 +10723,14 @@ function drawCourse(vw,vh){
     const AC={k:"#0b0d12",q:"#39414f",g:"#566173",G:"#8e9aad",m:"#3f6b2e",M:"#6fa844"};
     for(let r=0;r<AN.length;r++)for(let c=0;c<AN[r].length;c++){const ch=AN[r][c];if(ch!==".")dot(ax-6*ps+c*ps,ay-(AN.length-1)*ps+r*ps,AC[ch]);}
     for(let yy=snap(ay-(AN.length-1)*ps)-ps;yy>-ps;yy-=ps*2)dot(ax-ps,yy,"#2b3243",2,2);   // root cord up into the dark
-    const len=K.p.vine===v?K.p.rl+.25:v.len;
-    const n=Math.ceil(len*16);
+    const held=K.p.vine===v,len=held?K.p.rl+.25:v.len;
+    // a held vine runs straight down to the hero's hands, at the top of the hanging pose
+    const hx=sx(K.p.x),hy=sy(K.p.y)-U*1.05*20/16+ps*1.5;
+    const n=held?Math.ceil(Math.hypot(hx-ax,hy-ay)/ps):Math.ceil(len*16);
     let last=null;
     for(let i=0;i<=n;i++){
-      const q=i/n,bend=K.p.vine===v?0:Math.sin(q*Math.PI)*.18*Math.sin(K.t*2+v.ph);   // idle vines sway along their length; a held one pulls straight
-      const lx=ax+Math.sin(v.theta)*len*U*q+bend*U*.15,ly=ay+Math.cos(v.theta)*len*U*q;
+      const q=i/n,bend=held?0:Math.sin(q*Math.PI)*.18*Math.sin(K.t*2+v.ph);   // idle vines sway along their length; a held one pulls straight
+      const lx=held?ax+(hx-ax)*q:ax+Math.sin(v.theta)*len*U*q+bend*U*.15,ly=held?ay+(hy-ay)*q:ay+Math.cos(v.theta)*len*U*q;
       const key=snap(lx)+","+snap(ly);if(key===last)continue;last=key;
       dot(lx-ps,ly,"#2e4f22",2,1);dot(lx,ly,i%5===0?"#a8e063":"#6fa844");
       if(i%7===3){const sd=(i%14===3)?1:-1;dot(lx+sd*ps*2,ly-ps,"#6fa844",2,1);dot(lx+sd*ps*3,ly,"#a8e063");dot(lx+sd*ps*2,ly,"#3f6b2e");}
@@ -10699,10 +10743,11 @@ function drawCourse(vw,vh){
     const name=chasmHeroSprite(p),run=name.includes("_walk_");
     const img=SPR[name];
     if(img){
-      const x=sx(p.x),y=sy(p.y)-size+(run&&Math.floor(p.walk)%2?-size/16:0);
+      const h=size*img.height/16;                          // the hanging pose is taller: its arms reach up to the vine
+      const x=sx(p.x),y=sy(p.y)-h+(run&&Math.floor(p.walk)%2?-size/16:0);
       ctx.save();
-      if(p.face<0){ctx.translate(x,0);ctx.scale(-1,1);ctx.drawImage(img,-size/2,y,size,size);}
-      else ctx.drawImage(img,x-size/2,y,size,size);
+      if(p.face<0){ctx.translate(x,0);ctx.scale(-1,1);ctx.drawImage(img,-size/2,y,size,h);}
+      else ctx.drawImage(img,x-size/2,y,size,h);
       ctx.restore();
     }
   }
@@ -10858,7 +10903,7 @@ const SE_CATS={
   "Root Snare":["snare_crack_0","snare_crack_1","snare_crack_2","snare_ring_0","snare_ring_1","snare_roots_back_0","snare_roots_back_1","snare_roots_back_2","snare_roots_front_0","snare_roots_front_1","snare_roots_front_2"],
   "Orrin's Bolt":["magic_orb_0","magic_orb_1"],
   "Walk Cycles":["player_walk_0", "player_walk_1", "player_walk_2", "player_walk_3", "rook_walk_0", "rook_walk_1", "rook_walk_2", "rook_walk_3", "doctor_walk_0", "doctor_walk_1", "doctor_walk_2", "doctor_walk_3", "mage_walk_0", "mage_walk_1", "mage_walk_2", "mage_walk_3", "pact_maker_walk_0", "pact_maker_walk_1", "pact_maker_walk_2", "pact_maker_walk_3", "rat_walk_0", "rat_walk_1", "rat_walk_2", "rat_walk_3", "bat_walk_0", "bat_walk_1", "bat_walk_2", "bat_walk_3", "goblin_walk_0", "goblin_walk_1", "goblin_walk_2", "goblin_walk_3", "skeleton_walk_0", "skeleton_walk_1", "skeleton_walk_2", "skeleton_walk_3", "orc_walk_0", "orc_walk_1", "orc_walk_2", "orc_walk_3", "slime_walk_0", "slime_walk_1", "slime_walk_2", "slime_walk_3", "wraith_walk_0", "wraith_walk_1", "wraith_walk_2", "wraith_walk_3", "ogre_walk_0", "ogre_walk_1", "ogre_walk_2", "ogre_walk_3", "troll_walk_0", "troll_walk_1", "troll_walk_2", "troll_walk_3", "knight_walk_0", "knight_walk_1", "knight_walk_2", "knight_walk_3", "king_walk_0", "king_walk_1", "king_walk_2", "king_walk_3", "guardian_walk_0", "guardian_walk_1", "guardian_walk_2", "guardian_walk_3", "brute_walk_0", "brute_walk_1", "brute_walk_2", "brute_walk_3"],
-  "Attack Poses":["player_atk","player_parry","rook_atk","rook_parry","doctor_atk","doctor_parry","mage_atk","mage_parry","pact_maker_atk","pact_maker_parry","brute_atk","rat_atk","bat_atk","goblin_atk","skeleton_atk","orc_atk","slime_atk","wraith_atk","ogre_atk","troll_atk","knight_atk","king_atk","guardian_atk"],
+  "Attack Poses":["player_atk","player_parry","rook_atk","rook_parry","doctor_atk","doctor_parry","mage_atk","mage_parry","pact_maker_atk","pact_maker_parry","brute_atk","player_hang","rook_hang","doctor_hang","mage_hang","pact_maker_hang","monk_hang","brute_hang","rat_atk","bat_atk","goblin_atk","skeleton_atk","orc_atk","slime_atk","wraith_atk","ogre_atk","troll_atk","knight_atk","king_atk","guardian_atk"],
   "Weapons":["weapon_dagger","weapon_sword","weapon_axe","weapon_spear","weapon_rapier","weapon_hammer","weapon_great","weapon_ember","weapon_cane","weapon_staff"],
   "Armor":["armor_rags","armor_pad","armor_leath","armor_chain","armor_scale","armor_plate"],
   "Potions":["potion_heal","potion_heal1","potion_heal2","potion_might","potion_ink"],

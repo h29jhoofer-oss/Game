@@ -85,11 +85,21 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
     m.x=S.px+3;m.vx=m.x;for(let i=0;i<3;i++)render();return [toRight,m.faceR];})()`);
   check('a rat chasing you turns to face you: right when you are to its right, left when to its left', face[0] === true && face[1] === false, face);
   // the chasm vines
-  for (const id of ['cade', 'rook', 'brute', 'monk']) {
+  for (const id of ['cade', 'rook', 'doctor', 'mage', 'pact_maker', 'monk', 'brute']) {
     await run(id);
     const spr = await ev('chasmHeroSprite({vine:{},ground:false,vx:0,walk:0})');
-    check(`hanging from a vine, ${id} is still ${id}`, spr === await ev('pspr("")') && !/parry/.test(spr), spr);
+    check(`hanging from a vine, ${id} has their own hanging pose, arms up`, spr === await ev('pspr("")+"_hang"') && await ev(`SPR["${spr}"].height===20`), spr);
   }
+  check('off the vine they stand as themselves again', await ev('chasmHeroSprite({vine:null,ground:true,vx:0,walk:0})===pspr("")'));
+  // card-table talk
+  await run();
+  const talk = await ev(`(()=>{mons=[];spawnMon("orc",S.px+1,S.py);startBattle(mons[0]);B.phase="anim";seq=[];
+    const before=document.getElementById("log").textContent;S.hp=S.maxhp;const r=Math.random;Math.random=()=>.5;
+    S.hp=Math.round(S.maxhp*.22);enemyStrike(null,1,false);Math.random=r;
+    const t=document.getElementById("log").textContent;B=null;S.mode="map";document.body.classList.remove("inbattle");return t;})()`);
+  check('dropping to your last fifth of health, the monster asks if you are all in', /The orc grins: "/.test(talk) && await ev('TABLE_TALK.low.some(l=>/all in/i.test(l))'), talk.slice(-200));
+  check('the Thing is the house, and you fold', await ev('THING_DEAL.some(l=>/house always wins/.test(l.text))&&THING_DEAL.some(l=>l.who==="hero"&&/fold/.test(l.text))'));
+
   check('no page errors', errors.length === 0, errors);
   let pass = 0;
   for (const r of results) { console.log((r.ok ? 'ok   ' : 'FAIL ') + r.name + (r.ok ? '' : '  ' + JSON.stringify(r.detail))); if (r.ok) pass++; }
