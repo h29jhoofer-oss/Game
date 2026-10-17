@@ -36,8 +36,9 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   await run();
   await ev(`(()=>{for(const id of ["flame","ice"]){const r=POTIONS.find(p=>p.id===id);S.pack.push({kind:"use",ref:r,glyph:r.glyph,col:r.col,name:r.name,note:r.note});}
     spawnMon("gob",S.px+1,S.py);startBattle(mons[mons.length-1]);renderSpellBar();})()`);
-  check('in a fight the scrolls are round casino chips in their spell colours, with their price on a tab', await ev(`(()=>{const a=[...document.querySelectorAll("#spellbar .spellslot")];
-    return a.length===2&&a.every(b=>getComputedStyle(b).borderRadius==="50%"&&/conic/.test(getComputedStyle(b).backgroundImage)&&+b.querySelector(".chipv").textContent>0);})()`));
+  check('in a fight the scrolls are pixel casino chips in their spell colours, with their price on a tab', await ev(`(()=>{const a=[...document.querySelectorAll("#spellbar .spellslot")];
+    return a.length===2&&a.every(b=>/data:image.png/.test(getComputedStyle(b).backgroundImage)&&/pixelated|crisp/.test(getComputedStyle(b).imageRendering)&&+b.querySelector(".chipv").textContent>0)
+      &&a[0].style.getPropertyValue("--chip")!==a[1].style.getPropertyValue("--chip");})()`));
   await ev('B=null;S.mode="map";document.body.classList.remove("inbattle");');
 
   // 3. lore
@@ -77,6 +78,18 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('and the next descent begins with 100 gold and three healing draughts', await ev('S.gold===100&&S.pack.filter(i=>i.ref&&i.ref.id==="heal").length>=3&&!META.konami'));
   check('the codex counts the secrets found', await ev('(()=>{toggleCodex();const t=document.querySelector("#card h3").textContent;toggleCodex();return /✶ \\d+\\/\\d+/.test(t);})()'));
 
+  // monsters turn to face you
+  await run();
+  const face = await ev(`(()=>{mons=[];spawnMon("rat",S.px-3,S.py);const m=mons[0];m.seenYou=true;
+    for(let i=0;i<3;i++)render();const toRight=m.faceR;
+    m.x=S.px+3;m.vx=m.x;for(let i=0;i<3;i++)render();return [toRight,m.faceR];})()`);
+  check('a rat chasing you turns to face you: right when you are to its right, left when to its left', face[0] === true && face[1] === false, face);
+  // the chasm vines
+  for (const id of ['cade', 'rook', 'brute', 'monk']) {
+    await run(id);
+    const spr = await ev('chasmHeroSprite({vine:{},ground:false,vx:0,walk:0})');
+    check(`hanging from a vine, ${id} is still ${id}`, spr === await ev('pspr("")') && !/parry/.test(spr), spr);
+  }
   check('no page errors', errors.length === 0, errors);
   let pass = 0;
   for (const r of results) { console.log((r.ok ? 'ok   ' : 'FAIL ') + r.name + (r.ok ? '' : '  ' + JSON.stringify(r.detail))); if (r.ok) pass++; }

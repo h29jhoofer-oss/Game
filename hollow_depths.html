@@ -336,30 +336,21 @@ body.inbattle .spellbar{display:flex}
 /* No button frame: the scroll sprite itself is the button. */
 .spellslot{
   pointer-events:auto;position:relative;
-  width:54px;height:54px;padding:0;margin:0;
-  display:flex;align-items:center;justify-content:center;line-height:0;
-  border:0;outline:0;border-radius:50%;
-  /* a casino chip: the spell's colour round the rim, broken by eight white inserts, a dark inlay in the middle */
-  background:repeating-conic-gradient(from -6deg,var(--c) 0deg 33deg,#f2ece0 33deg 45deg);
-  box-shadow:inset 0 0 0 2px rgba(0,0,0,.35),0 0 0 2px #0a0c10,0 3px 0 2px var(--cd,#0a0c10),0 6px 8px 2px rgba(0,0,0,.55);
-  -webkit-appearance:none;appearance:none;
-  cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;
-  transition:transform .08s;
-}
-.spellslot::before{content:"";position:absolute;inset:8px;border-radius:50%;pointer-events:none;
-  background:radial-gradient(circle at 50% 40%,#2a2f3c,#12151c 72%);
-  box-shadow:0 0 0 2px var(--c),0 0 0 3px #0a0c10,inset 0 0 0 2px rgba(242,236,224,.55)}
-.spellslot::after{content:"";position:absolute;inset:4px;border-radius:50%;pointer-events:none;border:1px dashed rgba(242,236,224,.45)}
-.spellslot img{position:relative;z-index:1;width:32px!important;height:32px!important;image-rendering:pixelated;filter:drop-shadow(0 1px 1px rgba(0,0,0,.8))}
-.spellslot .chipv{position:absolute;z-index:2;right:-6px;bottom:-4px;min-width:16px;padding:2px 3px;box-sizing:border-box;
+  width:54px;height:60px;padding:0;margin:0;display:block;line-height:0;
+  border:0;outline:0;border-radius:0;box-shadow:none;cursor:pointer;
+  /* a casino chip in pixels (see chipArt): drawn on an 18x20 grid and scaled up three times */
+  background:var(--chip) center top/100% 100% no-repeat;image-rendering:pixelated;image-rendering:crisp-edges;
+  -webkit-appearance:none;appearance:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+  transition:transform .08s steps(2);filter:drop-shadow(0 3px 0 rgba(0,0,0,.45))}
+.spellslot img{position:absolute;left:11px;top:11px;width:32px!important;height:32px!important;image-rendering:pixelated;filter:none!important}
+.spellslot .chipv{position:absolute;z-index:2;right:-5px;bottom:2px;min-width:16px;padding:2px 3px;box-sizing:border-box;
   font:700 9px/1 "IBM Plex Mono",monospace;color:#161b23;background:#f2ece0;box-shadow:0 0 0 1px #0a0c10,0 0 0 2px var(--c),0 0 0 3px #0a0c10}
-.spellslot:hover{transform:translateY(-3px) rotate(-12deg) scale(1.1)}
-.spellslot:hover img,.spellslot:hover .chipv{transform:rotate(12deg)}
-.spellslot:active{transform:scale(.92)}
+.spellslot:hover{transform:translateY(-3px)}
+.spellslot:active{transform:translateY(1px)}
 .spellslot.poor{opacity:.4;filter:grayscale(.85)}
 @media (max-width:760px){
   .spellbar{left:5px;top:5px;bottom:5px;gap:6px}
-  .spellslot{width:42px;height:42px}.spellslot::before{inset:6px}.spellslot img{width:24px!important;height:24px!important}
+  .spellslot{width:36px;height:40px}.spellslot img{left:6px;top:6px;width:24px!important;height:24px!important}.spellslot .chipv{font-size:8px;right:-6px}
 }
 
 /* ---------- dice tray: pixel d20s roll into a wooden tray in the bottom-left corner ---------- */
@@ -3402,6 +3393,27 @@ function spendMana(amount){S.mana=Math.max(0,S.mana-amount);refreshMana();}
 // One tappable icon for every spell scroll in the pack (up to the 9 pack slots). Battle only.
 // Clicking is exactly the same as choosing the scroll from the item list; it vanishes once the scroll is used.
 const SPELL_COL={wisp:"#a87fe0",flame:"#f0902a",ice:"#8fd8f0",poison:"#6fa844",dark:"#8a5fc4",bolt:"#f0c060"};
+// A casino chip in pixels, 18 wide: a black outline, the rim in the spell's colour broken by eight white
+// inserts and lit from the upper left, a dark ring, then a dark inlay for the scroll to sit in. A second,
+// darker disc two pixels lower gives it its thickness. Cached per colour as a data URL.
+const CHIP_ART={};
+function chipArt(col){
+  if(CHIP_ART[col])return CHIP_ART[col];
+  const N=18,H=20,cv=document.createElement("canvas");cv.width=N;cv.height=H;const g=cv.getContext("2d");
+  const rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)),mix=(h,t)=>{const c=rgb(h);return`rgb(${c.map(v=>Math.round(t>0?v+(255-v)*t:v*(1+t))).join()})`;};
+  const P=(x,y,c)=>{g.fillStyle=c;g.fillRect(x,y,1,1);};
+  for(let y=0;y<H;y++)for(let x=0;x<N;x++){
+    const dx=x+.5-N/2,dy=y+.5-N/2,dy2=dy-2,d=Math.hypot(dx,dy),d2=Math.hypot(dx,dy2);
+    if(d<=8.6){
+      const a=(Math.atan2(dy,dx)*180/Math.PI+360+11)%45,lit=(dx+dy)<-3,shade=(dx+dy)>4;
+      if(d>7.8)P(x,y,"#0a0c10");
+      else if(d>5.6)P(x,y,a<11?(lit?"#ffffff":shade?"#cfc6b0":"#f2ece0"):lit?mix(col,.3):shade?mix(col,-.3):col);
+      else if(d>4.8)P(x,y,mix(col,-.55));
+      else P(x,y,dy<-1.5?"#262b36":"#1a1e27");
+    }else if(d2<=8.6){P(x,y,d2>7.8||dy2>6.4?"#0a0c10":mix(col,-.45));}
+  }
+  return CHIP_ART[col]=cv.toDataURL();
+}
 function renderSpellBar(){
   const el=$("spellbar");if(!el)return;
   const list=[];
@@ -3420,9 +3432,9 @@ function renderSpellBar(){
   const sig=list.map(o=>o.i+":"+o.spr+(o.poor?"!":"")).join("|");
   if(el.dataset.sig===sig)return;          // nothing changed: leave the buttons alone
   el.dataset.sig=sig;
-  // each scroll is a casino chip in its spell's colour; the little tab is its price
+  // each scroll is a pixel casino chip in its spell's colour; the little tab is its price
   const price=c=>!c?"":CHAR().noMana&&!CHAR().noMagic?bloodCost(c)+"♥":String(c);
-  el.innerHTML=list.map(o=>`<button type="button" tabindex="-1" class="spellslot${o.poor?" poor":""}" data-i="${o.i}" style="--c:${SPELL_COL[o.id]||"#333d4a"}" title="${o.name}" aria-label="Cast ${o.name}">${icon(o.spr,32)}${price(o.cost)?`<b class="chipv">${price(o.cost)}</b>`:""}</button>`).join("");
+  el.innerHTML=list.map(o=>`<button type="button" tabindex="-1" class="spellslot${o.poor?" poor":""}" data-i="${o.i}" style="--c:${SPELL_COL[o.id]||"#333d4a"};--chip:url(${chipArt(SPELL_COL[o.id]||"#333d4a")})" title="${o.name}" aria-label="Cast ${o.name}">${icon(o.spr,32)}${price(o.cost)?`<b class="chipv">${price(o.cost)}</b>`:""}</button>`).join("");
 }
 $("spellbar").addEventListener("mousedown",e=>{if(e.target.closest(".spellslot"))e.preventDefault();});  // keep keyboard focus off the buttons so Space still strikes
 $("spellbar").addEventListener("click",e=>{
@@ -4861,6 +4873,7 @@ function blit(name,tx,ty,alpha,fl,sy,sx,flip){
     ctx.scale(-1,1);
     ctx.drawImage(img,0,0,w,h);
     if(fl>.02){ctx.globalAlpha=Math.min(1,fl);ctx.drawImage(SPRW[name],0,0,w,h);}
+    eyeGlow(img,0,0,w,h,alpha);
     ctx.restore();
   }else{
     ctx.drawImage(img,px,py,w,h);
@@ -5024,8 +5037,12 @@ function render(){
     const mwk=MONSPR[m.t.id]+"_walk_",mwalk=m.walkT>0&&SPR[mwk+"0"],mf=mwalk?Math.floor(m.walkPhase||0)%4:0;
     knitCheck(m,m.hp/m.max);
     const mty=m.vy+o[1]+bob+(mwalk&&mf%2&&!m.t.erratic?-1/16:0);
-    blit(rootSpr(m.t,hurtSpr(mwalk?mwk+mf:MONSPR[m.t.id],m.hp/m.max)),m.vx+o[0],mty,b,m.flash||0,sy,sx);
-    if(m.keys>0){const kw=cell*sx*1.5,kh=cell*sy*1.5;drawGuardKeys((m.vx+o[0]-cam.x)*cell+(cell-kw)/2,(mty-cam.y)*cell+cell-kh,kw,kh,false,b,m.ph+(mwalk?mf:0));}
+    // every monster sprite faces left; turn it round to face you while it chases, or the way it walks otherwise
+    const ddx=m.lastVX===undefined?0:m.vx-m.lastVX;m.lastVX=m.vx;
+    if(m.seenYou){if(S.vx>m.vx+.15)m.faceR=true;else if(S.vx<m.vx-.15)m.faceR=false;}
+    else if(Math.abs(ddx)>.002)m.faceR=ddx>0;
+    blit(rootSpr(m.t,hurtSpr(mwalk?mwk+mf:MONSPR[m.t.id],m.hp/m.max)),m.vx+o[0],mty,b,m.flash||0,sy,sx,!!m.faceR);
+    if(m.keys>0){const kw=cell*sx*1.5,kh=cell*sy*1.5;drawGuardKeys((m.vx+o[0]-cam.x)*cell+(cell-kw)/2,(mty-cam.y)*cell+cell-kh,kw,kh,!!m.faceR,b,m.ph+(mwalk?mf:0));}
     if(m.hp<m.max){
       const w=Math.round(cell*.66),h=Math.max(2,Math.round(cell*.08));
       const tall=((SPR[MONSPR[m.t.id]]||{height:16}).height/16-1)*cell;
@@ -10407,6 +10424,11 @@ function buildCourse(depth){
   return{plats,vines,endX,startY:PK_BASE_Y};
 }
 /* ----- entering / leaving ----- */
+// The hero in the chasm: running on the ground, or else standing (or hanging from a vine) as themselves.
+function chasmHeroSprite(p){
+  const wk=CHAR().spr+"_walk_";
+  return p.ground&&Math.abs(p.vx)>.3&&SPR[wk+"0"]?wk+Math.floor(p.walk)%4:pspr("");
+}
 function startChasm(x,y,dx,dy){
   const ch=CHM.get(x+","+y);if(!ch||ch.bridged||S.over)return;
   const tx=x+dx,ty=y+dy;
@@ -10674,8 +10696,7 @@ function drawCourse(vw,vh){
   // the hero
   const p=K.p,size=U*1.05;
   if(!(K.state==="fall"&&K.timer<.55)){
-    const wk=CHAR().spr+"_walk_",run=p.ground&&Math.abs(p.vx)>.3&&SPR[wk+"0"];
-    const name=p.vine?pspr("_parry"):run?wk+Math.floor(p.walk)%4:pspr("");
+    const name=chasmHeroSprite(p),run=name.includes("_walk_");
     const img=SPR[name];
     if(img){
       const x=sx(p.x),y=sy(p.y)-size+(run&&Math.floor(p.walk)%2?-size/16:0);
