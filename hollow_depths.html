@@ -335,20 +335,31 @@ body.talking .movebar,body.talking .spellbar{display:none!important}
 body.inbattle .spellbar{display:flex}
 /* No button frame: the scroll sprite itself is the button. */
 .spellslot{
-  pointer-events:auto;
-  width:48px;height:48px;padding:0;margin:0;
-  display:block;line-height:0;
-  background:none;border:0;border-radius:0;box-shadow:none;outline:0;
+  pointer-events:auto;position:relative;
+  width:54px;height:54px;padding:0;margin:0;
+  display:flex;align-items:center;justify-content:center;line-height:0;
+  border:0;outline:0;border-radius:50%;
+  /* a casino chip: the spell's colour round the rim, broken by eight white inserts, a dark inlay in the middle */
+  background:repeating-conic-gradient(from -6deg,var(--c) 0deg 33deg,#f2ece0 33deg 45deg);
+  box-shadow:inset 0 0 0 2px rgba(0,0,0,.35),0 0 0 2px #0a0c10,0 3px 0 2px var(--cd,#0a0c10),0 6px 8px 2px rgba(0,0,0,.55);
   -webkit-appearance:none;appearance:none;
   cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;
   transition:transform .08s;
 }
-.spellslot img{width:48px;height:48px;image-rendering:pixelated;filter:drop-shadow(0 2px 2px rgba(0,0,0,.75))}
-.spellslot:hover{transform:scale(1.12)}
+.spellslot::before{content:"";position:absolute;inset:8px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle at 50% 40%,#2a2f3c,#12151c 72%);
+  box-shadow:0 0 0 2px var(--c),0 0 0 3px #0a0c10,inset 0 0 0 2px rgba(242,236,224,.55)}
+.spellslot::after{content:"";position:absolute;inset:4px;border-radius:50%;pointer-events:none;border:1px dashed rgba(242,236,224,.45)}
+.spellslot img{position:relative;z-index:1;width:32px!important;height:32px!important;image-rendering:pixelated;filter:drop-shadow(0 1px 1px rgba(0,0,0,.8))}
+.spellslot .chipv{position:absolute;z-index:2;right:-6px;bottom:-4px;min-width:16px;padding:2px 3px;box-sizing:border-box;
+  font:700 9px/1 "IBM Plex Mono",monospace;color:#161b23;background:#f2ece0;box-shadow:0 0 0 1px #0a0c10,0 0 0 2px var(--c),0 0 0 3px #0a0c10}
+.spellslot:hover{transform:translateY(-3px) rotate(-12deg) scale(1.1)}
+.spellslot:hover img,.spellslot:hover .chipv{transform:rotate(12deg)}
 .spellslot:active{transform:scale(.92)}
-.spellslot.poor{opacity:.35;filter:grayscale(.85)}
+.spellslot.poor{opacity:.4;filter:grayscale(.85)}
 @media (max-width:760px){
-  .spellbar{left:5px;top:5px;bottom:5px;gap:4px}
+  .spellbar{left:5px;top:5px;bottom:5px;gap:6px}
+  .spellslot{width:42px;height:42px}.spellslot::before{inset:6px}.spellslot img{width:24px!important;height:24px!important}
 }
 
 /* ---------- dice tray: pixel d20s roll into a wooden tray in the bottom-left corner ---------- */
@@ -605,6 +616,15 @@ body.talking .tutcard{display:none}
 #card.titlecard{background:#07080c;padding:0;max-width:880px;overflow:hidden;box-shadow:0 0 0 3px #3d2a1c,0 0 0 5px #5e3a24,0 0 0 7px #0a0c10,10px 12px 0 4px rgba(0,0,0,.55)}
 .titlescreen{position:relative;display:flex;flex-direction:column;align-items:center}
 .titlescreen canvas{display:block;width:100%;aspect-ratio:16/9;image-rendering:pixelated;image-rendering:crisp-edges}
+.whisperbox{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:4px 6px}
+.whisperbox h3{margin:0;letter-spacing:.2em;color:#c8a8f0}
+.whisperbox p{margin:0;font-size:12.5px;color:var(--slate)}
+.whisperbox form{display:flex;gap:8px}
+.whisperbox input{font:700 16px "IBM Plex Mono",monospace;letter-spacing:.2em;text-transform:uppercase;width:13ch;padding:7px 10px;
+  background:#0c1015;color:#e9e5d9;border:2px solid #8a5fc4;outline:0}
+.whisperbox form button{font:700 13px "IBM Plex Mono",monospace;letter-spacing:.1em;padding:7px 12px;background:#2a1a45;color:#e6d4ff;border:2px solid #8a5fc4;cursor:pointer}
+#card.konami{animation:konamiFlash .9s steps(6)}
+@keyframes konamiFlash{0%,100%{filter:none}20%,60%{filter:brightness(1.8) hue-rotate(40deg)}40%,80%{filter:brightness(1.2)}}
 .ttl{position:absolute;top:0;left:0;right:0;padding:3.5% 0 6%;text-align:center;pointer-events:none;background:linear-gradient(180deg,rgba(7,8,12,.78),rgba(7,8,12,.45) 60%,rgba(7,8,12,0))}
 .ttl h1{margin:0;font-size:clamp(22px,4.6vw,40px);letter-spacing:.2em;color:#f0c060;text-shadow:3px 3px 0 #0a0c10,0 0 18px rgba(240,192,96,.25)}
 .ttl p{margin:6px 0 0;font-size:clamp(11px,1.6vw,13.5px);color:#b9c2cf;text-shadow:2px 2px 0 #0a0c10}
@@ -911,6 +931,7 @@ body.inbattle #hint{display:none}
       <button id="btnCodex" class="ghost">Codex</button>
       <button id="btnShrine" class="ghost">Shrine</button>
       <button id="btnEditor" class="ghost" title="Sprite editor (P)">✏ Sprites</button>
+      <button id="btnWhisper" class="ghost" title="Whisper a secret word (/)">✶ Whisper</button>
       <div class="best" id="best"></div>
     </div>
   </header>
@@ -2364,7 +2385,8 @@ function spawnGuardian(x,y,depth){
   const base=MONSTERS.find(m=>m.id==="guardian"),d=depth;
   const t=Object.assign({},base,{hp:20+d*8,min:3+Math.floor(d*.9),max:6+Math.floor(d*1.4),
     def:Math.min(5,1+Math.floor(d/3)),xp:15+d*6});
-  mons.push({t,x,y,vx:x,vy:y,hp:t.hp,max:t.hp,seenYou:false,skip:false,
+  const hp=Math.round(t.hp*diff().hp);
+  mons.push({t,x,y,vx:x,vy:y,hp,max:hp,seenYou:false,skip:false,
     ph:Math.random()*6.283,flash:0,lunge:null});
 }
 function dropGuardianGold(m){
@@ -2395,7 +2417,8 @@ function openSpot(avoidStart){
 function spawnMon(id,x,y){
   let t=MONSTERS.find(m=>m.id===id);
   if(S&&S.depth>10&&!t.boss&&!t.guardian)t=deepType(t,S.depth);
-  mons.push({t,x,y,vx:x,vy:y,hp:t.hp,max:t.hp,seenYou:false,skip:false,
+  const hp=Math.round(t.hp*diff().hp);
+  mons.push({t,x,y,vx:x,vy:y,hp,max:hp,seenYou:false,skip:false,
     ph:Math.random()*6.283,flash:0,lunge:null});
 }
 // Below the throne (floors 11-20) the old monsters come back stronger, with the Thing's roots in them.
@@ -3386,18 +3409,20 @@ function renderSpellBar(){
     for(let i=0;i<S.pack.length&&i<9;i++){
       const it=S.pack[i];
       if(!spellOf(it))continue;
-      list.push({i:i,spr:itemSpr(it),name:it.name,id:it.ref.id,poor:!canPay(spellCost(it))});
+      list.push({i:i,spr:itemSpr(it),name:it.name,id:it.ref.id,poor:!canPay(spellCost(it)),cost:spellCost(it)});
     }
     if(S.spells)for(const id of LEARNABLE){
       if(S.spells[id]===undefined)continue;
       const g=grimoireItem(id);
-      list.push({i:"g:"+id,spr:itemSpr(g),name:g.name+" ("+spellCost(g)+" mana)",id:id,poor:S.mana<spellCost(g)});
+      list.push({i:"g:"+id,spr:itemSpr(g),name:g.name+" ("+spellCost(g)+" mana)",id:id,poor:S.mana<spellCost(g),cost:spellCost(g)});
     }
   }
   const sig=list.map(o=>o.i+":"+o.spr+(o.poor?"!":"")).join("|");
   if(el.dataset.sig===sig)return;          // nothing changed: leave the buttons alone
   el.dataset.sig=sig;
-  el.innerHTML=list.map(o=>`<button type="button" tabindex="-1" class="spellslot${o.poor?" poor":""}" data-i="${o.i}" style="--c:${SPELL_COL[o.id]||"#333d4a"}" title="${o.name}" aria-label="Cast ${o.name}">${icon(o.spr,38)}</button>`).join("");
+  // each scroll is a casino chip in its spell's colour; the little tab is its price
+  const price=c=>!c?"":CHAR().noMana&&!CHAR().noMagic?bloodCost(c)+"♥":String(c);
+  el.innerHTML=list.map(o=>`<button type="button" tabindex="-1" class="spellslot${o.poor?" poor":""}" data-i="${o.i}" style="--c:${SPELL_COL[o.id]||"#333d4a"}" title="${o.name}" aria-label="Cast ${o.name}">${icon(o.spr,32)}${price(o.cost)?`<b class="chipv">${price(o.cost)}</b>`:""}</button>`).join("");
 }
 $("spellbar").addEventListener("mousedown",e=>{if(e.target.closest(".spellslot"))e.preventDefault();});  // keep keyboard focus off the buttons so Space still strikes
 $("spellbar").addEventListener("click",e=>{
@@ -5296,7 +5321,7 @@ let META={unlocked:{cade:true},stats:{},done:{}};
 function metaLoad(){
   try{
     const m=JSON.parse(localStorage.getItem(META_KEY)||"null");
-    if(m&&typeof m==="object"){META.stats=m.stats||{};META.done=m.done||{};META.beasts=m.beasts||{};META.tutorialDone=!!m.tutorialDone&&m.tutorialV===TUT_VER;if(Array.isArray(m.papers))META.papers=m.papers;}
+    if(m&&typeof m==="object"){META.stats=m.stats||{};META.done=m.done||{};META.beasts=m.beasts||{};META.tutorialDone=!!m.tutorialDone&&m.tutorialV===TUT_VER;if(Array.isArray(m.papers))META.papers=m.papers;META.konami=!!m.konami;META.secrets=m.secrets&&typeof m.secrets==="object"?m.secrets:{};}
   }catch(e){}
   // Heroes are only ever earned by finishing their quests: Cade, plus whoever each finished quest unlocks.
   // (Rebuilt from the quests on every load, so an old save can't carry a hero its owner never earned.)
@@ -5740,6 +5765,9 @@ function startBattle(m){
   if(S.over)return;
   if(m.seated&&THRONE){m.seated=false;m.y=THRONE.y+2;m.fy=m.y+.5;m.vy=m.y;THRONE.stage="done";}   // fought before he came down: he stands first
   if(packOpen||codexOpen){packOpen=false;codexOpen=false;hideOverlay();}
+  // whispered secrets: a lit tomb, a kneeling guest and a struck clause each take something out of their boss
+  const weak=(m.t.id==="queen"&&S.candlesLit)?.75:(m.t.id==="king"&&S.knelt)?.8:(m.t.thing&&S.voided)?.85:1;
+  if(weak<1&&!m.secretWeak){m.secretWeak=true;m.hp=Math.round(m.hp*weak);}
   S.mode="battle";
   ensureAudio();setTension(true);
   B={mon:m,turn:1,mcd:0,qcd:2,log:[],phase:"intro",
@@ -5814,7 +5842,7 @@ function pDamage(mv,opts){
   if(exposed)base=Math.round(base*1.5);
   if(B.mStat.frozen>0)base=Math.round(base*1.25);   // brittle: frozen foes take extra damage
   const baseCrit=mv.crit!==undefined?mv.crit:w.crit;
-  const critChance=baseCrit+.04*stacks+(exposed?.25:0)+gearMod("crit")+(oh.type==="dagger"?.05:0)
+  const critChance=baseCrit+.04*stacks+(exposed?.25:0)+gearMod("crit")+(oh.type==="dagger"?.05:0)+(S.moonFloor===S.depth?.2:0)
     +(CHAR().notaryEye&&(B.mStat.bleed>0||B.mStat.burn>0||B.mStat.stun>0||B.mStat.broken>0)?.10:0);
   const crit=!!opts.forceCrit||finisher||Math.random()<critChance;
   if(crit)base=Math.round(base*2);
@@ -6254,7 +6282,7 @@ function enemyStrike(sp,scale,blocked){
   let dmg=r.dmg,crit=false;
   const cc=(m.t.crit!==undefined?m.t.crit:.06)+(turned("keen")?.08:0);
   if(!blocked&&Math.random()<cc){crit=true;dmg=Math.round(dmg*1.5);}
-  dmg=Math.max(1,Math.round(dmg*(scale||1)*(B.mStat.bind>0?.75:1)));
+  dmg=Math.max(1,Math.round(dmg*(scale||1)*(B.mStat.bind>0?.75:1)*diff().dmg));
   const warded=B.pStat.ward>0;
   if(warded)dmg=Math.max(1,Math.ceil(dmg/2));             // Sanctuary: the light takes half of it
   const sh=shieldReduce(dmg);
@@ -7955,6 +7983,47 @@ const LORE=[
   body:"King Aldric struck a bargain with something under the hill to save his Queen, and paid for it with everything a king is supposed to have on the inside. She died anyway. He has been down here since, hollow and crowned, holding a court that will not let him go."},
  {id:"ledger", at:11, title:"The Ledger",
   body:"Beside the broken throne lies a notary's ledger, its clasp undone. Every page is full of terms in a careful, courteous hand, every clause witnessed and initialled. The final page is blank, as if whoever kept it is still looking for the right words."},
+ {id:"tam",    at:3,  title:"Tam, the Lamp Boy",
+  body:"Forty candles in the Queen's chamber, and one boy to light them. Tam was nine when he took the job and eleven when the castle went down, halfway up a ladder with a taper in his hand. Whatever the hill did to everyone else, it seems to have missed the light he was carrying. Some of it is still burning."},
+ {id:"lamprule", at:3, title:"The Lamp Boy's Rule",
+  body:"Pinned inside a cupboard of tapers: 'A lamp boy comes when he is called, day or night.' Below it, in a careful child's hand: 'If the light at your shoulder ever looks tired, say my name. — T.'"},
+ {id:"hill",   at:11, title:"Before the Castle",
+  body:"The hill had a name long before anyone built on it. In the old tongue it meant 'the one that listens'. The first King of the line raised his keep on the crown of it on purpose, so that he could hear it too. For three hundred years, every king did. Aldric was only the first to answer."},
+ {id:"floor12",at:12, title:"The Warm Earth",
+  body:"Below the castle's last cellar the tunnels are older, cut by hands that did not use iron. The earth is warm the way skin is warm. The roots in it run upward, all of them, toward the floors above and everything that used to live there."},
+ {id:"floor13",at:13, title:"Faces in the Clay",
+  body:"Faces pressed into the walls like wax seals: courtiers, guards, a cook still holding her ladle. Further down the faces wear crowns none of the old books describe. Aldric was not the first king to come down here with a bargain. He was only the latest."},
+ {id:"floor14",at:14, title:"Borrowed Voices",
+  body:"It has no voice of its own, so it borrows. A mother calling a child in from the yard. A captain calling the watch. A Queen, very softly, asking for the candles to be lit. The voices are perfect. That is how you know they are not real."},
+ {id:"floor15",at:15, title:"Red Eyes",
+  body:"The old monsters came down here too, and the roots found them. Every rooted thing sees with the same red eyes, because it is the same thing looking. Somewhere in the dark the hill is watching you through a goblin, and a troll, and a rat."},
+ {id:"floor16",at:16, title:"The First Search Party",
+  body:"Forty men went down the black stair the week after the sinking, with ropes and lanterns and orders to bring back survivors. Their boots are here, lined up in pairs, laces tied. The hill does not like waste. It kept the rest."},
+ {id:"floor17",at:17, title:"And the Rest",
+  body:"Two words, scratched into every root on the floor in a notary's fair hand. In the contract they were the last line of the King's price: 'his life, his name, his crown, and the rest'. Nobody asked what the rest was. The hill has been collecting it ever since."},
+ {id:"floor18",at:18, title:"The Heart of the Hill",
+  body:"The warmth has a rhythm now, slow as a sleeper's breath. The roots swell and settle with it. Scholars upstairs once argued whether the hill was alive. Down here the argument is over."},
+ {id:"floor19",at:19, title:"The Older Thrones",
+  body:"Small stone chairs, worn smooth, set in a ring and half swallowed by roots. One for every king who came down to ask for something. Some of them got what they wanted. None of them got up again."},
+ {id:"floor20",at:20, title:"Daylight",
+  body:"There is a crack of real daylight somewhere on this floor, and the Thing knows it. It never meant to keep anyone forever. It only ever meant to keep them busy, long enough to sign one more line."},
+ // scratched, chalked and pinned hints at the secret whispers (press / or the Whisper button)
+ {id:"whisper",at:0,  title:"Whispers",
+  body:"Some words only work in the right place, at the right time. Old soldiers swear by them; lamp boys trade them like marbles. Press / (or the Whisper button) and whisper one. If nothing answers, you are in the wrong place, or it is the wrong hour."},
+ {id:"stairgame",at:1,title:"A Game on the Stairs",
+  body:"Chalked on the bottom step in a child's hand, the lamp boys' game for the start of the day: 'Up, up, down, down, left, right, left, right, B, A, and you begin again richer.' It only ever worked at the very beginning, before you had taken a single step."},
+ {id:"bunk",   at:2,  title:"Carved in a Bunk",
+  body:"'When the shrine is cold and you are colder, kneel at it and whisper PRAY.' Underneath, another hand: 'only AT the shrine, Wilm, it's not magic.' Underneath that: 'it is a bit.'"},
+ {id:"candlesong",at:7,title:"The Candle Song",
+  body:"A rhyme the lamp boys sang on the long climb up: 'Forty for the Queen, forty round her bed, whisper LIGHT inside the ring and mind what's in her head.' Tam always said it worked. Nobody ever tried it with her lying in the middle."},
+ {id:"hollis", at:9,  title:"Sir Hollis's Shield",
+  body:"Painted inside the rim of a knight's shield, where only its bearer would read it: 'Say my name on the floor where I stand guard, and I will teach you one more lesson. — Hollis.'"},
+ {id:"manners",at:10, title:"On Courtesy",
+  body:"A page torn from the court's book of manners: 'Before the King, whosoever approaches shall first KNEEL.' Someone has underlined it twice and written in the margin: 'He still remembers. It's all he remembers.'"},
+ {id:"miners", at:12, title:"The Miners' Warning",
+  body:"Scratched by the old diggers beside the warm tunnels: 'The roots sleep when the moon is straight overhead. Midnight to one, by an honest clock. Whisper MOON and they look away.'"},
+ {id:"strike", at:17, title:"Striking a Clause",
+  body:"A note in the margin of the notary's own copy: 'A clause may be struck only by the hand that wrote it, with the proper word, in the presence of the text.' The proper word is underlined. It is VOID."},
  {id:"end",    at:21, title:"After",
   body:"The crown comes apart like old plaster, and for a moment the dark under the hill is just dark, nothing wearing it. Cade doesn't know if that counts as mercy. He climbs back toward the light anyway, because someone should tell the wall guard it's finally over."}
 ];
@@ -9388,7 +9457,7 @@ function drawCodex(){
   const kept=PAPERS.filter(p=>META.papers.includes(p.id));
   const paperRows=kept.length?`<h3 style="font-size:14px;margin:14px 0 8px">The Queen's papers &nbsp;<span style="color:var(--slate);font-size:12px">${kept.length}/${PAPERS.length}</span></h3>
     <ul>${kept.map(p=>`<li><span class="t"><b>${p.title}</b><em style="white-space:normal">${p.body}</em></span></li>`).join("")}</ul>`:"";
-  overlay(`<div class="pack"><h3 style="font-size:15px;margin-bottom:10px">Codex &nbsp;<span style="color:var(--slate);font-size:12px">${found.length}/${LORE.length}</span></h3>
+  overlay(`<div class="pack"><h3 style="font-size:15px;margin-bottom:10px">Codex &nbsp;<span style="color:var(--slate);font-size:12px">${found.length}/${LORE.length}</span><span style="float:right;color:#c8a8f0;font-size:12px" title="Secret whispers found">✶ ${Object.keys(META.secrets||{}).length}/${SECRET_COUNT}</span></h3>
     <ul>${rows}</ul>${locked?`<p style="color:var(--slate);font-size:12px;margin:-4px 0 12px">${locked} entr${locked===1?"y":"ies"} still in the dark.</p>`:""}${paperRows}
     <button class="close" id="closeCodex">Close</button></div>`);
   $("closeCodex").onclick=toggleCodex;
@@ -9677,7 +9746,13 @@ setInterval(updateAudioVisibility,400);
 // The title and hero-select screens are quiet; the music swells in when a hero is picked.
 let menuQuiet=true,menuMusic=false;
 // Settings, kept between visits: sound effects and screen shake can be switched off (music has its own button).
-const SET={sfx:true,shake:true};
+const SET={sfx:true,shake:true,diff:"easy"};
+// Difficulty: Easy is the game as it has been played so far. Medium and Hard make every monster tougher and
+// harder-hitting (applied as each one is spawned, so a change takes hold from the next floor).
+const DIFFS={easy:{name:"Easy",hp:1,dmg:1,note:"The game as you know it"},
+  medium:{name:"Medium",hp:1.35,dmg:1.3,note:"Monsters have a third more health and hit a third harder"},
+  hard:{name:"Hard",hp:1.75,dmg:1.6,note:"Monsters are far tougher and hit much harder"}};
+function diff(){return DIFFS[SET.diff]||DIFFS.easy;}
 try{const v=JSON.parse(localStorage.getItem("hd-settings")||"null");if(v&&typeof v==="object")Object.assign(SET,v);}catch(e){}
 function saveSettings(){try{localStorage.setItem("hd-settings",JSON.stringify(SET));}catch(e){}}
 function setMusicVolume(){
@@ -10640,6 +10715,8 @@ window.addEventListener("blur",()=>held.clear());
 window.addEventListener("keydown",ev=>{
   if(ev.metaKey||ev.ctrlKey||ev.altKey)return;
   const k=ev.key;
+  if(whisperOpen){if(k==="Escape"){closeWhisper();ev.preventDefault();}return;}   // typing in the whisper box
+  if(titleOpen)konamiKey(k);
   if(editorOpen){
     if(k==="Escape"||k==="p"||k==="P"){toggleEditor();ev.preventDefault();}
     return;
@@ -10716,6 +10793,7 @@ window.addEventListener("keydown",ev=>{
   if(k==="p"||k==="P"){toggleEditor();ev.preventDefault();return;}
   if(k==="v"||k==="V"){toggleMusic();ev.preventDefault();return;}
   if(k==="h"||k==="H"){if(activeWisp())wispTalk();ev.preventDefault();return;}
+  if(k==="/"){openWhisper();ev.preventDefault();return;}
   if(k==="Enter"||k===">"){descend();ev.preventDefault();}
 });
 document.querySelectorAll(".pad button").forEach(b=>{
@@ -10730,6 +10808,7 @@ $("btnDash").onpointerdown=e=>{e.preventDefault();dash();};
 $("btnCodex").onclick=toggleCodex;
 $("btnShrine").onclick=toggleShrine;
 $("btnEditor").onclick=toggleEditor;
+$("btnWhisper").onclick=()=>openWhisper();
 $("btnMusic").onclick=toggleMusic;
 refreshMusicBtn();
 $("btnItem").onclick=()=>{if(B&&B.phase==="choose"&&S.pack.length)togglePack();};
@@ -11179,6 +11258,12 @@ function start(id){
   S.tamNext=1;S.tamWait=0;
   resize();refresh();
   say(CHAR().intro||"You climb down into the first floor. The torch holds.","c-cold");
+  if(META.konami){                            // the stair game: one descent, a little richer
+    META.konami=false;metaSave();
+    const h=POTIONS.find(p=>p.id==="heal");S.gold+=100;
+    for(let i=0;i<3;i++)S.pack.push({kind:"use",ref:h,glyph:h.glyph,col:h.col,name:h.name,note:h.note});
+    say("Up, up, down, down... you begin again richer: 100 gold and three healing draughts.","c-lvl");refresh();
+  }
 }
 // The title: ruins on a hill under a storm (after a painting by Niko, pixelated to 256x144 in 48 colours),
 // with rain sweeping in from the right, a low mist through the grass, and now and then a far flash of lightning.
@@ -11230,6 +11315,94 @@ function playtestKit(){
     cons("flame",2),cons("bolt",2),cons("ice",2),cons("dark",2)]);
   say("Playtest kit: the best gear, scrolls and healing. Press N to go down a floor and gain a level.","c-cold");
 }
+/* ============================ secret whispers ============================ */
+// Old-fashioned secret codes. Press / (or the Whisper button) on the map and type a word. Each one only
+// works in its own place, or at its own hour, and most only once a descent. The codex hides a hint for each.
+// On the title screen there is one more, typed with the arrow keys and B and A.
+let whisperOpen=false;
+const KONAMI=["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
+let konamiAt=0;
+function konamiKey(k){
+  const want=KONAMI[konamiAt];
+  if(k===want||k.toLowerCase()===want)konamiAt++;else konamiAt=k===KONAMI[0]?1:0;
+  if(konamiAt<KONAMI.length)return;
+  konamiAt=0;
+  if(META.konami){playCardSound(true);return;}
+  META.konami=true;metaSave();secretFound("konami");
+  const c=$("card");if(c){c.classList.remove("konami");void c.offsetWidth;c.classList.add("konami");}
+  const p=document.querySelector(".ttl p");if(p)p.textContent="A voice from the old days: your next descent begins a little richer.";
+}
+// What a found secret leaves behind: counted on the title of the codex.
+function secretFound(id){(META.secrets||(META.secrets={}))[id]=true;metaSave();}
+function nearXY(x,y,r){return Math.max(Math.abs(S.px-x),Math.abs(S.py-y))<=r;}
+const WHISPERS={
+  PRAY:()=>{
+    if(!S.atShrine)return null;
+    if(S.prayed)return "The shrine has already heard you this descent.";
+    S.prayed=true;S.maxhp+=5;S.hp=S.maxhp;S.stam=S.maxstam;S.flame=S.maxflame;
+    burst(S.px,S.py,"#fff27a",26,5);num(S.px,S.py,"+5 MAX","#fff27a",true);
+    return "The shrine hums under your hands. You are whole again, a little more than whole. (+5 max health)";
+  },
+  LIGHT:()=>{
+    if(S.depth!==8||!TOMB||!nearXY(TOMB.x,TOMB.y,4))return null;
+    if(S.candlesLit)return "The candles are already burning as high as they can.";
+    S.candlesLit=true;burst(TOMB.x,TOMB.y,"#f0c060",40,6);quake(4);
+    return "Forty candles gutter up at once, tall and gold. Somewhere under the lid, someone remembers being loved. (The Queen will be weaker.)";
+  },
+  HOLLIS:()=>{
+    if(S.depth!==9)return null;
+    if(S.hollis)return "Sir Hollis has taught you all he can.";
+    S.hollis=true;S.str+=2;burst(S.px,S.py,"#b9c2cf",20,4);num(S.px,S.py,"+2 STR","#e9e5d9",true);
+    return "Armour shifts somewhere in the dark, and a voice you half remember says: 'Elbow up. Again.' You hold the blade the way he showed you. (+2 strength)";
+  },
+  KNEEL:()=>{
+    if(S.depth!==10||!THRONE||S.kingSlain||!nearXY(THRONE.x,THRONE.y,9))return null;
+    if(S.knelt)return "You have knelt once. He saw.";
+    S.knelt=true;quake(3);
+    return "You kneel on the cold stone. At the end of the hall the crown dips, very slightly, as if a man under it remembered his manners. (The King will be weaker.)";
+  },
+  MOON:()=>{
+    if(new Date().getHours()!==0)return null;
+    if(S.moonFloor===S.depth)return "The roots are already looking away.";
+    S.moonFloor=S.depth;burst(S.px,S.py,"#c8d8f0",24,5);
+    return "Far above all this stone, the moon is straight overhead. The roots go still and look away. (Your blows find their mark more often on this floor.)";
+  },
+  VOID:()=>{
+    if(S.depth!==17)return null;
+    if(CHAR().id!=="pact_maker")return "You whisper it, but it is not your hand that wrote the clause. Nothing is struck.";
+    if(S.voided)return "The clause is already struck through.";
+    S.voided=true;burst(S.px,S.py,"#2f5fa8",30,6);quake(6);
+    return "You draw one neat line through 'and the rest'. Every root on the floor flinches. (The Thing Under the Hill will be weaker.)";
+  },
+  TAM:()=>{
+    const w=activeWisp();if(!w)return null;
+    if(S.tamCalled===S.depth)return 'Tam: "I\'m here! I\'m right here. You only have to call once a floor."';
+    S.tamCalled=S.depth;w.whp=w.wmax;num(S.px,S.py,"TAM!","#c8a8f0",true);
+    return 'Tam: "You called! Nobody\'s called me by my name in three years." He glows brighter, all the way back to full.';
+  }
+};
+const SECRET_COUNT=Object.keys(WHISPERS).length+1;   // the whispers, and the stair game on the title
+const WHISPER_WRONG=["Your whisper runs down the stair and comes back empty.","Nothing answers. Wrong place, perhaps, or the wrong hour.","The dark listens, and does nothing."];
+function whisper(word){
+  const w=String(word||"").trim().toUpperCase().replace(/[^A-Z]/g,"");
+  if(!w)return null;
+  const f=WHISPERS[w],r=f?f():null;
+  if(r){secretFound(w.toLowerCase());playCardSound(true);say(r,"c-lvl");refresh();return r;}
+  const msg=WHISPER_WRONG[Math.floor(Math.random()*WHISPER_WRONG.length)];
+  say(`You whisper "${w.toLowerCase()}". ${msg}`,"c-cold");return msg;
+}
+function openWhisper(){
+  if(!S||S.over||titleOpen){if(titleOpen){const p=document.querySelector(".ttl p");if(p)p.textContent="Whispers only carry in the dark. Start a descent first.";}return;}
+  if(S.mode!=="map"||MAPD.dlg||packOpen||codexOpen||shrineOpen||levelOpen){say("Not now. Whispers need quiet.","c-cold");return;}
+  whisperOpen=true;held.clear();
+  overlay(`<div class="whisperbox"><h3>Whisper</h3><p>Some words only work in the right place, or at the right hour.</p>
+    <form id="whForm" autocomplete="off"><input id="whIn" maxlength="16" spellcheck="false" placeholder="a word…" aria-label="Word to whisper"><button type="submit">Whisper</button></form>
+    <button class="close" id="whBack" type="button">Never mind</button></div>`);
+  const inp=$("whIn");setTimeout(()=>inp&&inp.focus(),30);
+  $("whForm").onsubmit=e=>{e.preventDefault();const v=inp.value;closeWhisper();whisper(v);};
+  $("whBack").onclick=closeWhisper;
+}
+function closeWhisper(){whisperOpen=false;hideOverlay();}
 function title(){
   S.over=true;   // keys and buttons must not play the demo floor behind the title card
   titleOpen=true;menuQuiet=false;menuMusic=true;setMusicVolume();
@@ -11254,6 +11427,7 @@ function openSettings(){
   closeTitle();
   const row=(label,id,val,note)=>`<div class="setrow"><span><b>${label}</b>${note?`<i>${note}</i>`:""}</span><button id="${id}" type="button">${val}</button></div>`;
   overlay(`<div class="settings"><h3>Settings</h3>
+    ${row("Difficulty","setDiff",diff().name,diff().note)}
     ${row("Music","setMus",musicOn?"On":"Off","The score")}
     ${row("Sound effects","setSfx",SET.sfx?"On":"Off","Blows, cards, doors, roars")}
     ${row("Screen shake","setShake",SET.shake?"On":"Off","When things hit hard")}
@@ -11262,11 +11436,13 @@ function openSettings(){
     <button class="close" id="setBack" type="button">Back</button></div>`);
   $("card").classList.add("wide");
   $("setMus").onclick=()=>{toggleMusic();};
+  $("setDiff").onclick=()=>{const ks=Object.keys(DIFFS);SET.diff=ks[(ks.indexOf(SET.diff)+1)%ks.length];saveSettings();
+    $("setDiff").textContent=diff().name;const i=$("setDiff").parentNode.querySelector("i");if(i)i.textContent=diff().note;playCardSound(true);};
   $("setSfx").onclick=()=>{SET.sfx=!SET.sfx;saveSettings();$("setSfx").textContent=SET.sfx?"On":"Off";if(SET.sfx)playCardSound(true);};
   $("setShake").onclick=()=>{SET.shake=!SET.shake;saveSettings();$("setShake").textContent=SET.shake?"On":"Off";};
   if($("setTut"))$("setTut").onclick=()=>{hideOverlay();startTutorial();};
   $("setErase").onclick=()=>{const b=$("setErase");if(b.dataset.armed){try{localStorage.removeItem(META_KEY);}catch(e){}
-      META.unlocked={cade:true};META.stats={};META.done={};META.beasts={};META.papers=[];META.tutorialDone=false;metaSave();b.textContent="Erased";b.disabled=true;}
+      META.unlocked={cade:true};META.stats={};META.done={};META.beasts={};META.papers=[];META.tutorialDone=false;META.secrets={};META.konami=false;metaSave();b.textContent="Erased";b.disabled=true;}
     else{b.dataset.armed="1";b.textContent="Sure? Click again";}};
   $("setBack").onclick=()=>{title();};
 }
