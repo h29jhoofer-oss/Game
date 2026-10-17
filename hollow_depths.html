@@ -438,49 +438,86 @@ body.talking .mapwrap .dicetray,body.inchasm .dicetray{display:none!important}
   padding:10px 26px;border-radius:8px;background:rgba(30,70,95,.92);border:2px solid #8fd8f0;color:#e8fbff;cursor:pointer;
   box-shadow:0 4px 0 rgba(0,0,0,.5)}
 .parry-btn:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.5)}
-/* ---------- the moves as a hand of little cards ---------- */
-.movebar{flex-wrap:nowrap!important;gap:0!important;align-items:flex-end}
+/* ---------- the moves as a hand of cards ---------- */
+/* Each card: parchment in a gold and ink rim, a coloured band along the top for the kind of move (red for a blow,
+   green for one that steadies you, gold for a level-nine finisher, crimson for a blood gift), the level that taught
+   it, the hotkey on a little keycap, the move's picture in a framed window, and its name underneath. */
+.movebar{flex-wrap:nowrap!important;gap:0!important;align-items:flex-end;bottom:14px!important}
 .moveslot.mcard{
-  --ink:#161b23;--gold-d:#a8873a;
-  position:relative;flex:none;width:46px;height:64px;margin:0 0 0 -6px;padding:0;
-  display:block;line-height:1;
-  background-color:#d9d2c0;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%23cfc6aa' d='M1 1h1v1h-1zM3 3h1v1h-1z'/%3E%3C/svg%3E");background-size:6px 6px;
+  --band:#8f2f28;--band-hi:#c94a3c;--gold-d:#a8873a;--fan:2.4deg;
+  position:relative;flex:none;width:66px;height:94px;margin:0 0 0 -8px;padding:0;
+  display:block;line-height:1;cursor:pointer;
+  background-color:#e2dac6;
+  background-image:linear-gradient(180deg,rgba(255,255,255,.18),rgba(0,0,0,.06)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%23d3c9ad' d='M1 1h1v1h-1zM3 3h1v1h-1z'/%3E%3C/svg%3E");
+  background-size:auto,6px 6px;
   box-shadow:0 -2px 0 0 var(--gold-d),0 2px 0 0 var(--gold-d),-2px 0 0 0 var(--gold-d),2px 0 0 0 var(--gold-d),
-    0 -3px 0 0 #0a0c10,0 3px 0 0 #0a0c10,-3px 0 0 0 #0a0c10,3px 0 0 0 #0a0c10,4px 5px 0 0 rgba(0,0,0,.5);
-  transform-origin:50% 160%;
-  transform:rotate(calc(var(--t) * 4deg)) translateY(calc(var(--t) * var(--t) * 1.6px));
-  transition:transform .14s ease-out;z-index:calc(5 + var(--i));
+    0 -4px 0 0 #0a0c10,0 4px 0 0 #0a0c10,-4px 0 0 0 #0a0c10,4px 0 0 0 #0a0c10,5px 7px 0 1px rgba(0,0,0,.5);
+  transform-origin:50% 420%;
+  transform:rotate(calc(var(--t) * var(--fan)));
+  transition:transform .14s ease-out,filter .14s;z-index:calc(5 + var(--i));
 }
+.moveslot.mcard.buff{--band:#3f6b2e;--band-hi:#6fa844}
+.moveslot.mcard.ult{--band:#9a6a14;--band-hi:#f0c060;--gold-d:#d4af52}
 .moveslot.mcard:first-child{margin-left:0}
-.moveslot.mcard::before{content:"";position:absolute;inset:3px;border:1px solid #8a7a58;pointer-events:none}
-.moveslot.mcard:hover{transform:rotate(calc(var(--t) * 4deg)) translateY(-12px) scale(1.12);z-index:30}
-.moveslot.mcard:active{transform:rotate(calc(var(--t) * 4deg)) translateY(-6px) scale(1.05)}
-.mc-pip{position:absolute;left:5px;top:4px;font:700 10px/1 "IBM Plex Mono",monospace;color:#b8433a}
-.mc-key{position:absolute;right:5px;bottom:4px;font:700 9px/1 "IBM Plex Mono",monospace;color:#8a7a58}
-.mc-art{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:34px;height:34px;display:flex;align-items:center;justify-content:center;
-  background:#161b23;box-shadow:0 0 0 2px #a8873a}
-.mc-art img{width:30px!important;height:30px!important;filter:none!important}
+.moveslot.mcard::before{content:"";position:absolute;left:0;right:0;top:0;height:13px;pointer-events:none;
+  background:linear-gradient(180deg,var(--band-hi) 0 2px,var(--band) 2px 11px,#0a0c10 11px 13px)}
+.moveslot.mcard::after{content:"";position:absolute;inset:16px 3px 3px;border:1px solid #b3a685;pointer-events:none}
+.moveslot.mcard:hover{transform:rotate(calc(var(--t) * var(--fan))) translateY(-18px) scale(1.14);z-index:30;filter:drop-shadow(0 0 6px rgba(240,192,96,.55))}
+.moveslot.mcard:active{transform:rotate(calc(var(--t) * var(--fan))) translateY(-10px) scale(1.06)}
+.mc-pip{position:absolute;left:4px;top:2px;z-index:1;font:700 9px/9px "IBM Plex Mono",monospace;color:#fff4dc;text-shadow:1px 1px 0 #0a0c10}
+.mc-pip::before{content:"LV ";font-size:7px;opacity:.75}
+.mc-key{position:absolute;right:3px;top:1px;z-index:1;min-width:11px;height:10px;padding:0 1px;box-sizing:border-box;
+  display:flex;align-items:center;justify-content:center;font:700 8px/1 "IBM Plex Mono",monospace;color:#e2dac6;
+  background:#161b23;box-shadow:0 0 0 1px #0a0c10,inset 0 -2px 0 #2a323d}
+.mc-art{position:absolute;left:50%;top:21px;transform:translateX(-50%);width:44px;height:44px;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 50% 45%,#2a3140,#10141b 70%);box-shadow:0 0 0 2px var(--gold-d),0 0 0 3px #0a0c10}
+.mc-art img{width:36px!important;height:36px!important;filter:none!important}
+.mc-name{position:absolute;left:3px;right:3px;bottom:3px;height:21px;display:flex;align-items:center;justify-content:center;text-align:center;
+  font:600 8px/9px "IBM Plex Mono",monospace;color:#2b2416;letter-spacing:-.01em;overflow:hidden}
 .moveslot.mcard.cool .mc-art img{opacity:.4;filter:grayscale(.9)!important}
+.moveslot.mcard.cool .mc-name{color:#8a7a58}
 /* face down: the deck's back, and the turns left before it comes back to hand */
 .moveslot.mcard.down{background:#4a1418;cursor:default}
-.moveslot.mcard.down:hover{transform:rotate(calc(var(--t) * 4deg)) translateY(calc(var(--t) * var(--t) * 1.6px))}
-.moveslot.mcard.down::before{border-color:#a8873a}
-.mc-back{position:absolute;inset:5px;display:flex;align-items:center;justify-content:center;background-color:#4a1418;
+.moveslot.mcard.down::before,.moveslot.mcard.down::after{display:none}
+.moveslot.mcard.down:hover{transform:rotate(calc(var(--t) * var(--fan)));filter:none}
+.mc-back{position:absolute;inset:4px;display:flex;flex-direction:column;gap:3px;align-items:center;justify-content:center;background-color:#4a1418;
+  box-shadow:inset 0 0 0 1px #a8873a;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' shape-rendering='crispEdges'%3E%3Cpath fill='%23a8873a' d='M5 0h2v1h-2zM4 1h1v1h-1zM7 1h1v1h-1zM3 2h1v1h-1zM8 2h1v1h-1zM2 3h1v1h-1zM9 3h1v1h-1zM1 4h1v1h-1zM10 4h1v1h-1zM0 5h1v2h-1zM11 5h1v2h-1zM1 7h1v1h-1zM10 7h1v1h-1zM2 8h1v1h-1zM9 8h1v1h-1zM3 9h1v1h-1zM8 9h1v1h-1zM4 10h1v1h-1zM7 10h1v1h-1zM5 11h2v1h-2z'/%3E%3C/svg%3E");
   background-size:12px 12px;image-rendering:pixelated}
-.mc-back b{display:flex;align-items:center;justify-content:center;width:20px;height:20px;background:#2a0c0a;color:#f0c060;font:700 13px/1 "IBM Plex Mono",monospace;
+.mc-back b{display:flex;align-items:center;justify-content:center;width:24px;height:24px;background:#2a0c0a;color:#f0c060;font:700 15px/1 "IBM Plex Mono",monospace;
   box-shadow:0 0 0 2px #a8873a,0 0 0 3px #0a0c10}
-.mcard.fly{position:absolute;z-index:8;width:46px;height:64px;pointer-events:none;
-  background:#d9d2c0;box-shadow:0 0 0 2px #a8873a,0 0 0 3px #0a0c10,6px 8px 0 rgba(0,0,0,.45);
+.mc-back i{font:700 7px/1 "IBM Plex Mono",monospace;font-style:normal;letter-spacing:.12em;color:#f0c060;background:#2a0c0a;padding:2px 3px;box-shadow:0 0 0 1px #a8873a}
+.mcard.fly{position:absolute;z-index:8;width:66px;height:94px;pointer-events:none;
+  background:#e2dac6;box-shadow:0 0 0 2px #a8873a,0 0 0 4px #0a0c10,6px 8px 0 rgba(0,0,0,.45);
   animation:mcFly .7s cubic-bezier(.2,.7,.3,1) forwards}
-.mcard.fly::before{content:"";position:absolute;inset:3px;border:1px solid #8a7a58}
+.mcard.fly .mc-pip{color:#2b2416;text-shadow:none}
 @keyframes mcFly{
   0%{transform:translate(0,0) scale(1)}
-  55%{transform:translate(var(--dx),var(--dy)) scale(1.9);opacity:1}
-  80%{transform:translate(var(--dx),var(--dy)) scale(1.9,1.9) scaleX(.05);opacity:1}
-  100%{transform:translate(var(--dx),var(--dy)) scale(1.9) scaleX(0);opacity:0}}
-@media (max-width:760px){.moveslot.mcard{width:38px;height:54px;margin-left:-8px}.mc-art{width:28px;height:28px}.mc-art img{width:24px!important;height:24px!important}}
+  55%{transform:translate(var(--dx),var(--dy)) scale(1.6);opacity:1}
+  80%{transform:translate(var(--dx),var(--dy)) scale(1.6,1.6) scaleX(.05);opacity:1}
+  100%{transform:translate(var(--dx),var(--dy)) scale(1.6) scaleX(0);opacity:0}}
+/* what the card does, on a slip of parchment over the hand while you point at it */
+.mvtip{position:absolute;z-index:31;left:50%;bottom:174px;transform:translateX(-50%);width:max-content;max-width:min(340px,80%);
+  display:none;padding:7px 12px 8px;background:#e2dac6;color:#2b2416;pointer-events:none;text-align:center;
+  box-shadow:0 -2px 0 0 #a8873a,0 2px 0 0 #a8873a,-2px 0 0 0 #a8873a,2px 0 0 0 #a8873a,0 -4px 0 0 #0a0c10,0 4px 0 0 #0a0c10,-4px 0 0 0 #0a0c10,4px 0 0 0 #0a0c10,5px 7px 0 1px rgba(0,0,0,.5)}
+.mvtip.show{display:block}
+.mvtip b{display:block;font:700 12px/1.3 "IBM Plex Mono",monospace;color:#8f2f28;letter-spacing:.04em}
+.mvtip span{display:block;font-size:12px;line-height:1.35;margin-top:2px}
+.mvtip em{display:block;font-style:normal;font-size:10px;color:#7a6a48;margin-top:3px}
+body.talking .mvtip{display:none!important}
+@media (max-width:760px){
+  .movebar{bottom:12px!important;left:50px!important;right:4px!important;z-index:6}
+  .moveslot.mcard{width:38px;height:56px;margin-left:-8px;--fan:1.5deg;transform-origin:50% 300%}
+  .moveslot.mcard::before{height:10px;background:linear-gradient(180deg,var(--band-hi) 0 1px,var(--band) 1px 8px,#0a0c10 8px 10px)}
+  .moveslot.mcard::after{inset:12px 2px 2px}
+  .mc-pip{font-size:7px;line-height:7px;left:3px;top:1px}.mc-pip::before{display:none}
+  .mc-key{display:none}
+  .mc-art{top:15px;width:28px;height:28px}.mc-art img{width:24px!important;height:24px!important}
+  .mc-name{display:none}
+  .mcard.fly{width:38px;height:56px}
+  .mvtip{bottom:118px;max-width:92%}
+}
 
 /* ---------- the table: green baize in a wooden rail, and the log kept on a scorepad ---------- */
 body{background-color:#0c0907;
@@ -535,9 +572,9 @@ body.talking .tutcard{display:none}
 .cprice{margin-top:8px;font-size:11px;line-height:1.4;color:#d8a8a0;border-top:1px dashed #8f2f28;padding-top:6px}
 .cprice b{color:#ff8f80}
 .chargrid.fan .charcard.black.blood.lift{box-shadow:0 -4px 0 0 #b8433a,0 4px 0 0 #b8433a,-4px 0 0 0 #b8433a,4px 0 0 0 #b8433a,0 -6px 0 0 #0a0c10,0 6px 0 0 #0a0c10,-6px 0 0 0 #0a0c10,6px 0 0 0 #0a0c10,0 0 26px 6px rgba(232,80,60,.45),10px 10px 0 0 rgba(0,0,0,.55)}
-.moveslot.mcard.blood{background:#1a0b0d;--gold-d:#b8433a}
-.moveslot.mcard.blood::before{border-color:#8f2f28}
-.moveslot.mcard.blood .mc-pip{color:#ff6a52}
+.moveslot.mcard.blood{background:#1a0b0d;--gold-d:#b8433a;--band:#5a1418;--band-hi:#ff6a52}
+.moveslot.mcard.blood::after{border-color:#5a1418}
+.moveslot.mcard.blood .mc-name{color:#ff8f80}
 .moveslot.mcard.blood .mc-art{background:#0a0505;box-shadow:0 0 0 2px #b8433a}
 /* sulphur gifts: black and yellow, very rare */
 .charcard.black.sulphur{--rule:#a8873a;--red:#f0c060;--gold-d:#d4af52;background-color:#0f0d07;
@@ -3378,7 +3415,7 @@ function playMoveCard(mv){
   if(!wrap||!from)return;
   const r=from.getBoundingClientRect(),w=wrap.getBoundingClientRect();
   const c=document.createElement("div");
-  c.className="mcard fly";c.innerHTML=`<span class="mc-pip">${mv.lvl}</span><span class="mc-art">${icon("move_"+mv.id,32)}</span>`;
+  c.className="mcard fly";c.innerHTML=`<span class="mc-pip">${mv.lvl}</span><span class="mc-art">${icon("move_"+mv.id,40)}</span><span class="mc-name">${mv.name}</span>`;
   c.style.left=(r.left-w.left)+"px";c.style.top=(r.top-w.top)+"px";
   c.style.setProperty("--dx",(w.width/2-(r.left-w.left)-r.width/2)+"px");c.style.setProperty("--dy",(w.height*.42-(r.top-w.top))+"px");
   wrap.appendChild(c);
@@ -3392,17 +3429,35 @@ function renderMoveBar(){
   const sig=list.map(m=>m.id+":"+(S.cds[m.id]||0)+(dry(m)?"!":"")).join("|");
   if(el.dataset.sig===sig)return;          // nothing changed: leave the buttons alone
   el.dataset.sig=sig;
+  const tip=$("mvtip");if(tip)tip.classList.remove("show");
   // a small fanned hand of cards: the rank in the corner is the level that taught it; a move that is
   // cooling down lies face down, showing how many turns until it can be played again
   const mid=(list.length-1)/2;
   el.innerHTML=list.map((m,i)=>{
     const cd=S.cds[m.id]||0,down=cd>0,t=(i-mid).toFixed(2);
-    return `<button type="button" tabindex="-1" class="moveslot mcard${down?" down":""}${!down&&dry(m)?" cool":""}${m.blood?" blood":""}" data-mv="${m.id}" style="--t:${t};--i:${i}" title="${m.name} — ${m.desc}" aria-label="${m.name}">`
-      +(down?`<span class="mc-back"><b>${cd}</b></span>`:`<span class="mc-pip">${m.blood?"♥":m.lvl}</span><span class="mc-art">${icon("move_"+m.id,32)}</span><span class="mc-key">${i+1}</span>`)+`</button>`;
+    const kind=m.blood?" blood":m.kind==="buff"?" buff":m.lvl>=9?" ult":"";
+    return `<button type="button" tabindex="-1" class="moveslot mcard${down?" down":""}${!down&&dry(m)?" cool":""}${kind}" data-mv="${m.id}" style="--t:${t};--i:${i}" aria-label="${m.name}">`
+      +(down?`<span class="mc-back"><b>${cd}</b><i>TURN${cd>1?"S":""}</i></span>`:`<span class="mc-pip">${m.blood?"♥":m.lvl}</span><span class="mc-key">${i+1}</span><span class="mc-art">${icon("move_"+m.id,40)}</span><span class="mc-name">${m.name}</span>`)+`</button>`;
   }).join("");
 }
 cv.addEventListener("pointerdown",e=>{if(DH().dlg){e.preventDefault();dlgAdvance();}});
 $("parryBtn").onpointerdown=e=>{e.preventDefault();parryPress();};
+// Pointing at a card shows what it does on a slip above the hand.
+function moveTip(b){
+  let tip=$("mvtip");
+  if(!tip){tip=document.createElement("div");tip.id="mvtip";tip.className="mvtip";$("mapwrap").appendChild(tip);}
+  const m=b&&!b.classList.contains("down")&&moveList().find(x=>x.id===b.dataset.mv);
+  if(!m){
+    const d=b&&b.classList.contains("down")&&moveList().find(x=>x.id===b.dataset.mv);
+    if(d){tip.innerHTML=`<b>${d.name}</b><span>Back in hand in ${S.cds[d.id]} turn${S.cds[d.id]>1?"s":""}.</span>`;tip.classList.add("show");}
+    else tip.classList.remove("show");
+    return;
+  }
+  tip.innerHTML=`<b>${m.name}</b><span>${m.desc}</span><em>${m.cd?"Rests "+m.cd+" turn"+(m.cd>1?"s":"")+" after use":"Always ready"} · key ${[...b.parentNode.children].indexOf(b)+1}</em>`;
+  tip.classList.add("show");
+}
+$("movebar").addEventListener("pointerover",e=>{const b=e.target.closest(".moveslot");if(b)moveTip(b);});
+$("movebar").addEventListener("pointerout",e=>{const b=e.target.closest(".moveslot");if(b&&!b.contains(e.relatedTarget))moveTip(null);});
 $("movebar").addEventListener("mousedown",e=>{if(e.target.closest(".moveslot"))e.preventDefault();});  // keep keyboard focus off the buttons so Space still strikes
 $("movebar").addEventListener("click",e=>{
   const b=e.target.closest(".moveslot");if(!b)return;
