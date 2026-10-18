@@ -40,7 +40,7 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
   - **S – Cataclysm:** a crushing leap that throws every hero into the air and sets stone spikes erupting across the floor.
   - **R – Devour:** spectral chains drag the furthest heroes into his jaws; the weak are eaten (healing him), the rest are spat out.
   - **F – Wailing Souls:** screaming skulls circle him, then hunt the heroes down.
-- **Sound:** chiptune music and sound effects, all synthesized in the browser (no audio files). M mutes the music, N mutes sound effects, and the toolbar has toggles for both.
+- **Sound:** orchestral-style music and sound effects, all synthesized in the browser (no audio files): string and brass sections, a choir, timpani, taiko, a funeral bell and a hall reverb. The path plays a slow, grim funeral march in D minor; the boss battle an epic C minor battle theme with choir and horns; and the Devourer a faster, heavier theme in E phrygian. M mutes the music, N mutes sound effects, and the toolbar has toggles for both.
 - Lava pits kill heroes who miss a jump. Each wave brings one more hero than the last, and they're stronger, better geared, and better at spotting traps and dodging.
 
 ## Pixel Snake (`snake.html`)

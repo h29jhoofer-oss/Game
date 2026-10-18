@@ -918,71 +918,373 @@ const Sound = (() => {
   }
 
   // ---------- music ----------
-  // Patterns are written one step per token; "." is a rest.
+  // An orchestra built from oscillators: string and brass sections, a formant choir, timpani,
+  // taiko, a funeral bell and a low drone, all sent through a hall reverb. Each track is a
+  // little score: a chord per bar, and a function that decides what plays on every 16th note.
   const NOTE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
   const freq = n => {
     const [, l, acc, oct] = n.match(/^([A-G])([#b]?)(\d)$/);
     const midi = 12 * (+oct + 1) + NOTE[l] + (acc === "#" ? 1 : acc === "b" ? -1 : 0);
     return 440 * Math.pow(2, (midi - 69) / 12);
   };
-  const steps = s => s.replace(/\|/g, " ").split(/\s+/).filter(Boolean).map(t => (t === "." ? null : freq(t)));
+  const chord = s => s.split(" ").map(freq);
+
+  let reverbIn = null, wetBus = null, shared = {};
+  // The hall: a stereo impulse of decaying noise, about three seconds long.
+  function buildReverb() {
+    const conv = ac.createConvolver(), len = Math.floor(ac.sampleRate * 2.4);
+    const ir = ac.createBuffer(2, len, ac.sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const d = ir.getChannelData(c);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    }
+    conv.buffer = ir;
+    shared = {};
+    reverbIn = ac.createGain();
+    reverbIn.gain.value = 0.32;
+    reverbIn.connect(conv);
+    conv.connect(musicBus);
+    // Drums and anything without its own send go through this: dry plus a little hall.
+    wetBus = ac.createGain();
+    wetBus.connect(musicBus);
+    const send = ac.createGain();
+    send.gain.value = 0.35;
+    wetBus.connect(send);
+    send.connect(reverbIn);
+  }
+  // A gain node for one note, wired to the music bus and (by `wet`) the reverb.
+  function voiceOut(wet) {
+    const g = ac.createGain();
+    g.gain.value = 0;
+    g.connect(musicBus);
+    if (wet) {
+      const send = ac.createGain();
+      send.gain.value = wet;
+      g.connect(send);
+      send.connect(reverbIn);
+    }
+    return g;
+  }
+  // Filters are linear, so notes that sound alike share one filter (or one vowel bank)
+  // instead of each building their own: far less work for the audio thread.
+  function sharedFilter(type, f, q, wet) {
+    const key = [type, f, q, wet].join();
+    if (shared[key]) return shared[key];
+    const flt = ac.createBiquadFilter(), out = voiceOut(wet);
+    flt.type = type;
+    flt.frequency.value = f;
+    flt.Q.value = q;
+    out.gain.value = 1;
+    flt.connect(out);
+    return (shared[key] = flt);
+  }
+  function vowelBank(vowel, wet) {
+    const key = "vowel" + vowel + wet;
+    if (shared[key]) return shared[key];
+    const input = ac.createGain(), out = voiceOut(wet);
+    out.gain.value = 1;
+    const formants = { oo: [[330, 7, 1.6], [760, 9, 0.6]], ah: [[760, 7, 1.5], [1150, 9, 0.9]], solo: [[760, 7, 1.4], [1150, 9, 0.8], [2500, 12, 0.25]] }[vowel];
+    for (const [ff, q, amp] of formants) {
+      const bp = ac.createBiquadFilter(), g = ac.createGain();
+      bp.type = "bandpass";
+      bp.frequency.value = ff;
+      bp.Q.value = q;
+      g.gain.value = amp * 2.2;
+      input.connect(bp);
+      bp.connect(g);
+      g.connect(out);
+    }
+    return (shared[key] = input);
+  }
+  // A bare envelope gain feeding a shared filter.
+  function envInto(dest) {
+    const g = ac.createGain();
+    g.gain.value = 0;
+    g.connect(dest);
+    return g;
+  }
+  function shape(g, when, attack, vol, hold, release) {
+    g.gain.setValueAtTime(0, when);
+    g.gain.linearRampToValueAtTime(vol, when + attack);
+    g.gain.setValueAtTime(vol, when + Math.max(attack, hold));
+    g.gain.linearRampToValueAtTime(0, when + Math.max(attack, hold) + release);
+    return when + Math.max(attack, hold) + release + 0.05;
+  }
+  function osc(type, f, when, end, dest, detune = 0) {
+    const o = ac.createOscillator();
+    o.type = type;
+    o.frequency.value = f;
+    o.detune.value = detune;
+    o.connect(dest);
+    o.start(when);
+    o.stop(end);
+    return o;
+  }
+  function vibrato(oscs, f, when, end, rate = 5, depth = 0.006) {
+    const lfo = ac.createOscillator(), g = ac.createGain();
+    lfo.frequency.value = rate;
+    g.gain.value = f * depth;
+    lfo.connect(g);
+    for (const o of oscs) g.connect(o.frequency);
+    lfo.start(when);
+    lfo.stop(end);
+  }
+  const V = {
+    // A string or synth pad: detuned saws through a soft low-pass, swelling in and fading out.
+    pad(f, when, dur, o = {}) {
+      const g = envInto(sharedFilter("lowpass", o.cut ?? 900, 0.6, o.wet ?? 0.6));
+      const end = shape(g, when, o.attack ?? 0.5, o.vol ?? 0.03, dur, o.release ?? 1.2);
+      for (const d of [-8, 8]) osc("sawtooth", f, when, end, g, d);
+    },
+    // Brass: the filter opens with a blare at the front of each note.
+    brass(f, when, dur, o = {}) {
+      const out = voiceOut(o.wet ?? 0.45), lp = ac.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.Q.value = 1.2;
+      const top = o.bright ?? 2600;
+      lp.frequency.setValueAtTime(300, when);
+      lp.frequency.linearRampToValueAtTime(top, when + 0.06);
+      lp.frequency.exponentialRampToValueAtTime(top * 0.45, when + 0.4);
+      lp.connect(out);
+      const end = shape(out, when, o.attack ?? 0.04, o.vol ?? 0.035, dur, o.release ?? 0.35);
+      const oscs = [osc("sawtooth", f, when, end, lp, -6), osc("sawtooth", f, when, end, lp, 6)];
+      if (o.vib) vibrato(oscs, f, when + 0.3, end, 5, 0.004);
+    },
+    // Choir: two saws through vowel formants, with a singer's vibrato.
+    choir(f, when, dur, o = {}) {
+      // Sustained chord voices sing "ah" (or "oo"); solo lines get a brighter "ah".
+      const g = envInto(vowelBank(o.solo ? "solo" : o.vowel === "oo" ? "oo" : "ah", o.wet ?? 0.8));
+      const end = shape(g, when, o.attack ?? 0.6, o.vol ?? 0.05, dur, o.release ?? 1.4);
+      const oscs = [osc("sawtooth", f, when, end, g, -7), osc("sawtooth", f, when, end, g, 7)];
+      vibrato(oscs, f, when, end, 5.3, 0.007);
+    },
+    // Low strings bowing short, hard notes for an ostinato.
+    strings(f, when, dur, o = {}) {
+      const g = envInto(sharedFilter("lowpass", o.cut ?? 1400, 1, o.wet ?? 0.3));
+      const end = shape(g, when, 0.008, o.vol ?? 0.04, dur * 0.6, dur * 0.5);
+      osc("sawtooth", f, when, end, g, -5);
+      if (!o.thin) osc("sawtooth", f, when, end, g, 5);
+    },
+    // A cello-like solo voice: dark, singing, with slow vibrato.
+    cello(f, when, dur, o = {}) {
+      const g = envInto(sharedFilter("lowpass", o.cut ?? 1100, 1.5, o.wet ?? 0.55));
+      const end = shape(g, when, o.attack ?? 0.18, o.vol ?? 0.05, dur, o.release ?? 0.5);
+      const oscs = [osc("sawtooth", f, when, end, g, -4), osc("sawtooth", f, when, end, g, 4)];
+      vibrato(oscs, f, when + 0.15, end, 4.6, 0.008);
+    },
+    // A droning low note under everything.
+    drone(f, when, dur, o = {}) {
+      const g = envInto(sharedFilter("lowpass", o.cut ?? 220, 1, o.wet ?? 0.4));
+      const end = shape(g, when, 1.5, o.vol ?? 0.07, dur, 2);
+      osc("sawtooth", f, when, end, g, -6);
+      osc("sawtooth", f, when, end, g, 6);
+      osc("sine", f / 2, when, end, g);
+    },
+    // A funeral bell: inharmonic partials ringing down.
+    bell(f, when, o = {}) {
+      const out = voiceOut(o.wet ?? 0.9), v = o.vol ?? 0.05;
+      out.gain.value = 1;
+      for (const [k, amp, dec] of [[0.5, 0.5, 4], [1, 1, 3.2], [2.0, 0.35, 2], [2.76, 0.45, 1.6], [5.4, 0.2, 0.8]]) {
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0, when);
+        g.gain.linearRampToValueAtTime(v * amp, when + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.0001, when + dec);
+        g.connect(out);
+        osc("sine", f * k, when, when + dec + 0.05, g);
+      }
+    },
+    // Timpani: a tuned drum with a soft thud.
+    timpani(f, when, o = {}) {
+      const out = voiceOut(o.wet ?? 0.5), v = o.vol ?? 0.3;
+      out.gain.setValueAtTime(0, when);
+      out.gain.linearRampToValueAtTime(v, when + 0.004);
+      out.gain.exponentialRampToValueAtTime(0.0001, when + (o.decay ?? 1.1));
+      const a = osc("sine", f, when, when + 1.3, out), b = osc("triangle", f * 1.5, when, when + 0.4, out);
+      a.frequency.setValueAtTime(f * 1.04, when);
+      a.frequency.exponentialRampToValueAtTime(f, when + 0.08);
+      b.frequency.value = f * 1.5;
+      noise({ dur: 0.08, vol: v * 0.35, freq: 600, when, bus: wetBus });
+    },
+    // Taiko: a huge low boom.
+    taiko(when, o = {}) {
+      tone(o.f ?? 75, { to: 38, type: "sine", dur: o.decay ?? 0.55, vol: o.vol ?? 0.45, when, bus: wetBus });
+      noise({ dur: 0.12, vol: (o.vol ?? 0.45) * 0.5, freq: 380, when, bus: wetBus });
+    },
+    snare(when, o = {}) {
+      noise({ dur: 0.22, vol: o.vol ?? 0.14, filter: "bandpass", freq: 1900, q: 0.7, when, bus: wetBus });
+      tone(190, { to: 150, type: "triangle", dur: 0.09, vol: (o.vol ?? 0.14) * 0.6, when, bus: wetBus });
+    },
+    crash(when, o = {}) { noise({ dur: 2.2, vol: o.vol ?? 0.07, filter: "highpass", freq: 4500, when, bus: wetBus }); },
+    // A long gust of wind for the empty path.
+    wind(when, o = {}) {
+      noise({ dur: 4, vol: o.vol ?? 0.035, filter: "bandpass", freq: 280, to: 900, q: 1.5, attack: 2, when, bus: wetBus });
+    },
+  };
+  // Notes in a bar: [step, note, length in steps].
+  const line = bars => bars.map(b => b.map(([st, n, len]) => [st, freq(n), len]));
 
   const TRACKS = {
-    // A slow, brooding march in A minor while the heroes approach.
+    // On the path: a slow funeral march in D minor. A drone, a tolling bell and muffled timpani;
+    // a lone cello answers low, then on the second pass mourns over the strings with a choir humming underneath.
     level: {
-      bpm: 96, perBeat: 2,
-      bass: steps("A2 . A2 . E2 . A2 . | F2 . F2 . C3 . F2 . | G2 . G2 . D3 . G2 . | E2 . E2 . B2 . G#2 ."),
-      lead: steps(`A4 . C5 . E5 . D5 C5 | F4 . A4 . C5 . B4 A4 | G4 . B4 . D5 . C5 B4 | E4 . G#4 . B4 . . .
-                   E5 . D5 C5 B4 . A4 . | C5 . B4 A4 G4 . F4 . | D5 . C5 B4 A4 . G4 . | G#4 . B4 . E5 . . .`),
-      drums: "k.h.k.h.",
-      leadVoice: { type: "square", dur: 0.28, vol: 0.05 },
-      bassVoice: { type: "triangle", dur: 0.3, vol: 0.2 },
+      bpm: 60, bars: 16,
+      chords: ["D3 F3 A3", "Bb2 D3 F3", "Eb3 G3 Bb3", "A2 C#3 E3", "D3 F3 A3", "G2 Bb2 D3", "Bb2 D3 F3", "A2 C#3 E3"].map(chord),
+      roots: ["D2", "Bb1", "Eb2", "A1", "D2", "G1", "Bb1", "A1"].map(freq),
+      melody: line([
+        [[0, "D4", 6], [6, "E4", 2], [8, "F4", 6], [14, "E4", 2]],
+        [[0, "D4", 8], [8, "C4", 4], [12, "Bb3", 4]],
+        [[0, "Eb4", 8], [8, "D4", 4], [12, "C4", 4]],
+        [[0, "C#4", 12], [12, "E4", 4]],
+        [[0, "A4", 6], [6, "G4", 2], [8, "F4", 4], [12, "E4", 4]],
+        [[0, "D4", 8], [8, "Bb3", 8]],
+        [[0, "C4", 4], [4, "D4", 4], [8, "Eb4", 8]],
+        [[0, "D4", 4], [4, "C#4", 12]],
+      ]),
+      play(bar, st, when, sl) {
+        const c = bar % 8, second = bar >= 8, barLen = sl * 16;
+        if (st === 0) {
+          for (const f of this.chords[c]) V.pad(f, when, barLen * 0.9, { vol: 0.016, cut: 700, attack: 1.2, release: 1.6 });
+          if (bar % 2 === 0) V.drone(freq("D1"), when, barLen * 2, { vol: 0.06 });
+          if (bar % 2 === 0) V.bell(freq("D4"), when, { vol: 0.04 });
+          if (second) for (const f of this.chords[c]) V.choir(f, when, barLen * 0.9, { vowel: "oo", vol: 0.022, attack: 1.2 });
+          if (bar % 8 === 4) V.wind(when);
+        }
+        // The march: a heavy beat, an answering one, and a soft pickup.
+        if (st === 0) V.timpani(this.roots[c], when, { vol: 0.32, decay: 1.4 });
+        if (st === 8) V.timpani(this.roots[c], when, { vol: 0.2, decay: 1.2 });
+        if (st === 14) V.timpani(this.roots[c], when, { vol: 0.1, decay: 0.6 });
+        // The first time through, the cello only answers low in the last four bars; then it sings the whole lament.
+        if (second || c >= 4) for (const [s0, f, len] of this.melody[c]) if (s0 === st) V.cello(second ? f : f / 2, when, len * sl * 0.95, { vol: second ? 0.05 : 0.06, cut: second ? 1100 : 800 });
+      },
     },
-    // Phase two: faster, lower and heavier, all half-steps and tritones.
-    boss2: {
-      bpm: 176, perBeat: 2,
-      bass: steps(`E1 E1 E2 E1 F1 F1 F2 F1 | E1 E1 E2 E1 G1 G1 Bb1 B1 | C2 C2 C3 C2 B1 B1 B2 B1 | Bb1 Bb1 Bb2 Bb1 A1 G1 F1 E1`),
-      lead: steps(`E5 . F5 . E5 . B4 . | E5 . F5 G5 F5 E5 . . | C6 . B5 . Bb5 . A5 . | G5 F5 E5 F5 E5 . . .
-                   E6 . . B5 C6 . Bb5 . | G5 . F5 . E5 . F5 . | G5 . Bb5 . B5 . C6 . | B5 . Bb5 . F5 . E5 .`),
-      drums: "kkshkksk",
-      leadVoice: { type: "square", dur: 0.12, vol: 0.05 },
-      bassVoice: { type: "sawtooth", dur: 0.14, vol: 0.06 },
-    },
-    // Driving and fast in D minor for the fight on the tower top.
+    // The boss battle: an epic C minor theme. Driving low strings, blaring brass, pounding
+    // taiko and timpani; on the second half the choir rises and the horns take the melody.
     boss: {
-      bpm: 160, perBeat: 2,
-      bass: steps(`D2 D2 D3 D2 D2 D2 C3 D2 | Bb1 Bb1 Bb2 Bb1 Bb1 Bb1 A2 Bb1 | C2 C2 C3 C2 C2 C2 Bb2 C2 | A1 A1 A2 A1 A1 C#2 E2 A2`),
-      lead: steps(`D5 . . A4 D5 . E5 F5 | F5 . E5 D5 . . A4 . | E5 . . C5 E5 . F5 G5 | A5 . G5 F5 E5 . C#5 .
-                   A5 . . F5 A5 . G5 F5 | D6 . C6 Bb5 A5 . F5 . | G5 . . E5 G5 . A5 Bb5 | A5 G5 F5 E5 C#5 . A4 .`),
-      drums: "khshkksh",
-      leadVoice: { type: "sawtooth", dur: 0.14, vol: 0.045 },
-      bassVoice: { type: "square", dur: 0.15, vol: 0.07 },
+      bpm: 138, bars: 16,
+      chords: ["C3 Eb3 G3 C4", "Ab2 C3 Eb3 Ab3", "Eb3 G3 Bb3 Eb4", "Bb2 D3 F3 Bb3", "C3 Eb3 G3 C4", "Ab2 C3 Eb3 Ab3", "F2 Ab2 C3 F3", "G2 B2 D3 G3"].map(chord),
+      roots: ["C2", "Ab1", "Eb2", "Bb1", "C2", "Ab1", "F1", "G1"].map(freq),
+      melody: line([
+        [[0, "G4", 6], [6, "C5", 2], [8, "Eb5", 6], [14, "D5", 2]],
+        [[0, "C5", 8], [8, "Ab4", 4], [12, "Bb4", 4]],
+        [[0, "G4", 6], [6, "Bb4", 2], [8, "Eb5", 8]],
+        [[0, "F5", 8], [8, "D5", 8]],
+        [[0, "G5", 6], [6, "F5", 2], [8, "Eb5", 4], [12, "D5", 4]],
+        [[0, "C5", 8], [8, "Eb5", 8]],
+        [[0, "F5", 4], [4, "Ab5", 4], [8, "G5", 4], [12, "F5", 4]],
+        [[0, "G5", 12], [12, "B4", 4]],
+      ]),
+      ost: [0, 0, 12, 0, 0, 0, 7, 12],
+      play(bar, st, when, sl) {
+        const c = bar % 8, second = bar >= 8, barLen = sl * 16, r = this.roots[c];
+        // Low strings: driving eighth notes on the root.
+        if (st % 2 === 0) V.strings(r * Math.pow(2, this.ost[st / 2] / 12) * 2, when, sl * 1.8, { vol: 0.045 });
+        if (st === 0) {
+          // Brass: a long chord on the downbeat...
+          for (const f of this.chords[c]) V.brass(f, when, sl * 6, { vol: 0.022 });
+          V.brass(r, when, sl * 6, { vol: 0.03, bright: 1200 });
+          if (second) for (const f of this.chords[c].slice(0, 3)) V.choir(f * 2, when, barLen * 0.95, { vol: 0.036, attack: 0.3 });
+          else for (const f of this.chords[c].slice(0, 3)) V.pad(f * 2, when, barLen * 0.95, { vol: 0.012, cut: 1600, attack: 0.3 });
+          if (bar % 8 === 0) V.crash(when, { vol: 0.08 });
+        }
+        // ...and a stab answering it.
+        if (st === 10) for (const f of this.chords[c].slice(0, 3)) V.brass(f, when, sl * 1.5, { vol: 0.028, release: 0.15 });
+        // Drums: taiko on the strong beats, timpani on the root, snare on the backbeat, a roll into each phrase.
+        if (st === 0 || st === 6 || st === 8) V.taiko(when, { vol: st === 0 ? 0.5 : 0.32 });
+        if (st === 0 || st === 8) V.timpani(r * 2, when, { vol: 0.2, decay: 0.8 });
+        if (st === 4 || st === 12) V.snare(when, { vol: 0.12 });
+        if (bar % 4 === 3 && st >= 12) V.snare(when, { vol: 0.05 + (st - 12) * 0.03 });
+        if (second) for (const [s0, f, len] of this.melody[c]) if (s0 === st) {
+          // Horns in octaves.
+          V.brass(f, when, len * sl * 0.95, { vol: 0.03, bright: 3000, attack: 0.05, vib: len >= 8 });
+          V.brass(f / 2, when, len * sl * 0.95, { vol: 0.025, bright: 1800, attack: 0.05 });
+        }
+      },
+    },
+    // Phase two: the Devourer. Faster and heavier, in E phrygian: churning sixteenth-note strings
+    // on a half-step, a chanting choir, war drums on every beat and brass shrieking dissonance.
+    boss2: {
+      bpm: 150, bars: 16,
+      chords: ["E3 G3 B3", "F3 A3 C4", "E3 G3 B3", "F3 A3 C4", "C3 E3 G3", "B2 D#3 F#3", "E3 G3 B3", "F3 A3 C4"].map(chord),
+      roots: ["E1", "F1", "E1", "F1", "C2", "B1", "E1", "F1"].map(freq),
+      melody: line([
+        [[0, "B4", 4], [4, "C5", 4], [8, "B4", 8]],
+        [[0, "C5", 4], [4, "A4", 4], [8, "F4", 8]],
+        [[0, "E5", 4], [4, "F5", 4], [8, "E5", 4], [12, "D5", 4]],
+        [[0, "C5", 8], [8, "A4", 8]],
+        [[0, "G5", 6], [6, "F5", 2], [8, "E5", 8]],
+        [[0, "F#5", 4], [4, "D#5", 4], [8, "B4", 8]],
+        [[0, "E5", 4], [4, "G5", 4], [8, "B5", 8]],
+        [[0, "C6", 8], [8, "B5", 4], [12, "F5", 4]],
+      ]),
+      ost: [0, 12, 1, 12, 0, 12, 1, 13, 0, 12, 1, 12, 3, 1, 0, 1],
+      play(bar, st, when, sl) {
+        const c = bar % 8, second = bar >= 8, barLen = sl * 16, r = this.roots[c];
+        V.strings(freq("E2") * Math.pow(2, this.ost[st] / 12), when, sl * 0.9, { vol: 0.05, cut: 1800, thin: true });
+        if (st === 0) {
+          for (const f of this.chords[c]) V.choir(f, when, barLen * 0.95, { vol: 0.035, attack: 0.25 });
+          V.drone(r, when, barLen, { vol: 0.07, cut: 300 });
+          if (bar % 4 === 0) V.bell(freq("E4"), when, { vol: 0.05 });
+          if (bar % 8 === 0) V.crash(when, { vol: 0.09 });
+        }
+        // Dissonant brass hits off the beat.
+        if (st === 3 || st === 11) {
+          for (const f of [this.chords[c][0], this.chords[c][2]]) V.brass(f * 2, when, sl * 1.2, { vol: 0.02, release: 0.12, bright: 3400 });
+          V.brass(r * 4 * Math.pow(2, 1 / 12), when, sl * 1.2, { vol: 0.014, release: 0.12, bright: 3400 });
+        }
+        if (st % 4 === 0) V.taiko(when, { vol: st === 0 ? 0.55 : 0.36, f: 70 });
+        if (st % 8 === 6) V.taiko(when, { vol: 0.25, f: 95 });
+        if (st === 4 || st === 12) V.snare(when, { vol: 0.14 });
+        if (bar % 2 === 1 && st >= 12) V.timpani(r * 4, when, { vol: 0.14, decay: 0.3 });
+        if (second) for (const [s0, f, len] of this.melody[c]) if (s0 === st) {
+          // The choir wails the melody over it all.
+          V.choir(f, when, len * sl * 0.95, { vol: 0.04, attack: 0.08, release: 0.5, solo: true });
+          V.brass(f / 2, when, len * sl * 0.9, { vol: 0.02, bright: 2200 });
+        }
+      },
     },
   };
 
   let track = null, step = 0, nextTime = 0;
-  function drum(ch, when) {
-    if (ch === "k") tone(150, { to: 40, type: "sine", dur: 0.16, vol: 0.5, when, bus: musicBus });
-    if (ch === "s") { noise({ dur: 0.12, vol: 0.18, filter: "highpass", freq: 1500, when, bus: musicBus }); tone(200, { type: "triangle", dur: 0.08, vol: 0.1, when, bus: musicBus }); }
-    if (ch === "h" || ch === "k" && track === "boss") noise({ dur: 0.03, vol: 0.05, filter: "highpass", freq: 7000, when, bus: musicBus });
-  }
   function scheduleStep(t, i, when) {
-    const bass = t.bass[i % t.bass.length], lead = t.lead[i % t.lead.length];
-    if (bass) tone(bass, Object.assign({ when, bus: musicBus }, t.bassVoice));
-    if (lead) tone(lead, Object.assign({ when, bus: musicBus, attack: 0.01 }, t.leadVoice));
-    drum(t.drums[i % t.drums.length], when);
+    t.play(Math.floor(i / 16) % t.bars, i % 16, when, 60 / t.bpm / 4);
   }
   // Look ahead a little and schedule notes on the audio clock so the beat stays steady.
   setInterval(() => {
     if (!ac || ac.state !== "running" || !track) return;
-    const t = TRACKS[track], stepLen = 60 / t.bpm / t.perBeat;
+    if (!reverbIn) buildReverb();
+    const t = TRACKS[track], stepLen = 60 / t.bpm / 4;
     if (nextTime < ac.currentTime) nextTime = ac.currentTime + 0.05;
-    while (nextTime < ac.currentTime + 0.15) {
+    while (nextTime < ac.currentTime + 0.2) {
       scheduleStep(t, step, nextTime);
       nextTime += stepLen;
-      step = (step + 1) % (t.lead.length * t.bass.length);
+      step = (step + 1) % (t.bars * 16);
     }
-  }, 30);
+  }, 40);
+
+  // For testing: render a few seconds of a track offline and report its levels.
+  async function renderTrack(name, secs = 10) {
+    const saved = { ac, musicBus, reverbIn, wetBus, noiseBuf, shared };
+    const off = new OfflineAudioContext(2, Math.floor(44100 * secs), 44100);
+    ac = off;
+    const comp = off.createDynamicsCompressor();
+    comp.connect(off.destination);
+    musicBus = off.createGain();
+    musicBus.gain.value = 0.45 * 0.6;
+    musicBus.connect(comp);
+    noiseBuf = off.createBuffer(1, off.sampleRate, off.sampleRate);
+    const nd = noiseBuf.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    reverbIn = null;
+    buildReverb();
+    const t = TRACKS[name], sl = 60 / t.bpm / 4;
+    for (let i = 0; i * sl < secs - 0.1; i++) scheduleStep(t, i, 0.05 + i * sl);
+    const buf = await off.startRendering();
+    ({ ac, musicBus, reverbIn, wetBus, noiseBuf, shared } = saved);
+    const d = buf.getChannelData(0);
+    let peak = 0, sum = 0;
+    for (let i = 0; i < d.length; i++) { peak = Math.max(peak, Math.abs(d[i])); sum += d[i] * d[i]; }
+    return { peak, rms: Math.sqrt(sum / d.length), buf };
+  }
 
   function music(name) {
     if (track === name) return;
@@ -991,7 +1293,7 @@ const Sound = (() => {
     if (ac) nextTime = ac.currentTime + 0.1;
   }
 
-  return { unlock, play, music, toggle, prefs };
+  return { unlock, play, music, toggle, prefs, renderTrack };
 })();
 
 // ---------- input ----------
