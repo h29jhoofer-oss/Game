@@ -14,7 +14,11 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
 - **Build:** spend coins on spikes, saw blades and arrow turrets (click a trap of the same type again to upgrade it, up to level 3), and souls on skeletons and ogres. You can build during waves too.
 - **Loot:** every hero you kill drops coins and exactly one soul, which fly into your counters.
 - **Unlockable traps:** kills unlock fire vents (3 kills), crushers (6), bombs (10) and frost totems that slow heroes down (15).
-- **Boss battle:** Vorgath roars to open the fight and becomes enraged (faster, deadlier) below half health. A / D move, W jumps, Space swings your cleaver and S slams the ground to send out shockwaves.
+- **Boss battle:** Vorgath roars to open the fight and becomes enraged (faster, deadlier) below half health. A / D move, W jumps and Space swings your cleaver. Special attacks, each on a cooldown shown in the action bar:
+  - **Q – Cleaver Slash:** dash forward, cutting through every hero in the way.
+  - **S – Ground Smash:** leap and slam down, hurting and hurling away everyone around you, with shockwaves along the floor.
+  - **R – Grasp of the Damned:** a pool of blood opens under the heroes; bony hands hold them, and the weak are dragged down to hell.
+  - **F – Hellfire:** the sky burns and fireballs rain down on the heroes.
 - **Sound:** chiptune music and sound effects, all synthesized in the browser (no audio files). M mutes the music, N mutes sound effects, and the toolbar has toggles for both.
 - Lava pits kill heroes who miss a jump. Each wave brings one more hero than the last, and they're stronger, better geared, and better at spotting traps and dodging.
 

@@ -129,7 +129,10 @@
     Click a trap of the same type again to upgrade it (max level 3).
     Every hero you kill drops coins and exactly one soul, and kills unlock new traps: fire vents, crushers, bombs and frost totems.<br>
     <b>Boss battle:</b> when the tower fills up, the fight moves to the tower top.
-    A / D or arrows move, W jumps, Space swings your cleaver, S slams the ground and sends out shockwaves.<br>
+    A / D or arrows move, W jumps, Space swings your cleaver. Special attacks, each with a cooldown:
+    <b>Q</b> Cleaver Slash (dash through the heroes), <b>S</b> Ground Smash (hurls away everyone around you),
+    <b>R</b> Grasp of the Damned (a pool of blood that holds heroes and drags the weak down to hell),
+    <b>F</b> Hellfire (fireballs rain from the sky).<br>
     <b>Heroes:</b> knights charge in with swords. From wave 2, <b>archers</b> join: fast and fragile, they stop to shoot
     your minions and keep their distance on the tower. From wave 3, <b>Iron Knights</b> march in: slow and very tough,
     with a tower shield that blocks most arrow damage from the front. Crushers, fire and bombs work best on them.<br>
@@ -237,7 +240,15 @@ const MINIONS = {
   skeleton: { cost: 1, hp: 15, atk: 3, speed: 2.0, w: 0.6, blood: ["#e8e2d0", "#a89f8a"] },
   ogre:     { cost: 3, hp: 50, atk: 8, speed: 1.2, w: 0.8, blood: ["#6aa84f", "#3f7a34"] },
 };
-const BOSS_HP = 300, BOSS_DMG = 30, BOSS_SPEED = 4, SLAM_DMG = 20, WAVE_DMG = 12;
+const BOSS_HP = 300, BOSS_DMG = 30, BOSS_SPEED = 4, SLAM_DMG = 26, WAVE_DMG = 12;
+// The Hollow King's special attacks. Cooldowns are in seconds, and shorter while he is enraged.
+const ABILITIES = [
+  { id: "slash", key: "Q", name: "CLEAVER SLASH", cd: 4 },
+  { id: "smash", key: "S", name: "GROUND SMASH", cd: 5 },
+  { id: "grasp", key: "R", name: "GRASP OF THE DAMNED", cd: 10 },
+  { id: "hellfire", key: "F", name: "HELLFIRE", cd: 16 },
+];
+const SLASH_DMG = 32, SMASH_RADIUS = 2.6, GRASP_TICK = 6, METEOR_DMG = 12;
 const GEAR = [
   { name: "Rags",         main: "#8d7b68", shade: "#5e5044" },
   { name: "Leather",      main: "#a0612d", shade: "#6b3f1d" },
@@ -270,6 +281,9 @@ const TAUNTS = {
   roar: ["YOUR SOULS ARE MINE.", "KNEEL BEFORE THE HOLLOW KING.", "NONE LEAVE THIS TOWER."],
   kill: ["KNEEL.", "ANOTHER SOUL.", "PATHETIC.", "THE TOWER HUNGERS.", "YOU ARE NOTHING."],
   rage: ["I AM ETERNAL!", "ENOUGH!"],
+  grasp: ["THE DEAD ARE HUNGRY.", "JOIN THEM BELOW.", "HELL OPENS FOR YOU."],
+  hellfire: ["BURN.", "LET THE SKY FALL.", "THE HEAVENS BLEED FOR ME."],
+  dragged: ["ONE MORE FOR THE PIT.", "DOWN YOU GO."],
   win: ["THE TOWER STANDS.", "SLEEP, LITTLE KNIGHTS."],
   die: ["THE TOWER... FALLS..."],
 };
@@ -334,7 +348,8 @@ function waveRoster(w) {
 function makeBoss() {
   return {
     x: PERCH.x, y: PERCH.y, w: 2.4, h: 2.75, vx: 0, vy: 0, onGround: true, isBoss: true,
-    hp: BOSS_HP, maxHp: BOSS_HP, cd: 0, windup: 0, swing: 0, slam: 0, slamCd: 0, face: -1, flash: 0, arm: 1.2,
+    hp: BOSS_HP, maxHp: BOSS_HP, cd: 0, windup: 0, swing: 0, slam: 0, face: -1, flash: 0, arm: 1.2,
+    action: null, cds: { slash: 0, smash: 0, grasp: 0, hellfire: 0 },
   };
 }
 
@@ -351,7 +366,7 @@ function newGame(title = false) {
     phase: title ? "title" : "intro", scene: "level", floats: [], particles: [], tool: "spike", time: 0,
     fade: 0, fadeIn: 0, intro: 0, returnT: 0,
     shake: 0, banner: null, bannerQueue: [], pulse: { coins: 0, souls: 0 }, fresh: new Set(),
-    dialog: { queue: [], cur: null }, heroArrows: [], seenKinds: new Set(["knight"]), lightning: { next: 3 + Math.random() * 4, flash: 0, bolt: null }, prologue: null, heartbeat: 0,
+    dialog: { queue: [], cur: null }, heroArrows: [], pools: [], meteors: [], hell: null, ghosts: [], decals: [], rings: [], slashes: [], seenKinds: new Set(["knight"]), lightning: { next: 3 + Math.random() * 4, flash: 0, bolt: null }, prologue: null, heartbeat: 0,
   };
   if (title) { say("Click or press any key to begin."); return; }
   startOpening();
@@ -615,6 +630,23 @@ const Sound = (() => {
       noise({ dur: 2.4, vol: 0.45, freq: 700, to: 60, attack: 0.05, at: 0.2 });
       tone(40, { type: "sine", dur: 2.2, vol: 0.3, attack: 0.1, at: 0.2 });
     },
+    slashCharge: () => tone(300, { to: 900, type: "sawtooth", dur: 0.22, vol: 0.06 }),
+    slash: () => { noise({ dur: 0.3, vol: 0.32, filter: "bandpass", freq: 3200, to: 500, q: 1.5 }); tone(1400, { to: 260, type: "square", dur: 0.25, vol: 0.06 }); },
+    graspCast: () => {
+      tone(55, { type: "sawtooth", dur: 1.3, vol: 0.12, attack: 0.3 });
+      tone(58.3, { type: "sawtooth", dur: 1.3, vol: 0.1, attack: 0.3 });
+      tone(110, { to: 78, type: "sine", dur: 1.3, vol: 0.12, attack: 0.4 });
+      noise({ dur: 1.0, vol: 0.14, freq: 250, to: 1100, attack: 0.5 });
+    },
+    bones: () => { for (let i = 0; i < 6; i++) tone(700 + Math.random() * 700, { type: "square", dur: 0.02, vol: 0.06, at: i * 0.05 }); },
+    drag: () => {
+      tone(80, { to: 28, type: "sawtooth", dur: 1.0, vol: 0.2 });
+      noise({ dur: 1.0, vol: 0.25, freq: 600, to: 70 });
+      tone(900, { to: 260, type: "sawtooth", dur: 0.7, vol: 0.05 });
+    },
+    hellCast: () => { tone(60, { to: 130, type: "sawtooth", dur: 0.9, vol: 0.2, attack: 0.2 }); noise({ dur: 0.9, vol: 0.25, freq: 200, to: 1600, attack: 0.3 }); },
+    meteor: () => noise({ dur: 0.45, vol: 0.08, filter: "bandpass", freq: 1900, to: 400, q: 2 }),
+    meteorBoom: () => { tone(100, { to: 35, type: "sine", dur: 0.4, vol: 0.32 }); noise({ dur: 0.4, vol: 0.22, freq: 1800, to: 120 }); },
     bow: () => { tone(320, { to: 140, type: "triangle", dur: 0.12, vol: 0.09 }); noise({ dur: 0.08, vol: 0.06, filter: "bandpass", freq: 2500, q: 3 }); },
     stomp: () => { tone(70, { to: 45, type: "sine", dur: 0.12, vol: 0.22 }); noise({ dur: 0.06, vol: 0.06, freq: 400 }); },
     clang: () => { tone(1250, { type: "square", dur: 0.08, vol: 0.06 }); tone(1870, { type: "triangle", dur: 0.25, vol: 0.06 }); noise({ dur: 0.05, vol: 0.1, filter: "highpass", freq: 4000 }); },
@@ -627,7 +659,7 @@ const Sound = (() => {
     },
   };
   // Busy sounds are rate-limited so a crowd of heroes doesn't turn into noise.
-  const GAP = { stomp: 0.12, bow: 0.06, clang: 0.08, voiceBoss: 0.05, voiceHero: 0.04, growl: 0.5, thunder: 2, bounce: 0.07, hit: 0.05, minionHurt: 0.08, fire: 0.3, coinDrop: 0.2, saw: 0.12, spike: 0.1, arrow: 0.08, soulRise: 0.15 };
+  const GAP = { meteor: 0.08, meteorBoom: 0.07, bones: 0.15, stomp: 0.12, bow: 0.06, clang: 0.08, voiceBoss: 0.05, voiceHero: 0.04, growl: 0.5, thunder: 2, bounce: 0.07, hit: 0.05, minionHurt: 0.08, fire: 0.3, coinDrop: 0.2, saw: 0.12, spike: 0.1, arrow: 0.08, soulRise: 0.15 };
 
   function play(name, arg) {
     if (!ac || ac.state !== "running" || !prefs.sfx || !SFX[name]) return;
@@ -721,7 +753,10 @@ document.addEventListener("keydown", e => {
   keys[k] = true;
   if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
   if (k === " ") bossAttack();
-  if (k === "s" || k === "arrowdown") bossSlam();
+  if (k === "s" || k === "arrowdown" || k === "e") useAbility("smash");
+  if (k === "q") useAbility("slash");
+  if (k === "r") useAbility("grasp");
+  if (k === "f") useAbility("hellfire");
 });
 document.addEventListener("keyup", e => {
   keys[e.key.toLowerCase()] = false;
@@ -976,7 +1011,9 @@ function startBossFight() {
     Object.assign(h, { x: 1.4 + slot * 0.5, y: ARENA_FLOOR - h.h, vx: 0, vy: 0, face: 1, evade: 0, trail: [], cd: 0.5 + i * 0.15, walkTo: 4 + slot });
   });
   const b = S.boss;
-  Object.assign(b, { x: 21.5, y: ARENA_FLOOR - b.h, vx: 0, vy: 0, face: -1, windup: 0, swing: 0, slam: 0, cd: 0, slamCd: 0, hp: b.maxHp, enraged: false, roar: 0 });
+  Object.assign(b, { x: 21.5, y: ARENA_FLOOR - b.h, vx: 0, vy: 0, face: -1, windup: 0, swing: 0, slam: 0, cd: 0, hp: b.maxHp, enraged: false, roar: 0,
+    action: null, cds: { slash: 0, smash: 0, grasp: 0, hellfire: 0 } });
+  clearSpecials();
   S.intro = 3.0;
   Sound.play("bossIntro");
   say(`${S.heroes.length} heroes reached the top of the tower. Boss battle! A / D move, W jumps, Space swings, S slams the ground.`);
@@ -984,6 +1021,7 @@ function startBossFight() {
 
 // After the boss wins, go back down to the level to build for the next wave.
 function returnToLevel() {
+  clearSpecials();
   S.scene = "level";
   S.fadeIn = FADE;
   S.waves = [];
@@ -996,12 +1034,12 @@ const canFight = () => (S.phase === "boss" && S.intro <= 0) || S.phase === "fell
 
 function bossAttack() {
   const b = S.boss;
-  if (!canFight() || b.cd > 0 || b.windup > 0 || b.slam > 0) return;
+  if (!canFight() || b.cd > 0 || bossBusy(b)) return;
   b.windup = 0.25;
   b.cd = b.enraged ? 0.55 : 0.75;
   // Stronger heroes sometimes see the swing coming and leap away.
   for (const h of S.heroes) {
-    if (h.evade <= 0 && Math.abs(centerX(h) - centerX(b)) < 3 && Math.random() < h.dodge) {
+    if (h.evade <= 0 && !h.grabbed && Math.abs(centerX(h) - centerX(b)) < 3 && Math.random() < h.dodge) {
       h.evade = 0.45;
       if (h.onGround) h.vy = -9;
       float(centerX(h), h.y - 0.3, "DODGE", "#6fd3ff");
@@ -1010,13 +1048,207 @@ function bossAttack() {
   }
 }
 
-// Heavy attack: raise the cleaver high, then smash the floor and send shockwaves both ways.
-function bossSlam() {
+// ---------- special attacks ----------
+const abilityCd = (b, id) => ABILITIES.find(a => a.id === id).cd * (b.enraged ? 0.7 : 1);
+const bossBusy = b => b.windup > 0 || b.slam > 0 || !!b.action;
+
+function useAbility(id) {
   const b = S.boss;
-  if (!canFight() || b.slamCd > 0 || b.windup > 0 || b.slam > 0 || !b.onGround) return;
-  b.slam = 0.45;
-  b.slamCd = b.enraged ? 2.2 : 3;
-  Sound.play("slamCharge");
+  if (!canFight()) return;
+  if (b.cds[id] > 0 || bossBusy(b) || (id === "smash" && !b.onGround)) { if (b.cds[id] > 0) Sound.play("deny"); return; }
+  b.cds[id] = abilityCd(b, id);
+  b.flashName = { text: ABILITIES.find(a => a.id === id).name, t: 1.2 };
+  if (id === "smash") {
+    // Leap, then come down hard.
+    b.slam = 0.45;
+    b.vy = -6;
+    Sound.play("slamCharge");
+  } else if (id === "slash") {
+    b.action = { type: "slash", t: 0, hits: new Set() };
+    Sound.play("slashCharge");
+  } else if (id === "grasp") {
+    b.action = { type: "grasp", t: 0 };
+    Sound.play("graspCast");
+    if (!S.dialog.cur && Math.random() < 0.6) speak(b, pick(TAUNTS.grasp));
+  } else if (id === "hellfire") {
+    b.action = { type: "hellfire", t: 0 };
+    Sound.play("hellCast");
+    if (!S.dialog.cur && Math.random() < 0.6) speak(b, pick(TAUNTS.hellfire));
+  }
+}
+
+function clearSpecials() {
+  for (const h of S.heroes) { h.grabbed = null; h.sink = 0; h.doomed = false; }
+  Object.assign(S, { pools: [], meteors: [], hell: null, ghosts: [], decals: [], rings: [], slashes: [] });
+  if (S.boss) S.boss.action = null;
+}
+
+// Runs every frame of a special attack that takes time to perform.
+function updateAction(b, dt) {
+  const a = b.action;
+  a.t += dt;
+  if (a.type === "slash") {
+    // Wind up, then dash forward through every hero in the way, and finish with a wide cut.
+    if (a.t < 0.22) { b.vx = 0; return; }
+    if (!a.started) {
+      a.started = true;
+      a.x0 = centerX(b);
+      S.shake = Math.max(S.shake, 3);
+      Sound.play("slash");
+    }
+    if (a.t < 0.48) {
+      b.vx = b.face * 16;
+      if (Math.random() < dt * 60) S.ghosts.push({ x: b.x, y: b.y, face: b.face, t: 0.25 });
+      const box = { x: b.x - 0.3, y: b.y, w: b.w + 0.6, h: b.h };
+      for (const h of S.heroes) {
+        if (a.hits.has(h) || h.evade > 0 || !overlaps(box, h)) continue;
+        a.hits.add(h);
+        damage(h, SLASH_DMG, "#ff5252");
+        knock(h, b.face * 6, -5);
+        Sound.play("bossHit");
+      }
+      return;
+    }
+    if (!a.cut) {
+      a.cut = true;
+      b.swing = 0.15;
+      S.slashes.push({ x0: a.x0, x1: centerX(b) + b.face * 1.5, y: b.y + 1.3, t: 0.35 });
+      for (const h of S.heroes) if (!a.hits.has(h) && h.evade <= 0 && overlaps(swingBox(b), h)) { damage(h, SLASH_DMG * 0.6, "#ff5252"); knock(h, b.face * 4, -4); }
+    }
+    b.vx = 0;
+    if (a.t > 0.62) b.action = null;
+  } else if (a.type === "grasp") {
+    // Hand raised, dark power gathering, then the ground opens.
+    b.vx = 0;
+    if (Math.random() < dt * 40) {
+      const ang = Math.random() * Math.PI * 2;
+      particle({ x: centerX(b) + Math.cos(ang) * 1.4, y: b.y + 0.4 + Math.sin(ang) * 1, vx: -Math.cos(ang) * 2, vy: -Math.sin(ang) * 2, life: 0.4, color: Math.random() < 0.5 ? "#7a1420" : "#3b1048", glow: true });
+    }
+    if (a.t >= 0.6) { castGrasp(b); b.action = null; }
+  } else if (a.type === "hellfire") {
+    // Cleaver to the sky; the heavens catch fire.
+    b.vx = 0;
+    if (Math.random() < dt * 30) particle({ x: centerX(b) + b.face * 0.8, y: b.y - 0.4, vy: -6, life: 0.4, color: "#ff6f00", glow: true });
+    if (a.t >= 0.8) {
+      S.hell = { t: 0, dur: 2.8, next: 0 };
+      S.shake = Math.max(S.shake, 4);
+      b.action = null;
+    }
+  }
+}
+
+// Throw a hero: they fly helplessly for a moment.
+function knock(h, vx, vy) {
+  if (h.grabbed) return;
+  h.vx = vx;
+  h.vy = vy;
+  h.knock = 0.45;
+}
+
+// Grasp of the Damned: a pool of blood opens under the thickest knot of heroes.
+function castGrasp(b) {
+  let best = null, bestN = -1;
+  for (const h of S.heroes) {
+    const n = S.heroes.filter(o => Math.abs(centerX(o) - centerX(h)) < 2.2).length;
+    if (n > bestN) { bestN = n; best = centerX(h); }
+  }
+  const x = Math.max(2.6, Math.min(W - 2.6, best ?? centerX(b) + b.face * 4));
+  S.pools.push({ x, r: 0, maxR: 2.3, t: 0, hands: [], grabbed: new Set(), tick: 0 });
+  S.shake = Math.max(S.shake, 3);
+  Sound.play("bones");
+}
+
+function updatePools(dt) {
+  const floor = ARENA_FLOOR;
+  for (const p of S.pools) {
+    const before = p.t;
+    p.t += dt;
+    p.r = p.t < 0.5 ? p.maxR * p.t / 0.5 : p.t < 2.9 ? p.maxR : p.maxR * Math.max(0, 1 - (p.t - 2.9) / 0.6);
+    if (Math.random() < dt * 20) particle({ x: p.x + (Math.random() - 0.5) * 2 * p.r, y: floor - 0.05, vy: -1.5 - Math.random() * 2, g: 10, life: 0.5, color: Math.random() < 0.5 ? "#c62828" : "#5d0f0f" });
+    if (p.t > 0.5 && p.t < 2.1) {
+      // Bony hands claw up out of the blood and seize anyone standing in it.
+      if (Math.random() < dt * 6) p.hands.push({ x: p.x + (Math.random() - 0.5) * 1.8 * p.r, t: 0, life: 0.9 + Math.random() * 0.6 });
+      for (const h of S.heroes) {
+        if (h.grabbed || Math.abs(centerX(h) - p.x) > p.r || h.y + h.h < floor - 0.4) continue;
+        h.grabbed = p;
+        h.vx = h.vy = 0;
+        p.grabbed.add(h);
+        Sound.play("bones");
+      }
+      p.tick -= dt;
+      if (p.tick <= 0) {
+        p.tick = 0.5;
+        for (const h of p.grabbed) damage(h, GRASP_TICK, "#ff5252", ["#c62828", "#5d0f0f"]);
+      }
+    }
+    for (const hand of p.hands) hand.t += dt;
+    p.hands = p.hands.filter(hand => hand.t < hand.life);
+    if (before < 2.1 && p.t >= 2.1) {
+      // The weak are dragged down to hell; the strong tear free.
+      let dragged = 0;
+      for (const h of p.grabbed) {
+        if (h.hp <= h.maxHp * 0.5) { h.doomed = true; dragged++; }
+        else { h.grabbed = null; knock(h, Math.sign(centerX(h) - p.x) * 3, -7); float(centerX(h), h.y - 0.3, "BROKE FREE", "#e6e0ec"); }
+      }
+      if (dragged) Sound.play("drag");
+    }
+    if (p.t >= 2.1) {
+      for (const h of p.grabbed) {
+        if (!h.doomed) continue;
+        h.sink = Math.min(1, (p.t - 2.1) / 0.8);
+        if (h.sink >= 1 && h.hp > 0) { h.hp = 0; h.hell = true; }
+      }
+    }
+  }
+  for (const p of S.pools) if (p.t >= 3.5) for (const h of p.grabbed) { h.grabbed = null; h.sink = 0; }
+  S.pools = S.pools.filter(p => p.t < 3.5);
+}
+
+// Hellfire: fireballs rain from a burning sky, most of them aimed at the heroes.
+function updateHell(dt) {
+  const hell = S.hell;
+  if (hell) {
+    hell.t += dt;
+    hell.next -= dt;
+    while (hell.next <= 0 && hell.t < hell.dur) {
+      hell.next += 0.12;
+      const aimed = S.heroes.length && Math.random() < 0.6;
+      const tx = aimed ? centerX(pick(S.heroes)) + (Math.random() - 0.5) * 1.5 : 1.5 + Math.random() * (W - 3);
+      const from = tx + (Math.random() < 0.5 ? -3 : 3), fall = 0.5 + Math.random() * 0.2;
+      S.meteors.push({ x: from, y: -0.5, vx: (tx - from) / fall, vy: (ARENA_FLOOR + 0.5) / fall });
+      Sound.play("meteor");
+    }
+    if (hell.t > hell.dur + 0.8) S.hell = null;
+  }
+  for (const m of S.meteors) {
+    m.x += m.vx * dt;
+    m.y += m.vy * dt;
+    if (Math.random() < dt * 60) particle({ x: m.x, y: m.y, vx: -m.vx * 0.1, vy: -1, life: 0.3, color: Math.random() < 0.5 ? "#ff6f00" : "#ffb300", glow: true });
+    if (m.y >= ARENA_FLOOR) {
+      m.dead = true;
+      burst(m.x, ARENA_FLOOR - 0.1, 14, ["#ffd54f", "#ff6f00", "#ff3d00", "#fff3c4"], 6, { glow: true });
+      S.decals.push({ type: "scorch", x: m.x, life: 3 });
+      S.shake = Math.max(S.shake, 2);
+      Sound.play("meteorBoom");
+      for (const h of S.heroes) {
+        if (h.evade > 0 || Math.abs(centerX(h) - m.x) > 1 || h.y + h.h < ARENA_FLOOR - 1.5) continue;
+        damage(h, METEOR_DMG, "#ffb74d", ["#ff6f00", "#ffd54f"]);
+      }
+    }
+  }
+  S.meteors = S.meteors.filter(m => !m.dead);
+}
+
+function updateSpecials(dt) {
+  updatePools(dt);
+  updateHell(dt);
+  for (const list of [S.ghosts, S.slashes, S.rings]) for (const g of list) g.t -= dt;
+  for (const d of S.decals) d.life -= dt;
+  S.ghosts = S.ghosts.filter(g => g.t > 0);
+  S.slashes = S.slashes.filter(g => g.t > 0);
+  S.rings = S.rings.filter(g => g.t > 0);
+  S.decals = S.decals.filter(d => d.life > 0);
+  if (S.boss.flashName) S.boss.flashName.t -= dt;
 }
 
 function slamImpact(b) {
@@ -1027,11 +1259,14 @@ function slamImpact(b) {
   dust(fx, fy, 16);
   burst(fx, fy - 0.1, 12, ["#8a8296", "#c9c2d6", "#5d566a"], 6);
   for (const dir of [-1, 1]) S.waves.push({ x: centerX(b) + dir * 0.8, y: fy, dir, life: 1.1, hits: new Set(), jumps: new Map() });
+  S.rings.push({ x: centerX(b), y: fy, t: 0.4 });
+  S.decals.push({ type: "crack", x: centerX(b), life: 3.5 });
+  // Everyone close by is hurt and hurled away.
   for (const h of S.heroes) {
-    if (h.evade <= 0 && h.onGround && Math.abs(centerX(h) - centerX(b)) < 1.8) {
-      damage(h, SLAM_DMG, "#ff5252");
-      h.vy = -6;
-    }
+    const dx = centerX(h) - centerX(b);
+    if (h.evade > 0 || Math.abs(dx) > SMASH_RADIUS || h.y + h.h < fy - 1.6) continue;
+    damage(h, SLAM_DMG, "#ff5252");
+    knock(h, (Math.sign(dx) || 1) * 7, -6);
   }
 }
 
@@ -1070,6 +1305,7 @@ function update(dt) {
     // The heroes are dead; the boss stands on the tower a moment before the scene fades back.
     updateBoss(dt);
     updateWaves(dt);
+    updateSpecials(dt);
     S.returnT -= dt;
     if (S.returnT <= 0) returnToLevel();
     return;
@@ -1084,6 +1320,7 @@ function update(dt) {
     for (const h of S.heroes) updateHero(h, dt);
     updateHeroArrows(dt);
     updateWaves(dt);
+    updateSpecials(dt);
   } else {
     updateMinions(dt);
     if (S.phase === "intro") updateOpening(dt);
@@ -1259,20 +1496,24 @@ function updateBoss(dt) {
   const b = S.boss;
   b.cd -= dt;
   b.swing -= dt;
-  b.slamCd -= dt;
+  for (const id in b.cds) b.cds[id] -= dt;
   let dir = 0;
-  if (b.slam <= 0) {
+  if (b.slam <= 0 && !b.action) {
     if (keys.a || keys.arrowleft) dir--;
     if (keys.d || keys.arrowright) dir++;
     if ((keys.w || keys.arrowup) && b.onGround) { b.vy = -10; Sound.play("jump"); }
   }
   b.vx = dir * BOSS_SPEED;
   if (dir) b.face = dir;
+  if (b.action) updateAction(b, dt);
   moveBody(b, dt);
 
   // Cleaver angle: resting forward, raised back on windup, straight up for a slam, sweeping down on the swing.
   b.roar = (b.roar || 0) - dt;
-  const target = b.slam > 0 || b.roar > 0 ? -0.1 : b.windup > 0 ? -0.5 : b.swing > 0 ? 2.3 : 1.2;
+  const act = b.action;
+  const target = act && act.type !== "slash" ? -0.15
+    : act && act.type === "slash" ? (act.t < 0.22 ? -0.9 : 2.4)
+    : b.slam > 0 || b.roar > 0 ? -0.1 : b.windup > 0 ? -0.5 : b.swing > 0 ? 2.3 : 1.2;
   b.arm += (target - b.arm) * Math.min(1, dt * (b.swing > 0 ? 40 : b.windup > 0 || b.slam > 0 ? 18 : 8));
 
   if (b.slam > 0) {
@@ -1305,6 +1546,17 @@ function updateHero(h, dt) {
   h.atkAnim -= dt;
   h.trail = h.trail.filter(p => (p.t -= dt) > 0);
 
+  if (h.grabbed) {
+    // Held fast by the hands in the blood, struggling.
+    h.vx = 0;
+    h.vy = 0;
+    return;
+  }
+  if (h.knock > 0) {
+    h.knock -= dt;
+    moveBody(h, dt);
+    return;
+  }
   if (h.evade > 0) {
     // Leap away from the boss, leaving afterimages.
     h.evade -= dt;
@@ -1755,7 +2007,10 @@ function heroDied(h) {
   S.heroes = S.heroes.filter(o => o !== h);
   const hx = centerX(h), hy = Math.min(centerY(h), H - 1.5);
   const gear = gearFor(h.lv);
-  burst(hx, hy, 24, h.lava ? ["#ffb300", "#ff6f00", "#fff59d"] : ["#d32f2f", gear.main, gear.shade], 6, { glow: !!h.lava });
+  if (h.hell) {
+    burst(hx, ARENA_FLOOR - 0.1, 26, ["#c62828", "#5d0f0f", "#e8dcc0"], 5);
+    if (!S.dialog.cur && Math.random() < 0.5) speak(S.boss, pick(TAUNTS.dragged));
+  } else burst(hx, hy, 24, h.lava ? ["#ffb300", "#ff6f00", "#fff59d"] : ["#d32f2f", gear.main, gear.shade], 6, { glow: !!h.lava });
   dropCoins(hx, hy, coins);
   dropSoul(hx, hy - 0.3);
   S.shake = Math.max(S.shake, 2.5);
@@ -2194,6 +2449,63 @@ const ART = {
     "CaAAAAAAhhAAAAAAaC",
     "aAAAAAAAAAAAAAAAAa",
   ],
+  boneHand: [".H.H.H.", ".H.H.H.", "HH.H.H.", "HHHHHH.", "HHHHHHH", ".HHHHH.", "..HhH..", "..HhH..", "..HhH..", "..HhH..", "..HhH.."],
+  iconSlash: [
+    "..........WW",
+    "........WWR.",
+    "......WWRR..",
+    ".....WRR....",
+    "....WRR.....",
+    "...WRR......",
+    "..WRR.......",
+    "..WR........",
+    ".WRR........",
+    ".WR.........",
+    "WR..........",
+    "W...........",
+  ],
+  iconSmash: [
+    "...hHHHHh...",
+    "..hHHHHHHh..",
+    "..HHkHkHkH..",
+    "..HHHHHHHH..",
+    "...HHHHHH...",
+    "....HHHH....",
+    "............",
+    ".D..D..D..D.",
+    "DDDDDDDDDDDD",
+    "dMdddMdddMdd",
+    "dddMdddMdddd",
+    "dddddddddddd",
+  ],
+  iconGrasp: [
+    "..H..H..H...",
+    "..H..H..H.H.",
+    "..H..H..H.H.",
+    "..HHHHHHHH..",
+    "..HHHHHHHH..",
+    "...HHHHHH...",
+    "....HhhH....",
+    "....HhhH....",
+    ".RRRRRRRRRR.",
+    "RRrRRRRRrRRR",
+    "rRRRrRRRRRrR",
+    ".rrrrrrrrrr.",
+  ],
+  iconHellfire: [
+    "........yy..",
+    ".......yYy..",
+    "......yYy...",
+    "....yyYy....",
+    "...yYYWy....",
+    "..yYWWWYy...",
+    "..yWWWWWy...",
+    "..yYWWWYy...",
+    "...yYYYy....",
+    "....yyy.....",
+    "..R.....R...",
+    "RRRRRRRRRRRR",
+  ],
   helm: [".aAa.", "aAAAa", "AkkkA", "aAAAa"],
   coin2: [".YY.", "YWYy", "WYYy", "YYYy", "YYyy", ".yy."],
   coin3: ["Yy", "Wy", "Yy", "Yy", "Yy", "yy"],
@@ -2231,6 +2543,13 @@ const BOSS_PAL = {
 const BOSS_RAGE_PAL = Object.assign({}, BOSS_PAL, { E: "#ffffff", Y: "#ffffff", F: "#ffeb3b", e: "#ffffff", R: "#c62828" });
 // Lit from behind by lightning: a black shape with burning eyes.
 const BOSS_SHADOW_PAL = Object.fromEntries(Object.keys(BOSS_PAL).map(k => [k, "EYe".includes(k) ? BOSS_PAL[k] : "#050308"]));
+const BOSS_GHOST_PAL = Object.fromEntries(Object.keys(BOSS_PAL).map(k => [k, "#ff1744"]));
+const ICON_PALS = {
+  slash: { W: "#ffffff", R: "#ff1744" },
+  smash: { H: "#6b6378", h: "#4a4458", k: "#2b2535", D: "#8a82a0", d: "#4a4458", M: "#1a1622" },
+  grasp: { H: "#e8dcc0", h: "#a8987a", R: "#c62828", r: "#5d0f0f" },
+  hellfire: { y: "#ff6f00", Y: "#ffb300", W: "#fff3c4", R: "#7a1420" },
+};
 const CLEAVER_PAL = { M: "#4a4458", m: "#2b2535", W: "#c9c2d6", R: "#ff1744", B: "#3a2a20", G: "#c9a227", A: "#2b2535", L: "#4d4560", a: "#1a1622" };
 const SPIKE_PALS = [
   { M: "#8e95a0", m: "#5d6370", W: "#d7dde3", D: "#3b3746", d: "#26232e" },
@@ -2889,10 +3208,28 @@ function drawHero(h) {
   for (const p of h.trail) {
     drawSprite(sprite(ART.heroJump, { A: "#6fd3ff", a: "#3d8fbf" }, "ghost"), (p.x + h.w / 2) * T, (p.y + h.h) * T, p.face, p.t * 1.6);
   }
-  const cx = centerX(h) * T, bottom = (h.y + h.h) * T;
+  let cx = centerX(h) * T, bottom = (h.y + h.h) * T;
+  const held = h.grabbed && inArena();
+  if (held) {
+    // Struggling against the hands; the doomed are pulled under the floor.
+    cx += Math.floor(S.time * 20) % 2 ? 1 : -1;
+    bottom += Math.round((h.sink || 0) * (h.h * T + 2));
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W * T, ARENA_FLOOR * T);
+    ctx.clip();
+  }
   drawSprite(heroSprite(h), cx, bottom, h.face, h.evade > 0 ? 0.6 : 1);
   if (h.flash > 0) drawSprite(heroSprite(h, true), cx, bottom, h.face, 0.85);
   else if (h.chill > 0 && !inArena()) drawSprite(heroSprite(h, true), cx, bottom, h.face, 0.3);
+  if (held) {
+    ctx.restore();
+    // Bony hands wrapped around their legs.
+    const hand = sprite(ART.boneHand, { H: "#e8dcc0", h: "#a8987a" }, "hand");
+    ctx.drawImage(hand, Math.round(cx) - 8, ARENA_FLOOR * T - 9);
+    ctx.drawImage(hand, Math.round(cx) + 1, ARENA_FLOOR * T - 8);
+    return;
+  }
 
   // Sword (or mace) smear when attacking.
   if (h.atkAnim > 0 && h.kind !== "archer") {
@@ -2905,6 +3242,129 @@ function drawHero(h) {
       ctx.fillRect(Math.round(ox + h.face * Math.cos(a) * (r - 1)), Math.round(oy + Math.sin(a) * (r - 1)), 1, 1);
     }
     ctx.globalAlpha = 1;
+  }
+}
+
+// ---------- special attack effects ----------
+// Cracks from a ground smash and scorch marks from hellfire, fading on the floor.
+function drawDecals() {
+  const fy = ARENA_FLOOR * T;
+  for (const d of S.decals) {
+    ctx.globalAlpha = Math.min(1, d.life);
+    const x = Math.round(d.x * T);
+    if (d.type === "crack") {
+      ctx.fillStyle = "#14101c";
+      for (const dir of [-1, 1]) {
+        let cx = x, cy = fy;
+        for (let i = 0; i < 18; i++) {
+          cx += dir * (1 + (i % 3 === 0 ? 1 : 0));
+          cy = fy + (i % 4 < 2 ? 1 : 2);
+          ctx.fillRect(cx, cy, 1, 1);
+          if (i % 5 === 2) ctx.fillRect(cx, cy + 1, 1, 2);
+        }
+      }
+      ctx.fillStyle = "#ff3d00";
+      ctx.globalAlpha = Math.min(1, d.life) * 0.6;
+      ctx.fillRect(x - 2, fy + 1, 5, 1);
+    } else {
+      ctx.fillStyle = "#1a0e0c";
+      ctx.fillRect(x - 4, fy, 9, 2);
+      ctx.fillRect(x - 2, fy + 2, 5, 1);
+      ctx.fillStyle = "#ff6f00";
+      if (d.life > 2) ctx.fillRect(x - 1, fy, 3, 1);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// The pool of blood, bones floating in it, and the hands clawing up out of it.
+function drawPools(front) {
+  const fy = ARENA_FLOOR * T;
+  for (const p of S.pools) {
+    const r = p.r * T, cx = Math.round(p.x * T);
+    if (!front) {
+      // A spreading pool, seen from the side: a flattened oval over the floor.
+      for (let x = -Math.floor(r); x <= r; x++) {
+        const k = Math.sqrt(Math.max(0, 1 - (x / r) ** 2));
+        const top = fy - 1 - Math.round(k), bottom = fy + Math.round(k * 9);
+        ctx.fillStyle = "#2a040b";
+        ctx.fillRect(cx + x, top, 1, bottom - top + 1);
+        if (k > 0.25) {
+          ctx.fillStyle = "#6e0f18";
+          ctx.fillRect(cx + x, top + 1, 1, Math.max(1, bottom - top - 2));
+          ctx.fillStyle = "#a0141e";
+          ctx.fillRect(cx + x, top + 1, 1, Math.max(1, Math.round((bottom - top) * 0.35)));
+        }
+        if (k > 0.5 && (x * 7 + Math.floor(S.time * 10)) % 9 === 0) { ctx.fillStyle = "#ff5252"; ctx.fillRect(cx + x, top + 1, 1, 1); }
+      }
+      // Bubbles, a skull and bones adrift in the blood.
+      for (let i = 0; i < 5; i++) {
+        const bx = cx + Math.round(Math.sin(i * 2.1 + p.t * 0.8) * r * 0.65), by = fy + 2 + (i % 3) * 2;
+        ctx.fillStyle = "#e8dcc0";
+        if (i === 0) { ctx.fillRect(bx, by - 1, 3, 3); ctx.fillStyle = "#2a040b"; ctx.fillRect(bx, by, 1, 1); ctx.fillRect(bx + 2, by, 1, 1); }
+        else ctx.fillRect(bx, by, i % 2 ? 4 : 2, 1);
+      }
+      continue;
+    }
+    for (const hand of p.hands) {
+      const rise = Math.min(1, hand.t / 0.25, (hand.life - hand.t) / 0.25);
+      const spr = sprite(ART.boneHand, { H: "#e8dcc0", h: "#a8987a" }, "hand");
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, W * T, fy + 1);
+      ctx.clip();
+      ctx.drawImage(spr, Math.round(hand.x * T) - 4, fy + 2 - Math.round(rise * (spr.height - 1)));
+      ctx.restore();
+    }
+  }
+}
+
+function drawSpecials() {
+  // Afterimages of the dash.
+  for (const g of S.ghosts) drawSprite(sprite(ART.boss, BOSS_GHOST_PAL, "bossGhost"), (g.x + S.boss.w / 2) * T, (g.y + S.boss.h) * T, g.face, g.t * 2);
+  // The long red cut left by a cleaver slash.
+  for (const sl of S.slashes) {
+    const k = sl.t / 0.35, y = Math.round(sl.y * T), x0 = Math.round(Math.min(sl.x0, sl.x1) * T), x1 = Math.round(Math.max(sl.x0, sl.x1) * T);
+    ctx.globalAlpha = k;
+    ctx.fillStyle = "#ff1744";
+    ctx.fillRect(x0, y - 1, x1 - x0, 3);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(x0 + 4, y, x1 - x0 - 8, 1);
+  }
+  // Dust ring from a ground smash.
+  for (const ring of S.rings) {
+    const k = 1 - ring.t / 0.4, r = k * SMASH_RADIUS * T, cx = ring.x * T, cy = ring.y * T;
+    ctx.globalAlpha = ring.t / 0.4;
+    ctx.fillStyle = "#c9c2d6";
+    for (let a = Math.PI; a <= Math.PI * 2; a += 0.05) ctx.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r * 0.35), 2, 1);
+  }
+  ctx.globalAlpha = 1;
+  // Falling fireballs.
+  for (const m of S.meteors) {
+    const x = Math.round(m.x * T), y = Math.round(m.y * T);
+    // A flaming tail streaming back along its path, then the burning head.
+    const dx = -Math.sign(m.vx) || -1;
+    for (let i = 1; i <= 6; i++) {
+      ctx.fillStyle = i < 3 ? "#ff6f00" : "#c62828";
+      ctx.globalAlpha = 1 - i / 7;
+      ctx.fillRect(x + dx * i * 2 - 1, y - i * 3 - 1, 3, 3);
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = OUTLINE; ctx.fillRect(x - 4, y - 3, 8, 7); ctx.fillRect(x - 3, y - 4, 6, 9);
+    ctx.fillStyle = "#ff3d00"; ctx.fillRect(x - 3, y - 2, 6, 5); ctx.fillRect(x - 2, y - 3, 4, 7);
+    ctx.fillStyle = "#ffb300"; ctx.fillRect(x - 2, y - 2, 4, 4);
+    ctx.fillStyle = "#fff3c4"; ctx.fillRect(x - 1, y - 1, 2, 2);
+  }
+}
+
+// While hellfire falls, the sky burns.
+function drawHellSky() {
+  const hell = S.hell;
+  if (!hell) return;
+  const k = Math.min(1, hell.t / 0.4, (hell.dur + 0.8 - hell.t) / 0.8);
+  for (let y = 0; y < 120; y += 2) {
+    ctx.fillStyle = `rgba(180,20,0,${k * 0.35 * (1 - y / 120)})`;
+    ctx.fillRect(0, y, W * T, 2);
   }
 }
 
@@ -2977,6 +3437,8 @@ function drawLighting() {
   torches().forEach((t, i) => hole(t.x * T + 8, t.y * T + 6, 70 + Math.sin(S.time * 9 + i * 2) * 3));
   for (let x = 0; x < W; x++) if (tileAt(x, H - 1) === "L") hole(x * T + 8, (H - 1) * T + 4, 44, 0.9);
   for (const h of S.heroes) hole(centerX(h) * T, centerY(h) * T, 40, 0.7);
+  for (const p of S.pools) hole(p.x * T, ARENA_FLOOR * T, p.r * T * 2.2, 0.8);
+  for (const m of S.meteors) hole(m.x * T, m.y * T, 40, 1);
   if (S.doorFlash > 0 && !inArena()) hole(TOWER_X * T + 6, 8.5 * T, 50, S.doorFlash * 2);
   hole(centerX(S.boss) * T, S.boss.y * T + 14, 56, 0.8);
   for (const e of bossEyes(S.boss)) hole(e.x, e.y, 14, 1);
@@ -3000,6 +3462,8 @@ function drawLighting() {
   };
   torches().forEach((t, i) => glow(t.x * T + 8, t.y * T + 6, 22 + Math.sin(S.time * 11 + i) * 2, "rgba(255,140,40,0.22)"));
   for (let x = 0; x < W; x++) if (tileAt(x, H - 1) === "L") glow(x * T + 8, (H - 1) * T + 4, 20, "rgba(255,90,20,0.18)");
+  for (const p of S.pools) glow(p.x * T, ARENA_FLOOR * T, p.r * T * 1.4, "rgba(200,20,30,0.3)");
+  for (const m of S.meteors) glow(m.x * T, m.y * T, 14, "rgba(255,110,20,0.5)");
   // The Hollow King's eyes and the soul in his chest burn through the dark.
   if (S.phase !== "over") {
     const b = S.boss, k = b.enraged ? 1.25 : 1;
@@ -3060,6 +3524,42 @@ function coinSprite(spin, white = false, big = false) {
   const f = Math.floor(spin) % 4;
   const art = big ? [ART.bigCoin, ART.bigCoin2, ART.bigCoin3, ART.bigCoin2][f] : [ART.coin, ART.coin2, ART.coin3, ART.coin2][f];
   return { spr: sprite(art, ICON_PAL, "coin", white), face: f === 3 ? -1 : 1 };
+}
+
+// Four ability slots: icon, key, and a cooldown shade that drains away with the seconds left.
+function drawAbilityBar(b) {
+  const size = 24, gap = 4, x0 = W * T - 8 - ABILITIES.length * (size + gap) + gap, y0 = H * T - size - 5;
+  const alpha = ctx.globalAlpha;
+  ABILITIES.forEach((ab, i) => {
+    const x = x0 + i * (size + gap), cd = Math.max(0, b.cds[ab.id]), total = abilityCd(b, ab.id), ready = cd <= 0;
+    drawPanel(x, y0, size, size, ready ? "rgba(30,14,22,0.95)" : "rgba(12,10,18,0.95)");
+    const icon = sprite(ART["icon" + ab.id[0].toUpperCase() + ab.id.slice(1)], ICON_PALS[ab.id], "icon" + ab.id);
+    ctx.globalAlpha = alpha * (ready ? 1 : 0.45);
+    ctx.drawImage(icon, x + Math.round((size - icon.width) / 2), y0 + Math.round((size - icon.height) / 2));
+    ctx.globalAlpha = alpha;
+    if (!ready) {
+      const hgt = Math.round((size - 4) * Math.min(1, cd / total));
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(x + 2, y0 + 2, size - 4, hgt);
+      drawText(Math.ceil(cd), x + size / 2, y0 + 9, "#e6e0ec", { align: "center" });
+    } else if (b.cds[ab.id] > -0.3) {
+      // Just came off cooldown: a bright flash around the slot.
+      ctx.fillStyle = "#ffd54f";
+      ctx.fillRect(x + 1, y0, size - 2, 1); ctx.fillRect(x + 1, y0 + size - 1, size - 2, 1);
+      ctx.fillRect(x, y0 + 1, 1, size - 2); ctx.fillRect(x + size - 1, y0 + 1, 1, size - 2);
+    }
+    // Key in the corner.
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x + 1, y0 + 1, 7, 9);
+    drawText(ab.key, x + 2, y0 + 2, ready ? "#ffd54f" : "#8a8296", { shadow: null });
+  });
+  // The name of the attack just used, above the bar.
+  const f = b.flashName;
+  if (f && f.t > 0) {
+    ctx.globalAlpha = alpha * Math.min(1, f.t * 3);
+    drawText(f.text, W * T - 8, y0 - 10, "#ffd54f", { align: "right" });
+    ctx.globalAlpha = alpha;
+  }
 }
 
 function drawLoot() {
@@ -3145,12 +3645,11 @@ function drawHud() {
     drawText(`HEROES ${S.heroes.length}`, 240, 5, "#e6e0ec", { align: "center" });
     // Souls-style boss bar along the bottom during the battle; it steps aside for dialogue.
     ctx.globalAlpha = 1 - dialogAlpha();
-    const bw = 300, bx = (W * T - bw) / 2, by = H * T - 9;
+    const bw = 250, bx = 14, by = H * T - 9;
     drawText(`${BOSS_NAME}, ${BOSS_TITLE}`, bx, by - 10, b.enraged ? "#ff8a80" : "#e6e0ec");
     drawMeter(bx, by, bw, 4, b.hp / b.maxHp, "#3b1016", "#c62828", "#ef5350");
-    if (b.slamCd > 0) drawText("SLAM", bx + bw, by - 10, "#6b5f75", { align: "right" });
-    else drawText("SLAM READY", bx + bw, by - 10, "#ffd54f", { align: "right" });
     ctx.globalAlpha = 1;
+    drawAbilityBar(b);
     return;
   }
 
@@ -3250,16 +3749,18 @@ function draw() {
     S.heroArrows.forEach(drawArrow);
     drawHover();
   }
+  if (arena) { drawDecals(); drawPools(false); }
   for (const e of [S.boss, ...S.heroes, ...(arena ? [] : S.minions)]) drawShadow(e);
   if (!arena) S.minions.forEach(drawMinion);
   drawBoss(S.boss);
   S.heroes.forEach(drawHero);
   S.waves.forEach(drawWave);
-  if (arena) S.heroArrows.forEach(drawArrow);
+  if (arena) { S.heroArrows.forEach(drawArrow); drawPools(true); drawSpecials(); }
   drawParticles(false);
   drawLighting();
   drawParticles(true);
   if (arena) {
+    drawHellSky();
     ctx.globalAlpha = 0.7 + Math.max(0, S.pulseRed || 0) * 0.8;
     ctx.drawImage(vignette, 0, 0);
     ctx.globalAlpha = 1;
@@ -3373,7 +3874,8 @@ function drawDialog() {
   const c = S.dialog.cur, a = dialogAlpha();
   if (!c || !a) return;
   const slide = Math.round((1 - a) * 6);
-  const bx = 8, bw = W * T - 16, bh = 44, by = H * T - bh - 4 + slide;
+  // On the tower top the box stops short of the action bar so your cooldowns stay in view.
+  const bx = 8, bw = W * T - 16 - (inArena() ? ABILITIES.length * 28 + 4 : 0), bh = 38, by = H * T - bh - 3 + slide;
   ctx.globalAlpha = a;
   drawPanel(bx, by, bw, bh);
 
@@ -3397,7 +3899,7 @@ function drawDialog() {
   drawText(label, tx + 6, ty + 3, nameColor);
 
   // The line itself, typed out and wrapped.
-  const lines = wrapText(c.text, 62);
+  const lines = wrapText(c.text, Math.floor((bw - 70) / 6));
   let left = typed;
   lines.forEach((line, i) => {
     const part = line.slice(0, Math.max(0, left));
