@@ -13,7 +13,15 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
 - **Waves:** each wave is a group of heroes. Heroes who reach the tower door hide inside; once 5 are in the tower, they all climb up for the boss battle.
 - **The path** to the tower is twice as wide as the screen. Scroll with A / D, the arrow keys, the mouse wheel, the screen edges, or by clicking the mini-map under the HUD.
 - **Build:** spend coins on spikes, saw blades and arrow turrets, and souls on skeletons and ogres. You can build during waves too.
-- **Manage traps:** click a placed trap to open its menu: see its stats and what the next level adds, **Upgrade** it (up to level 3, or press U) or **Sell** it for half what you paid (or press X). The *Your traps* list under the toolbar does the same for every trap, with a **Find** button that scrolls to it.
+- **Manage traps:** click a placed trap and its tab slides in from the right side of the screen: see its stats and what the next level adds, **Upgrade** it (up to level 3, or press U) or **Sell** it for half what you paid (or press X). The *Your traps* list under the toolbar does the same for every trap, with a **Find** button that scrolls to it.
+- **Specialize:** at level 3 each trap can go down one of two paths (click a card or press 1 / 2). Each path trades one strength for another and gives the trap a new look:
+  - Spikes: *Barbed* (heroes bleed, less hit damage) or *Impaler* (double damage and pins heroes, much slower).
+  - Saw blade: *Ripper* (huge blade, big damage, slow) or *Patrol Saw* (slides along a rail, less damage).
+  - Arrow turret: *Ballista* (piercing bolts, big damage, slow) or *Twin Gargoyle* (shoots both ways, faster, less damage).
+  - Fire vent: *Pillar of Fire* (3 tiles tall, more damage, erupts less often) or *Ember Pit* (burns nonstop, low and weak).
+  - Crusher: *Steam Piston* (rises and resets far faster, half damage) or *Obsidian Slab* (more damage and a landing shockwave, rises slowly).
+  - Bomb: *Cluster Bomb* (three blasts, rearms, half damage) or *Powder Keg* (bigger, stronger blast on a short fuse).
+  - Frost totem: *Blizzard* (wider aura, weaker slow) or *Deep Freeze* (freezes heroes solid now and then, smaller aura).
 - **Loot:** every hero you kill drops coins and exactly one soul, which fly into your counters.
 - **Unlockable traps:** kills unlock fire vents (3 kills), crushers (6), bombs (10) and frost totems that slow heroes down (15).
 - **Boss battle:** Vorgath has 600 HP (his Devourer form has 720). He roars to open the fight and becomes enraged (faster, deadlier) below half health. A / D move, W jumps and Space swings your cleaver. Special attacks, each on a cooldown shown in the action bar:

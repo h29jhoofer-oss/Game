@@ -109,6 +109,7 @@
   .trap-row .info { line-height: 1.8; }
   .trap-row .name { color: var(--text); }
   .trap-row .pips { color: var(--coin); margin-left: 6px; }
+  .trap-row .path { margin-left: 8px; }
   .trap-row .stat { color: var(--dim); }
   .trap-row .stat b { color: #9cff9c; font-weight: normal; }
   .trap-row .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
@@ -148,8 +149,10 @@
     You are the boss, waiting at the top of your castle tower. Each wave, a group of heroes runs and jumps through the level to reach it.
     Heroes who make it through the door hide inside the tower. Once 5 are inside, they climb up and fight you all at once.<br>
     <b>Build:</b> pick a tool and click the level. Spikes go on the ground; saws and turrets go anywhere, even over the lava pits.
-    Click a placed trap to open its menu and upgrade it (max level 3) or sell it for half what you paid; the
-    <b>Your traps</b> list below does the same for every trap at once. The path is twice as long as the screen:
+    Click a placed trap to open its tab on the right side of the screen: upgrade it (U) or sell it for half what you paid (X).
+    At level 3 you can <b>specialize</b> it down one of two paths (press 1 or 2). Each makes the trap better at one thing and worse
+    at another, and changes how it looks: a crusher can become a fast Steam Piston that hits softer, or a slow Obsidian Slab that
+    hits harder and sends out a shockwave. The <b>Your traps</b> list below does the same for every trap at once. The path is twice as long as the screen:
     scroll with A / D, the arrow keys, the mouse wheel, by moving the mouse to the screen edge, or by clicking the mini-map.
     Every hero you kill drops coins and exactly one soul, and kills unlock new traps: fire vents, crushers, bombs and frost totems.<br>
     <b>Boss battle:</b> when the tower fills up, the fight moves to the tower top.
@@ -259,6 +262,71 @@ const firePeriod = lvl => 2.6 - 0.4 * (lvl - 1);
 const FIRE_ON = 0.9;
 const frostRadius = lvl => 2.2 + 0.4 * (lvl - 1);
 const frostSlow = lvl => 0.3 + 0.1 * (lvl - 1);
+
+// Once a trap is at level 3 it can be specialized down one of two paths. Each path makes the
+// trap better at one thing and worse at another, and changes how it looks.
+const TRAP_PATHS = {
+  spike: [
+    { id: "barbed", name: "Barbed Spikes", color: "#ff5252", cost: 18, mods: { dmg: 0.6 },
+      pros: ["HEROES BLEED 3S"], cons: ["-40% HIT DAMAGE"] },
+    { id: "impaler", name: "Impaler", color: "#cfd8dc", cost: 18, mods: { dmg: 2, cd: 2.5 },
+      pros: ["+100% DAMAGE", "PINS HEROES"], cons: ["STRIKES 2.5X SLOWER"] },
+  ],
+  saw: [
+    { id: "ripper", name: "Ripper", color: "#ff7043", cost: 20, mods: { dmg: 2.4, cd: 2.5 },
+      pros: ["+140% DAMAGE", "BIGGER BLADE"], cons: ["CUTS 2.5X SLOWER"] },
+    { id: "patrol", name: "Patrol Saw", color: "#4fc3f7", cost: 20, mods: { dmg: 0.7 },
+      pros: ["SLIDES ON A RAIL"], cons: ["-30% DAMAGE"] },
+  ],
+  turret: [
+    { id: "ballista", name: "Ballista", color: "#ffd54f", cost: 24, mods: { dmg: 2.5, cd: 2.2 },
+      pros: ["+150% DAMAGE", "BOLTS PIERCE"], cons: ["FIRES 2.2X SLOWER"] },
+    { id: "twin", name: "Twin Gargoyle", color: "#b388ff", cost: 24, mods: { dmg: 0.6, cd: 0.8 },
+      pros: ["SHOOTS BOTH WAYS", "FIRES 25% FASTER"], cons: ["-40% DAMAGE"] },
+  ],
+  fire: [
+    { id: "pillar", name: "Pillar of Fire", color: "#40c4ff", cost: 28, mods: { dmg: 1.5, period: 1.5 },
+      pros: ["+50% DAMAGE", "3 TILES TALL"], cons: ["ERUPTS LESS OFTEN"] },
+    { id: "ember", name: "Ember Pit", color: "#ff3d00", cost: 28, mods: { dmg: 0.4 },
+      pros: ["BURNS NONSTOP"], cons: ["-60% DAMAGE", "LOW FLAMES"] },
+  ],
+  crusher: [
+    { id: "piston", name: "Steam Piston", color: "#ffca28", cost: 32, mods: { dmg: 0.5, cd: 0.25, rise: 3.5, fall: 1.5 },
+      pros: ["RISES 3.5X FASTER", "RESETS 4X FASTER"], cons: ["-50% DAMAGE"] },
+    { id: "obsidian", name: "Obsidian Slab", color: "#b388ff", cost: 32, mods: { dmg: 1.7, cd: 1.5, rise: 0.5 },
+      pros: ["+70% DAMAGE", "LANDING SHOCKWAVE"], cons: ["RISES 2X SLOWER"] },
+  ],
+  mine: [
+    { id: "cluster", name: "Cluster Bomb", color: "#9cff9c", cost: 18, mods: { dmg: 0.5 }, charges: 3,
+      pros: ["3 BLASTS", "REARMS ITSELF"], cons: ["-50% DAMAGE"] },
+    { id: "keg", name: "Powder Keg", color: "#ff8a65", cost: 18, mods: { dmg: 1.6, radius: 1.7 }, fuse: 0.5,
+      pros: ["+60% DAMAGE", "+70% BLAST SIZE"], cons: ["0.5S FUSE"] },
+  ],
+  frost: [
+    { id: "blizzard", name: "Blizzard", color: "#e1f5fe", cost: 26, mods: { radius: 1.5, slow: 0.7 },
+      pros: ["+50% RANGE"], cons: ["-30% SLOW"] },
+    { id: "deepfreeze", name: "Deep Freeze", color: "#448aff", cost: 26, mods: { radius: 0.65, slow: 1.2 },
+      pros: ["FREEZES HEROES", "+20% SLOW"], cons: ["-35% RANGE"] },
+  ],
+};
+const pathInfo = (type, id) => id ? TRAP_PATHS[type].find(p => p.id === id) : null;
+
+// Every number a trap uses, for its level and path.
+function trapNums(type, lvl, pathId) {
+  const k = TRAPS[type], p = pathInfo(type, pathId);
+  const m = Object.assign({ dmg: 1, cd: 1, period: 1, rise: 1, fall: 1, radius: 1, slow: 1 }, p && p.mods);
+  const dmg = Math.round((k.dmg || 0) * lvl * m.dmg);
+  switch (type) {
+    case "spike": case "saw": return { dmg, cd: k.cd * m.cd };
+    case "turret": return { dmg, cd: (1.6 - 0.4 * (lvl - 1)) * m.cd };
+    case "fire": return { dmg, period: firePeriod(lvl) * m.period, always: pathId === "ember", tall: pathId === "pillar" ? 3 : 2 };
+    case "crusher": return { dmg, cd: (1.4 - 0.3 * (lvl - 1)) * m.cd, rise: 1.6 * m.rise, fall: 70 * m.fall };
+    case "mine": return { dmg, radius: 1.6 * m.radius, charges: (p && p.charges) || 1, fuse: (p && p.fuse) || 0 };
+    case "frost": return { slow: Math.min(0.8, frostSlow(lvl) * m.slow), radius: frostRadius(lvl) * m.radius };
+  }
+  return {};
+}
+const numsOf = t => trapNums(t.type, t.lvl, t.path);
 
 // Why a trap can't go on a tile, or null if it can.
 function placeProblem(tool, x, y, existing) {
@@ -679,6 +747,9 @@ const Sound = (() => {
     // traps and building
     place: () => { tone(220, { to: 140, dur: 0.08, vol: 0.12 }); noise({ dur: 0.05, vol: 0.12, freq: 1500, at: 0.01 }); },
     upgrade: () => arp(523, [0, 4, 7, 12], { dur: 0.08, vol: 0.08, gap: 0.05 }),
+    specialize: () => { arp(392, [0, 7, 12, 16, 19, 24], { dur: 0.12, vol: 0.08, gap: 0.06 }); tone(98, { to: 49, type: "sawtooth", dur: 0.5, vol: 0.12 }); },
+    freeze: () => { noise({ dur: 0.35, vol: 0.18, filter: "highpass", freq: 3500, to: 1200 }); tone(1900, { to: 2600, type: "sine", dur: 0.3, vol: 0.05 }); },
+    fuse: () => noise({ dur: 0.5, vol: 0.08, filter: "bandpass", freq: 4000, q: 2 }),
     summon: () => { tone(150, { to: 600, type: "sawtooth", dur: 0.55, vol: 0.06, attack: 0.1 }); tone(156, { to: 620, type: "sawtooth", dur: 0.55, vol: 0.06, attack: 0.1 }); },
     deny: () => { tone(140, { dur: 0.08, vol: 0.08 }); tone(115, { dur: 0.12, vol: 0.08, at: 0.09 }); },
     click: () => tone(1200, { dur: 0.025, vol: 0.05 }),
@@ -879,6 +950,7 @@ document.addEventListener("keydown", e => {
   if (k === " ") bossAttack();
   if (S.trapMenu) {
     if (k === "u") upgradeTrap(S.trapMenu);
+    if ((k === "1" || k === "2") && S.trapMenu.lvl >= 3 && !S.trapMenu.path) specializeTrap(S.trapMenu, TRAP_PATHS[S.trapMenu.type][+k - 1].id);
     if (k === "x" || k === "delete") sellTrap(S.trapMenu);
     if (k === "escape") S.trapMenu = null;
   }
@@ -929,7 +1001,7 @@ function updateCamera(dt) {
     if (keys.a || keys.arrowleft) pan--;
     if (keys.d || keys.arrowright) pan++;
     if (mouse && mouse.y > 26 && mouse.x < 10) pan--;
-    if (mouse && mouse.y > 26 && mouse.x > W * T - 10) pan++;
+    if (mouse && mouse.y > 26 && mouse.x > W * T - 10 && !S.trapMenu) pan++;
   }
   if (pan) { S.camX += pan * 18 * dt; S.camGoal = null; }
   else if (S.camGoal != null) {
@@ -949,6 +1021,8 @@ canvas.addEventListener("click", e => {
     for (const r of S.menuRects || []) {
       if (p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) { r.act(); return; }
     }
+    const tab = S.menuPanel;
+    if (tab && p.x >= tab.x && p.y >= tab.y && p.y < tab.y + tab.h) return;
   }
   // The mini-map jumps the view.
   if (!inArena() && p.y >= MINIMAP.y && p.y < MINIMAP.y + MINIMAP.h + 2 && canManageTraps()) {
@@ -958,7 +1032,7 @@ canvas.addEventListener("click", e => {
   }
   const tile = tileAtScreen(p);
   const onTrap = S.traps.some(t => t.x === tile.x && t.y === tile.y);
-  // Clicking away from an open menu just closes it.
+  // Clicking away from the open tab just closes it.
   if (S.trapMenu && !onTrap) { S.trapMenu = null; return; }
   place(tile);
 });
@@ -1026,7 +1100,7 @@ function place({ x, y }) {
   if (["over", "title", "prologue"].includes(S.phase)) return;
   if (inArena()) { say("You can't build during the boss battle."); Sound.play("deny"); return; }
   const trap = S.traps.find(t => t.x === x && t.y === y);
-  if (trap) { S.trapMenu = trap; Sound.play("click"); return; }
+  if (trap) { openTrapMenu(trap); Sound.play("click"); return; }
   if (!canBuild(x, y)) { say("You can't build there."); Sound.play("deny"); return; }
 
   if (TRAPS[S.tool]) {
@@ -1056,27 +1130,31 @@ function place({ x, y }) {
   }
 }
 
-// What a trap does at a given level, for the trap menu and the trap list.
-function trapStats(type, lvl) {
-  const k = TRAPS[type];
+// What a trap does, as label/value pairs, for the trap tab and the trap list.
+function trapStatLines(type, lvl, pathId) {
+  const n = trapNums(type, lvl, pathId), sec = v => v.toFixed(1) + "S";
   switch (type) {
-    case "spike": return `DMG ${k.dmg * lvl}  EVERY ${k.cd}S`;
-    case "saw": return `DMG ${k.dmg * lvl}  EVERY ${k.cd}S`;
-    case "turret": return `ARROW ${k.dmg * lvl}  EVERY ${(1.6 - 0.4 * (lvl - 1)).toFixed(1)}S`;
-    case "fire": return `BURN ${k.dmg * lvl}  ERUPTS EVERY ${firePeriod(lvl).toFixed(1)}S`;
-    case "crusher": return `CRUSH ${k.dmg * lvl}  RESETS ${(1.4 - 0.3 * (lvl - 1)).toFixed(1)}S`;
-    case "mine": return `BLAST ${k.dmg * lvl}  ONE USE`;
-    case "frost": return `SLOW ${Math.round(frostSlow(lvl) * 100)}%  RANGE ${frostRadius(lvl).toFixed(1)}`;
+    case "spike": case "saw": return [["DAMAGE", n.dmg], ["EVERY", sec(n.cd)]];
+    case "turret": return [["ARROW", n.dmg], ["EVERY", sec(n.cd)]];
+    case "fire": return [["BURN", n.dmg], ["ERUPTS", n.always ? "NONSTOP" : "EVERY " + sec(n.period)]];
+    case "crusher": return [["CRUSH", n.dmg], ["RESETS", sec(n.cd)]];
+    case "mine": return [["BLAST", n.dmg], [n.charges > 1 ? "BLASTS" : "USES", n.charges > 1 ? n.charges : "ONE"]];
+    case "frost": return [["SLOW", Math.round(n.slow * 100) + "%"], ["RANGE", n.radius.toFixed(1)]];
   }
-  return "";
+  return [];
 }
-const trapRefund = t => Math.floor(TRAPS[t.type].costs.slice(0, t.lvl).reduce((a, c) => a + c, 0) / 2);
+const trapStats = (type, lvl, pathId) => trapStatLines(type, lvl, pathId).map(([a, b]) => `${a} ${b}`).join("  ");
+const trapRefund = t => Math.floor((TRAPS[t.type].costs.slice(0, t.lvl).reduce((a, c) => a + c, 0) + (t.path ? pathInfo(t.type, t.path).cost : 0)) / 2);
 const canManageTraps = () => !inArena() && !["over", "title", "prologue"].includes(S.phase);
 
 function upgradeTrap(t) {
   const kind = TRAPS[t.type];
   if (!canManageTraps()) return;
-  if (t.lvl >= 3) { say(`${kind.name} is already at max level.`); Sound.play("deny"); return; }
+  if (t.lvl >= 3) {
+    say(t.path ? `${kind.name} is fully upgraded.` : `${kind.name} is at max level. Pick a path in the tab (1 or 2) to specialize it.`);
+    Sound.play("deny");
+    return;
+  }
   const cost = kind.costs[t.lvl];
   if (S.coins < cost) { say(`Need ${cost} coins to upgrade.`); Sound.play("deny"); return; }
   S.coins -= cost;
@@ -1085,6 +1163,19 @@ function upgradeTrap(t) {
   burst(t.x + 0.5, t.y + 0.6, 12, ["#ffd54f", "#fff3c4", "#9cff9c"], 3, { glow: true });
   Sound.play("upgrade");
   say(`${kind.name} upgraded to level ${t.lvl}.`);
+}
+
+function specializeTrap(t, id) {
+  const p = pathInfo(t.type, id);
+  if (!canManageTraps() || !p || t.lvl < 3 || t.path) return;
+  if (S.coins < p.cost) { say(`Need ${p.cost} coins to specialize.`); Sound.play("deny"); return; }
+  S.coins -= p.cost;
+  spend("coins", p.cost);
+  Object.assign(t, { path: id, used: 0, rearm: 0, fuse: 0 });
+  burst(t.x + 0.5, t.y + 0.5, 24, [p.color, "#ffffff", "#ffd54f"], 5, { glow: true });
+  S.shake = Math.max(S.shake, 2);
+  Sound.play("specialize");
+  say(`${TRAPS[t.type].name} became a ${p.name}! Sell it if you want to start over.`);
 }
 
 function sellTrap(t) {
@@ -1116,7 +1207,7 @@ function startWave() {
   const gap = { brute: 1.7, champion: 2.2 };
   S.spawnQueue = roster.map((kind, i) => ({ lv: S.wave, kind, delay: i === 0 ? 0.4 : gap[kind] || 1.3 }));
   S.spawnT = 0;
-  for (const t of S.traps) Object.assign(t, { timer: 0, off: 0, v: 0, state: "up", cd: 0 });
+  for (const t of S.traps) Object.assign(t, { timer: 0, off: 0, v: 0, state: "up", cd: 0, fuse: 0, rearm: 0, pulse: 2 });
   S.arrows = [];
   S.phase = "wave";
   S.loot = { kills: 0, coins: 0 };
@@ -2040,6 +2131,21 @@ function updateHero(h, dt) {
   h.trail = h.trail.filter(p => (p.t -= dt) > 0);
 
   if (h.chained) return;
+  if (h.bleed > 0) {
+    // Barbed spikes: bleeding a little every half second.
+    h.bleed -= dt;
+    h.bleedTick = (h.bleedTick || 0) - dt;
+    if (h.bleedTick <= 0) { h.bleedTick = 0.5; damage(h, h.bleedDmg, "#ff5252"); }
+    if (Math.random() < dt * 12) particle({ x: h.x + Math.random() * h.w, y: h.y + h.h * 0.6, vy: 1, g: 14, life: 0.4, color: "#d32f2f" });
+  }
+  if (h.pinned > 0) {
+    // Run through by an impaler or frozen solid: going nowhere for a moment.
+    h.pinned -= dt;
+    h.frozen = Math.max(0, (h.frozen || 0) - dt);
+    h.vx = 0;
+    moveBody(h, dt);
+    return;
+  }
   if (S.boss.transform && !(h.knock > 0)) {
     // Frozen, watching the thing their foe is becoming.
     h.vx = 0;
@@ -2122,8 +2228,8 @@ function finishHeroMove(h, dt, arena) {
     // Frost totems slow a hero down inside their aura.
     h.chill = 0;
     for (const t of S.traps) {
-      if (t.type === "frost" && Math.hypot(centerX(h) - t.x - 0.5, centerY(h) - t.y - 0.5) < frostRadius(t.lvl)) {
-        h.chill = Math.max(h.chill, frostSlow(t.lvl));
+      if (t.type === "frost" && Math.hypot(centerX(h) - t.x - 0.5, centerY(h) - t.y - 0.5) < numsOf(t).radius) {
+        h.chill = Math.max(h.chill, numsOf(t).slow);
       }
     }
     h.vx *= 1 - h.chill;
@@ -2309,10 +2415,14 @@ function updateTraps(dt) {
         if (Math.abs(dx) < 10 && Math.abs(centerY(h) - (t.y + 0.5)) < 1 && (!best || Math.abs(dx) < Math.abs(best))) best = dx;
       }
       if (t.cd <= 0 && best !== null) {
+        const n = numsOf(t), bolt = t.path === "ballista";
         t.face = Math.sign(best) || -1;
-        S.arrows.push({ x: t.x + 0.5 + t.face * 0.4, y: t.y + 0.5, vx: t.face * 9, dmg: TRAPS.turret.dmg * t.lvl });
-        Sound.play("arrow");
-        t.cd = 1.6 - 0.4 * (t.lvl - 1);
+        // The twin gargoyle looses one arrow each way; the ballista a heavy bolt that goes through heroes.
+        for (const d of t.path === "twin" ? [-1, 1] : [t.face]) {
+          S.arrows.push({ x: t.x + 0.5 + d * 0.4, y: t.y + 0.5, vx: d * (bolt ? 12 : 9), dmg: n.dmg, bolt, hits: bolt ? new Set() : null });
+        }
+        Sound.play(bolt ? "bow" : "arrow");
+        t.cd = n.cd;
         t.flash = 0.15;
         dust(t.x + 0.5 + t.face * 0.5, t.y + 0.6, 2);
       }
@@ -2320,45 +2430,97 @@ function updateTraps(dt) {
     }
     if (t.type === "fire") { updateFire(t, dt); continue; }
     if (t.type === "crusher") { updateCrusher(t, dt); continue; }
-    if (t.type === "mine") { updateMine(t); continue; }
+    if (t.type === "mine") { updateMine(t, dt); continue; }
     if (t.type === "frost") {
       if (Math.random() < dt * 3) {
-        const a = Math.random() * Math.PI * 2, r = Math.random() * frostRadius(t.lvl);
+        const a = Math.random() * Math.PI * 2, r = Math.random() * numsOf(t).radius;
         particle({ x: t.x + 0.5 + Math.cos(a) * r, y: t.y + 0.5 + Math.sin(a) * r * 0.6, vy: 0.4, life: 0.8, color: "#b3e5fc", glow: true });
       }
+      if (t.path === "blizzard" && Math.random() < dt * 14) {
+        // Snow drifting down over the whole area.
+        const r = numsOf(t).radius;
+        particle({ x: t.x + 0.5 + (Math.random() * 2 - 1) * r, y: t.y + 0.5 - r * 0.6, vx: -0.6, vy: 1.4, life: 1.0, color: "#ffffff", glow: true });
+      }
+      if (t.path === "deepfreeze") updateDeepFreeze(t, dt);
       continue;
     }
-    const kind = TRAPS[t.type];
-    const box = t.type === "spike" ? { x: t.x + 0.1, y: t.y + 0.55, w: 0.8, h: 0.45 } : tileBox(t);
+    const n = numsOf(t);
+    let box = t.type === "spike" ? { x: t.x + 0.1, y: t.y + 0.55, w: 0.8, h: 0.45 } : tileBox(t);
+    if (t.path === "impaler") box = { x: t.x + 0.1, y: t.y + 0.3, w: 0.8, h: 0.7 };
+    if (t.path === "ripper") box = { x: t.x - 0.15, y: t.y - 0.15, w: 1.3, h: 1.3 };
+    if (t.path === "patrol") box.x += sawSlide(t);
     const hit = t.cd <= 0 ? heroesIn(box) : [];
-    for (const h of hit) damage(h, kind.dmg * t.lvl, "#ffb74d");
+    for (const h of hit) {
+      damage(h, n.dmg, "#ffb74d");
+      if (t.path === "barbed") { h.bleed = 3; h.bleedDmg = Math.max(1, Math.round(t.lvl * 1.5)); }
+      if (t.path === "impaler") {
+        if (!(h.pinned > 0)) float(centerX(h), h.y - 0.4, "PINNED", "#cfd8dc");
+        h.pinned = 0.7;
+      }
+    }
     if (hit.length) {
       Sound.play(t.type);
-      if (t.type === "saw") burst(t.x + 0.5, t.y + 0.5, 6, ["#fff59d", "#ffb300"], 6, { glow: true });
-      t.cd = kind.cd;
+      if (t.type === "saw") {
+        const sx = t.x + 0.5 + (t.path === "patrol" ? sawSlide(t) : 0);
+        burst(sx, t.y + 0.5, t.path === "ripper" ? 12 : 6, ["#fff59d", "#ffb300"], 6, { glow: true });
+      }
+      t.cd = n.cd;
       t.flash = 0.25;
     }
   }
 }
 
+// A patrol saw runs back and forth along a rail of up to two open tiles each side.
+function sawRail(t) {
+  let l = 0, r = 0;
+  while (l < 2 && t.x - l - 1 >= 0 && !isSolid(t.x - l - 1, t.y)) l++;
+  while (r < 2 && t.x + r + 1 < TOWER_X - 1 && !isSolid(t.x + r + 1, t.y)) r++;
+  return { l, r };
+}
+function sawSlide(t) {
+  const { l, r } = sawRail(t);
+  return -l + (l + r) * (0.5 + 0.5 * Math.sin(S.time * 1.6 + t.x));
+}
+
+// Deep freeze: every few seconds a pulse freezes every hero in range solid.
+function updateDeepFreeze(t, dt) {
+  t.pulse = (t.pulse ?? 2) - dt;
+  if (t.pulse > 0) return;
+  const r = numsOf(t).radius, caught = S.heroes.filter(h => h.evade <= 0 && Math.hypot(centerX(h) - t.x - 0.5, centerY(h) - t.y - 0.5) < r);
+  if (!caught.length) { t.pulse = 0.3; return; }
+  t.pulse = 4;
+  for (const h of caught) {
+    h.pinned = Math.max(h.pinned || 0, 1.1);
+    h.frozen = 1.1;
+    burst(centerX(h), centerY(h), 10, ["#e1f5fe", "#82b1ff", "#ffffff"], 3, { glow: true });
+  }
+  for (let i = 0; i < 18; i++) {
+    const a = i / 18 * Math.PI * 2;
+    particle({ x: t.x + 0.5, y: t.y + 0.5, vx: Math.cos(a) * r * 2.4, vy: Math.sin(a) * r * 1.4, life: 0.4, color: i % 2 ? "#ffffff" : "#82b1ff", glow: true });
+  }
+  t.flash = 0.3;
+  Sound.play("freeze");
+}
+
 function updateFire(t, dt) {
   t.timer += dt;
-  const p = t.timer % firePeriod(t.lvl), period = firePeriod(t.lvl);
+  const n = numsOf(t), period = n.period, p = t.timer % period;
   const wasOn = t.fireOn;
-  t.fireOn = p > period - FIRE_ON;
+  t.fireOn = n.always || p > period - FIRE_ON;
   if (t.fireOn && !wasOn) Sound.play("fire");
   t.warn = !t.fireOn && p > period - FIRE_ON - 0.45;
   if (t.warn && Math.random() < dt * 25) {
     particle({ x: t.x + 0.3 + Math.random() * 0.4, y: t.y + 0.8, vy: -2, vx: (Math.random() - 0.5), life: 0.3, color: "#ffb300", glow: true });
   }
   if (!t.fireOn) return;
-  if (Math.random() < dt * 30) {
-    particle({ x: t.x + 0.25 + Math.random() * 0.5, y: t.y + 0.4, vy: -4 - Math.random() * 2, vx: (Math.random() - 0.5) * 0.8,
-      life: 0.35, color: Math.random() < 0.5 ? "#ff6f00" : "#ffd54f", glow: true });
+  if (Math.random() < dt * (n.always ? 10 : 30)) {
+    const blue = t.path === "pillar";
+    particle({ x: t.x + 0.25 + Math.random() * 0.5, y: t.y + 0.4, vy: n.always ? -1.5 : (-4 - Math.random() * 2) * (blue ? 1.4 : 1), vx: (Math.random() - 0.5) * 0.8,
+      life: 0.35, color: blue ? (Math.random() < 0.5 ? "#40c4ff" : "#e1f5fe") : Math.random() < 0.5 ? "#ff6f00" : "#ffd54f", glow: true });
   }
   if (t.cd > 0) return;
-  const hit = heroesIn({ x: t.x + 0.15, y: t.y - 1, w: 0.7, h: 2 });
-  for (const h of hit) damage(h, TRAPS.fire.dmg * t.lvl, "#ffb74d", ["#ff6f00", "#ffd54f"]);
+  const hit = heroesIn({ x: t.x + 0.15, y: t.y + 1 - n.tall, w: 0.7, h: n.tall });
+  for (const h of hit) damage(h, n.dmg, "#ffb74d", t.path === "pillar" ? ["#40c4ff", "#e1f5fe"] : ["#ff6f00", "#ffd54f"]);
   if (hit.length) t.cd = TRAPS.fire.cd;
 }
 
@@ -2379,12 +2541,12 @@ function updateCrusher(t, dt) {
     });
     if (t.cd <= 0 && under) { t.state = "fall"; t.v = 0; t.hits = new Set(); }
   } else if (t.state === "fall") {
-    t.v += 70 * dt;
+    t.v += numsOf(t).fall * dt;
     t.off = Math.min(drop, t.off + t.v * dt);
     for (const h of heroesIn({ x: t.x + 0.05, y: t.y + t.off, w: 0.9, h: 1 })) {
       if (t.hits.has(h)) continue;
       t.hits.add(h);
-      damage(h, TRAPS.crusher.dmg * t.lvl, "#ff5252");
+      damage(h, numsOf(t).dmg, "#ff5252");
       S.shake = Math.max(S.shake, 4);
     }
     if (t.off >= drop) {
@@ -2393,31 +2555,70 @@ function updateCrusher(t, dt) {
       Sound.play("crush");
       S.shake = Math.max(S.shake, 3);
       dust(t.x + 0.5, t.y + t.off + 1, 10);
+      if (t.path === "obsidian") obsidianShockwave(t);
     }
   } else if (t.state === "down") {
     t.timer -= dt;
     if (t.timer <= 0) t.state = "rise";
   } else {
-    t.off -= 1.6 * dt;
-    if (t.off <= 0) { t.off = 0; t.state = "up"; t.cd = 1.4 - 0.3 * (t.lvl - 1); }
+    const n = numsOf(t);
+    t.off -= n.rise * dt;
+    if (t.path === "piston" && Math.random() < dt * 30) {
+      // Steam hissing out of the piston as it winches back up.
+      particle({ x: t.x + 0.1 + Math.random() * 0.8, y: t.y + t.off + 0.2, vx: (Math.random() - 0.5) * 2, vy: -1.5, g: -2, life: 0.5, color: Math.random() < 0.5 ? "#eceff1" : "#b0bec5" });
+    }
+    if (t.off <= 0) { t.off = 0; t.state = "up"; t.cd = n.cd; }
   }
 }
 
-function updateMine(t) {
-  if (!heroesIn({ x: t.x + 0.15, y: t.y + 0.6, w: 0.7, h: 0.4 }).length) return;
-  // Boom: hurts every hero and minion caught in the blast, then the bomb is gone.
-  const cx = t.x + 0.5, cy = t.y + 0.7;
+// The obsidian slab cracks the ground: heroes standing nearby are hurt and thrown up.
+function obsidianShockwave(t) {
+  const gx = t.x + 0.5, gy = t.y + t.off + 1, n = numsOf(t);
   for (const h of S.heroes) {
-    if (h.evade > 0 || Math.hypot(centerX(h) - cx, centerY(h) - cy) > 1.6) continue;
-    damage(h, TRAPS.mine.dmg * t.lvl, "#ff5252", ["#ff6f00", "#ffd54f", "#5d566a"]);
+    const dx = Math.abs(centerX(h) - gx);
+    if (dx > 2.2 || dx < 0.45 || Math.abs(h.y + h.h - gy) > 0.6 || h.evade > 0) continue;
+    damage(h, Math.round(n.dmg * 0.4), "#b388ff", ["#b388ff", "#4a148c"]);
+    h.vy = -7;
+  }
+  for (let i = 0; i < 16; i++) {
+    const d = i % 2 ? 1 : -1;
+    particle({ x: gx, y: gy - 0.1, vx: d * (2 + Math.random() * 5), vy: -1 - Math.random() * 2, life: 0.4, color: i % 3 ? "#b388ff" : "#ea80fc", glow: true });
+  }
+  S.shake = Math.max(S.shake, 5);
+}
+
+function updateMine(t, dt) {
+  const n = numsOf(t);
+  if (t.rearm > 0) { t.rearm -= dt; return; }
+  if (t.fuse > 0) {
+    // The powder keg's fuse fizzes down, then it goes up.
+    t.fuse -= dt;
+    if (Math.random() < dt * 40) particle({ x: t.x + 0.55, y: t.y + 0.25, vx: (Math.random() - 0.5) * 3, vy: -2 - Math.random() * 2, life: 0.25, color: Math.random() < 0.5 ? "#ffd54f" : "#ffffff", glow: true });
+    if (t.fuse <= 0) explodeMine(t, n);
+    return;
+  }
+  if (!heroesIn({ x: t.x + 0.15, y: t.y + 0.6, w: 0.7, h: 0.4 }).length) return;
+  if (n.fuse) { t.fuse = n.fuse; Sound.play("fuse"); return; }
+  explodeMine(t, n);
+}
+
+// Boom: hurts every hero and minion caught in the blast. Cluster bombs rearm until their charges run out.
+function explodeMine(t, n) {
+  const cx = t.x + 0.5, cy = t.y + 0.7, r = n.radius;
+  for (const h of S.heroes) {
+    if (h.evade > 0 || Math.hypot(centerX(h) - cx, centerY(h) - cy) > r) continue;
+    damage(h, n.dmg, "#ff5252", ["#ff6f00", "#ffd54f", "#5d566a"]);
     h.vy = -8;
   }
-  for (const m of S.minions) if (Math.hypot(centerX(m) - cx, centerY(m) - cy) < 1.6) damage(m, 20, "#ffb74d", MINIONS[m.type].blood);
-  burst(cx, cy, 30, ["#ffd54f", "#ff6f00", "#fff3c4", "#ff3d00"], 8, { glow: true });
+  for (const m of S.minions) if (Math.hypot(centerX(m) - cx, centerY(m) - cy) < r) damage(m, 20, "#ffb74d", MINIONS[m.type].blood);
+  const big = r / 1.6;
+  burst(cx, cy, Math.round(30 * big), ["#ffd54f", "#ff6f00", "#fff3c4", "#ff3d00"], 8 * big, { glow: true });
   burst(cx, cy, 14, ["#5d566a", "#3a3448"], 5);
-  S.shake = 6;
+  S.shake = 6 * Math.min(1.5, big);
   Sound.play("boom");
-  t.dead = true;
+  t.used = (t.used || 0) + 1;
+  if (t.used >= n.charges) t.dead = true;
+  else t.rearm = 1.5;
 }
 
 function updateArrows(dt) {
@@ -2428,9 +2629,11 @@ function updateArrows(dt) {
       burst(a.x, a.y, 3, ["#a1887f", "#d7ccc8"], 2);
       continue;
     }
-    const [h] = heroesIn({ x: a.x - 0.2, y: a.y - 0.05, w: 0.4, h: 0.1 });
+    const h = heroesIn({ x: a.x - 0.2, y: a.y - 0.05, w: 0.4, h: 0.1 }).find(o => !a.hits || !a.hits.has(o));
     if (!h) continue;
-    a.dead = true;
+    // Ballista bolts carry on through every hero in the row.
+    if (a.hits) a.hits.add(h);
+    else a.dead = true;
     if (h.kind === "brute" && Math.sign(a.vx) === -h.face) {
       // Caught on the tower shield: a clang, sparks, and only a scratch.
       damage(h, Math.max(1, Math.round(a.dmg * 0.25)), "#cfd8dc", ["#ffffff", "#cfd8dc"]);
@@ -3060,6 +3263,50 @@ const ART = {
     "DDDDDDDDDDDDDDDD",
     "dddddddddddddddd",
   ],
+  barbUp: [
+    ".W...W...W...W..",
+    "WMW.WMW.WMW.WMW.",
+    "MMm.MMm.MMm.MMm.",
+    "MMm.MMm.MMm.MMm.",
+    "DDDDDDDDDDDDDDDD",
+    "dddddddddddddddd",
+  ],
+  barbDown: [
+    "WMW.WMW.WMW.WMW.",
+    "MMm.MMm.MMm.MMm.",
+    "DDDDDDDDDDDDDDDD",
+    "dddddddddddddddd",
+  ],
+  impalerUp: [
+    "..W.....W.....W.",
+    "..M.....M.....M.",
+    ".MMm...MMm...MMm",
+    ".MMm...MMm...MMm",
+    ".MMm...MMm...MMm",
+    "MMMMm.MMMMm.MMMm",
+    "DDDDDDDDDDDDDDDD",
+    "dddddddddddddddd",
+  ],
+  impalerDown: [
+    "..W.....W.....W.",
+    ".MMm...MMm...MMm",
+    "DDDDDDDDDDDDDDDD",
+    "dddddddddddddddd",
+  ],
+  bombSmall: ["..r..", ".dMd.", "dMWMd", "dMMMd", ".ddd."],
+  keg: [
+    "......r...",
+    ".....B....",
+    "..dddddd..",
+    ".dOOOOOOd.",
+    ".dhhhhhhd.",
+    ".dOrOOrOd.",
+    ".dOOrrOOd.",
+    ".dOrOOrOd.",
+    ".dhhhhhhd.",
+    "..dddddd..",
+  ],
+  frostShard: [".W.", "WcW", ".W."],
   spikeDown: [
     ".W...W...W...W..",
     "MMm.MMm.MMm.MMm.",
@@ -3565,6 +3812,7 @@ const GLYPHS = {
   8: ".###. #...# #...# .###. #...# #...# .###.", 9: ".###. #...# #...# .#### ....# ....# .###.",
   "+": "..... ..#.. ..#.. ##### ..#.. ..#.. .....", "-": "..... ..... ..... ##### ..... ..... .....",
   "!": "..#.. ..#.. ..#.. ..#.. ..#.. ..... ..#..", ".": "..... ..... ..... ..... ..... ..... ..#..",
+  "%": "##..# ##.#. ...#. ..#.. .#... .#.## #..##",
   ":": "..... ..#.. ..... ..... ..... ..#.. .....", "/": "....# ...#. ...#. ..#.. .#... .#... #....",
   "'": "..#.. ..#.. ..... ..... ..... ..... .....", ",": "..... ..... ..... ..... ..... ..#.. .#...",
   " ": "..... ..... ..... ..... ..... ..... .....",
@@ -3900,21 +4148,23 @@ function drawTorches() {
   }
 }
 
-function drawSaw(cx, cy, lvl, spin, alpha = 1) {
-  const [main, shade] = LEVEL_SAW[lvl - 1];
+function drawSaw(cx, cy, lvl, spin, alpha = 1, look = null) {
+  const [main, shade] = look ? [look.main, look.shade] : LEVEL_SAW[lvl - 1];
+  const r = look ? look.r : 6, teeth = look ? look.teeth : 8;
+  cx = Math.round(cx);
   ctx.globalAlpha = alpha;
   // Teeth around the rim, then a solid pixel disc and hub.
-  for (let i = 0; i < 8; i++) {
-    const a = spin + i * Math.PI / 4;
+  for (let i = 0; i < teeth; i++) {
+    const a = spin + i * Math.PI * 2 / teeth;
     ctx.fillStyle = OUTLINE;
-    ctx.fillRect(Math.round(cx + Math.cos(a) * 7) - 1, Math.round(cy + Math.sin(a) * 7) - 1, 3, 3);
+    ctx.fillRect(Math.round(cx + Math.cos(a) * (r + 1)) - 1, Math.round(cy + Math.sin(a) * (r + 1)) - 1, 3, 3);
     ctx.fillStyle = main;
-    ctx.fillRect(Math.round(cx + Math.cos(a) * 7), Math.round(cy + Math.sin(a) * 7), 1, 1);
+    ctx.fillRect(Math.round(cx + Math.cos(a) * (r + 1)), Math.round(cy + Math.sin(a) * (r + 1)), 1, 1);
   }
-  for (let y = -6; y <= 6; y++) for (let x = -6; x <= 6; x++) {
+  for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
     const d = x * x + y * y;
-    if (d > 36) continue;
-    ctx.fillStyle = d > 25 ? OUTLINE : (x + y < 0 ? main : shade);
+    if (d > r * r) continue;
+    ctx.fillStyle = d > (r - 1) * (r - 1) ? OUTLINE : (x + y < 0 ? main : shade);
     ctx.fillRect(cx + x, cy + y, 1, 1);
   }
   const a = spin * 1.0;
@@ -3925,57 +4175,160 @@ function drawSaw(cx, cy, lvl, spin, alpha = 1) {
   ctx.globalAlpha = 1;
 }
 
-function drawTrap(t, alpha = 1) {
-  const X = t.x * T, Y = t.y * T;
+// Specialized traps get their own colours and shapes.
+const PATH_SPIKE_PALS = {
+  barbed: { M: "#9a2a2a", m: "#5d0f0f", W: "#ff8a80", D: "#3b3746", d: "#26232e" },
+  impaler: { M: "#546e7a", m: "#263238", W: "#eceff1", D: "#3b3746", d: "#26232e" },
+};
+const PATH_SAWS = { ripper: { main: "#ff7043", shade: "#bf360c", r: 9, teeth: 12 }, patrol: { main: "#4fc3f7", shade: "#0277bd", r: 6, teeth: 8 } };
+const PATH_CRUSHERS = {
+  piston: { S: "#c9a227", s: "#8d6e1f", M: "#ffe082", m: "#c79a1e", Y: "#fff59d" },
+  obsidian: { S: "#2b2535", s: "#1a1622", M: "#9575cd", m: "#5e35b1", Y: "#ea80fc" },
+};
+const PATH_FROST = { blizzard: { C: "#e1f5fe", c: "#ffffff", W: "#b3e5fc" }, deepfreeze: { C: "#2962ff", c: "#82b1ff", W: "#0d47a1" } };
+const PATH_TURRETS = { ballista: { S: "#8d6e63", s: "#5d4037", eye: "#ffd54f" }, twin: { S: "#5e4b7a", s: "#3f3156", eye: "#b388ff" } };
+
+// An iron pole from the ground (or the lava) up to a trap hanging in the air.
+function drawPole(cx, top, tx, ty, alpha, colors = ["#4a4458", "#6b6378"]) {
+  let bot = ty;
+  while (bot < H - 1 && !isSolid(tx, bot + 1)) bot++;
+  const len = (bot + 1) * T - top;
+  if (len <= 0) return;
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(cx - 2, top, 4, len);
+  ctx.fillStyle = colors[0];
+  ctx.fillRect(cx - 1, top, 2, len);
+  ctx.fillStyle = colors[1];
+  ctx.fillRect(cx - 1, top, 1, len);
+  ctx.globalAlpha = 1;
+}
+
+// preview: draw just the trap itself (no poles, chains or markers), for the cards in the trap tab.
+function drawTrap(t, alpha = 1, preview = false) {
+  const X = t.x * T, Y = t.y * T, path = t.path;
   if (t.type === "spike") {
-    const near = S.heroes.some(h => Math.abs(centerX(h) - (t.x + 0.5)) < 1.6 && Math.abs(centerY(h) - (t.y + 0.5)) < 1.2);
-    const art = near || t.flash > 0 ? ART.spikeUp : ART.spikeDown;
-    drawSprite(sprite(art, SPIKE_PALS[t.lvl - 1], "spike" + t.lvl), X + 8, Y + T - 1, 1, alpha);
+    const near = preview || S.heroes.some(h => Math.abs(centerX(h) - (t.x + 0.5)) < 1.6 && Math.abs(centerY(h) - (t.y + 0.5)) < 1.2);
+    const up = near || t.flash > 0;
+    const art = path === "impaler" ? (up ? ART.impalerUp : ART.impalerDown) : path === "barbed" ? (up ? ART.barbUp : ART.barbDown) : up ? ART.spikeUp : ART.spikeDown;
+    drawSprite(sprite(art, path ? PATH_SPIKE_PALS[path] : SPIKE_PALS[t.lvl - 1], "spike" + (path || t.lvl)), X + 8, Y + T - 1, 1, alpha);
+    if (path === "barbed") {
+      // Blood dripping off the hooks.
+      ctx.fillStyle = "#d32f2f";
+      for (const i of [1, 5, 9, 13]) {
+        const drip = Math.floor((S.time * 3 + i * 0.7) % 4);
+        ctx.fillRect(X + i, Y + T - 2 + Math.min(drip, 1), 1, 1 + (drip > 2 ? 1 : 0));
+      }
+    }
   } else if (t.type === "saw") {
-    // An iron pole from the ground (or the lava) holds the saw up.
-    let bot = t.y;
-    while (bot < H - 1 && !isSolid(t.x, bot + 1)) bot++;
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(X + 6, Y + 8, 4, (bot + 1) * T - Y - 8);
-    ctx.fillStyle = "#4a4458";
-    ctx.fillRect(X + 7, Y + 8, 2, (bot + 1) * T - Y - 8);
-    ctx.fillStyle = "#6b6378";
-    ctx.fillRect(X + 7, Y + 8, 1, (bot + 1) * T - Y - 8);
-    ctx.globalAlpha = 1;
-    drawSaw(X + 8, Y + 8, t.lvl, S.time * (t.flash > 0 ? 30 : 14), alpha);
+    const look = PATH_SAWS[path];
+    let sx = X + 8;
+    if (path === "patrol") {
+      // A steel rail between two posts; the blade runs along it.
+      const { l, r } = sawRail(t);
+      if (!preview) {
+        const x1 = X - l * T + 3, x2 = X + (r + 1) * T - 3;
+        drawPole(x1 + 1, Y + 9, t.x - l, t.y, alpha, ["#01579b", "#4fc3f7"]);
+        drawPole(x2 - 1, Y + 9, t.x + r, t.y, alpha, ["#01579b", "#4fc3f7"]);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(x1 - 1, Y + 6, x2 - x1 + 2, 5);
+        ctx.fillStyle = "#0277bd";
+        ctx.fillRect(x1, Y + 7, x2 - x1, 3);
+        ctx.fillStyle = "#81d4fa";
+        ctx.fillRect(x1, Y + 7, x2 - x1, 1);
+        ctx.globalAlpha = 1;
+        sx += sawSlide(t) * T;
+      }
+    } else if (!preview) drawPole(X + 8, Y + 8, t.x, t.y, alpha, path === "ripper" ? ["#5d2a1a", "#8d4a2f"] : undefined);
+    drawSaw(sx, Y + 8, t.lvl, S.time * (t.flash > 0 ? 30 : path === "ripper" ? 9 : 14), alpha, look);
   } else if (t.type === "fire") {
-    drawFireVent(t, X, Y, alpha);
+    drawFireVent(t, X, Y, alpha, preview);
   } else if (t.type === "crusher") {
     // A chain from the top of the screen holds the block; it drops and winches back up.
-    const by = Math.round(Y + (t.off || 0) * T);
-    ctx.globalAlpha = alpha;
-    for (let y = 18; y < by + 1; y += 4) {
-      ctx.fillStyle = OUTLINE;
-      ctx.fillRect(X + 6, y, 4, 3);
-      ctx.fillStyle = y % 8 ? "#6b6378" : "#4a4458";
-      ctx.fillRect(X + 7, y, 2, 2);
+    const look = PATH_CRUSHERS[path];
+    const by = Math.round(Y + (preview ? 0 : t.off || 0) * T);
+    if (!preview) {
+      ctx.globalAlpha = alpha;
+      if (path === "piston") {
+        // A brass piston rod instead of a chain.
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(X + 5, 18, 6, by - 17);
+        ctx.fillStyle = "#c79a1e";
+        ctx.fillRect(X + 6, 18, 4, by - 17);
+        ctx.fillStyle = "#ffe082";
+        ctx.fillRect(X + 6, 18, 1, by - 17);
+      } else {
+        for (let y = 18; y < by + 1; y += 4) {
+          ctx.fillStyle = OUTLINE;
+          ctx.fillRect(X + 6, y, 4, 3);
+          ctx.fillStyle = path === "obsidian" ? (y % 8 ? "#5e35b1" : "#311b92") : y % 8 ? "#6b6378" : "#4a4458";
+          ctx.fillRect(X + 7, y, 2, 2);
+        }
+      }
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
     const angry = t.state === "fall" || t.state === "down";
-    const pal = Object.assign({}, STONE_PAL, { Y: angry ? "#ff1744" : ["#ffb300", "#ff7043", "#ff1744"][t.lvl - 1] });
-    drawSprite(sprite(ART.crusher, pal, "crusher" + pal.Y), X + 8, by + T - 1 + 1, 1, alpha);
+    const eye = angry ? "#ff1744" : look ? look.Y : ["#ffb300", "#ff7043", "#ff1744"][t.lvl - 1];
+    const pal = Object.assign({}, STONE_PAL, look || {}, { Y: eye });
+    drawSprite(sprite(ART.crusher, pal, "crusher" + (path || "") + eye), X + 8, by + T - 1 + 1, 1, alpha);
+    if (path === "obsidian") {
+      // Runes glowing in the black stone.
+      ctx.globalAlpha = alpha * (0.5 + 0.5 * Math.sin(S.time * 4 + t.x));
+      ctx.fillStyle = "#ea80fc";
+      for (const [rx, ry] of [[3, 2], [4, 3], [12, 2], [11, 3], [7, 10], [8, 10]]) ctx.fillRect(X + rx, by + ry, 1, 1);
+      ctx.globalAlpha = 1;
+    }
   } else if (t.type === "mine") {
     const blink = Math.floor(S.time * 3 + t.x) % 2 === 0;
     const near = S.heroes.some(h => Math.abs(centerX(h) - t.x - 0.5) < 2);
-    const pal = { r: blink || near ? "#ff1744" : "#5d0f0f", M: ["#5d566a", "#7c7392", "#9a2a2a"][t.lvl - 1], m: "#3a3448" };
-    drawSprite(sprite(ART.mine, pal, "mine" + pal.r + t.lvl), X + 8, Y + T - 1, 1, alpha);
+    if (path === "cluster") {
+      // One small bomb per charge left; the next one fades in while it rearms.
+      const left = Math.max(0, 3 - (t.used || 0));
+      const pal = { r: blink || near ? "#ff1744" : "#5d0f0f", M: "#2e7d32", m: "#1b5e20", W: "#9cff9c" };
+      const spr = sprite(ART.bombSmall, pal, "bombSmall" + pal.r);
+      [3, 8, 13].slice(0, preview ? 3 : left).forEach((bx, i) => {
+        const arming = !preview && t.rearm > 0 && i === left - 1;
+        drawSprite(spr, X + bx, Y + T - 1, 1, alpha * (arming ? 0.35 : 1));
+      });
+    } else if (path === "keg") {
+      const lit = t.fuse > 0 && Math.floor(S.time * 16) % 2;
+      const pal = { O: "#8d5a3a", h: "#5d566a", B: "#c9a26a", r: lit ? "#ffffff" : blink || near ? "#ff1744" : "#7f1d1d" };
+      drawSprite(sprite(ART.keg, pal, "keg" + pal.r), X + 8 + (t.fuse > 0 ? (Math.floor(S.time * 30) % 2 ? 1 : -1) : 0), Y + T - 1, 1, alpha);
+    } else {
+      const pal = { r: blink || near ? "#ff1744" : "#5d0f0f", M: ["#5d566a", "#7c7392", "#9a2a2a"][t.lvl - 1], m: "#3a3448" };
+      drawSprite(sprite(ART.mine, pal, "mine" + pal.r + t.lvl), X + 8, Y + T - 1, 1, alpha);
+    }
   } else if (t.type === "frost") {
-    const pal = Object.assign({}, STONE_PAL, FROST_PALS[t.lvl - 1]);
+    const pal = Object.assign({}, STONE_PAL, PATH_FROST[path] || FROST_PALS[t.lvl - 1]);
     drawSprite(sprite(ART.frostBase, pal, "frostbase"), X + 8, Y + T - 1, 1, alpha);
     const bob = Math.round(Math.sin(S.time * 3 + t.x) * 1.5);
-    drawSprite(sprite(ART.frostCrystal, pal, "frost" + t.lvl), X + 8, Y + 7 + bob, 1, alpha);
+    drawSprite(sprite(ART.frostCrystal, pal, "frost" + (path || t.lvl)), X + 8, Y + 7 + bob, 1, alpha);
+    if (path === "blizzard") {
+      // Two shards circling the crystal.
+      const shard = sprite(ART.frostShard, pal, "shard" + path);
+      for (const off of [0, Math.PI]) {
+        const a = S.time * 2.5 + off;
+        drawSprite(shard, X + 8 + Math.round(Math.cos(a) * 7), Y + 6 + Math.round(Math.sin(a) * 2), 1, alpha);
+      }
+    }
+    if (path === "deepfreeze") {
+      // Ice spikes jutting up around the base.
+      ctx.globalAlpha = alpha;
+      for (const [ix, ih] of [[1, 4], [3, 6], [12, 6], [14, 4]]) {
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(X + ix - 1, Y + T - ih - 1, 3, ih + 1);
+        ctx.fillStyle = t.flash > 0 ? "#ffffff" : "#82b1ff";
+        ctx.fillRect(X + ix, Y + T - ih, 1, ih);
+      }
+      ctx.globalAlpha = 1;
+    }
   } else {
     // A carved stone pillar from the ground holds up the gargoyle.
     let bot = t.y;
     while (bot < H - 1 && !isSolid(t.x, bot + 1)) bot++;
     const ph = (bot + 1) * T - (Y + 13);
-    if (ph > 0) {
+    if (ph > 0 && !preview) {
       ctx.globalAlpha = alpha;
       ctx.fillStyle = OUTLINE;
       ctx.fillRect(X + 4, Y + 13, 8, ph);
@@ -3987,48 +4340,98 @@ function drawTrap(t, alpha = 1) {
       for (let yy = Y + 18; yy < Y + 13 + ph; yy += 8) ctx.fillRect(X + 5, yy, 6, 1);
       ctx.globalAlpha = 1;
     }
-    const eye = t.flash > 0 ? "#ffffff" : TURRET_EYES[t.lvl - 1];
-    const spr = sprite(ART.turret, { S: "#6b6378", s: "#4a4456", Y: eye, k: "#3b0a0d" }, "turret" + eye);
-    drawSprite(spr, X + 8, Y + T - 1, t.face || -1, alpha);
+    const look = PATH_TURRETS[path];
+    const eye = t.flash > 0 ? "#ffffff" : look ? look.eye : TURRET_EYES[t.lvl - 1];
+    const spr = sprite(ART.turret, { S: look ? look.S : "#6b6378", s: look ? look.s : "#4a4456", Y: eye, k: "#3b0a0d" }, "turret" + (path || "") + eye);
+    if (path === "twin") {
+      // Two heads, back to back.
+      drawSprite(spr, X + 4, Y + T - 1, -1, alpha);
+      drawSprite(spr, X + 12, Y + T - 1, 1, alpha);
+    } else drawSprite(spr, X + 8, Y + T - 1, t.face || -1, alpha);
+    if (path === "ballista") {
+      // A big crossbow mounted on the gargoyle's head.
+      const f = t.face || -1, fx = X + 8 + f * 5;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(Math.min(fx, fx - f * 9) - 1, Y + 1, 12, 4);
+      for (let dy = -7; dy <= 7; dy++) {
+        const bx = fx - f * Math.round(dy * dy / 9);
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(bx - 1, Y + 3 + dy - 1, 4, 3);
+      }
+      for (let dy = -7; dy <= 7; dy++) {
+        const bx = fx - f * Math.round(dy * dy / 9);
+        ctx.fillStyle = Math.abs(dy) < 3 ? "#ffd54f" : "#a1887f";
+        ctx.fillRect(bx, Y + 3 + dy, 2, 1);
+      }
+      // The string, and the bolt waiting on it.
+      ctx.fillStyle = "#e8e2d0";
+      ctx.fillRect(fx - f * 5, Y - 3, 1, 13);
+      ctx.fillStyle = "#8d6e63";
+      ctx.fillRect(Math.min(fx + f * 3, fx - f * 8), Y + 2, 11, 2);
+      ctx.fillStyle = "#ffd54f";
+      ctx.fillRect(fx + f * 3, Y + 2, 2, 2);
+      ctx.globalAlpha = 1;
+    }
   }
-  if (alpha === 1 && S.trapMenu === t) {
+  if (preview || alpha !== 1) return;
+  if (S.trapMenu === t) {
     ctx.fillStyle = Math.floor(S.time * 4) % 2 ? "#ffd54f" : "#fff3c4";
     for (const [cx, cy, dx, dy] of [[0, 0, 1, 1], [15, 0, -1, 1], [0, 15, 1, -1], [15, 15, -1, -1]]) {
       ctx.fillRect(X + cx, Y + cy, 1, 1); ctx.fillRect(X + cx + dx, Y + cy, 1, 1); ctx.fillRect(X + cx, Y + cy + dy, 1, 1);
     }
   }
-  if (alpha === 1) {
-    for (let i = 0; i < t.lvl; i++) {
-      ctx.fillStyle = OUTLINE;
-      ctx.fillRect(X + 1 + i * 3, Y + 1, 3, 3);
-      ctx.fillStyle = "#ffd54f";
-      ctx.fillRect(X + 2 + i * 3, Y + 2, 1, 1);
-    }
+  for (let i = 0; i < t.lvl; i++) {
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(X + 1 + i * 3, Y + 1, 3, 3);
+    ctx.fillStyle = "#ffd54f";
+    ctx.fillRect(X + 2 + i * 3, Y + 2, 1, 1);
+  }
+  if (path) {
+    // A diamond in the path's colour marks a specialized trap.
+    const c = pathInfo(t.type, path).color;
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(X + 11, Y, 3, 5);
+    ctx.fillRect(X + 10, Y + 1, 5, 3);
+    ctx.fillStyle = c;
+    ctx.fillRect(X + 12, Y + 1, 1, 3);
+    ctx.fillRect(X + 11, Y + 2, 3, 1);
   }
 }
 
-function drawFireVent(t, X, Y, alpha) {
-  const hot = t.fireOn || t.warn;
-  const pal = { M: hot ? "#ffb300" : "#5d566a", g: hot ? "#ff6f00" : "#2e2a38", D: "#3b3746", d: "#26232e" };
-  drawSprite(sprite(ART.fireVent, pal, "vent" + hot), X + 8, Y + T - 1, 1, alpha);
-  if (!t.fireOn) return;
-  // A roaring column of flame, two tiles tall.
-  const base = Y + T - 4;
+const FLAME_COLORS = {
+  normal: ["#c62828", "#ff6f00", "#ffb300", "#fff3c4"],
+  pillar: ["#1565c0", "#40c4ff", "#b3e5fc", "#ffffff"],
+  ember: ["#7f0000", "#d50000", "#ff6d00", "#ffd180"],
+};
+function drawFireVent(t, X, Y, alpha, preview = false) {
+  const path = t.path, hot = t.fireOn || t.warn || path === "ember";
+  const pal = path === "pillar" ? { M: hot ? "#40c4ff" : "#455a64", g: hot ? "#e1f5fe" : "#263238", D: "#37474f", d: "#1c262b" }
+    : path === "ember" ? { M: Math.floor(S.time * 3 + t.x) % 2 ? "#ff3d00" : "#ff6d00", g: "#ffab00", D: "#3b1d16", d: "#26120e" }
+    : { M: hot ? "#ffb300" : "#5d566a", g: hot ? "#ff6f00" : "#2e2a38", D: "#3b3746", d: "#26232e" };
+  drawSprite(sprite(ART.fireVent, pal, "vent" + (path || "") + pal.M), X + 8, Y + T - 1, 1, alpha);
+  if (!t.fireOn && !preview && path !== "ember") return;
+  // A column of flame: two tiles tall, three for a pillar of fire, and low and steady in an ember pit.
+  const base = Y + T - 4, cols = FLAME_COLORS[path || "normal"];
   for (let i = 0; i < 10; i++) {
     const x = X + 3 + i;
     const edge = Math.min(i, 9 - i);
-    const h = Math.round(14 + edge * 3 + Math.sin(S.time * 40 + i * 1.7) * 3 + t.lvl * 2);
-    ctx.fillStyle = "#c62828";
+    let h = Math.round(14 + edge * 3 + Math.sin(S.time * 40 + i * 1.7) * 3 + t.lvl * 2);
+    if (path === "pillar") h = Math.round(h * 1.55);
+    if (path === "ember") h = Math.round(4 + edge * 1.2 + Math.sin(S.time * 12 + i * 2.1) * 2);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = cols[0];
     ctx.fillRect(x, base - h, 1, h);
-    ctx.fillStyle = "#ff6f00";
+    ctx.fillStyle = cols[1];
     ctx.fillRect(x, base - Math.round(h * 0.8), 1, Math.round(h * 0.8));
-    ctx.fillStyle = "#ffb300";
+    ctx.fillStyle = cols[2];
     ctx.fillRect(x, base - Math.round(h * 0.55), 1, Math.round(h * 0.55));
     if (edge > 1) {
-      ctx.fillStyle = "#fff3c4";
+      ctx.fillStyle = cols[3];
       ctx.fillRect(x, base - Math.round(h * 0.3), 1, Math.round(h * 0.3));
     }
   }
+  ctx.globalAlpha = 1;
 }
 
 function drawBar(e, width, color) {
@@ -4224,6 +4627,7 @@ function drawHero(h) {
   drawSprite(heroSprite(h), cx, bottom, h.face, h.evade > 0 ? 0.6 : 1);
   if (amped) drawSprite(heroSprite(h, "#76ff03"), cx, bottom, h.face, 0.12 + Math.sin(S.time * 6) * 0.05);
   if (h.flash > 0) drawSprite(heroSprite(h, true), cx, bottom, h.face, 0.85);
+  else if (h.frozen > 0) drawSprite(heroSprite(h, "#b3e5fc"), cx, bottom, h.face, 0.65);
   else if (h.chill > 0 && !inArena()) drawSprite(heroSprite(h, true), cx, bottom, h.face, 0.3);
   if (held) {
     ctx.restore();
@@ -4429,6 +4833,19 @@ function drawWave(w) {
 
 function drawArrow(a) {
   const x = Math.round(a.x * T), y = Math.round(a.y * T), d = Math.sign(a.vx);
+  if (a.bolt) {
+    // A ballista bolt: long, heavy, gold-tipped.
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 7, y - 2, 15, 4);
+    ctx.fillStyle = "#8d6e63";
+    ctx.fillRect(x - 6, y - 1, 13, 2);
+    ctx.fillStyle = "#ffd54f";
+    ctx.fillRect(x + d * 6, y - 1, 2, 2);
+    ctx.fillStyle = "#e8e2d0";
+    ctx.fillRect(x - d * 6, y - 2, 2, 1);
+    ctx.fillRect(x - d * 6, y + 1, 2, 1);
+    return;
+  }
   if (a.magic) {
     ctx.fillStyle = OUTLINE;
     ctx.fillRect(x - 2, y - 2, 5, 5);
@@ -4530,7 +4947,8 @@ function drawLighting() {
   }
   if (!inArena()) for (const t of S.traps) {
     if (t.type === "fire" && t.fireOn) glow(t.x * T + 8, t.y * T, 28, "rgba(255,120,30,0.35)");
-    if (t.type === "frost") glow(t.x * T + 8, t.y * T + 4, frostRadius(t.lvl) * T * 0.8, "rgba(80,170,255,0.12)");
+    if (t.type === "frost") glow(t.x * T + 8, t.y * T + 4, numsOf(t).radius * T * 0.8, t.path === "deepfreeze" ? "rgba(60,110,255,0.18)" : "rgba(80,170,255,0.12)");
+    if (t.type === "fire" && t.fireOn && t.path === "pillar") glow(t.x * T + 8, t.y * T - 10, 30, "rgba(64,196,255,0.3)");
   }
   ctx.globalCompositeOperation = "source-over";
 }
@@ -4625,40 +5043,99 @@ function drawAbilityBar(b) {
   }
 }
 
-// The trap menu: a panel above the selected trap with its stats, Upgrade and Sell.
+// The trap tab: slides in from the right edge when you click a placed trap. It shows the trap's
+// stats, Upgrade and Sell, and at level 3 the two paths it can be specialized down.
+const TAB = { w: 164, y: 27, h: 163 };
+function openTrapMenu(t) {
+  if (!S.trapMenu) S.tabOpenAt = S.time;
+  S.trapMenu = t;
+  // Keep the trap in view, clear of the tab.
+  const free = W - TAB.w / T - 1, sx = t.x - camX();
+  if (sx < 0.5 || sx > free - 1) S.camGoal = Math.max(0, Math.min(LEVEL_W - W, t.x + 0.5 - free / 2));
+}
+const mouseOver = (x, y, w, h) => mouse && mouse.x >= x && mouse.x < x + w && mouse.y >= y && mouse.y < y + h;
+
+// A small dark box with a picture of the trap in it (as it would look with a given path).
+function trapIconBox(x, y, w, h, t, path) {
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = "#120e1a";
+  ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x + 1, y + 1, w - 2, h - 2);
+  ctx.clip();
+  const fake = { type: t.type, lvl: 3, path, x: (x + w / 2 - 8) / T, y: (y + h - 17) / T, flash: 0, face: 1, off: 0, state: "up", fireOn: true, used: 0 };
+  drawTrap(fake, 1, true);
+  ctx.restore();
+}
+
+// A little up (good) or down (bad) arrow beside a path's pros and cons.
+function drawArrowMark(x, y, up, color) {
+  ctx.fillStyle = color;
+  for (let i = 0; i < 3; i++) ctx.fillRect(x + 2 - i, y + (up ? 1 + i : 5 - i), 1 + i * 2, 1);
+}
+
+function pathCard(x, y, w, h, t, p, { chosen = false } = {}) {
+  const enabled = !chosen && S.coins >= p.cost, hot = !chosen && mouseOver(x, y, w, h);
+  ctx.fillStyle = hot ? p.color : OUTLINE;
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = chosen ? "#2a2238" : hot ? "#2f2640" : "#1c1726";
+  ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+  ctx.fillStyle = chosen || enabled ? p.color : "#4a4258";
+  ctx.fillRect(x + 1, y + 1, 2, h - 2);
+  trapIconBox(x + 6, y + 4, 20, h - 8, t, p.id);
+  drawText(p.name, x + 31, y + 3, chosen || enabled ? p.color : "#8a8296");
+  if (!chosen) drawText(`${p.cost}C`, x + w - 4, y + 3, enabled ? "#ffd54f" : "#ff8a80", { align: "right" });
+  let ly = y + 13;
+  for (const line of p.pros) { drawArrowMark(x + 31, ly, true, "#9cff9c"); drawText(line, x + 38, ly, "#c8f7c8"); ly += 8; }
+  for (const line of p.cons) { drawArrowMark(x + 31, ly, false, "#ff8a80"); drawText(line, x + 38, ly, "#f7c8c8"); ly += 8; }
+  if (!chosen) S.menuRects.push({ x, y, w, h, act: () => specializeTrap(t, p.id) });
+}
+
 function drawTrapMenu() {
   const t = S.trapMenu;
   S.menuRects = [];
+  S.menuPanel = null;
   if (!t) return;
-  // Close when the trap is gone, or scrolled out of view.
-  const onScreen = t.x + 1 > camX() && t.x < camX() + W;
-  if (!S.traps.includes(t) || !canManageTraps() || !onScreen) { S.trapMenu = null; return; }
-  const kind = TRAPS[t.type], max = t.lvl >= 3, cost = max ? 0 : kind.costs[t.lvl];
-  const w = 150, h = max ? 46 : 56;
-  const sx = (t.x - camX()) * T + 8, sy = t.y * T;
-  const x = Math.round(Math.max(4, Math.min(W * T - w - 4, sx - w / 2)));
-  const y = Math.round(sy - h - 6 >= 28 ? sy - h - 6 : sy + T + 6);
+  if (!S.traps.includes(t) || !canManageTraps()) { S.trapMenu = null; return; }
+  const kind = TRAPS[t.type], path = pathInfo(t.type, t.path), max = t.lvl >= 3;
+  const k = Math.min(1, (S.time - (S.tabOpenAt ?? -9)) / 0.2), e = 1 - Math.pow(1 - k, 3);
+  const w = TAB.w, h = TAB.h, y = TAB.y, x = Math.round(W * T - w - 3 + (1 - e) * (w + 6));
+  S.menuPanel = { x, y, w, h };
   drawPanel(x, y, w, h);
-  // A little pointer down (or up) to the trap.
-  ctx.fillStyle = "#4a4258";
-  const px = Math.round(Math.max(x + 8, Math.min(x + w - 8, sx)));
-  if (y < sy) { ctx.fillRect(px - 2, y + h, 5, 1); ctx.fillRect(px - 1, y + h + 1, 3, 1); ctx.fillRect(px, y + h + 2, 1, 1); }
-  else { ctx.fillRect(px - 2, y - 1, 5, 1); ctx.fillRect(px - 1, y - 2, 3, 1); ctx.fillRect(px, y - 3, 1, 1); }
+  const x0 = x + 8, right = x + w - 8;
 
-  drawText(kind.name, x + 7, y + 6, "#ffd54f");
-  for (let i = 0; i < 3; i++) {
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(x + w - 32 + i * 8, y + 6, 6, 6);
-    ctx.fillStyle = i < t.lvl ? "#ffd54f" : "#3a3448";
-    ctx.fillRect(x + w - 31 + i * 8, y + 7, 4, 4);
+  // Header: a picture of the trap, its name, and its level or path.
+  trapIconBox(x0, y + 6, 20, 20, t, t.path);
+  drawText(kind.name, x0 + 26, y + 8, "#ffd54f");
+  if (path) drawText(path.name, x0 + 26, y + 18, path.color);
+  else {
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(x0 + 26 + i * 8, y + 18, 6, 6);
+      ctx.fillStyle = i < t.lvl ? "#ffd54f" : "#3a3448";
+      ctx.fillRect(x0 + 27 + i * 8, y + 19, 4, 4);
+    }
+    drawText(`LEVEL ${t.lvl}`, x0 + 52, y + 18, "#8a8296");
   }
-  drawText(trapStats(t.type, t.lvl), x + 7, y + 17, "#e6e0ec");
-  if (!max) drawText(`NEXT ${trapStats(t.type, t.lvl + 1)}`, x + 7, y + 27, "#9cff9c");
+  // Close box.
+  const cx = x + w - 13, cy = y + 4, hotX = mouseOver(cx, cy, 10, 10);
+  drawText("X", cx + 2, cy + 2, hotX ? "#ffffff" : "#8a8296");
+  S.menuRects.push({ x: cx, y: cy, w: 10, h: 10, act: () => { S.trapMenu = null; } });
 
-  // Buttons: hovered ones light up.
-  const by = y + h - 17;
-  const button = (bx, bw, label, color, enabled, act) => {
-    const hot = enabled && mouse && mouse.x >= bx && mouse.x < bx + bw && mouse.y >= by && mouse.y < by + 13;
+  const divider = dy => { ctx.fillStyle = "#3a3448"; ctx.fillRect(x0, y + dy, w - 16, 1); };
+  divider(29);
+  const now = trapStatLines(t.type, t.lvl, t.path);
+  now.forEach(([label, val], i) => {
+    drawText(label, x0, y + 33 + i * 9, "#8a8296");
+    drawText(String(val), right, y + 33 + i * 9, "#e6e0ec", { align: "right" });
+  });
+  divider(52);
+
+  // Buttons light up under the mouse.
+  const button = (bx, by, bw, label, color, enabled, act) => {
+    const hot = enabled && mouseOver(bx, by, bw, 13);
     ctx.fillStyle = OUTLINE;
     ctx.fillRect(bx, by, bw, 13);
     ctx.fillStyle = hot ? "#3a2f4a" : "#241e2e";
@@ -4668,11 +5145,35 @@ function drawTrapMenu() {
     drawText(label, bx + bw / 2, by + 3, enabled ? color : "#6b5f75", { align: "center" });
     if (enabled) S.menuRects.push({ x: bx, y: by, w: bw, h: 13, act });
   };
-  if (max) button(x + 6, 70, "MAX LEVEL", "#ffd54f", false);
-  else button(x + 6, 76, `UPGRADE ${cost}C`, "#9cff9c", S.coins >= cost, () => upgradeTrap(t));
-  button(x + w - 64, 46, `SELL +${trapRefund(t)}`, "#ff8a80", true, () => sellTrap(t));
-  // Close box.
-  S.menuRects.push({ x: x + w - 12, y: y + 1, w: 11, h: 10, act: () => { S.trapMenu = null; } });
+
+  if (!max) {
+    const cost = kind.costs[t.lvl];
+    drawText("NEXT LEVEL", x0, y + 56, "#9cff9c");
+    trapStatLines(t.type, t.lvl + 1, null).forEach(([label, val], i) => {
+      const changed = String(val) !== String(now[i][1]);
+      drawText(label, x0, y + 66 + i * 9, "#8a8296");
+      drawText(String(val), right, y + 66 + i * 9, changed ? "#9cff9c" : "#e6e0ec", { align: "right" });
+    });
+    button(x0, y + 87, w - 16, `UPGRADE  ${cost}C`, "#9cff9c", S.coins >= cost, () => upgradeTrap(t));
+    // A taste of what level 3 opens up.
+    drawText("AT LEVEL 3, CHOOSE:", x0, y + 108, "#8a8296");
+    TRAP_PATHS[t.type].forEach((p, i) => {
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(x0, y + 118 + i * 10, 6, 6);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(x0 + 1, y + 119 + i * 10, 4, 4);
+      drawText(p.name, x0 + 10, y + 118 + i * 10, "#c9c2d6");
+    });
+  } else if (!path) {
+    drawText("CHOOSE A PATH", x0, y + 56, "#ffd54f");
+    drawText("1 / 2", right, y + 56, "#6b5f75", { align: "right" });
+    TRAP_PATHS[t.type].forEach((p, i) => pathCard(x + 5, y + 65 + i * 41, w - 10, 39, t, p));
+  } else {
+    drawText("SPECIALIZED", x0, y + 56, path.color);
+    pathCard(x + 5, y + 65, w - 10, 39, t, path, { chosen: true });
+    drawText("SELL IT TO START OVER", x0, y + 110, "#6b5f75");
+  }
+  button(x0, y + h - 18, w - 16, `SELL  +${trapRefund(t)}C`, "#ff8a80", true, () => sellTrap(t));
 }
 
 // A strip under the HUD showing the whole path: ground, lava, traps, heroes, and where the view is.
@@ -4927,8 +5428,8 @@ function draw() {
     drawLoot();
   }
   drawBanner();
-  drawTrapMenu();
   drawDialog();
+  drawTrapMenu();
 
   if (S.whiteFlash > 0) {
     ctx.globalAlpha = Math.min(1, S.whiteFlash / 0.6);
@@ -5142,7 +5643,7 @@ function trapIcon(type) {
 }
 let trapListKey = "";
 function updateTrapList() {
-  const key = [S.traps.map(t => `${t.type}${t.x},${t.y}:${t.lvl}`).join("|"), S.coins, canManageTraps(), S.traps.indexOf(S.trapMenu)].join("/");
+  const key = [S.traps.map(t => `${t.type}${t.x},${t.y}:${t.lvl}${t.path || ""}`).join("|"), S.coins, canManageTraps(), S.traps.indexOf(S.trapMenu)].join("/");
   if (key === trapListKey) return;
   trapListKey = key;
   document.getElementById("trapCount").textContent = S.traps.length;
@@ -5151,14 +5652,15 @@ function updateTrapList() {
   if (!list.length) { rows.innerHTML = `<div class="empty">No traps yet. Pick one above and click the level to place it.</div>`; return; }
   const can = canManageTraps();
   rows.innerHTML = list.map(t => {
-    const kind = TRAPS[t.type], max = t.lvl >= 3, cost = max ? 0 : kind.costs[t.lvl];
+    const kind = TRAPS[t.type], max = t.lvl >= 3, cost = max ? 0 : kind.costs[t.lvl], path = pathInfo(t.type, t.path);
     const next = max ? "" : ` &gt; <b>${trapStats(t.type, t.lvl + 1)}</b>`;
+    const upLabel = !max ? `Upgrade ${cost}c` : path ? path.name : "Specialize";
     return `<div class="trap-row${S.trapMenu === t ? " active" : ""}" data-i="${S.traps.indexOf(t)}">
       <img src="${trapIcon(t.type)}" alt="">
-      <div class="info"><span class="name">${kind.name}</span><span class="pips">${"&#9632;".repeat(t.lvl)}${"&#9633;".repeat(3 - t.lvl)}</span>
-        <div class="stat">${trapStats(t.type, t.lvl)}${next}</div></div>
+      <div class="info"><span class="name">${kind.name}</span><span class="pips">${"&#9632;".repeat(t.lvl)}${"&#9633;".repeat(3 - t.lvl)}</span>${path ? `<span class="path" style="color:${path.color}">&#9670; ${path.name}</span>` : ""}
+        <div class="stat">${trapStats(t.type, t.lvl, t.path)}${next}</div></div>
       <div class="acts">
-        <button class="up" data-act="up" ${max || !can || S.coins < cost ? "disabled" : ""}>${max ? "Max level" : `Upgrade ${cost}c`}</button>
+        <button class="up" data-act="up" ${path || !can || (!max && S.coins < cost) ? "disabled" : ""}>${upLabel}</button>
         <button class="sell" data-act="sell" ${can ? "" : "disabled"}>Sell +${trapRefund(t)}c</button>
         <button data-act="find">Find</button>
       </div></div>`;
@@ -5170,9 +5672,13 @@ document.getElementById("trapRows").addEventListener("click", e => {
   btn.blur();
   const t = S.traps[+row.dataset.i];
   if (!t) return;
-  if (btn.dataset.act === "up") upgradeTrap(t);
+  if (btn.dataset.act === "up") {
+    // At level 3 the button opens the tab to pick a path.
+    if (t.lvl >= 3) openTrapMenu(t);
+    else upgradeTrap(t);
+  }
   if (btn.dataset.act === "sell") sellTrap(t);
-  if (btn.dataset.act === "find" && !inArena()) { focusCamera(t.x + 0.5); S.trapMenu = t; }
+  if (btn.dataset.act === "find" && canManageTraps()) { openTrapMenu(t); S.camGoal = Math.max(0, Math.min(LEVEL_W - W, t.x + 0.5 - (W - TAB.w / T - 1) / 2)); }
 });
 
 function updateToolbar() {
