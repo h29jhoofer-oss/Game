@@ -100,6 +100,16 @@ const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
   check('dropping to your last fifth of health, the monster asks if you are all in', /The orc grins: "/.test(talk) && await ev('TABLE_TALK.low.some(l=>/all in/i.test(l))'), talk.slice(-200));
   check('the Thing is the house, and you fold', await ev('THING_DEAL.some(l=>/house always wins/.test(l.text))&&THING_DEAL.some(l=>l.who==="hero"&&/fold/.test(l.text))'));
 
+  // the whisper box pauses the game, and anything else that takes the screen closes it
+  await run();
+  check('while you whisper, the world waits', await ev('(()=>{S.mode="map";hideOverlay();openWhisper();const p=whisperOpen&&freePaused();closeWhisper();return p;})()'), await ev('JSON.stringify({snare:!!SNARE,lw:S.lvlWait,pl:S.pendLvl,dlg:!!MAPD.dlg,fp:freePaused(),pack:packOpen,codex:codexOpen,shrine:shrineOpen,lvl:levelOpen,chase:!!S.chase})'));
+  check('a fight closes the whisper box', await ev('(()=>{openWhisper();mons=[];spawnMon("gob",S.px+1,S.py);startBattle(mons[0]);const ok=!whisperOpen;B=null;S.mode="map";document.body.classList.remove("inbattle");return ok;})()'));
+  check('so does any other card (death, level up), and a new descent starts clear', await ev('(()=>{hideOverlay();openWhisper();overlay("<p>x</p>");const a=!whisperOpen;openWhisper();start("cade");return a&&!whisperOpen;})()'));
+  check('you cannot whisper while roots are grabbing you or something is chasing you', await ev('(()=>{S.mode="map";hideOverlay();S.chase={};openWhisper();const a=!whisperOpen;S.chase=null;SNARE={stage:"warn",x:S.px,y:S.py,t:0};openWhisper();const b=!whisperOpen;SNARE=null;return a&&b;})()'));
+  check('a whisper that does nothing is not counted as a secret found', await ev('(()=>{META.secrets={};S.depth=17;whisper("void");return !META.secrets.void;})()'));
+  check('the Thing\'s second shape is as tough as the difficulty says', await ev(`(()=>{SET.diff="hard";mons=[];spawnMon("thing",S.px+1,S.py);const m=mons[0];startBattle(m);
+    B.mhp=0;B.phase="anim";seq=[];winBattle();for(let i=0;i<200&&B&&B.phaseNum!==2;i++)tick(.05);const ok=B&&B.mmax===Math.round(MONSTERS.find(x=>x.id==="thing2").hp*1.75);
+    SET.diff="easy";B=null;S.mode="map";document.body.classList.remove("inbattle");return ok;})()`));
   check('no page errors', errors.length === 0, errors);
   let pass = 0;
   for (const r of results) { console.log((r.ok ? 'ok   ' : 'FAIL ') + r.name + (r.ok ? '' : '  ' + JSON.stringify(r.detail))); if (r.ok) pass++; }

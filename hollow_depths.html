@@ -3874,7 +3874,7 @@ function win(){
     <button id="again">Descend again</button>`);
   $("again").onclick=chooseHero;
 }
-function overlay(html){$("card").classList.remove("wide","packcard");$("card").innerHTML=html;$("veil").classList.remove("hide");}
+function overlay(html){whisperOpen=false;$("card").classList.remove("wide","packcard");$("card").innerHTML=html;$("veil").classList.remove("hide");}
 function hideOverlay(){$("veil").classList.add("hide");}
 
 /* ============================ pack ui ============================ */
@@ -5812,6 +5812,7 @@ function sfirehit(L,fx){
 }
 
 function startBattle(m){
+  if(whisperOpen)closeWhisper();
   if(m.asleep&&VAULT&&VAULT.guards){MAPD.dlg=null;VAULT.gstage="done";for(const g of VAULT.guards){g.asleep=false;g.seenYou=true;}}
   if(S.over)return;
   if(m.seated&&THRONE){m.seated=false;m.y=THRONE.y+2;m.fy=m.y+.5;m.vy=m.y;THRONE.stage="done";}   // fought before he came down: he stands first
@@ -8508,7 +8509,8 @@ function thingUnveils(){sfxPhase();
     if(!B)return;
     B.trans=null;
     const t=MONSTERS.find(x=>x.id==="thing2");
-    m.t=t;m.hp=m.max=t.hp;B.mhp=B.mmax=B.mShown=t.hp;B.phaseNum=2;B.qcd=1;B.mcd=0;
+    const hp2=Math.round(t.hp*diff().hp*(S.voided?.85:1));   // its second shape is as tough as the difficulty, and as struck
+    m.t=t;m.hp=m.max=hp2;B.mhp=B.mmax=B.mShown=hp2;B.phaseNum=2;B.qcd=1;B.mcd=0;
     for(const k in B.mStat)B.mStat[k]=0;
     B.maxPoise=70;B.poise=B.maxPoise;B.combo=0;B.thingWind=false;
     blog("What was underneath has too many eyes and no patience left.","c-hit");
@@ -10179,7 +10181,7 @@ for(const k in KEYS){
 const held=new Set();
 let freeClock=0,freeBumpT=0,freeWindedT=0;
 function freeMode(){return !!S;}   // every hero walks freely now; the grid code stays for "." (rest) and as a fallback
-function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()||monkChoiceOpen||wispTalkOpen||snareGrab()||!!MAPD.dlg||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||descentT>0;}
+function freePaused(){return S.over||S.mode!=="map"||!!S.jump||tombBusy()||throneBusy()||vaultBusy()||guardsBusy()||arriveBusy()||monkChoiceOpen||wispTalkOpen||snareGrab()||!!MAPD.dlg||paperOpen||levelOpen||packOpen||shrineOpen||codexOpen||editorOpen||whisperOpen||descentT>0;}
 // What a box of half-width r centred on (cx,cy) overlaps: {wall:true}, {chasm:[x,y]}, or null.
 function boxHit(cx,cy,r){
   const e=1e-6;
@@ -11318,7 +11320,7 @@ function toggleEditor(){
 
 /* ============================ boot ============================ */
 function start(id){
-  monkChoiceOpen=false;wispTalkOpen=false;snareReset();descentT=0;levelOpen=false;levelPicked=false;paperOpen=false;
+  titleOpen=false;clearTimeout(titleRAF);monkChoiceOpen=false;wispTalkOpen=false;whisperOpen=false;HV.hp=HV.fl=HV.st=null;HV.flap=0;HV.hit=0;snareReset();descentT=0;levelOpen=false;levelPicked=false;paperOpen=false;
   menuQuiet=false;menuMusic=false;setMusicVolume();
   hideOverlay();packOpen=false;codexOpen=false;
   ensureAudio();
@@ -11363,7 +11365,7 @@ function drawTitleArt(cv,tm){
 }
 // Playtest builds only. N goes down a floor and grants a level (its cards come up as usual), and Cade
 // starts with the best gear, top-tier scrolls and healing, so the deep floors can be tried quickly.
-let PLAYTEST=true;   // tests switch it off to see the game as players will
+let PLAYTEST=false;  // set to true for playtest builds: N skips a floor, Cade starts kitted out, every hero is unlocked
 function playtestSkip(){
   S.depth++;if(S.depth>10)S.kingSlain=true;
   newFloor(S.depth);S.tamNext=S.depth;S.tamWait=0;snareReset();S.snareCD=6;
@@ -11409,45 +11411,46 @@ function nearXY(x,y,r){return Math.max(Math.abs(S.px-x),Math.abs(S.py-y))<=r;}
 const WHISPERS={
   PRAY:()=>{
     if(!S.atShrine)return null;
-    if(S.prayed)return "The shrine has already heard you this descent.";
+    if(S.prayed)return {no:"The shrine has already heard you this descent."};
     S.prayed=true;S.maxhp+=5;S.hp=S.maxhp;S.stam=S.maxstam;S.flame=S.maxflame;
     burst(S.px,S.py,"#fff27a",26,5);num(S.px,S.py,"+5 MAX","#fff27a",true);
     return "The shrine hums under your hands. You are whole again, a little more than whole. (+5 max health)";
   },
   LIGHT:()=>{
     if(S.depth!==8||!TOMB||!nearXY(TOMB.x,TOMB.y,4))return null;
-    if(S.candlesLit)return "The candles are already burning as high as they can.";
+    if(TOMB.stage==="rest")return {no:"The candles burn on their own now. She doesn't need them any more."};
+    if(S.candlesLit)return {no:"The candles are already burning as high as they can."};
     S.candlesLit=true;burst(TOMB.x,TOMB.y,"#f0c060",40,6);quake(4);
     return "Forty candles gutter up at once, tall and gold. Somewhere under the lid, someone remembers being loved. (The Queen will be weaker.)";
   },
   HOLLIS:()=>{
     if(S.depth!==9)return null;
-    if(S.hollis)return "Sir Hollis has taught you all he can.";
+    if(S.hollis)return {no:"Sir Hollis has taught you all he can."};
     S.hollis=true;S.str+=2;burst(S.px,S.py,"#b9c2cf",20,4);num(S.px,S.py,"+2 STR","#e9e5d9",true);
     return "Armour shifts somewhere in the dark, and a voice you half remember says: 'Elbow up. Again.' You hold the blade the way he showed you. (+2 strength)";
   },
   KNEEL:()=>{
     if(S.depth!==10||!THRONE||S.kingSlain||!nearXY(THRONE.x,THRONE.y,9))return null;
-    if(S.knelt)return "You have knelt once. He saw.";
+    if(S.knelt)return {no:"You have knelt once. He saw."};
     S.knelt=true;quake(3);
     return "You kneel on the cold stone. At the end of the hall the crown dips, very slightly, as if a man under it remembered his manners. (The King will be weaker.)";
   },
   MOON:()=>{
     if(new Date().getHours()!==0)return null;
-    if(S.moonFloor===S.depth)return "The roots are already looking away.";
+    if(S.moonFloor===S.depth)return {no:"The roots are already looking away."};
     S.moonFloor=S.depth;burst(S.px,S.py,"#c8d8f0",24,5);
     return "Far above all this stone, the moon is straight overhead. The roots go still and look away. (Your blows find their mark more often on this floor.)";
   },
   VOID:()=>{
     if(S.depth!==17)return null;
-    if(CHAR().id!=="pact_maker")return "You whisper it, but it is not your hand that wrote the clause. Nothing is struck.";
-    if(S.voided)return "The clause is already struck through.";
+    if(CHAR().id!=="pact_maker")return {no:"You whisper it, but it is not your hand that wrote the clause. Nothing is struck."};
+    if(S.voided)return {no:"The clause is already struck through."};
     S.voided=true;burst(S.px,S.py,"#2f5fa8",30,6);quake(6);
     return "You draw one neat line through 'and the rest'. Every root on the floor flinches. (The Thing Under the Hill will be weaker.)";
   },
   TAM:()=>{
     const w=activeWisp();if(!w)return null;
-    if(S.tamCalled===S.depth)return 'Tam: "I\'m here! I\'m right here. You only have to call once a floor."';
+    if(S.tamCalled===S.depth)return {no:'Tam: "I\'m here! I\'m right here. You only have to call once a floor."'};
     S.tamCalled=S.depth;w.whp=w.wmax;num(S.px,S.py,"TAM!","#c8a8f0",true);
     return 'Tam: "You called! Nobody\'s called me by my name in three years." He glows brighter, all the way back to full.';
   }
@@ -11458,17 +11461,19 @@ function whisper(word){
   const w=String(word||"").trim().toUpperCase().replace(/[^A-Z]/g,"");
   if(!w)return null;
   const f=WHISPERS[w],r=f?f():null;
+  if(r&&r.no){say(r.no,"c-cold");return r.no;}       // the right place, but nothing more to give
   if(r){secretFound(w.toLowerCase());playCardSound(true);say(r,"c-lvl");refresh();return r;}
   const msg=WHISPER_WRONG[Math.floor(Math.random()*WHISPER_WRONG.length)];
   say(`You whisper "${w.toLowerCase()}". ${msg}`,"c-cold");return msg;
 }
 function openWhisper(){
   if(!S||S.over||titleOpen){if(titleOpen){const p=document.querySelector(".ttl p");if(p)p.textContent="Whispers only carry in the dark. Start a descent first.";}return;}
-  if(S.mode!=="map"||MAPD.dlg||packOpen||codexOpen||shrineOpen||levelOpen){say("Not now. Whispers need quiet.","c-cold");return;}
-  whisperOpen=true;held.clear();
+  if(S.mode!=="map"||S.chase||SNARE||S.lvlWait>0||S.pendLvl>0||MAPD.dlg||packOpen||codexOpen||shrineOpen||levelOpen||freePaused()){say("Not now. Whispers need quiet.","c-cold");return;}
+  held.clear();
   overlay(`<div class="whisperbox"><h3>Whisper</h3><p>Some words only work in the right place, or at the right hour.</p>
     <form id="whForm" autocomplete="off"><input id="whIn" maxlength="16" spellcheck="false" placeholder="a word…" aria-label="Word to whisper"><button type="submit">Whisper</button></form>
     <button class="close" id="whBack" type="button">Never mind</button></div>`);
+  whisperOpen=true;                               // after overlay(), which clears it for every other card
   const inp=$("whIn");setTimeout(()=>inp&&inp.focus(),30);
   $("whForm").onsubmit=e=>{e.preventDefault();const v=inp.value;closeWhisper();whisper(v);};
   $("whBack").onclick=closeWhisper;
