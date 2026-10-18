@@ -27,7 +27,7 @@
     flex-direction: column;
     align-items: center;
     gap: 14px;
-    padding: 20px 16px;
+    padding: 12px 16px;
     background: radial-gradient(ellipse at top, #1d1526 0%, var(--bg) 70%);
     color: var(--text);
     font-family: "Press Start 2P", "Courier New", monospace;
@@ -40,7 +40,7 @@
     color: var(--accent);
     text-shadow: 3px 3px 0 #3b0a0d;
   }
-  .wrap { width: 100%; max-width: 1440px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .wrap { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
   .frame {
     padding: 4px;
     background: #000;
@@ -322,8 +322,14 @@ document.addEventListener("keyup", e => {
   if (e.key === " ") e.preventDefault();
 });
 
+// The game draws into a small pixel buffer, which is then scaled up onto the visible canvas.
 const canvas = document.getElementById("game");
-let ctx = canvas.getContext("2d");
+const screenCtx = canvas.getContext("2d");
+const buffer = document.createElement("canvas");
+buffer.width = W * T; buffer.height = H * T;
+let ctx = buffer.getContext("2d");
+const big = document.createElement("canvas");
+const bigCtx = big.getContext("2d");
 let hover = null;
 
 function tileFromEvent(e) {
@@ -346,12 +352,27 @@ document.getElementById("go").addEventListener("click", () => {
   else if (S.phase === "build") startWave();
 });
 
-// Scale the canvas by a whole number so every game pixel is the same size.
+// Fill as much of the window as fits, leaving room for the toolbar underneath.
 function fitCanvas() {
-  const avail = Math.min(document.querySelector(".wrap").clientWidth - 16, (innerHeight - 260) * canvas.width / canvas.height);
-  const scale = Math.max(1, Math.floor(avail / canvas.width));
-  canvas.style.width = canvas.width * scale + "px";
-  canvas.style.height = canvas.height * scale + "px";
+  const gw = W * T, gh = H * T;
+  const wide = Math.min(document.querySelector(".wrap").clientWidth - 24, (innerHeight - 190) * gw / gh);
+  const cssW = Math.max(160, Math.floor(wide));
+  canvas.style.width = cssW + "px";
+  canvas.style.height = Math.round(cssW * gh / gw) + "px";
+  const dpr = devicePixelRatio || 1;
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssW * gh / gw * dpr);
+  // Blow the pixels up by a whole number first (crisp and even), then shrink smoothly to fit.
+  const k = Math.ceil(canvas.width / gw);
+  big.width = gw * k; big.height = gh * k;
+}
+
+function present() {
+  bigCtx.imageSmoothingEnabled = false;
+  bigCtx.drawImage(buffer, 0, 0, big.width, big.height);
+  screenCtx.imageSmoothingEnabled = big.width !== canvas.width;
+  screenCtx.imageSmoothingQuality = "high";
+  screenCtx.drawImage(big, 0, 0, canvas.width, canvas.height);
 }
 addEventListener("resize", fitCanvas);
 fitCanvas();
@@ -1813,6 +1834,7 @@ function frame(now) {
   update(dt);
   update(dt);
   draw();
+  present();
   updateToolbar();
   requestAnimationFrame(frame);
 }
