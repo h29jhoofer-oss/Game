@@ -99,7 +99,7 @@
 <body>
 <h1>DUNGEON BOSS</h1>
 <div class="wrap">
-  <div class="frame"><canvas id="game" width="480" height="160"></canvas></div>
+  <div class="frame"><canvas id="game" width="480" height="192"></canvas></div>
   <div id="tools">
     <button data-tool="spike"><canvas width="16" height="16"></canvas><span>Spikes<span class="cost c">5 coins</span></span></button>
     <button data-tool="saw"><canvas width="16" height="16"></canvas><span>Saw blade<span class="cost c">8 coins</span></span></button>
@@ -111,10 +111,11 @@
   <div id="msg"></div>
   <details>
     <summary>How to play</summary>
-    You are the boss at the end of the level. Heroes run and jump through it to reach you.<br>
+    You are the boss, waiting at the top of your castle tower. Heroes run and jump through the level to reach it.<br>
     <b>Build:</b> pick a tool and click the level. Spikes go on the ground; saws and turrets go anywhere, even over the lava pits.
     Click a trap of the same type again to upgrade it (max level 3).<br>
-    <b>Fight:</b> A / D or arrows move, W jumps, Space swings your cleaver. You can't leave your lair.<br>
+    <b>Boss battle:</b> when a hero gets through the tower door, the fight moves to the tower top.
+    A / D or arrows move, W jumps, Space swings your cleaver, S slams the ground and sends out shockwaves.<br>
     Each dead hero gives coins and souls, but the next one is stronger, better geared, and better at spotting traps and dodging.<br>
     <a href="index.html">&larr; back to menu</a>
   </details>
@@ -122,28 +123,56 @@
 
 <script>
 // ---------- level (side view) ----------
-// # stone   . air   L lava   S hero start   G lair gate (heroes pass, the boss can't)
+// # stone   . air   L lava   S hero start
+// The approach to your castle tower. You wait on top; a hero who reaches the door climbs up to fight you.
 const MAP = [
-  "##############################",
-  "#.....................#......#",
-  "#.....................#......#",
-  "#.....................#......#",
-  "#.....................#......#",
-  "#.....................#......#",
-  "#S......##............G......#",
+  "..............................",
+  "..............................",
+  "..............................",
+  "........................######",
+  "........................######",
+  "........................######",
+  "........................######",
+  "........................######",
+  ".S......##..............######",
   "####..######...####..#########",
   "####..######...####..#########",
   "####LL######LLL####LL#########",
 ];
-const W = 30, H = 10, T = 16;
-const LAIR_X = 23;                     // first column inside the lair
-const TORCHES = [{ x: 4, y: 4 }, { x: 11, y: 4 }, { x: 17, y: 4 }, { x: 24, y: 3 }, { x: 28, y: 3 }];
+// The top of the tower, where the boss battle happens.
+const ARENA = [
+  "..............................",
+  "..............................",
+  "..............................",
+  "..............................",
+  "..............................",
+  "..............................",
+  "#............................#",
+  "#............................#",
+  "#............................#",
+  "##############################",
+  "##############################",
+  "##############################",
+];
+const W = 30, H = 12, T = 16;
+const TOWER_X = 24;                    // first column of the tower
+const ARENA_FLOOR = 9;
+const PERCH = { x: 26.2, y: 3 - 1.8 }; // where the boss waits on the tower top
+const TORCHES = {
+  level: [{ x: 3, y: 7, post: true }, { x: 10, y: 7, post: true }, { x: 17, y: 7, post: true }, { x: 25, y: 5 }, { x: 28, y: 5 }],
+  arena: [{ x: 0, y: 5 }, { x: 29, y: 5 }, { x: 10, y: 7 }, { x: 19, y: 7 }],
+};
+const MOON = { level: { x: 170, y: 38, r: 10 }, arena: { x: 330, y: 40, r: 14 } };
+const FADE = 0.5;
 let START;
 MAP.forEach((row, y) => { const x = row.indexOf("S"); if (x >= 0) START = { x, y }; });
 
-const tileAt = (x, y) => (MAP[y] || "")[x] || "#";
+const inArena = () => !!S && S.scene === "arena";
+const tileIn = (map, x, y) => (map[y] || "")[x] || "#";
+const tileAt = (x, y) => tileIn(inArena() ? ARENA : MAP, x, y);
 const isSolid = (x, y) => tileAt(x, y) === "#";
-const canBuild = (x, y) => tileAt(x, y) === "." && x < LAIR_X - 1;
+const torches = () => TORCHES[inArena() ? "arena" : "level"];
+const canBuild = (x, y) => !inArena() && y > 0 && tileAt(x, y) === "." && x < TOWER_X - 1;
 
 // ---------- balance ----------
 const GRAVITY = 25, JUMP = 12;
@@ -156,7 +185,7 @@ const MINIONS = {
   skeleton: { cost: 1, hp: 15, atk: 3, speed: 2.0, w: 0.6, blood: ["#e8e2d0", "#a89f8a"] },
   ogre:     { cost: 3, hp: 50, atk: 8, speed: 1.2, w: 0.8, blood: ["#6aa84f", "#3f7a34"] },
 };
-const BOSS_HP = 300, BOSS_DMG = 30, BOSS_SPEED = 4;
+const BOSS_HP = 300, BOSS_DMG = 30, BOSS_SPEED = 4, SLAM_DMG = 20, WAVE_DMG = 12;
 const GEAR = [
   { name: "Rags",         main: "#8d7b68", shade: "#5e5044" },
   { name: "Leather",      main: "#a0612d", shade: "#6b3f1d" },
@@ -182,8 +211,8 @@ function makeHero(lv) {
 }
 function makeBoss() {
   return {
-    x: 26, y: 5.2, w: 1.6, h: 1.8, vx: 0, vy: 0, onGround: false, isBoss: true,
-    hp: BOSS_HP, maxHp: BOSS_HP, cd: 0, windup: 0, swing: 0, face: -1, flash: 0, arm: 1.2,
+    x: PERCH.x, y: PERCH.y, w: 1.6, h: 1.8, vx: 0, vy: 0, onGround: true, isBoss: true,
+    hp: BOSS_HP, maxHp: BOSS_HP, cd: 0, windup: 0, swing: 0, slam: 0, slamCd: 0, face: -1, flash: 0, arm: 1.2,
   };
 }
 
@@ -191,18 +220,15 @@ let S;
 function newGame() {
   S = {
     coins: 20, souls: 3, wave: 1, heroLv: 1,
-    traps: [], minions: [], arrows: [], hero: null, boss: makeBoss(),
-    phase: "build", floats: [], particles: [], tool: "spike", time: 0,
+    traps: [], minions: [], arrows: [], waves: [], hero: null, boss: makeBoss(),
+    phase: "build", scene: "level", floats: [], particles: [], tool: "spike", time: 0,
+    fade: 0, fadeIn: 0, intro: 0, returnT: 0,
     shake: 0, banner: null, pulse: { coins: 0, souls: 0 },
   };
   say("Build your level, then press Start wave.");
 }
 
 // ---------- physics ----------
-function solidFor(e, x, y) {
-  return isSolid(x, y) || (e.isBoss && tileAt(x, y) === "G");
-}
-
 function rows(e) { return [Math.floor(e.y), Math.floor(e.y + e.h - 0.001)]; }
 function cols(e) { return [Math.floor(e.x), Math.floor(e.x + e.w - 0.001)]; }
 
@@ -214,10 +240,10 @@ function moveBody(e, dt) {
   const [r0, r1] = rows(e);
   if (e.vx > 0) {
     const tx = Math.floor(e.x + e.w);
-    for (let ty = r0; ty <= r1; ty++) if (solidFor(e, tx, ty)) { e.x = tx - e.w - 0.001; break; }
+    for (let ty = r0; ty <= r1; ty++) if (isSolid(tx, ty)) { e.x = tx - e.w - 0.001; break; }
   } else if (e.vx < 0) {
     const tx = Math.floor(e.x);
-    for (let ty = r0; ty <= r1; ty++) if (solidFor(e, tx, ty)) { e.x = tx + 1.001; break; }
+    for (let ty = r0; ty <= r1; ty++) if (isSolid(tx, ty)) { e.x = tx + 1.001; break; }
   }
 
   const wasGround = e.onGround, fall = e.vy;
@@ -226,10 +252,10 @@ function moveBody(e, dt) {
   const [c0, c1] = cols(e);
   if (e.vy > 0) {
     const ty = Math.floor(e.y + e.h);
-    for (let tx = c0; tx <= c1; tx++) if (solidFor(e, tx, ty)) { e.y = ty - e.h; e.vy = 0; e.onGround = true; break; }
+    for (let tx = c0; tx <= c1; tx++) if (isSolid(tx, ty)) { e.y = ty - e.h; e.vy = 0; e.onGround = true; break; }
   } else if (e.vy < 0) {
     const ty = Math.floor(e.y);
-    for (let tx = c0; tx <= c1; tx++) if (solidFor(e, tx, ty)) { e.y = ty + 1; e.vy = 0; break; }
+    for (let tx = c0; tx <= c1; tx++) if (isSolid(tx, ty)) { e.y = ty + 1; e.vy = 0; break; }
   }
   if (e.onGround && !wasGround && fall > 6) {
     dust(centerX(e), e.y + e.h, e.isBoss ? 10 : 5);
@@ -288,6 +314,7 @@ document.addEventListener("keydown", e => {
   keys[k] = true;
   if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
   if (k === " ") bossAttack();
+  if (k === "s" || k === "arrowdown") bossSlam();
 });
 document.addEventListener("keyup", e => {
   keys[e.key.toLowerCase()] = false;
@@ -321,7 +348,7 @@ document.getElementById("go").addEventListener("click", () => {
 
 // Scale the canvas by a whole number so every game pixel is the same size.
 function fitCanvas() {
-  const avail = Math.min(document.querySelector(".wrap").clientWidth - 16, (innerHeight - 260) * 3);
+  const avail = Math.min(document.querySelector(".wrap").clientWidth - 16, (innerHeight - 260) * canvas.width / canvas.height);
   const scale = Math.max(1, Math.floor(avail / canvas.width));
   canvas.style.width = canvas.width * scale + "px";
   canvas.style.height = canvas.height * scale + "px";
@@ -331,6 +358,7 @@ fitCanvas();
 
 function place({ x, y }) {
   if (S.phase === "over") return;
+  if (inArena()) { say("You can't build during the boss battle."); return; }
   if (!canBuild(x, y)) { say("You can't build there."); return; }
   const trap = S.traps.find(t => t.x === x && t.y === y);
 
@@ -376,9 +404,43 @@ function swingBox(b) {
   };
 }
 
+// The hero made it to the tower door: fade out, then climb to the top.
+function enterTower() {
+  S.phase = "enter";
+  S.fade = 0;
+  S.arrows = [];
+  say(`${S.hero.name} enters your tower and climbs the stairs...`);
+}
+
+function startBossFight() {
+  S.scene = "arena";
+  S.phase = "boss";
+  S.intro = 1.8;
+  S.fadeIn = FADE;
+  S.waves = [];
+  S.particles = [];
+  const h = S.hero, b = S.boss;
+  Object.assign(h, { x: 1.7, y: ARENA_FLOOR - h.h, vx: 0, vy: 0, face: 1, evade: 0, trail: [], cd: 0.5 });
+  Object.assign(b, { x: 22, y: ARENA_FLOOR - b.h, vx: 0, vy: 0, face: -1, windup: 0, swing: 0, slam: 0, cd: 0, slamCd: 0 });
+  banner("LORD OF THE TOWER", `${h.name} has reached the top`, "#ff8a80");
+  say("Boss battle! A / D move, W jumps, Space swings, S slams the ground.");
+}
+
+// After the boss wins, go back down to the level to build for the next wave.
+function returnToLevel() {
+  S.scene = "level";
+  S.phase = "build";
+  S.fadeIn = FADE;
+  S.waves = [];
+  S.particles = S.particles.filter(p => p.home);
+  Object.assign(S.boss, { x: PERCH.x, y: PERCH.y, vx: 0, vy: 0, face: -1, windup: 0, swing: 0, slam: 0, onGround: true });
+}
+
+const canFight = () => (S.phase === "boss" && S.intro <= 0) || S.phase === "felled";
+
 function bossAttack() {
   const b = S.boss;
-  if (S.phase === "over" || b.cd > 0 || b.windup > 0) return;
+  if (!canFight() || b.cd > 0 || b.windup > 0 || b.slam > 0) return;
   b.windup = 0.25;
   b.cd = 0.75;
   // A stronger hero sometimes sees the swing coming and leaps away.
@@ -387,6 +449,28 @@ function bossAttack() {
     h.evade = 0.45;
     if (h.onGround) h.vy = -9;
     float(centerX(h), h.y - 0.3, "DODGE", "#6fd3ff");
+  }
+}
+
+// Heavy attack: raise the cleaver high, then smash the floor and send shockwaves both ways.
+function bossSlam() {
+  const b = S.boss;
+  if (!canFight() || b.slamCd > 0 || b.windup > 0 || b.slam > 0 || !b.onGround) return;
+  b.slam = 0.45;
+  b.slamCd = 3;
+}
+
+function slamImpact(b) {
+  b.swing = 0.15;
+  S.shake = 6;
+  const fy = b.y + b.h, fx = centerX(b) + b.face * 1.2;
+  dust(fx, fy, 16);
+  burst(fx, fy - 0.1, 12, ["#8a8296", "#c9c2d6", "#5d566a"], 6);
+  for (const dir of [-1, 1]) S.waves.push({ x: centerX(b) + dir * 0.8, y: fy, dir, life: 1.1 });
+  const h = S.hero;
+  if (h && h.evade <= 0 && h.onGround && Math.abs(centerX(h) - centerX(b)) < 1.8) {
+    damage(h, SLAM_DMG, "#ff5252");
+    h.vy = -6;
   }
 }
 
@@ -401,20 +485,57 @@ function update(dt) {
   S.floats = S.floats.filter(f => f.t > 0);
   updateParticles(dt);
   S.traps.forEach(t => { t.cd -= dt; t.flash -= dt; });
+  S.fadeIn = Math.max(0, S.fadeIn - dt);
+  S.boss.flash -= dt;
   if (S.phase === "over") return;
 
-  updateBoss(dt);
-  updateMinions(dt);
-  if (S.phase !== "wave") return;
+  if (S.phase === "enter") {
+    S.fade += dt;
+    if (S.fade >= FADE) startBossFight();
+    return;
+  }
+  if (S.phase === "felled") {
+    // The hero is dead; the boss stands on the tower a moment before the scene fades back.
+    updateBoss(dt);
+    updateWaves(dt);
+    S.returnT -= dt;
+    if (S.returnT <= 0) returnToLevel();
+    return;
+  }
 
-  updateHero(dt);
-  updateTraps(dt);
-  updateArrows(dt);
+  if (inArena()) {
+    S.intro -= dt;
+    updateBoss(dt);
+    updateHero(dt);
+    updateWaves(dt);
+  } else {
+    updateMinions(dt);
+    if (S.phase !== "wave") return;
+    updateHero(dt);
+    if (S.phase !== "wave") return;
+    updateTraps(dt);
+    updateArrows(dt);
+  }
 
-  S.minions = S.minions.filter(m => m.hp > 0);
   const h = S.hero;
   if (h.hp <= 0) heroDied(h.lava ? `${h.name} fell into the lava!` : `${h.name} has fallen!`);
   else if (S.boss.hp <= 0) bossDied();
+}
+
+function updateWaves(dt) {
+  const h = S.hero;
+  for (const w of S.waves) {
+    w.life -= dt;
+    w.x += w.dir * 8 * dt;
+    if (isSolid(Math.floor(w.x), Math.floor(w.y - 0.5))) w.life = 0;
+    if (Math.random() < dt * 25) dust(w.x, w.y, 1);
+    if (h && !w.hit && h.evade <= 0 && h.onGround && Math.abs(centerX(h) - w.x) < 0.45) {
+      w.hit = true;
+      damage(h, WAVE_DMG, "#ff5252");
+      h.vy = -6;
+    }
+  }
+  S.waves = S.waves.filter(w => w.life > 0);
 }
 
 function updateParticles(dt) {
@@ -441,7 +562,7 @@ function updateParticles(dt) {
         life: 0.8 + Math.random() * 0.8, color: Math.random() < 0.5 ? "#ffb300" : "#ff6f00", glow: true });
     }
   }
-  for (const t of TORCHES) {
+  for (const t of torches()) {
     if (Math.random() < dt * 2) {
       particle({ x: t.x + 0.5 + (Math.random() - 0.5) * 0.15, y: t.y + 0.25, vx: (Math.random() - 0.5) * 0.4, vy: -1.2,
         life: 0.5 + Math.random() * 0.4, color: "#ffcc80", glow: true });
@@ -453,18 +574,25 @@ function updateBoss(dt) {
   const b = S.boss;
   b.cd -= dt;
   b.swing -= dt;
-  b.flash -= dt;
+  b.slamCd -= dt;
   let dir = 0;
-  if (keys.a || keys.arrowleft) dir--;
-  if (keys.d || keys.arrowright) dir++;
+  if (b.slam <= 0) {
+    if (keys.a || keys.arrowleft) dir--;
+    if (keys.d || keys.arrowright) dir++;
+    if ((keys.w || keys.arrowup) && b.onGround) b.vy = -10;
+  }
   b.vx = dir * BOSS_SPEED;
   if (dir) b.face = dir;
-  if ((keys.w || keys.arrowup) && b.onGround) b.vy = -10;
   moveBody(b, dt);
 
-  // Cleaver angle: resting on the shoulder, raised back on windup, sweeping down on the swing.
-  const target = b.windup > 0 ? -0.5 : b.swing > 0 ? 2.3 : 1.2;
-  b.arm += (target - b.arm) * Math.min(1, dt * (b.swing > 0 ? 40 : b.windup > 0 ? 18 : 8));
+  // Cleaver angle: resting forward, raised back on windup, straight up for a slam, sweeping down on the swing.
+  const target = b.slam > 0 ? -0.1 : b.windup > 0 ? -0.5 : b.swing > 0 ? 2.3 : 1.2;
+  b.arm += (target - b.arm) * Math.min(1, dt * (b.swing > 0 ? 40 : b.windup > 0 || b.slam > 0 ? 18 : 8));
+
+  if (b.slam > 0) {
+    b.slam -= dt;
+    if (b.slam <= 0) slamImpact(b);
+  }
 
   if (b.windup > 0) {
     b.windup -= dt;
@@ -496,10 +624,28 @@ function updateHero(dt) {
     return;
   }
 
-  // Fight a minion standing in the way.
-  const foe = S.minions.find(m =>
+  const arena = inArena();
+  if (arena && S.intro > 0) {
+    // Step out of the stairwell and square up.
+    h.vx = h.x < 5 ? h.speed * 0.6 : 0;
+    h.face = 1;
+    moveBody(h, dt);
+    return;
+  }
+  if (arena) {
+    // Shockwaves: a sharper hero sees them coming and hops over.
+    for (const w of S.waves) {
+      const dist = (centerX(h) - w.x) * w.dir;
+      if (dist < 0 || dist > 1.3 || !h.onGround) continue;
+      if (w.jump === undefined) w.jump = Math.random() < 0.25 + h.smart;
+      if (w.jump) h.vy = -JUMP * 0.8;
+    }
+  }
+
+  // Fight a minion standing in the way (in the level), or the boss (on the tower).
+  const foe = arena ? null : S.minions.find(m =>
     Math.abs(centerY(m) - centerY(h)) < 0.8 && m.x - (h.x + h.w) < 0.4 && m.x + m.w > h.x - 0.2);
-  const atBoss = h.x + h.w > b.x - 0.4 && h.x < b.x + b.w + 0.4 && Math.abs(centerY(b) - centerY(h)) < 1.5;
+  const atBoss = arena && h.x + h.w > b.x - 0.4 && h.x < b.x + b.w + 0.4 && Math.abs(centerY(b) - centerY(h)) < 1.5;
   const target = foe || (atBoss ? b : null);
 
   if (target) {
@@ -512,13 +658,15 @@ function updateHero(dt) {
       h.atkAnim = 0.18;
     }
   } else {
-    const dir = h.x > LAIR_X ? Math.sign(centerX(b) - centerX(h)) || 1 : 1;
+    const dir = arena ? Math.sign(centerX(b) - centerX(h)) || 1 : 1;
     h.vx = dir * h.speed;
     h.face = dir;
-    if (h.onGround && shouldJump(h, dir)) h.vy = -JUMP;
+    if (!arena && h.onGround && shouldJump(h, dir)) h.vy = -JUMP;
   }
   moveBody(h, dt);
+  if (arena) return;
   if (inLava(h)) { h.hp = 0; h.lava = true; }
+  else if (h.x + h.w > TOWER_X - 0.3) enterTower();
 }
 
 // Platformer AI: jump over walls, pits, and (if clever enough) traps.
@@ -627,7 +775,8 @@ function heroDied(reason) {
   S.arrows = [];
   S.heroLv++;
   S.wave++;
-  S.phase = "build";
+  if (inArena()) { S.phase = "felled"; S.returnT = 2.2; }
+  else S.phase = "build";
   banner("HERO FELLED", `+${coins} coins  +${souls} soul${souls > 1 ? "s" : ""}`, "#ffd54f");
   say(`${reason} The next hero arrives at Lv ${S.heroLv} in ${gearFor(S.heroLv).name}...`);
 }
@@ -968,72 +1117,134 @@ function rng(seed) {
   return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
 }
 
-const bg = document.createElement("canvas");
-bg.width = W * T; bg.height = H * T;
-(function drawBackground() {
-  const g = bg.getContext("2d");
-  const rand = rng(7);
-  const px = (x, y, c, w = 1, h = 1) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+// Paint one scene's backdrop and stonework into an offscreen canvas.
+function buildBackground(map, arena) {
+  const c = document.createElement("canvas");
+  c.width = W * T; c.height = H * T;
+  const g = c.getContext("2d");
+  const rand = rng(arena ? 11 : 7);
+  const px = (x, y, col, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+  const solid = (x, y) => tileIn(map, x, y) === "#";
 
-  // Back wall: small bricks, red-tinted in the boss lair.
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      if (isSolid(x, y)) continue;
-      const lair = x >= LAIR_X - 1;
-      const mortar = lair ? "#160a0e" : "#110e17";
-      const shades = lair ? ["#2b161c", "#2f1920", "#26131a", "#331b22"] : ["#1d1926", "#211c2b", "#1a1722", "#24202f"];
-      px(x * T, y * T, mortar, T, T);
-      for (let by = 0; by < 4; by++) {
-        const off = (by + y) % 2 ? 4 : 0;
-        for (let bx = -1; bx < 2; bx++) {
-          const sx = x * T + bx * 8 + off + 1, sy = y * T + by * 4 + 1;
-          const l = Math.max(sx, x * T), r = Math.min(sx + 7, x * T + T);
-          if (r <= l) continue;
-          px(l, sy, shades[(rand() * shades.length) | 0], r - l, 3);
-          if (rand() < 0.05) px(l + 1, sy + 1, mortar, 2, 1);
-        }
+  // Night sky in dithered bands, darkest at the top.
+  const bands = ["#08071a", "#0c0a21", "#110d29", "#171131", "#1e1539", "#271a42", "#301e48"];
+  const bandH = 18;
+  for (let y = 0; y < H * T; y++) {
+    const i = Math.min(bands.length - 1, Math.floor(y / bandH));
+    px(0, y, bands[i], W * T, 1);
+    const edge = y % bandH;
+    if (i < bands.length - 1 && edge >= bandH - 3) {
+      for (let x = (y + (edge === bandH - 2 ? 1 : 0)) % 2; x < W * T; x += edge === bandH - 1 ? 2 : 4) px(x, y, bands[i + 1]);
+    }
+  }
+  // Stars.
+  for (let i = 0; i < 90; i++) {
+    const x = (rand() * W * T) | 0, y = 16 + ((rand() * 90) | 0);
+    const bright = rand() < 0.15;
+    px(x, y, bright ? "#ffffff" : rand() < 0.5 ? "#b8b0e0" : "#7d74a8");
+    if (bright) { px(x - 1, y, "#6d6498"); px(x + 1, y, "#6d6498"); px(x, y - 1, "#6d6498"); px(x, y + 1, "#6d6498"); }
+  }
+  // Moon with a soft dithered halo and a few craters.
+  const moon = MOON[arena ? "arena" : "level"];
+  for (let y = -moon.r - 4; y <= moon.r + 4; y++) for (let x = -moon.r - 4; x <= moon.r + 4; x++) {
+    const d = Math.sqrt(x * x + y * y);
+    if (d <= moon.r) px(moon.x + x, moon.y + y, x + y > moon.r * 0.6 ? "#d4c9a2" : "#f3ecd2");
+    else if (d <= moon.r + 4 && (x + y) % 2 === 0) px(moon.x + x, moon.y + y, d < moon.r + 2 ? "#3b3463" : "#2a2350");
+  }
+  for (const [cx, cy, r] of [[-3, -2, 2], [3, 3, 1], [-2, 4, 1], [4, -4, 1]]) {
+    const k = moon.r / 10;
+    px(moon.x + Math.round(cx * k), moon.y + Math.round(cy * k), "#cbbf96", Math.round(r * k) + 1, Math.round(r * k) + 1);
+  }
+  // Thin clouds drifting across the sky.
+  for (let i = 0; i < 7; i++) {
+    const cx = (rand() * W * T) | 0, cy = 30 + ((rand() * 50) | 0), len = 20 + ((rand() * 40) | 0);
+    px(cx, cy, "#221c44", len, 2);
+    px(cx + 6, cy - 1, "#2a2350", len - 12, 1);
+    px(cx + 3, cy + 2, "#1a1538", len - 6, 1);
+  }
+
+  // Distant mountains: two jagged ridges.
+  const ridge = (base, amp, col, seed) => {
+    for (let x = 0; x < W * T; x++) {
+      const h = Math.sin(x * 0.021 + seed) * amp + Math.sin(x * 0.057 + seed * 3) * amp * 0.45 + Math.abs(Math.sin(x * 0.11 + seed)) * amp * 0.25;
+      px(x, Math.round(base - h), col, 1, H * T);
+    }
+  };
+  if (arena) {
+    // High above everything: far peaks poking out of a sea of clouds.
+    ridge(118, 12, "#1d1838", 1.3);
+    for (let y = 112; y < H * T; y += 3) {
+      for (let x = 0; x < W * T; x += 1) {
+        const wob = Math.sin(x * 0.05 + y) * 2;
+        if ((x + y) % 7 < 5) px(x, y + Math.round(wob), y < 118 ? "#3a3266" : "#2c2552", 1, 2);
       }
     }
+  } else {
+    ridge(92, 14, "#1a1533", 0.4);
+    ridge(108, 10, "#141029", 2.1);
   }
 
-  // Hanging chains and cobwebs.
-  for (const cx of [6, 14, 20]) {
-    const len = 2 + ((cx * 7) % 3);
-    for (let i = 0; i < len * T; i += 3) {
-      px(cx * T + 8, T + i, "#3f3a4a", 1, 2);
-      px(cx * T + 7, T + i + 1, "#2a2633", 1, 1);
+  // Brick wall helper for castle walls in the background.
+  const bricks = (x0, y0, w, h, shades, mortar) => {
+    px(x0, y0, mortar, w, h);
+    for (let y = y0; y < y0 + h; y += 4) {
+      const off = ((y - y0) / 4) % 2 ? 4 : 0;
+      for (let x = x0 - 8 + off; x < x0 + w; x += 8) {
+        const l = Math.max(x + 1, x0), r = Math.min(x + 8, x0 + w);
+        if (r > l) px(l, y + 1, shades[(rand() * shades.length) | 0], r - l, 3);
+      }
     }
-    px(cx * T + 6, T + len * T, "#55506a", 4, 2);
-  }
-  const web = (ox, oy, flip) => {
-    for (let i = 0; i < 7; i++) {
-      px(ox + (flip ? -i : i), oy + 6 - i, "#4a4558");
-      px(ox + (flip ? -i : i), oy, "#3a3646");
-      px(ox, oy + i, "#3a3646");
-    }
-    px(ox + (flip ? -3 : 3), oy + 2, "#4a4558");
   };
-  web(T, T, false);
-  web(22 * T - 1, T, true);
+  const merlons = (x0, x1, y, w, h, gap, col, hi) => {
+    for (let x = x0; x + w <= x1; x += w + gap) {
+      px(x - 1, y - h - 1, OUTLINE, w + 2, h + 1);
+      px(x, y - h, col, w, h);
+      px(x, y - h, hi, w, 1);
+    }
+  };
+  const wallShades = ["#251f33", "#29223a", "#221c2f", "#2d263f"];
 
-  // Banners in the lair.
-  for (const bx of [24, 27]) {
-    const x0 = bx * T + 3, y0 = T + 1;
-    px(x0 - 1, y0, "#5d4037", 12, 2);
-    px(x0, y0 + 2, "#7a1a20", 10, 26);
-    px(x0, y0 + 2, "#9c2a2f", 2, 26);
-    for (let i = 0; i < 5; i++) px(x0 + i * 2, y0 + 28, "#7a1a20", 1, 2 + (i % 2) * 2);
-    px(x0 + 3, y0 + 9, "#e8dcc0", 4, 4);          // skull emblem
-    px(x0 + 4, y0 + 10, "#3b0a0d", 1, 1);
-    px(x0 + 6, y0 + 10, "#3b0a0d", 1, 1);
-    px(x0 + 4, y0 + 13, "#e8dcc0", 3, 1);
+  if (arena) {
+    // The low parapet that rings the tower top, with merlons.
+    bricks(T, 116, (W - 2) * T, 28, wallShades, "#17131f");
+    px(T, 116, "#3a3448", (W - 2) * T, 1);
+    merlons(T + 4, (W - 1) * T, 116, 10, 7, 8, "#2d263f", "#4a4258");
+    // Flagpoles with tattered red flags.
+    for (const fx of [8 * T, 22 * T]) {
+      px(fx, 52, "#3a2a20", 2, 92);
+      px(fx - 1, 50, "#e0b84a", 4, 2);
+      for (let i = 0; i < 22; i++) {
+        const sag = Math.round(Math.sin(i * 0.4) * 1.5);
+        px(fx + 2 + i, 54 + sag, i % 3 ? "#9c2a2f" : "#7a1a20", 1, 14 - Math.floor(i / 4));
+      }
+      px(fx + 9, 58, "#e8dcc0", 4, 4);
+      px(fx + 10, 59, "#3b0a0d"); px(fx + 12, 59, "#3b0a0d");
+    }
+  } else {
+    // The castle's outer wall behind the path.
+    bricks(0, 96, TOWER_X * T, H * T - 96, wallShades, "#17131f");
+    px(0, 96, "#3a3448", TOWER_X * T, 1);
+    merlons(2, TOWER_X * T, 96, 8, 5, 6, "#2d263f", "#4a4258");
+    for (const sx of [40, 136, 232, 328]) {
+      px(sx - 1, 103, OUTLINE, 4, 11);
+      px(sx, 104, "#7a4a1a", 2, 9);
+      px(sx, 105, "#ffb74d", 2, 6);
+    }
+    // Wooden posts holding the path torches.
+    for (const t of TORCHES.level) {
+      if (!t.post) continue;
+      let gy = t.y + 1;
+      while (gy < H && !solid(t.x, gy)) gy++;
+      px(t.x * T + 7, t.y * T + 16, "#3a2a20", 3, (gy - t.y - 1) * T);
+      px(t.x * T + 7, t.y * T + 16, "#5d4037", 1, (gy - t.y - 1) * T);
+    }
   }
 
   // Foreground stone blocks.
-  const stone = ["#4b4559", "#504a5f", "#47415a", "#544d63"];
+  const stone = arena ? ["#4f4860", "#544c66", "#4a4359", "#58506b"] : ["#4b4559", "#504a5f", "#47415a", "#544d63"];
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
-      if (!isSolid(x, y)) continue;
+      if (!solid(x, y)) continue;
       const X = x * T, Y = y * T;
       px(X, Y, "#252130", T, T);
       for (let by = 0; by < 2; by++) {
@@ -1048,14 +1259,16 @@ bg.width = W * T; bg.height = H * T;
           if (rand() < 0.15) px(l + 2 + ((rand() * 6) | 0), sy + 3, "#3a3448", 2, 1);
         }
       }
-      const air = (dx, dy) => !isSolid(x + dx, y + dy) && y + dy >= 0 && y + dy < H && x + dx >= 0 && x + dx < W;
+      const air = (dx, dy) => !solid(x + dx, y + dy) && y + dy >= 0 && y + dy < H && x + dx >= 0 && x + dx < W;
       if (air(0, -1)) {
-        // Walkable top: a bright lip with moss creeping over the edge.
         px(X, Y, "#7c7392", T, 2);
         px(X, Y + 2, "#3a3448", T, 1);
-        for (let i = 0; i < T; i++) {
-          if (rand() < 0.45) px(X + i, Y, rand() < 0.5 ? "#4e7a3f" : "#5f8f4a");
-          if (rand() < 0.18) px(X + i, Y + 1, "#3f6534", 1, 1 + ((rand() * 3) | 0));
+        // Moss grows on the open ground, not on the tower's stonework.
+        if (!arena && x < TOWER_X) {
+          for (let i = 0; i < T; i++) {
+            if (rand() < 0.45) px(X + i, Y, rand() < 0.5 ? "#4e7a3f" : "#5f8f4a");
+            if (rand() < 0.18) px(X + i, Y + 1, "#3f6534", 1, 1 + ((rand() * 3) | 0));
+          }
         }
       }
       if (air(-1, 0)) px(X, Y, "#2a2533", 1, T);
@@ -1064,17 +1277,48 @@ bg.width = W * T; bg.height = H * T;
     }
   }
 
-  // The hero's entrance: an arched wooden door.
-  const dx = START.x * T + 2, dy = START.y * T;
-  px(dx, dy + 3, "#2a1a10", 12, 13);
-  px(dx + 2, dy + 1, "#2a1a10", 8, 2);
-  px(dx + 1, dy + 4, "#6d4c2f", 10, 12);
-  px(dx + 3, dy + 2, "#6d4c2f", 6, 2);
-  for (let i = 3; i < 11; i += 3) px(dx + i, dy + 3, "#4a3220", 1, 13);
-  px(dx + 1, dy + 7, "#3b3746", 10, 1);
-  px(dx + 1, dy + 12, "#3b3746", 10, 1);
-  px(dx + 8, dy + 9, "#e0b84a", 1, 1);
-})();
+  const skullBanner = (x0, y0, w, h) => {
+    px(x0 - 1, y0, "#5d4037", w + 2, 2);
+    px(x0, y0 + 2, "#7a1a20", w, h);
+    px(x0, y0 + 2, "#9c2a2f", 2, h);
+    for (let i = 0; i < w / 2; i++) px(x0 + i * 2, y0 + h + 2, "#7a1a20", 1, 2 + (i % 2) * 2);
+    const sx = x0 + Math.floor(w / 2) - 2, sy = y0 + Math.floor(h / 3);
+    px(sx, sy, "#e8dcc0", 4, 4);
+    px(sx + 1, sy + 1, "#3b0a0d"); px(sx + 3, sy + 1, "#3b0a0d");
+    px(sx + 1, sy + 4, "#e8dcc0", 3, 1);
+  };
+
+  if (arena) {
+    // Merlon caps on the corner walls, and the open hatch the hero climbs out of.
+    for (const wx of [0, W - 1]) merlons(wx * T + 1, wx * T + T, 6 * T, 6, 5, 2, "#58506b", "#7c7392");
+    px(1 * T + 4, ARENA_FLOOR * T - 1, "#0b0910", 22, 2);
+    px(1 * T + 2, ARENA_FLOOR * T - 15, OUTLINE, 4, 14);
+    px(1 * T + 3, ARENA_FLOOR * T - 14, "#6d4c2f", 2, 13);
+    px(1 * T + 3, ARENA_FLOOR * T - 10, "#3b3746", 2, 1);
+  } else {
+    // The tower: battlements on top, a banner, a lit window and the door at its foot.
+    merlons(TOWER_X * T + 1, W * T, 3 * T, 7, 6, 4, "#544d63", "#7c7392");
+    skullBanner(26 * T + 3, 3 * T + 6, 20, 38);
+    const wx = 27 * T - 3, wy = 7 * T;
+    px(wx - 1, wy - 1, OUTLINE, 8, 13);
+    px(wx, wy + 2, "#ffb74d", 6, 10);
+    px(wx + 1, wy, "#ffb74d", 4, 2);
+    px(wx, wy + 8, "#e07b2e", 6, 4);
+    px(wx + 2, wy, "#3b3746", 2, 12);
+    px(wx, wy + 5, "#3b3746", 6, 1);
+    const dx = TOWER_X * T + 1, dy = 8 * T;
+    px(dx, dy + 1, "#1c1924", 13, 15);
+    px(dx + 2, dy - 1, "#1c1924", 9, 2);
+    px(dx + 1, dy + 3, "#6d4c2f", 11, 13);
+    px(dx + 3, dy + 1, "#6d4c2f", 7, 2);
+    for (let i = 3; i < 12; i += 3) px(dx + i, dy + 2, "#4a3220", 1, 14);
+    px(dx + 1, dy + 6, "#3b3746", 11, 1);
+    px(dx + 1, dy + 12, "#3b3746", 11, 1);
+    px(dx + 9, dy + 9, "#e0b84a", 1, 1);
+  }
+  return c;
+}
+const BG = { level: buildBackground(MAP, false), arena: buildBackground(ARENA, true) };
 
 // ---------- drawing ----------
 function drawLava() {
@@ -1101,7 +1345,7 @@ function drawLava() {
 }
 
 function drawTorches() {
-  for (const [i, t] of TORCHES.entries()) {
+  for (const [i, t] of torches().entries()) {
     const X = t.x * T + 8, Y = t.y * T + 10;
     ctx.fillStyle = "#2e2a38";
     ctx.fillRect(X - 2, Y, 4, 2);
@@ -1157,14 +1401,16 @@ function drawTrap(t, alpha = 1) {
     const art = near || t.flash > 0 ? ART.spikeUp : ART.spikeDown;
     drawSprite(sprite(art, SPIKE_PALS[t.lvl - 1], "spike" + t.lvl), X + 8, Y + T - 1, 1, alpha);
   } else if (t.type === "saw") {
-    // A chain up to the ceiling holds the saw in place.
-    let top = t.y;
-    while (top > 0 && !isSolid(t.x, top - 1)) top--;
+    // An iron pole from the ground (or the lava) holds the saw up.
+    let bot = t.y;
+    while (bot < H - 1 && !isSolid(t.x, bot + 1)) bot++;
     ctx.globalAlpha = alpha;
-    for (let y = top * T; y < Y + 2; y += 3) {
-      ctx.fillStyle = "#3f3a4a";
-      ctx.fillRect(X + 7, y, 2, 2);
-    }
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(X + 6, Y + 8, 4, (bot + 1) * T - Y - 8);
+    ctx.fillStyle = "#4a4458";
+    ctx.fillRect(X + 7, Y + 8, 2, (bot + 1) * T - Y - 8);
+    ctx.fillStyle = "#6b6378";
+    ctx.fillRect(X + 7, Y + 8, 1, (bot + 1) * T - Y - 8);
     ctx.globalAlpha = 1;
     drawSaw(X + 8, Y + 8, t.lvl, S.time * (t.flash > 0 ? 30 : 14), alpha);
   } else {
@@ -1268,6 +1514,26 @@ function drawHero(h) {
   }
 }
 
+// Shockwave from a ground slam: a ridge of rock bursting up from the floor.
+function drawWave(w) {
+  const x = Math.round(w.x * T), y = Math.round(w.y * T);
+  const k = Math.min(1, w.life * 3);
+  for (let i = -2; i <= 2; i++) {
+    const h = Math.round((3 - Math.abs(i)) * 3 * k);
+    if (h <= 0) continue;
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x + i * 2 - 1, y - h - 1, 4, h + 1);
+    ctx.fillStyle = "#6b6378";
+    ctx.fillRect(x + i * 2, y - h, 2, h);
+    ctx.fillStyle = "#c9c2d6";
+    ctx.fillRect(x + i * 2, y - h, 2, 1);
+  }
+  ctx.fillStyle = "#ff8a80";
+  ctx.globalAlpha = k * 0.8;
+  ctx.fillRect(x - 6, y - 1, 12, 1);
+  ctx.globalAlpha = 1;
+}
+
 function drawArrow(a) {
   const x = Math.round(a.x * T), y = Math.round(a.y * T), d = Math.sign(a.vx);
   ctx.fillStyle = OUTLINE;
@@ -1289,7 +1555,7 @@ const lctx = light.getContext("2d");
 function drawLighting() {
   lctx.globalCompositeOperation = "source-over";
   lctx.clearRect(0, 0, light.width, light.height);
-  lctx.fillStyle = "rgba(8, 4, 18, 0.62)";
+  lctx.fillStyle = inArena() ? "rgba(8, 4, 18, 0.42)" : "rgba(8, 4, 18, 0.5)";
   lctx.fillRect(0, 0, light.width, light.height);
   lctx.globalCompositeOperation = "destination-out";
   const hole = (x, y, r, strength = 1) => {
@@ -1300,7 +1566,9 @@ function drawLighting() {
     lctx.fillStyle = g;
     lctx.fillRect(x / 2 - r / 2, y / 2 - r / 2, r, r);
   };
-  TORCHES.forEach((t, i) => hole(t.x * T + 8, t.y * T + 6, 70 + Math.sin(S.time * 9 + i * 2) * 3));
+  const moon = MOON[inArena() ? "arena" : "level"];
+  hole(moon.x, moon.y, moon.r * 9, 0.6);
+  torches().forEach((t, i) => hole(t.x * T + 8, t.y * T + 6, 70 + Math.sin(S.time * 9 + i * 2) * 3));
   for (let x = 0; x < W; x++) if (tileAt(x, H - 1) === "L") hole(x * T + 8, (H - 1) * T + 4, 44, 0.9);
   if (S.hero) hole(centerX(S.hero) * T, centerY(S.hero) * T, 40, 0.7);
   hole(centerX(S.boss) * T, S.boss.y * T + 12, 36, 0.6);
@@ -1318,7 +1586,7 @@ function drawLighting() {
     ctx.fillStyle = g;
     ctx.fillRect(x - r, y - r, r * 2, r * 2);
   };
-  TORCHES.forEach((t, i) => glow(t.x * T + 8, t.y * T + 6, 22 + Math.sin(S.time * 11 + i) * 2, "rgba(255,140,40,0.22)"));
+  torches().forEach((t, i) => glow(t.x * T + 8, t.y * T + 6, 22 + Math.sin(S.time * 11 + i) * 2, "rgba(255,140,40,0.22)"));
   for (let x = 0; x < W; x++) if (tileAt(x, H - 1) === "L") glow(x * T + 8, (H - 1) * T + 4, 20, "rgba(255,90,20,0.18)");
   ctx.globalCompositeOperation = "source-over";
 }
@@ -1334,7 +1602,7 @@ function drawParticles(glowing) {
 }
 
 function drawHover() {
-  if (!hover || S.phase === "over" || hover.x < 0 || hover.x >= W || hover.y < 0 || hover.y >= H) return;
+  if (!hover || S.phase === "over" || inArena() || hover.x < 0 || hover.x >= W || hover.y < 0 || hover.y >= H) return;
   const { x, y } = hover;
   const existing = S.traps.find(t => t.x === x && t.y === y);
   let ok = canBuild(x, y), label = "";
@@ -1397,7 +1665,24 @@ function drawHud() {
     drawText("BUILD PHASE", 240, 4, "#9cff9c", { align: "center" });
   }
 
-  const b = S.boss, bw = 80, bx = W * T - bw - 8;
+  const b = S.boss;
+  if (inArena()) {
+    // Souls-style boss bar along the bottom during the battle.
+    const bw = 300, bx = (W * T - bw) / 2, by = H * T - 10;
+    drawText("LORD OF THE TOWER", bx, by - 8, "#e6e0ec");
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(bx - 1, by - 1, bw + 2, 6);
+    ctx.fillStyle = "#3b1016";
+    ctx.fillRect(bx, by, bw, 4);
+    ctx.fillStyle = "#c62828";
+    ctx.fillRect(bx, by, Math.max(0, Math.round(bw * b.hp / b.maxHp)), 4);
+    ctx.fillStyle = "#ef5350";
+    ctx.fillRect(bx, by, Math.max(0, Math.round(bw * b.hp / b.maxHp)), 1);
+    if (b.slamCd > 0) drawText("SLAM", bx + bw, by - 8, "#6b5f75", { align: "right" });
+    else drawText("SLAM READY", bx + bw, by - 8, "#ffd54f", { align: "right" });
+    return;
+  }
+  const bw = 80, bx = W * T - bw - 8;
   drawText("BOSS", bx - 4, 4, "#ff8a80", { align: "right" });
   ctx.fillStyle = OUTLINE;
   ctx.fillRect(bx - 1, 4, bw + 2, 7);
@@ -1427,15 +1712,16 @@ function drawBanner() {
   const a = persist ? Math.min(1, life / 1.2) : Math.min(1, life * 4, (2.4 - life) * 3);
   ctx.globalAlpha = a * 0.75;
   ctx.fillStyle = "#000";
-  ctx.fillRect(0, 56, W * T, 46);
+  const top = H * T / 2 - 23;
+  ctx.fillRect(0, top, W * T, 46);
   ctx.globalAlpha = a;
   ctx.fillStyle = bn.color;
-  ctx.fillRect(0, 56, W * T, 1);
-  ctx.fillRect(0, 101, W * T, 1);
+  ctx.fillRect(0, top, W * T, 1);
+  ctx.fillRect(0, top + 45, W * T, 1);
   const scale = persist ? 5 : 4;
-  drawText(bn.text, W * T / 2, 64, bn.color, { align: "center", scale, shadow: "#000" });
-  drawText(bn.sub, W * T / 2, 64 + scale * 5 + 6, "#e6e0ec", { align: "center" });
-  if (persist) drawText("PRESS PLAY AGAIN", W * T / 2, 108, "#8a8296", { align: "center" });
+  drawText(bn.text, W * T / 2, top + 8, bn.color, { align: "center", scale, shadow: "#000" });
+  drawText(bn.sub, W * T / 2, top + 8 + scale * 5 + 6, "#e6e0ec", { align: "center" });
+  if (persist) drawText("PRESS PLAY AGAIN", W * T / 2, top + 52, "#8a8296", { align: "center" });
   ctx.globalAlpha = 1;
 }
 
@@ -1444,26 +1730,41 @@ function draw() {
   ctx.save();
   if (S.shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * S.shake), Math.round((Math.random() - 0.5) * S.shake));
 
-  ctx.drawImage(bg, 0, 0);
-  drawLava();
+  const arena = inArena();
+  ctx.drawImage(BG[arena ? "arena" : "level"], 0, 0);
   drawTorches();
-  S.traps.forEach(t => drawTrap(t));
-  S.arrows.forEach(drawArrow);
-  drawHover();
-  S.minions.forEach(drawMinion);
+  if (!arena) {
+    drawLava();
+    S.traps.forEach(t => drawTrap(t));
+    S.arrows.forEach(drawArrow);
+    drawHover();
+    S.minions.forEach(drawMinion);
+  }
   drawBoss(S.boss);
   if (S.hero) drawHero(S.hero);
+  S.waves.forEach(drawWave);
   drawParticles(false);
   drawLighting();
   drawParticles(true);
 
-  for (const m of S.minions) if (m.hp < m.maxHp) drawBar(m, 10, "#e53935");
+  if (!arena) for (const m of S.minions) if (m.hp < m.maxHp) drawBar(m, 10, "#e53935");
   if (S.hero) drawBar(S.hero, 12, "#64b5f6");
   drawFloats();
   ctx.restore();
 
   drawHud();
   drawBanner();
+
+  // Fade to black when moving between the level and the tower top.
+  let dark = S.fadeIn / FADE;
+  if (S.phase === "enter") dark = S.fade / FADE;
+  else if (S.phase === "felled" && S.returnT < FADE) dark = 1 - S.returnT / FADE;
+  if (dark > 0) {
+    ctx.globalAlpha = Math.min(1, dark);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, W * T, H * T);
+    ctx.globalAlpha = 1;
+  }
 }
 
 // ---------- toolbar ----------
@@ -1499,9 +1800,9 @@ function updateToolbar() {
     b.classList.toggle("poor", poor);
   });
   const go = document.getElementById("go");
-  const label = S.phase === "over" ? "Play again" : S.phase === "wave" ? "Wave in progress" : "Start wave";
+  const label = { over: "Play again", build: "Start wave", wave: "Wave in progress" }[S.phase] || "Boss battle!";
   if (go.textContent !== label) go.textContent = label;
-  go.disabled = S.phase === "wave";
+  go.disabled = S.phase !== "over" && S.phase !== "build";
 }
 
 let last = performance.now();
