@@ -116,6 +116,7 @@
   .trap-row button { font-size: 8px; padding: 6px 8px; }
   .trap-row button.up { color: #9cff9c; }
   .trap-row button.sell { color: #ff8a80; }
+  .cost.d { color: #ea80fc; }
   #darkPanel { width: min(960px, 100%); }
   .dark-intro { color: var(--dim); margin: 4px 0; }
   #darkRows { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
@@ -147,6 +148,7 @@
     <button data-tool="imp"><canvas width="16" height="16"></canvas><span>Imp<span class="cost s">2 souls</span></span></button>
     <button data-tool="wraith"><canvas width="16" height="16"></canvas><span>Wraith<span class="cost s">3 souls</span></span></button>
     <button data-tool="hound"><canvas width="16" height="16"></canvas><span>Hellhound<span class="cost s">4 souls</span></span></button>
+    <button data-tool="serpent"><canvas width="16" height="16"></canvas><span>Bone Serpent<span class="cost d">2 dark souls</span></span></button>
     <button data-tool="golem"><canvas width="16" height="16"></canvas><span>Bone Golem<span class="cost s">6 souls</span></span></button>
     <button id="go">Start wave</button>
     <button id="music" class="toggle">Music on</button>
@@ -175,7 +177,9 @@
     Every hero you kill drops coins and exactly one soul, and kills unlock new traps: fire vents, crushers, bombs and frost totems.<br>
     <b>Monsters:</b> spend souls on skeletons and ogres, and as you kill more heroes, <b>imps</b> (spit fireballs from range),
     <b>wraiths</b> (fly over pits and walls and drain life), <b>hellhounds</b> (fast, pounce and set heroes burning) and
-    <b>bone golems</b> (huge, and smash every hero around them).<br>
+    <b>bone golems</b> (huge, and smash every hero around them).
+    The <b>Bone Serpent</b> costs 2 dark souls and lives in a lava pit (one per pit): it can't be killed, swims slowly,
+    and every 7 seconds or so it lunges up and swallows a hero jumping over its pit. Champions are too big to swallow, so it bites them hard instead.<br>
     <b>Dark souls:</b> one hero in ten drops a purple dark soul instead of a normal one. Spend them on <b>Dark powers</b>
     (below the toolbar) that you keep for every boss battle: Dark Mending (1), Doom Nova (2), Raise the Fallen (3) and
     the passive Unholy Might. Or click one of your monsters and infuse it with a dark soul (I): it turns black and violet,
@@ -382,6 +386,9 @@ const MINIONS = {
 // A dark soul given to a monster makes it a far deadlier version of itself.
 const DARK = { hp: 2.5, atk: 2, speed: 1.2, steal: 0.3 };
 const DARK_SOUL_CHANCE = 0.1;
+// The Bone Serpent lives in a lava pit and can't be killed. Every so often it lunges up and
+// swallows a hero jumping over its pit. It's bought with dark souls, one per pit.
+const SERPENT = { cost: 2, cd: 7, swim: 0.7, reach: 1.4, height: 4.2, champBite: 0.5 };
 // Dark powers: bought once with dark souls, then used in every boss battle (keys 1-3).
 const DARK_POWERS = [
   { id: "mend", key: "1", name: "DARK MENDING", cost: 1, cd: 25, desc: "Heal 150 health in a burst of shadow." },
@@ -548,7 +555,7 @@ let S;
 function newGame(title = false) {
   S = {
     coins: 20, souls: 2, wave: 1, kills: 0, named: 0,
-    shown: { coins: 20, souls: 2, dark: 0 }, coinFx: [], soulFx: [], darkSouls: 0, powers: new Set(), risen: [], monsterMenu: null,
+    serpents: [], shown: { coins: 20, souls: 2, dark: 0 }, coinFx: [], soulFx: [], darkSouls: 0, powers: new Set(), risen: [], monsterMenu: null,
     gain: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
     loss: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
     traps: [], minions: [], arrows: [], waves: [], boss: makeBoss(),
@@ -799,6 +806,7 @@ const Sound = (() => {
     upgrade: () => arp(523, [0, 4, 7, 12], { dur: 0.08, vol: 0.08, gap: 0.05 }),
     specialize: () => { arp(392, [0, 7, 12, 16, 19, 24], { dur: 0.12, vol: 0.08, gap: 0.06 }); tone(98, { to: 49, type: "sawtooth", dur: 0.5, vol: 0.12 }); },
     freeze: () => { noise({ dur: 0.35, vol: 0.18, filter: "highpass", freq: 3500, to: 1200 }); tone(1900, { to: 2600, type: "sine", dur: 0.3, vol: 0.05 }); },
+    serpent: () => { tone(70, { to: 40, type: "sawtooth", dur: 0.6, vol: 0.18 }); noise({ dur: 0.5, vol: 0.2, freq: 500, to: 2500, attack: 0.1 }); },
     fireball: () => { noise({ dur: 0.18, vol: 0.1, freq: 900, to: 300 }); tone(240, { to: 120, type: "sawtooth", dur: 0.12, vol: 0.04 }); },
     darkSoul: () => { tone(220, { to: 110, type: "sawtooth", dur: 0.5, vol: 0.06, attack: 0.05 }); [0, 3, 6].forEach((st, i) => tone(semi(440, st), { type: "sine", dur: 0.3, vol: 0.05, at: i * 0.08 })); },
     infuse: () => { tone(55, { to: 110, type: "sawtooth", dur: 0.7, vol: 0.15, attack: 0.1 }); noise({ dur: 0.7, vol: 0.15, freq: 300, to: 1800, attack: 0.3 }); arp(220, [0, 3, 6, 9, 12], { dur: 0.15, vol: 0.06, gap: 0.08 }); },
@@ -1164,6 +1172,7 @@ fitCanvas();
 function place({ x, y }) {
   if (["over", "title", "prologue"].includes(S.phase)) return;
   if (inArena()) { say("You can't build during the boss battle."); Sound.play("deny"); return; }
+  if (S.tool === "serpent") { placeSerpent(x); return; }
   const trap = S.traps.find(t => t.x === x && t.y === y);
   if (trap) { openTrapMenu(trap); Sound.play("click"); return; }
   const monster = S.minions.find(m => overlaps({ x: x + 0.1, y: y + 0.1, w: 0.8, h: 0.8 }, m));
@@ -2065,6 +2074,7 @@ function update(dt) {
     if (S.phase === "wave") spawnHeroes(dt);
     for (const h of [...S.heroes]) updateHero(h, dt);
     updateTraps(dt);
+    updateSerpents(dt);
     S.traps = S.traps.filter(t => !t.dead);
     updateArrows(dt);
     updateHeroArrows(dt);
@@ -2290,7 +2300,7 @@ function updateHero(h, dt) {
   h.atkAnim -= dt;
   h.trail = h.trail.filter(p => (p.t -= dt) > 0);
 
-  if (h.chained) return;
+  if (h.chained || h.serpentHeld) return;
   if (h.bleed > 0) {
     // Barbed spikes: bleeding a little every half second.
     h.bleed -= dt;
@@ -2856,6 +2866,149 @@ function updateMinions(dt) {
   S.minions = S.minions.filter(m => m.hp > 0);
 }
 
+// The lava pit a column belongs to, as [first, last] columns, or null.
+function pitAt(x) {
+  if (tileAt(x, H - 1) !== "L" || x >= TOWER_X - 1) return null;
+  let a = x, b = x;
+  while (tileAt(a - 1, H - 1) === "L") a--;
+  while (tileAt(b + 1, H - 1) === "L") b++;
+  return [a, b];
+}
+function placeSerpent(x) {
+  const pit = pitAt(x);
+  if (!pit) { say("The Bone Serpent lives in lava: click over a lava pit."); Sound.play("deny"); return; }
+  if (S.serpents.some(n => n.pit[0] === pit[0])) { say("That pit already has a Bone Serpent."); Sound.play("deny"); return; }
+  if (S.darkSouls < SERPENT.cost) { say(`A Bone Serpent costs ${SERPENT.cost} dark souls.`); Sound.play("deny"); return; }
+  S.darkSouls -= SERPENT.cost;
+  spend("dark", SERPENT.cost);
+  const mid = (pit[0] + pit[1] + 1) / 2;
+  S.serpents.push({ pit, x: mid, state: "lurk", t: 0, cd: 2, prey: null, hx: mid, hy: H - 0.6, jaw: 0, dir: 1 });
+  burst(mid, H - 0.8, 30, ["#ffd54f", "#ff6f00", "#e8dcc0", "#d500f9"], 6, { glow: true });
+  S.shake = Math.max(S.shake, 4);
+  Sound.play("serpent");
+  speak(S.boss, "RISE, OLD WORM. THE PIT IS YOURS. FEAST.");
+  say("A Bone Serpent coils beneath the lava. It snatches heroes who jump over its pit, then rests a while.");
+}
+
+// Each serpent swims slowly toward heroes coming its way, then lunges at one in the air above.
+function updateSerpents(dt) {
+  const lavaY = H - 0.6;
+  for (const n of S.serpents) {
+    n.t += dt;
+    n.cd -= dt;
+    n.jaw = Math.max(0, n.jaw - dt * 3);
+    const lo = n.pit[0] + 0.4, hi = n.pit[1] + 0.6;
+    if (n.state === "lurk") {
+      // Drift toward the nearest hero heading for the pit, or idly back and forth.
+      const near = S.heroes.filter(h => !h.serpentHeld && centerX(h) > n.pit[0] - 4 && centerX(h) < n.pit[1] + 2)
+        .sort((a, b) => Math.abs(centerX(a) - n.x) - Math.abs(centerX(b) - n.x))[0];
+      const goal = near ? Math.max(lo, Math.min(hi, centerX(near))) : (n.dir > 0 ? hi : lo);
+      if (!near && Math.abs(goal - n.x) < 0.1) n.dir *= -1;
+      n.x += Math.sign(goal - n.x) * Math.min(Math.abs(goal - n.x), SERPENT.swim * dt);
+      n.hx = n.x; n.hy = lavaY + 0.2;
+      if (Math.random() < dt * 3) particle({ x: n.x + (Math.random() - 0.5) * 0.8, y: lavaY - 0.1, vy: -1.5, life: 0.4, color: Math.random() < 0.5 ? "#ffd54f" : "#ff6f00", glow: true });
+      if (n.cd > 0) continue;
+      const prey = S.heroes.find(h => !h.onGround && !h.serpentHeld && h.evade <= 0 && Math.abs(centerX(h) - n.x) < SERPENT.reach &&
+        centerX(h) > n.pit[0] - 0.2 && centerX(h) < n.pit[1] + 1.2 && h.y + h.h > lavaY - SERPENT.height);
+      if (prey) { n.state = "strike"; n.t = 0; n.prey = prey; n.sx = n.x; Sound.play("serpent"); }
+    } else if (n.state === "strike") {
+      // Burst up out of the lava, homing in on the jumper.
+      const h = n.prey, k = Math.min(1, n.t / 0.2);
+      if (!S.heroes.includes(h)) { n.state = "sink"; n.t = 0; continue; }
+      n.hx = n.sx + (centerX(h) - n.sx) * k;
+      n.hy = lavaY + (centerY(h) - lavaY) * k;
+      n.jaw = 1;
+      if (n.t === dt || Math.random() < dt * 30) burst(n.sx, lavaY - 0.1, 3, ["#ffd54f", "#ff6f00"], 5, { glow: true });
+      if (k >= 1) {
+        n.jaw = 0;
+        Sound.play("chomp");
+        S.shake = Math.max(S.shake, 4);
+        burst(n.hx, n.hy, 14, ["#d32f2f", "#e8dcc0"], 5);
+        if (h.kind === "champion") {
+          // Too big to swallow: a savage bite, and the champion is flung away.
+          damage(h, Math.round(h.maxHp * SERPENT.champBite), "#ff5252");
+          h.vy = -9;
+          float(centerX(h), h.y - 0.6, "BITTEN", "#ff8a80");
+          n.state = "sink"; n.t = 0;
+        } else {
+          h.serpentHeld = n;
+          n.state = "drag"; n.t = 0;
+          float(centerX(h), h.y - 0.6, "DEVOURED", "#ff8a80");
+        }
+      }
+    } else if (n.state === "drag") {
+      // Pull the hero down into the lava.
+      // It holds its catch up high for a moment, thrashing, then pulls it down.
+      const h = n.prey, k = Math.min(1, n.t / 1.0);
+      if (n.t > 0.35) n.hy += (lavaY + 0.6 - n.hy) * Math.min(1, dt * 5);
+      else n.hx += Math.sin(n.t * 40) * 0.02;
+      if (S.heroes.includes(h)) {
+        h.x = n.hx - h.w / 2;
+        h.y = n.hy - h.h / 2;
+        h.vx = 0; h.vy = 0;
+        if (Math.random() < dt * 20) particle({ x: n.hx, y: n.hy, vx: (Math.random() - 0.5) * 3, vy: -2, life: 0.4, color: "#d32f2f" });
+      }
+      if (k >= 1) {
+        if (S.heroes.includes(h)) { h.hp = 0; h.eaten = true; h.lava = true; }
+        burst(n.hx, lavaY - 0.1, 20, ["#ffd54f", "#ff6f00", "#e8dcc0"], 6, { glow: true });
+        Sound.play("sizzle");
+        n.state = "sink"; n.t = 0;
+      }
+    } else {
+      // Slowly sink back under, then rest before it can strike again.
+      n.hy += (lavaY + 0.3 - n.hy) * Math.min(1, dt * 1.6);
+      n.hx += (n.x - n.hx) * Math.min(1, dt * 1.6);
+      if (n.t > 1.4) { n.state = "lurk"; n.cd = SERPENT.cd; n.prey = null; }
+    }
+  }
+}
+
+// The serpent's spine: vertebrae curving up out of the lava to a horned skull.
+function drawSerpent(n) {
+  const lavaY = (H - 1) * T + 4, hx = n.hx * T, hy = Math.min(n.hy * T, lavaY + 6);
+  const out = n.state !== "lurk";
+  const bx = (n.state === "lurk" ? n.x : n.sx ?? n.x) * T;
+  if (out) {
+    const segs = 9;
+    for (let i = segs; i >= 1; i--) {
+      const k = i / segs, wob = Math.sin(S.time * 6 + i) * 2 * (1 - k);
+      const x = bx + (hx - bx) * k + wob, y = lavaY + (hy - lavaY) * k - Math.sin(k * Math.PI) * 6;
+      if (y > lavaY + 2) continue;
+      const r = 3 - Math.floor(k * 1.5);
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(Math.round(x) - r - 1, Math.round(y) - r - 1, r * 2 + 3, r * 2 + 3);
+      ctx.fillStyle = i % 2 ? "#e8dcc0" : "#c9bd9f";
+      ctx.fillRect(Math.round(x) - r, Math.round(y) - r, r * 2 + 1, r * 2 + 1);
+      ctx.fillStyle = "#8d8270";
+      ctx.fillRect(Math.round(x) - r - 2, Math.round(y), 1, 1);
+      ctx.fillRect(Math.round(x) + r + 2, Math.round(y), 1, 1);
+    }
+  } else {
+    // Lurking: a few humps of spine breaking the surface as it swims.
+    for (let i = -2; i <= 2; i++) {
+      const x = Math.round(n.x * T + i * 5 + Math.sin(S.time * 2 + i) * 1), y = lavaY + 1 + Math.round(Math.sin(S.time * 3 + i * 1.3) * 1.5);
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(x - 2, y - 2, 5, 4);
+      ctx.fillStyle = "#c9bd9f";
+      ctx.fillRect(x - 1, y - 1, 3, 2);
+    }
+  }
+  const face = out ? (n.prey && centerX(n.prey) < n.sx ? -1 : 1) : n.dir;
+  const art = n.jaw > 0.3 ? ART.serpentOpen : ART.serpentHead;
+  const ready = n.cd <= 0 && n.state === "lurk";
+  const pal = { H: "#e8dcc0", h: "#a8987a", K: "#1a1420", E: ready ? "#ff1744" : "#7a1420", R: "#c62828" };
+  // While lurking only the horns and eyes show above the lava.
+  const headY = out ? hy + 5 : lavaY + 5;
+  if (!out) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, mapW() * T, lavaY);
+    ctx.clip();
+  }
+  drawSprite(sprite(art, pal, "serpent" + (n.jaw > 0.3) + pal.E), (out ? hx : n.x * T + n.dir * 12), headY, face);
+  if (!out) ctx.restore();
+}
+
 // One monster's melee strike. Golems smash everyone around them; dark monsters drink the blood they spill.
 function minionHit(m, kind, h) {
   const targets = kind.smash ? S.heroes.filter(o => o.evade <= 0 && Math.abs(centerX(o) - centerX(m)) < kind.smash && Math.abs(centerY(o) - centerY(m)) < 1.2) : [h];
@@ -3056,7 +3209,7 @@ function heroDied(h) {
   if (h.reckless) setTimeout(() => { speak(S.boss, pick(TAUNTS.fool)); Sound.play("laugh"); }, 600);
   else if (inArena() && S.heroes.length && Math.random() < 0.6) speak(S.boss, pick(TAUNTS.kill));
   else if (Math.random() < 0.3) speak(h, pick(h.lava ? HERO_LINES.lava : HERO_LINES.die));
-  say(h.lava ? `${h.name} fell into the lava!` : `${h.name} has fallen!`);
+  say(h.eaten ? `${h.name} was swallowed by the Bone Serpent!` : h.lava ? `${h.name} fell into the lava!` : `${h.name} has fallen!`);
   for (const [tool, kind] of Object.entries(TRAPS)) {
     if (kind.unlock !== S.kills) continue;
     S.fresh.add(tool);
@@ -3439,6 +3592,8 @@ const ART = {
   houndWalk: ["................", "................", "................", "................", "...........ff...", "..........fDDf..", "..f......fDDEDD.", ".fDf...ffDDDDDDT", ".DfDDDDDDDDDDdd.", "..DDDDDDDDDDDd..", "..DDDDDDDDDDD...", ".DDd......DDd...", "Dd..........Dd..", "D............Dd.", "D.............D.", "................"],
   golem: ["......hHHHHHh.......", ".....hHHHHHHHh......", ".....HHkHHHkHHh.....", ".....HHEHHHEHHh.....", ".....hHHHHHHHh......", "......hHTTTHh.......", "..hhh..hHHHh..hhh...", ".hHHHhhHHHHHhhHHHh..", ".hHHHHHHkHkHHHHHHh..", "hHHhHHkHkHkHkHHhHHh.", "hHH.hHHkRRRkHHh.HHh.", "hHH.hHkHRRRHkHh.HHh.", "hHH.hHHkHHHkHHh.HHh.", "HHHh.hHHHHHHHh.hHHH.", "HHHH.hHHkHkHHh.HHHH.", ".hh..hHHHHHHHh..hh..", ".....hHHh.hHHh......", ".....hHH...HHh......", ".....hHH...HHh......", ".....hHH...HHh......", "....hHHHh.hHHHh.....", "....hhhhh.hhhhh....."],
   golemWalk: ["......hHHHHHh.......", ".....hHHHHHHHh......", ".....HHkHHHkHHh.....", ".....HHEHHHEHHh.....", ".....hHHHHHHHh......", "......hHTTTHh.......", "..hhh..hHHHh..hhh...", ".hHHHhhHHHHHhhHHHh..", ".hHHHHHHkHkHHHHHHh..", "hHHhHHkHkHkHkHHhHHh.", "hHH.hHHkRRRkHHh.HHh.", "hHH.hHkHRRRHkHh.HHh.", "hHH.hHHkHHHkHHh.HHh.", "HHHh.hHHHHHHHh.hHHH.", "HHHH.hHHkHkHHh.HHHH.", ".hh..hHHHHHHHh..hh..", "....hHHh...hHHh.....", "....hHH.....HHh.....", "...hHH.......HHh....", "...hHH.......HHh....", "..hHHHh.....hHHHh...", "..hhhhh.....hhhhh..."],
+  serpentHead: ["..h.........", "..hh....hHH.", "...hHHHHHHHH", "..hHHHHHHKEH", ".hHHHHHHHHHH", "hHHHHHHHHHHH", "hHHHHHHHHHH.", ".hHHHhHhHhH.", "..hhhhhhhhh."],
+  serpentOpen: ["..h.........", "..hh....hHH.", "...hHHHHHHHH", "..hHHHHHHKEH", ".hHHHHHHHHHH", "hHHHHHHHhHhH", "hHHHHRRRR...", "hHHHHRRR....", ".hHHHHhHhH..", "..hhhhhhhhh."],
   iconMight: ["............", "P....P.....P", "PP..PPP...PP", "PPP.PPP..PPP", "PPPPPPPPPPPP", "PWPPPWWPPPWP", "PPPPPPPPPPPP", "PPPPPPPPPPPP", "............", "............", "............", "............"],
   iconMend: ["............", "..PPP..PPP..", ".PWPPPPPPPP.", ".PWPPPPPPPP.", ".PPPPPPPPPP.", ".PPPPPPPPPP.", "..PPPPPPPP..", "...PPPPPP...", "....PPPP....", ".....PP.....", "............", "............"],
   iconNova: ["P....P....P.", ".P...P...P..", "..P..P..P...", "...PPWPP....", "....PWWP....", "PPPPWWWWPPPP", "....PWWP....", "...PPWPP....", "..P..P..P...", ".P...P...P..", "P....P....P.", "............"],
@@ -5258,6 +5413,7 @@ function drawLighting() {
   for (const p of S.pools) glow(p.x * T, ARENA_FLOOR * T, p.r * T * 1.4, "rgba(200,20,30,0.3)");
   for (const m of S.meteors) glow(m.x * T, m.y * T, 14, "rgba(255,110,20,0.5)");
   for (const sk of S.skulls) glow(sk.x * T, sk.y * T, 10, "rgba(150,100,255,0.45)");
+  if (!inArena()) for (const n of S.serpents) if (n.cd <= 0) glow(n.x * T, (H - 1) * T + 4, 14, "rgba(255,23,68,0.25)");
   for (const h of S.heroes) if (h.ampBy) glow(centerX(h) * T, centerY(h) * T, 18, "rgba(118,255,3,0.22)");
   for (const a of S.heroArrows) if (a.magic) glow(a.x * T, a.y * T, 8, "rgba(118,255,3,0.5)");
   // The Hollow King's eyes and the soul in his chest burn through the dark.
@@ -5304,11 +5460,21 @@ function drawHover() {
       if (S.coins < kind.costs[lvl]) ok = false;
     }
     if (ok && !existing) drawTrap(newTrap(S.tool, x, y), 0.55);
+  } else if (S.tool === "serpent") {
+    // Highlight the whole pit the serpent would live in.
+    const pit = pitAt(x);
+    ok = !!pit && !S.serpents.some(n => n.pit[0] === pit[0]) && S.darkSouls >= SERPENT.cost;
+    label = pit && S.serpents.some(n => n.pit[0] === pit[0]) ? "TAKEN" : `${SERPENT.cost} DARK`;
+    if (pit) {
+      ctx.fillStyle = ok ? "rgba(213,0,249,0.25)" : "rgba(255,82,82,0.25)";
+      ctx.fillRect(pit[0] * T, (H - 1) * T, (pit[1] - pit[0] + 1) * T, T);
+    }
   } else {
     const kind = MINIONS[S.tool];
     label = `${kind.cost}S`;
-    if (S.souls < kind.cost) ok = false;
-    if (ok) drawSprite(sprite(ART[S.tool], S.tool === "skeleton" ? SKELETON_PAL : {}, S.tool), x * T + 8, y * T + T - 1, -1, 0.55);
+    if (S.souls < kind.cost || !unlocked(S.tool)) ok = false;
+    if (!unlocked(S.tool)) label = "LOCKED";
+    if (ok) drawSprite(sprite(ART[S.tool], MINION_PALS[S.tool], S.tool), x * T + 8, y * T + T - 1, -1, 0.55);
   }
   const c = existing ? "#ffd54f" : ok ? "#9cff9c" : "#ff5252";
   ctx.fillStyle = c;
@@ -5787,6 +5953,7 @@ function draw() {
   drawTorches();
   if (!arena) {
     drawLava();
+    S.serpents.forEach(n => { if (n.state === "lurk") drawSerpent(n); });
     S.traps.forEach(t => drawTrap(t));
     S.arrows.forEach(drawArrow);
     S.heroArrows.forEach(drawArrow);
@@ -5797,6 +5964,7 @@ function draw() {
   if (!arena) S.minions.forEach(m => drawMinion(m));
   drawBoss(S.boss);
   S.heroes.forEach(drawHero);
+  if (!arena) S.serpents.forEach(n => { if (n.state !== "lurk") drawSerpent(n); });
   S.waves.forEach(drawWave);
   if (arena) { drawRisen(); S.heroArrows.forEach(drawArrow); drawPools(true); drawSpecials(); }
   drawParticles(false);
@@ -6023,6 +6191,7 @@ function drawIcons() {
       if (tool === "mine") spr = sprite(ART.mine, { r: "#ff1744", M: "#5d566a", m: "#3a3448" }, "mine#ff17441");
       if (tool === "frost") spr = sprite(ART.frostCrystal, Object.assign({}, STONE_PAL, FROST_PALS[0]), "frost1");
       if (MINIONS[tool]) spr = sprite(ART[tool], MINION_PALS[tool], tool);
+      if (tool === "serpent") spr = sprite(ART.serpentOpen, { H: "#e8dcc0", h: "#a8987a", K: "#1a1420", E: "#ff1744", R: "#c62828" }, "serpentIcon");
       // Big sprites shrink to fit the 16px icon.
       const k = Math.min(1, 16 / spr.height, 16 / spr.width);
       g.drawImage(spr, Math.round(8 - spr.width * k / 2), Math.round(16 - spr.height * k), Math.round(spr.width * k), Math.round(spr.height * k));
@@ -6122,11 +6291,12 @@ function updateToolbar() {
   document.querySelectorAll("[data-tool]").forEach(b => {
     const tool = b.dataset.tool;
     b.classList.toggle("selected", tool === S.tool);
-    const poor = TRAPS[tool] ? S.coins < TRAPS[tool].costs[0] : S.souls < MINIONS[tool].cost;
+    const poor = TRAPS[tool] ? S.coins < TRAPS[tool].costs[0] : tool === "serpent" ? S.darkSouls < SERPENT.cost : S.souls < MINIONS[tool].cost;
     b.classList.toggle("poor", poor);
     const locked = !unlocked(tool);
     b.classList.toggle("locked", locked);
     b.classList.toggle("fresh", S.fresh.has(tool) && tool !== S.tool);
+    if (tool === "serpent") return;
     const kind = TRAPS[tool] || MINIONS[tool], cost = b.querySelector(".cost");
     const price = TRAPS[tool] ? `${kind.costs[0]} coins` : `${kind.cost} soul${kind.cost > 1 ? "s" : ""}`;
     const text = locked ? `Kill ${kind.unlock - S.kills} more` : price;
