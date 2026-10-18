@@ -1726,7 +1726,7 @@ function endWave(sub) {
 }
 
 function swingBox(b) {
-  const reach = b.form === 2 ? 2.4 : 1.3;
+  const reach = b.form === 2 ? 2.4 : b.bigSwing ? 3.2 : 2.1;
   return {
     x: b.face > 0 ? b.x + b.w / 2 : b.x + b.w / 2 - reach - b.w / 2,
     y: b.y - 0.2, w: reach + b.w / 2, h: b.h + 0.2,
@@ -1967,9 +1967,13 @@ function updateAction(b, dt) {
     }
     if (!a.cut) {
       a.cut = true;
-      b.swing = 0.15;
-      S.slashes.push({ x0: a.x0, x1: centerX(b) + b.face * 1.5, y: b.y + 1.3, t: 0.35 });
-      for (const h of S.heroes) if (!a.hits.has(h) && h.evade <= 0 && overlaps(swingBox(b), h)) { damage(h, SLASH_DMG * 0.6, "#ff5252"); knock(h, b.face * 4, -4); }
+      b.swing = 0.25;
+      b.bigSwing = true;
+      S.slashes.push({ x0: a.x0, x1: centerX(b) + b.face * 3.2, y: b.y + 1.3, t: 0.45 });
+      S.shake = Math.max(S.shake, 5);
+      // Sparks and blood flying off the end of the cut.
+      burst(centerX(b) + b.face * 2.5, b.y + 1.1, 18, ["#ffffff", "#ff1744", "#ff8a80"], 7, { glow: true });
+      for (const h of S.heroes) if (!a.hits.has(h) && h.evade <= 0 && overlaps(swingBox(b), h)) { damage(h, SLASH_DMG * 0.6, "#ff5252"); knock(h, b.face * 6, -5); }
     }
     b.vx = 0;
     if (a.t > 0.62) b.action = null;
@@ -2345,6 +2349,7 @@ function updateSpecials(dt) {
 
 function slamImpact(b) {
   b.swing = 0.15;
+  b.bigSwing = false;
   S.shake = 6;
   Sound.play("slam");
   const fy = b.y + b.h, fx = centerX(b) + b.face * 1.2;
@@ -2627,6 +2632,7 @@ function updateBoss(dt) {
     b.windup -= dt;
     if (b.windup <= 0) {
       b.swing = 0.15;
+      b.bigSwing = false;
       Sound.play(b.form === 2 ? "claw" : "swing");
       // One swing cleaves through every hero in reach; the Devourer's claws reach further and throw them.
       for (const h of S.heroes) {
@@ -4058,32 +4064,41 @@ const ART = {
   ],
   // His greatcleaver, pointing straight up; it rotates around the shoulder (bottom).
   cleaverArm: [
-    "..MMMMMMMMm.",
-    "..WMMMMMMMMm",
-    "..WMMRRMMMMm",
-    "..WMMMMMMMMm",
-    "..WMMMMMMMm.",
-    "..WMMRMMMMm.",
-    "..WMMMMMMMm.",
-    "..WMMMMMMm..",
-    "..WMMMRMMm..",
-    "..WMMMMMMm..",
-    "..WMMMMMm...",
-    "..WMMRMMm...",
-    "..WMMMMMm...",
-    "..WMMMMm....",
-    "..mmmmmm....",
-    "GGGGGG......",
-    "..B.........",
-    "..B.........",
-    "..B.........",
-    ".GGG........",
-    ".AAA........",
-    ".ALA........",
-    ".AAA........",
-    ".RRR........",
-    ".AAA........",
-    "AAAAA.......",
+    "....MMMMMMMMm...",
+    "...WMMMMMMMMMm..",
+    "..WMMMRRMMMMMMm.",
+    "..WMMMRRMMMMMMMm",
+    "..WMMMMMMMMMMMMm",
+    "..WMMMMMMMMMMMm.",
+    "..WMMMMMMMMMMMMm",
+    "..WMMRMMMMMMMMm.",
+    "..WMMMMMMMMMMMMm",
+    "..WMMMMMMMMMMMm.",
+    "..WMMMMRMMMMMMm.",
+    "..WMMMMMMMMMMm..",
+    "..WMMMMMMMMMMMm.",
+    "..WMMRMMMMMMMm..",
+    "..WMMMMMMMMMMm..",
+    "..WMMMMMMMMMm...",
+    "..WMMMMMRMMMm...",
+    "..WMMMMMMMMm....",
+    "..WMMMMMMMMm....",
+    "..WMMMRMMMm.....",
+    "..WMMMMMMMm.....",
+    "..WMMMMMMm......",
+    "..mmmmmmmm......",
+    "GGGGGGGGG.......",
+    "..B.............",
+    "..B.............",
+    "..B.............",
+    "..B.............",
+    ".GGG............",
+    ".AAA............",
+    ".ALA............",
+    ".AAA............",
+    ".RRR............",
+    ".AAA............",
+    "AAAAA...........",
   ],
   spikeUp: [
     ".W...W...W...W..",
@@ -5449,12 +5464,14 @@ function drawBoss(b, shadow = false) {
   // The weapon arm hangs off the front shoulder.
   const sx = b.face > 0 ? left + 34 : left + spr.width - 35, sy = top + 27 + breathe;
 
-  // Swing smear: a bright arc traced by the blade.
+  // Swing smear: a bright arc traced by the blade, and a huge crescent for the Cleaver Slash.
   if (b.swing > 0) {
-    for (let a = -0.5; a <= 2.3; a += 0.06) {
-      for (let r = 12; r <= 25; r++) {
-        ctx.fillStyle = r > 23 ? "#ffffff" : "#ff1744";
-        ctx.globalAlpha = (b.swing / 0.15) * (r > 23 ? 0.9 : 0.35);
+    const big = b.bigSwing, outer = big ? 50 : 37, inner = big ? 16 : 14, fade = Math.min(1, b.swing / 0.15);
+    for (let a = big ? -0.9 : -0.5; a <= 2.4; a += big ? 0.03 : 0.045) {
+      for (let r = inner; r <= outer; r++) {
+        const edge = r > outer - (big ? 4 : 3);
+        ctx.fillStyle = edge ? "#ffffff" : r > outer - 8 ? "#ff5252" : "#b71c1c";
+        ctx.globalAlpha = fade * (edge ? 0.95 : r > outer - 8 ? 0.55 : 0.25);
         ctx.fillRect(Math.round(sx + b.face * Math.sin(a) * r), Math.round(sy - Math.cos(a) * r), 1, 1);
       }
     }
@@ -5666,12 +5683,15 @@ function drawSpecials() {
   for (const g of S.ghosts) drawSprite(sprite(ART.boss, BOSS_GHOST_PAL, "bossGhost"), (g.x + S.boss.w / 2) * T, (g.y + S.boss.h) * T, g.face, g.t * 2);
   // The long red cut left by a cleaver slash.
   for (const sl of S.slashes) {
-    const k = sl.t / 0.35, y = Math.round(sl.y * T), x0 = Math.round(Math.min(sl.x0, sl.x1) * T), x1 = Math.round(Math.max(sl.x0, sl.x1) * T);
+    const k = Math.min(1, sl.t / 0.35), y = Math.round(sl.y * T), x0 = Math.round(Math.min(sl.x0, sl.x1) * T), x1 = Math.round(Math.max(sl.x0, sl.x1) * T);
+    ctx.globalAlpha = k * 0.4;
+    ctx.fillStyle = "#b71c1c";
+    ctx.fillRect(x0 - 2, y - 4, x1 - x0 + 4, 9);
     ctx.globalAlpha = k;
     ctx.fillStyle = "#ff1744";
-    ctx.fillRect(x0, y - 1, x1 - x0, 3);
+    ctx.fillRect(x0, y - 2, x1 - x0, 5);
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(x0 + 4, y, x1 - x0 - 8, 1);
+    ctx.fillRect(x0 + 4, y - 1, x1 - x0 - 8, 2);
   }
   // Dust ring from a ground smash.
   for (const ring of S.rings) {
