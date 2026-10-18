@@ -134,6 +134,17 @@
     Each wave brings one more hero than the last, and they're stronger, better geared, and better at spotting traps and dodging.<br>
     <a href="index.html">&larr; back to menu</a>
   </details>
+  <details>
+    <summary>Lore</summary>
+    <b>Vorgath, the Hollow King.</b> Three hundred years ago, the kingdom of Ashfall was dying. Its king, Vorgath, climbed the
+    highest tower of his castle and made a bargain with something that answered from the dark: his soul, in return for a
+    tower that would never fall.<br>
+    The tower still stands. Vorgath does too, after a fashion: a suit of black iron with nothing inside but hunger,
+    and two red eyes that never close. He is bound to the tower, and the tower feeds on souls.<br>
+    <b>The Order of the Dawn</b> has sworn to end him. Every year more of their squires, knights and paladins march on
+    the tower. Every year the lava drinks some, the traps take others, and those who reach the top meet the Hollow King
+    and his greatcleaver. Not one has come back down. Their souls are what keep him standing.
+  </details>
 </div>
 
 <script>
@@ -173,7 +184,7 @@ const W = 30, H = 12, T = 16;
 const TOWER_X = 24;                    // first column of the tower
 const ARENA_FLOOR = 9;
 const TOWER_TOP = 4;
-const PERCH = { x: 26.2, y: TOWER_TOP - 1.8 }; // where the boss waits on the tower top
+const PERCH = { x: 25.8, y: TOWER_TOP - 2.75 }; // where the boss waits on the tower top
 const TORCHES = {
   level: [{ x: 3, y: 7, post: true }, { x: 10, y: 7, post: true }, { x: 17, y: 7, post: true }, { x: 25, y: 6 }, { x: 28, y: 6 }],
   arena: [{ x: 0, y: 5 }, { x: 29, y: 5 }, { x: 12, y: 7 }, { x: 17, y: 7 }],
@@ -234,6 +245,39 @@ const GEAR = [
   { name: "Holy Armor",   main: "#f5f5f5", shade: "#b9b4cc" },
 ];
 const gearFor = lv => GEAR[Math.min(lv - 1, GEAR.length - 1)];
+// ---------- lore ----------
+// Vorgath was a king who sold his soul so his tower would never fall. Now he is the Hollow King,
+// bound to the tower and fed by the souls of the heroes the Order of the Dawn sends to end him.
+const BOSS_NAME = "VORGATH", BOSS_TITLE = "THE HOLLOW KING";
+const PROLOGUE = [
+  "LONG AGO, KING VORGATH SOLD HIS SOUL TO A DEMON.",
+  "IN RETURN, HIS TOWER WOULD NEVER FALL.",
+  "NOW HE IS THE HOLLOW KING, AND HE FEEDS ON THE SOULS OF HEROES.",
+  "TONIGHT, THE ORDER OF THE DAWN MARCHES ON HIS TOWER.",
+];
+const WAVE_LORE = [
+  "THE ORDER SENDS ITS SQUIRES", "KNIGHTS OF THE DAWN APPROACH", "THE SILVER VOW RIDES TO WAR",
+  "PALADINS OF THE SUN ADVANCE", "THE DAWN'S CHAMPIONS ARRIVE", "THE ORDER SENDS ITS FINEST",
+  "THE LAST LIGHT OF THE DAWN",
+];
+const TAUNTS = {
+  wave: ["COME, LITTLE KNIGHTS.", "MORE SOULS FOR MY TOWER.", "THE DAWN WILL NOT SAVE YOU.", "I HAVE WAITED CENTURIES. I CAN WAIT TONIGHT."],
+  full: ["YES... CLIMB TO ME.", "COME UP. ALL OF YOU."],
+  fool: ["HAHAHA... FOOL."],
+  roar: ["YOUR SOULS ARE MINE.", "KNEEL BEFORE THE HOLLOW KING.", "NONE LEAVE THIS TOWER."],
+  kill: ["KNEEL.", "ANOTHER SOUL.", "PATHETIC.", "THE TOWER HUNGERS.", "YOU ARE NOTHING."],
+  rage: ["I AM ETERNAL!", "ENOUGH!"],
+  win: ["THE TOWER STANDS.", "SLEEP, LITTLE KNIGHTS."],
+  die: ["THE TOWER... FALLS..."],
+};
+const HERO_LINES = {
+  charge: ["FOR THE DAWN!", "DOWN WITH THE HOLLOW KING!", "FOR GLORY!", "THE TOWER WILL FALL!", "STAY TOGETHER!"],
+  die: ["AVENGE... ME...", "THE DAWN... FADES...", "NOOO!", "FORGIVE ME..."],
+  lava: ["IT BURNS!", "AAARGH!"],
+  fear: ["WHAT IS THAT...", "GODS PRESERVE US!", "HOLD THE LINE!"],
+};
+const pick = list => list[Math.floor(Math.random() * list.length)];
+
 const HERO_NAMES = ["Sir Aldric", "Sir Borin", "Dame Elara", "Sir Cedric", "Dame Isolde", "Sir Galen", "Sir Thorne",
   "Dame Wren", "Sir Roland", "Sir Percival", "Dame Maren", "Sir Edmund"];
 
@@ -250,7 +294,7 @@ function makeHero(lv) {
 }
 function makeBoss() {
   return {
-    x: PERCH.x, y: PERCH.y, w: 1.6, h: 1.8, vx: 0, vy: 0, onGround: true, isBoss: true,
+    x: PERCH.x, y: PERCH.y, w: 2.4, h: 2.75, vx: 0, vy: 0, onGround: true, isBoss: true,
     hp: BOSS_HP, maxHp: BOSS_HP, cd: 0, windup: 0, swing: 0, slam: 0, slamCd: 0, face: -1, flash: 0, arm: 1.2,
   };
 }
@@ -268,9 +312,26 @@ function newGame(title = false) {
     phase: title ? "title" : "intro", scene: "level", floats: [], particles: [], tool: "spike", time: 0,
     fade: 0, fadeIn: 0, intro: 0, returnT: 0,
     shake: 0, banner: null, bannerQueue: [], pulse: { coins: 0, souls: 0 }, fresh: new Set(),
+    speech: [], lightning: { next: 3 + Math.random() * 4, flash: 0, bolt: null }, prologue: null, heartbeat: 0,
   };
   if (title) { say("Click or press any key to begin."); return; }
   startOpening();
+}
+
+// The story so far, typed out line by line before the opening. A click or key skips ahead.
+function startPrologue() {
+  S.phase = "prologue";
+  S.prologue = { line: 0, t: 0 };
+  S.lightning.next = 0.6;
+  say("Click or press any key to skip.");
+}
+const prologueTyped = p => Math.floor(p.t * 32) >= PROLOGUE[p.line].length;
+function advancePrologue() {
+  const p = S.prologue;
+  if (!prologueTyped(p)) { p.t = 99; return; }
+  p.line++;
+  p.t = 0;
+  if (p.line >= PROLOGUE.length) startOpening();
 }
 
 // The opening: one reckless hero charges in alone.
@@ -499,13 +560,30 @@ const Sound = (() => {
       noise({ dur: 1.4, vol: 0.2, freq: 300, to: 80 });
     },
     victory: () => arp(294, [0, 3, 7, 12, 15], { dur: 0.25, vol: 0.1, gap: 0.12 }),
+    roar: () => {
+      tone(95, { to: 52, type: "sawtooth", dur: 1.5, vol: 0.32, attack: 0.08 });
+      tone(101, { to: 48, type: "square", dur: 1.5, vol: 0.12, attack: 0.08 });
+      tone(48, { to: 30, type: "sine", dur: 1.6, vol: 0.4, attack: 0.1 });
+      noise({ dur: 1.5, vol: 0.4, filter: "bandpass", freq: 420, to: 140, q: 2, attack: 0.08 });
+    },
+    growl: () => { tone(66, { to: 54, type: "sawtooth", dur: 0.5, vol: 0.12, attack: 0.04 }); noise({ dur: 0.45, vol: 0.12, filter: "bandpass", freq: 260, q: 3 }); },
+    laugh: () => [0, 0.17, 0.34, 0.51].forEach((at, i) => {
+      tone(150 - i * 12, { to: 115 - i * 12, type: "sawtooth", dur: 0.12, vol: 0.13, at });
+      noise({ dur: 0.1, vol: 0.08, filter: "bandpass", freq: 500, q: 2, at });
+    }),
+    thunder: () => {
+      noise({ dur: 0.15, vol: 0.4, filter: "highpass", freq: 2500 });
+      noise({ dur: 2.4, vol: 0.45, freq: 700, to: 60, attack: 0.05, at: 0.2 });
+      tone(40, { type: "sine", dur: 2.2, vol: 0.3, attack: 0.1, at: 0.2 });
+    },
+    heartbeat: () => { tone(62, { to: 40, type: "sine", dur: 0.16, vol: 0.45 }); tone(56, { to: 38, type: "sine", dur: 0.16, vol: 0.38, at: 0.22 }); },
     death: () => {
       [0, 3, 7].forEach(s => tone(semi(110, s), { type: "sawtooth", dur: 2.8, vol: 0.08, attack: 0.05 }));
       tone(55, { type: "sine", dur: 2.8, vol: 0.3 });
     },
   };
   // Busy sounds are rate-limited so a crowd of heroes doesn't turn into noise.
-  const GAP = { bounce: 0.07, hit: 0.05, minionHurt: 0.08, fire: 0.3, coinDrop: 0.2, saw: 0.12, spike: 0.1, arrow: 0.08, soulRise: 0.15 };
+  const GAP = { growl: 0.5, thunder: 2, bounce: 0.07, hit: 0.05, minionHurt: 0.08, fire: 0.3, coinDrop: 0.2, saw: 0.12, spike: 0.1, arrow: 0.08, soulRise: 0.15 };
 
   function play(name, arg) {
     if (!ac || ac.state !== "running" || !prefs.sfx || !SFX[name]) return;
@@ -587,7 +665,8 @@ const keys = {};
 let startedAt = 0;
 function wake() {
   Sound.unlock();
-  if (S.phase === "title") { startedAt = performance.now(); startOpening(); }
+  if (S.phase === "title") { startedAt = performance.now(); startPrologue(); }
+  else if (S.phase === "prologue") { startedAt = performance.now(); advancePrologue(); }
 }
 addEventListener("pointerdown", wake);
 document.addEventListener("keydown", e => {
@@ -688,7 +767,7 @@ if (document.fonts) document.fonts.ready.then(fitCanvas);
 fitCanvas();
 
 function place({ x, y }) {
-  if (S.phase === "over" || S.phase === "title") return;
+  if (["over", "title", "prologue"].includes(S.phase)) return;
   if (inArena()) { say("You can't build during the boss battle."); Sound.play("deny"); return; }
   if (!canBuild(x, y)) { say("You can't build there."); Sound.play("deny"); return; }
   const trap = S.traps.find(t => t.x === x && t.y === y);
@@ -741,7 +820,8 @@ function startWave() {
   S.phase = "wave";
   S.loot = { kills: 0, coins: 0 };
   Sound.play("horn");
-  banner(`WAVE ${S.wave}`, `${n} heroes approach`, "#e6e0ec");
+  banner(`WAVE ${S.wave}`, `${n} heroes - ${WAVE_LORE[Math.min(S.wave, WAVE_LORE.length) - 1]}`, "#e6e0ec");
+  if (S.wave === 1 || Math.random() < 0.5) setTimeout(() => speak(S.boss, pick(TAUNTS.wave)), 1200);
   say(`${n} Lv ${S.wave} heroes in ${gearFor(S.wave).name} storm your castle! If ${TOWER_LIMIT} get into the tower, they come for you.`);
 }
 
@@ -750,7 +830,9 @@ function spawnHeroes(dt) {
   S.spawnT += dt;
   if (S.spawnT < S.spawnQueue[0].delay) return;
   S.spawnT = 0;
-  S.heroes.push(makeHero(S.spawnQueue.shift().lv));
+  const h = makeHero(S.spawnQueue.shift().lv);
+  S.heroes.push(h);
+  if (Math.random() < 0.35) speak(h, pick(HERO_LINES.charge));
 }
 
 // The opening: one hero charges in alone and tumbles into the lava, the ground rumbles,
@@ -784,7 +866,7 @@ function heroReachedTower(h) {
   const n = S.towerHeroes.length;
   S.doorFlash = 0.5;
   Sound.play("door");
-  if (n === TOWER_LIMIT) Sound.play("bell");
+  if (n === TOWER_LIMIT) { Sound.play("bell"); speak(S.boss, pick(TAUNTS.full)); }
   S.shake = Math.max(S.shake, 1.5);
   dust(TOWER_X - 0.2, ARENA_FLOOR, 8);
   float(TOWER_X + 0.5, 7.3, `${n}/${TOWER_LIMIT}`, n >= TOWER_LIMIT ? "#ff5252" : "#ff8a80");
@@ -839,10 +921,10 @@ function startBossFight() {
     Object.assign(h, { x: 1.4 + slot * 0.5, y: ARENA_FLOOR - h.h, vx: 0, vy: 0, face: 1, evade: 0, trail: [], cd: 0.5 + i * 0.15, walkTo: 4 + slot });
   });
   const b = S.boss;
-  Object.assign(b, { x: 22, y: ARENA_FLOOR - b.h, vx: 0, vy: 0, face: -1, windup: 0, swing: 0, slam: 0, cd: 0, slamCd: 0, hp: b.maxHp });
-  banner("LORD OF THE TOWER", `${S.heroes.length} heroes reached the top`, "#ff8a80");
+  Object.assign(b, { x: 21.5, y: ARENA_FLOOR - b.h, vx: 0, vy: 0, face: -1, windup: 0, swing: 0, slam: 0, cd: 0, slamCd: 0, hp: b.maxHp, enraged: false, roar: 0 });
+  S.intro = 3.0;
   Sound.play("bossIntro");
-  say("Boss battle! A / D move, W jumps, Space swings, S slams the ground.");
+  say(`${S.heroes.length} heroes reached the top of the tower. Boss battle! A / D move, W jumps, Space swings, S slams the ground.`);
 }
 
 // After the boss wins, go back down to the level to build for the next wave.
@@ -861,7 +943,7 @@ function bossAttack() {
   const b = S.boss;
   if (!canFight() || b.cd > 0 || b.windup > 0 || b.slam > 0) return;
   b.windup = 0.25;
-  b.cd = 0.75;
+  b.cd = b.enraged ? 0.55 : 0.75;
   // Stronger heroes sometimes see the swing coming and leap away.
   for (const h of S.heroes) {
     if (h.evade <= 0 && Math.abs(centerX(h) - centerX(b)) < 3 && Math.random() < h.dodge) {
@@ -878,7 +960,7 @@ function bossSlam() {
   const b = S.boss;
   if (!canFight() || b.slamCd > 0 || b.windup > 0 || b.slam > 0 || !b.onGround) return;
   b.slam = 0.45;
-  b.slamCd = 3;
+  b.slamCd = b.enraged ? 2.2 : 3;
   Sound.play("slamCharge");
 }
 
@@ -913,6 +995,15 @@ function update(dt) {
   S.traps.forEach(t => { t.cd -= dt; t.flash -= dt; });
   S.fadeIn = Math.max(0, S.fadeIn - dt);
   S.boss.flash -= dt;
+  updateSpeech(dt);
+  updateLightning(dt);
+  if (S.phase !== "title") bossAura(dt);
+  if (S.phase === "prologue") {
+    // Lines advance on their own once typed out and read.
+    S.prologue.t += dt;
+    if (prologueTyped(S.prologue) && S.prologue.t > PROLOGUE[S.prologue.line].length / 32 + 2.2) advancePrologue();
+    return;
+  }
   if (S.phase === "over" || S.phase === "title") return;
 
   if (S.phase === "enter") {
@@ -930,7 +1021,10 @@ function update(dt) {
   }
 
   if (inArena()) {
+    // Partway through the heroes' entrance, the Hollow King roars.
+    if (S.intro > 1.6 && S.intro - dt <= 1.6) bossRoar();
     S.intro -= dt;
+    updateRage(dt);
     updateBoss(dt);
     for (const h of S.heroes) updateHero(h, dt);
     updateWaves(dt);
@@ -951,9 +1045,90 @@ function update(dt) {
   if (S.phase === "boss" && !S.heroes.length) {
     S.phase = "felled";
     S.returnT = 2.4;
-    banner("HEROES FELLED", "None of them will leave this tower", "#ffd54f");
+    banner("HEROES FELLED", "Their souls feed the Hollow King", "#ffd54f");
+    speak(S.boss, pick(TAUNTS.win));
     Sound.play("victory");
   }
+}
+
+// ---------- speech ----------
+// Short lines shown above whoever is talking. Fixed spots (like a dead hero's last words) pass a plain box.
+function speak(who, text, color) {
+  S.speech = S.speech.filter(s => s.who !== who);
+  if (S.speech.length > 3) S.speech.shift();
+  const fixed = !who.isBoss && !S.heroes.includes(who);
+  S.speech.push({ who: fixed ? { x: who.x, y: who.y, w: who.w, h: who.h } : who, text, color: color || (who.isBoss ? "#ff5252" : "#e6e0ec"), t: 2.4 });
+  if (who.isBoss) Sound.play("growl");
+}
+function updateSpeech(dt) {
+  for (const s of S.speech) s.t -= dt;
+  S.speech = S.speech.filter(s => s.t > 0 && (s.who.isBoss || !s.who.lv || S.heroes.includes(s.who)));
+}
+
+// Smoke and embers curl off the Hollow King; when enraged they burn.
+function bossAura(dt) {
+  const b = S.boss;
+  if (S.phase === "over") return;
+  if (Math.random() < dt * 16) {
+    particle({ x: b.x + Math.random() * b.w, y: b.y + b.h * (0.25 + Math.random() * 0.7), vx: (Math.random() - 0.5) * 0.4,
+      vy: -0.6 - Math.random() * 0.8, life: 0.8 + Math.random() * 0.6, size: Math.random() < 0.4 ? 2 : 1,
+      color: b.enraged ? (Math.random() < 0.5 ? "#ff3d00" : "#b71c1c") : (Math.random() < 0.5 ? "#3b1048" : "#24102e"), glow: !!b.enraged });
+  }
+  if (Math.random() < dt * 5) {
+    particle({ x: centerX(b), y: b.y + 0.6, vx: (Math.random() - 0.5) * 1.5, vy: -1.5, life: 0.5, color: "#ff1744", glow: true });
+  }
+}
+
+function bossRoar() {
+  const b = S.boss;
+  b.roar = 1.1;
+  S.shake = 7;
+  Sound.play("roar");
+  burst(centerX(b), b.y + 0.5, 24, ["#ff1744", "#7a1420", "#ffeb3b"], 7, { glow: true });
+  banner(BOSS_NAME, BOSS_TITLE, "#ff1744");
+  speak(b, pick(TAUNTS.roar));
+  // The heroes flinch.
+  for (const h of S.heroes) { float(centerX(h), h.y - 0.2, "!", "#ffeb3b"); h.vx = 0; }
+  const scared = S.heroes[0];
+  if (scared) setTimeout(() => { if (S.heroes.includes(scared)) speak(scared, pick(HERO_LINES.fear)); }, 900);
+}
+
+// Below half health the Hollow King is enraged: faster attacks, burning aura and a heartbeat.
+function updateRage(dt) {
+  const b = S.boss;
+  if (!b.enraged && b.hp > 0 && b.hp < b.maxHp / 2) {
+    b.enraged = true;
+    b.roar = 0.8;
+    S.shake = 6;
+    Sound.play("roar");
+    float(centerX(b), b.y - 0.4, "ENRAGED", "#ff3d00");
+    speak(b, pick(TAUNTS.rage));
+  }
+  if (b.hp < b.maxHp * 0.3) {
+    S.heartbeat -= dt;
+    if (S.heartbeat <= 0) { S.heartbeat = 0.85; S.pulseRed = 0.4; Sound.play("heartbeat"); }
+  }
+  S.pulseRed = (S.pulseRed || 0) - dt;
+}
+
+// Every so often lightning splits the sky over the tower.
+function updateLightning(dt) {
+  const L = S.lightning;
+  L.flash -= dt;
+  if (inArena() || S.phase === "title") return;
+  L.next -= dt;
+  if (L.next > 0) return;
+  L.next = 9 + Math.random() * 12;
+  L.flash = 0.35;
+  // A jagged bolt from the clouds down to the tower top.
+  const pts = [{ x: 300 + Math.random() * 160, y: 18 }];
+  const end = { x: TOWER_X * T + 20 + Math.random() * 60, y: TOWER_TOP * T - 4 };
+  for (let i = 1; i <= 7; i++) {
+    const k = i / 7;
+    pts.push({ x: Math.round(pts[0].x + (end.x - pts[0].x) * k + (i < 7 ? (Math.random() - 0.5) * 22 : 0)), y: Math.round(18 + (end.y - 18) * k) });
+  }
+  L.bolt = pts;
+  Sound.play("thunder");
 }
 
 function updateWaves(dt) {
@@ -1013,7 +1188,8 @@ function updateBoss(dt) {
   moveBody(b, dt);
 
   // Cleaver angle: resting forward, raised back on windup, straight up for a slam, sweeping down on the swing.
-  const target = b.slam > 0 ? -0.1 : b.windup > 0 ? -0.5 : b.swing > 0 ? 2.3 : 1.2;
+  b.roar = (b.roar || 0) - dt;
+  const target = b.slam > 0 || b.roar > 0 ? -0.1 : b.windup > 0 ? -0.5 : b.swing > 0 ? 2.3 : 1.2;
   b.arm += (target - b.arm) * Math.min(1, dt * (b.swing > 0 ? 40 : b.windup > 0 || b.slam > 0 ? 18 : 8));
 
   if (b.slam > 0) {
@@ -1425,6 +1601,9 @@ function heroDied(h) {
   dropSoul(hx, hy - 0.3);
   S.shake = Math.max(S.shake, 2.5);
   Sound.play(h.lava ? "sizzle" : "heroDie");
+  if (h.reckless) setTimeout(() => { speak(S.boss, pick(TAUNTS.fool)); Sound.play("laugh"); }, 600);
+  else if (inArena() && S.heroes.length && Math.random() < 0.6) speak(S.boss, pick(TAUNTS.kill));
+  else if (Math.random() < 0.3) speak(h, pick(h.lava ? HERO_LINES.lava : HERO_LINES.die));
   say(h.lava ? `${h.name} fell into the lava!` : `${h.name} has fallen!`);
   for (const [tool, kind] of Object.entries(TRAPS)) {
     if (kind.unlock !== S.kills) continue;
@@ -1443,9 +1622,12 @@ function bossDied() {
   for (const h of S.heroes) h.atkAnim = 0;
   S.phase = "over";
   const held = S.wave - 1;
-  banner("YOU DIED", `Waves survived: ${held}`, "#c62828");
+  banner("YOU DIED", `The Hollow King has fallen - ${held} wave${held === 1 ? "" : "s"} survived`, "#c62828");
+  speak(b, pick(TAUNTS.die));
+  // Let his last words land before the death card fades in.
+  S.banner.t = -1.6;
   Sound.play("death");
-  say(`The heroes have slain the Lord of the Tower. You held out for ${held} wave${held === 1 ? "" : "s"} and slew ${S.kills} heroes.`);
+  say(`The Order of the Dawn has slain Vorgath, the Hollow King. You held out for ${held} wave${held === 1 ? "" : "s"} and slew ${S.kills} heroes.`);
 }
 
 // ======================================================================
@@ -1570,57 +1752,81 @@ const ART = {
     "..ggGG.....gGGg.",
     "..gggg.....gggg.",
   ],
-  // Left half of the boss; mirrored to make it symmetric.
+  // Left half of the Hollow King; mirrored to make it symmetric.
   bossHalf: [
-    "..H...........",
-    "..HH..........",
-    "...HH.........",
-    "...hHH........",
-    "....hHH.rrrrrr",
-    ".....hHrRRRRRR",
-    "......rRRRRRRR",
-    ".....rRRPPRRRR",
-    ".....rRPRRRRRR",
-    ".....rRRyYYRRR",
-    ".....rRRRyYRRR",
-    ".....rRRRRRRRR",
-    "......rRRTRTRT",
-    ".......rRKKKKK",
-    "........rrRRRR",
-    "...rrrrRRRRRRR",
-    "..rRRRRRPPRRRR",
-    ".rRRPRRRRRPRRR",
-    ".rRPRRrRRRRPRR",
-    "rRRRRrrRRRRRRR",
-    "rRRRr.rRRrRRrR",
-    "rRRr..rRRRRRRR",
-    "HHH...rRRrRRrR",
-    "HH....rDDDDDDD",
-    ".......rRRRRRR",
-    "......rRRRR...",
-    "......rRRRR...",
-    "......rRRR....",
-    ".....rrRRR....",
-    "....DDDDDD....",
+    "..H.................",
+    "..HH................",
+    "..hH................",
+    "..hHH...............",
+    "...hHH..............",
+    "...hHHH............G",
+    "....hHHH.........G.G",
+    ".....hhHHH......GgGG",
+    "......hhHHHH...GGGGG",
+    "........hhHHaaAGgGgG",
+    "...........aAALAAAAA",
+    "...........aALAAAAAA",
+    "...........aLAAAAAAA",
+    "...........aAKKKKKAA",
+    "...........aAKEYEKKA",
+    "...........aAKKEKKAA",
+    "............aAAAAKAA",
+    "............aAAKHKKK",
+    ".............aAKHKHK",
+    ".H..H........aaAAAAA",
+    ".hH..hH......aAAAAAA",
+    "..HRRRHRR...RRRRRRRR",
+    ".RLLLLLLLR.RAAAAAAAA",
+    "RLLAAAAAALRAAAAAAAAA",
+    "RLAAAAAAAARAAAAAAAFF",
+    "RAAAAAAAAARAAAAAAFYe",
+    "raAAAAAAAARaAAAAAFYe",
+    ".raaaaaaar.aAAAAAAFF",
+    "CC.AAAAA...aAAAAAAAA",
+    "CCcALAAA...aAArArAAA",
+    "CCcAAAAA....aAAAAAAA",
+    "CCcAAAAA....aArArAAA",
+    "CCcRRRRR....aAAAAAAA",
+    "CCcAAAAA....RRRRRRRR",
+    "CCcAAAAA...aAAAAGgAA",
+    "CCcKHKHK...aAAAAAAAA",
+    "CCCH.H.H....aAAAAA..",
+    "CCcCc.......aAAAAA..",
+    "CcCcC......HaALAAA..",
+    "Cc.cC.......RRRRRR..",
+    "C..c.C......aAAAAA..",
+    ".C..c.......aAAAAA..",
+    "...........aAAAAAA..",
+    "..........aaaaaaaa..",
   ],
-  // The boss's weapon arm, pointing straight up; it rotates around the shoulder (bottom).
+  // His greatcleaver, pointing straight up; it rotates around the shoulder (bottom).
   cleaverArm: [
-    "..HMMMMMMm.",
-    "..BWWMMMMMm",
-    "..BWMMMMMMm",
-    "..BMMMMMMMm",
-    "..BMMMMMMmm",
-    "..BMMMMMmm.",
-    "..BmmmmmD..",
-    "..B........",
-    "..B........",
-    ".HHH.......",
-    ".RRR.......",
-    "..RR.......",
-    ".RRr.......",
-    ".RRr.......",
-    ".RRr.......",
-    ".RRr.......",
+    "..MMMMMMMMm.",
+    "..WMMMMMMMMm",
+    "..WMMRRMMMMm",
+    "..WMMMMMMMMm",
+    "..WMMMMMMMm.",
+    "..WMMRMMMMm.",
+    "..WMMMMMMMm.",
+    "..WMMMMMMm..",
+    "..WMMMRMMm..",
+    "..WMMMMMMm..",
+    "..WMMMMMm...",
+    "..WMMRMMm...",
+    "..WMMMMMm...",
+    "..WMMMMm....",
+    "..mmmmmm....",
+    "GGGGGG......",
+    "..B.........",
+    "..B.........",
+    "..B.........",
+    ".GGG........",
+    ".AAA........",
+    ".ALA........",
+    ".AAA........",
+    ".RRR........",
+    ".AAA........",
+    "AAAAA.......",
   ],
   spikeUp: [
     ".W...W...W...W..",
@@ -1713,7 +1919,8 @@ const ART = {
 };
 ART.boss = ART.bossHalf.map((r, y) => {
   const right = [...r].reverse();
-  if (y >= 16 && y <= 23) for (let x = 10; x < 14; x++) right[x] = ".";
+  // The front arm is drawn separately so it can swing the cleaver.
+  if (y >= 28 && y <= 35) for (let x = 12; x < 17; x++) right[x] = ".";
   return r + right.join("");
 });
 
@@ -1730,8 +1937,16 @@ const PALETTE = {
   M: "#b0b8c0", m: "#6d7680", d: "#2e2a38",
 };
 const SKELETON_PAL = { W: "#e8e2d0" };
-const BOSS_PAL = { h: "#a8987a", K: "#120a0c", T: "#f5f0e1" };
-const CLEAVER_PAL = { D: "#3a2a20", B: "#5d4037", H: "#e8dcc0", r: "#6e0f12" };
+// Blackened armour, bone horns, a gold crown, and a burning soul in his chest.
+const BOSS_PAL = {
+  A: "#2b2535", a: "#1a1622", L: "#4d4560", R: "#7a1420", r: "#4a0c14", H: "#e8dcc0", h: "#a8987a",
+  G: "#c9a227", g: "#7d6314", K: "#08060c", E: "#ff1744", Y: "#ffeb3b", e: "#ffffff", F: "#ff3d00", C: "#3b0a14", c: "#22060c",
+};
+// Enraged: the eyes and the soul in his chest burn white-hot.
+const BOSS_RAGE_PAL = Object.assign({}, BOSS_PAL, { E: "#ffffff", Y: "#ffffff", F: "#ffeb3b", e: "#ffffff", R: "#c62828" });
+// Lit from behind by lightning: a black shape with burning eyes.
+const BOSS_SHADOW_PAL = Object.fromEntries(Object.keys(BOSS_PAL).map(k => [k, "EYe".includes(k) ? BOSS_PAL[k] : "#050308"]));
+const CLEAVER_PAL = { M: "#4a4458", m: "#2b2535", W: "#c9c2d6", R: "#ff1744", B: "#3a2a20", G: "#c9a227", A: "#2b2535", L: "#4d4560", a: "#1a1622" };
 const SPIKE_PALS = [
   { M: "#8e95a0", m: "#5d6370", W: "#d7dde3", D: "#3b3746", d: "#26232e" },
   { M: "#cfd8dc", m: "#8a959c", W: "#ffffff", D: "#3b3746", d: "#26232e" },
@@ -1880,13 +2095,15 @@ function buildBackground(map, arena) {
   const moon = MOON[arena ? "arena" : "level"];
   for (let y = -moon.r - 4; y <= moon.r + 4; y++) for (let x = -moon.r - 4; x <= moon.r + 4; x++) {
     const d = Math.sqrt(x * x + y * y);
-    if (d <= moon.r) px(moon.x + x, moon.y + y, x + y > moon.r * 0.6 ? "#d4c9a2" : "#f3ecd2");
-    else if (d <= moon.r + 1.5) px(moon.x + x, moon.y + y, "#3e3768");
-    else if (d <= moon.r + 3.5) px(moon.x + x, moon.y + y, "#2a2450");
+    // Over the tower top, the moon is the colour of blood.
+    const [lit, dark, rim, halo] = arena ? ["#d84a3a", "#9c2a22", "#5a1a2a", "#3a1430"] : ["#f3ecd2", "#d4c9a2", "#3e3768", "#2a2450"];
+    if (d <= moon.r) px(moon.x + x, moon.y + y, x + y > moon.r * 0.6 ? dark : lit);
+    else if (d <= moon.r + 1.5) px(moon.x + x, moon.y + y, rim);
+    else if (d <= moon.r + 3.5) px(moon.x + x, moon.y + y, halo);
   }
   for (const [cx, cy, r] of [[-3, -2, 2], [3, 3, 1], [-2, 4, 1], [4, -4, 1]]) {
     const k = moon.r / 10;
-    px(moon.x + Math.round(cx * k), moon.y + Math.round(cy * k), "#cbbf96", Math.round(r * k) + 1, Math.round(r * k) + 1);
+    px(moon.x + Math.round(cx * k), moon.y + Math.round(cy * k), arena ? "#a8302a" : "#cbbf96", Math.round(r * k) + 1, Math.round(r * k) + 1);
   }
   // Thin clouds drifting across the sky.
   for (let i = 0; i < 6; i++) {
@@ -2307,22 +2524,30 @@ function drawMinion(m) {
   if (m.flash > 0) drawSprite(sprite(art, pal, m.type, true), centerX(m) * T + lunge, (m.y + m.h) * T + bob, m.face, 0.8);
 }
 
-function drawBoss(b) {
-  const spr = sprite(ART.boss, BOSS_PAL, "boss");
+// Where the Hollow King's eyes are, in canvas pixels.
+function bossEyes(b) {
+  const w = 42, h = 46;
+  const left = Math.round(centerX(b) * T - w / 2), top = Math.round((b.y + b.h) * T - h + 1);
+  return [{ x: left + 16, y: top + 15 }, { x: left + w - 17, y: top + 15 }];
+}
+
+function drawBoss(b, shadow = false) {
+  const pal = shadow ? BOSS_SHADOW_PAL : b.enraged ? BOSS_RAGE_PAL : BOSS_PAL;
+  const spr = sprite(ART.boss, pal, shadow ? "bossShadow" : b.enraged ? "bossRage" : "boss");
   const cx = centerX(b) * T, bottom = (b.y + b.h) * T;
   const breathe = b.onGround && Math.floor(S.time * 2) % 2 ? 1 : 0;
   const top = Math.round(bottom - spr.height + 1);
   const left = Math.round(cx - spr.width / 2);
 
   // The weapon arm hangs off the front shoulder.
-  const sx = b.face > 0 ? left + 24 : left + spr.width - 24, sy = top + 18 + breathe;
+  const sx = b.face > 0 ? left + 34 : left + spr.width - 35, sy = top + 27 + breathe;
 
   // Swing smear: a bright arc traced by the blade.
   if (b.swing > 0) {
     for (let a = -0.5; a <= 2.3; a += 0.06) {
-      for (let r = 11; r <= 17; r++) {
-        ctx.fillStyle = r > 15 ? "#ffffff" : "#ff8a80";
-        ctx.globalAlpha = (b.swing / 0.15) * (r > 15 ? 0.9 : 0.45);
+      for (let r = 12; r <= 25; r++) {
+        ctx.fillStyle = r > 23 ? "#ffffff" : "#ff1744";
+        ctx.globalAlpha = (b.swing / 0.15) * (r > 23 ? 0.9 : 0.35);
         ctx.fillRect(Math.round(sx + b.face * Math.sin(a) * r), Math.round(sy - Math.cos(a) * r), 1, 1);
       }
     }
@@ -2330,10 +2555,21 @@ function drawBoss(b) {
   }
 
   if (S.phase === "over") { drawSprite(spr, cx, bottom, b.face, 0.35); return; }
+  // Roar: rings of force burst out from his head.
+  if (b.roar > 0) {
+    for (const k of [0, 0.25]) {
+      const r = (1.1 - b.roar + k) * 90;
+      if (r <= 0) continue;
+      ctx.globalAlpha = Math.max(0, b.roar - k) * 0.6;
+      ctx.fillStyle = "#ff1744";
+      for (let a = 0; a < Math.PI * 2; a += 0.04) ctx.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(top + 14 + Math.sin(a) * r * 0.6), 2, 1);
+    }
+    ctx.globalAlpha = 1;
+  }
   drawSprite(spr, cx, bottom + breathe, b.face);
   if (b.flash > 0) drawSprite(sprite(ART.boss, BOSS_PAL, "boss", true), cx, bottom + breathe, b.face, 0.7);
 
-  const arm = sprite(ART.cleaverArm, CLEAVER_PAL, "arm");
+  const arm = sprite(ART.cleaverArm, shadow ? Object.fromEntries(Object.keys(CLEAVER_PAL).map(k => [k, "#050308"])) : CLEAVER_PAL, shadow ? "armShadow" : "arm");
   ctx.save();
   ctx.translate(sx, sy);
   ctx.scale(b.face, 1);
@@ -2341,11 +2577,11 @@ function drawBoss(b) {
   ctx.drawImage(arm, -3, -arm.height + 2);
   ctx.restore();
 
-  // Windup: the eyes flare.
-  if (b.windup > 0) {
+  // Windup and roars: the eyes flare.
+  if (b.windup > 0 || b.roar > 0) {
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(left + 10, top + 10 + breathe, 3, 2);
-    ctx.fillRect(left + spr.width - 13, top + 10 + breathe, 3, 2);
+    ctx.fillRect(left + 15, top + 15 + breathe, 3, 1);
+    ctx.fillRect(left + spr.width - 18, top + 15 + breathe, 3, 1);
   }
 }
 
@@ -2409,6 +2645,18 @@ const light = document.createElement("canvas");
 light.width = W * T / 2; light.height = H * T / 2;
 const lctx = light.getContext("2d");
 
+// A blood-red vignette around the edges of the tower top.
+const vignette = document.createElement("canvas");
+vignette.width = W * T; vignette.height = H * T;
+(() => {
+  const g = vignette.getContext("2d");
+  const grad = g.createRadialGradient(W * T / 2, H * T / 2, H * T * 0.35, W * T / 2, H * T / 2, W * T * 0.6);
+  grad.addColorStop(0, "rgba(40,0,6,0)");
+  grad.addColorStop(1, "rgba(60,0,10,0.75)");
+  g.fillStyle = grad;
+  g.fillRect(0, 0, W * T, H * T);
+})();
+
 function drawLighting() {
   lctx.globalCompositeOperation = "source-over";
   lctx.clearRect(0, 0, light.width, light.height);
@@ -2430,6 +2678,7 @@ function drawLighting() {
   for (const h of S.heroes) hole(centerX(h) * T, centerY(h) * T, 40, 0.7);
   if (S.doorFlash > 0 && !inArena()) hole(TOWER_X * T + 6, 8.5 * T, 50, S.doorFlash * 2);
   hole(centerX(S.boss) * T, S.boss.y * T + 14, 56, 0.8);
+  for (const e of bossEyes(S.boss)) hole(e.x, e.y, 14, 1);
   if (!inArena()) for (const t of S.traps) {
     if (t.type === "turret") hole(t.x * T + 8, t.y * T + 8, 18, 0.6);
     if (t.type === "fire" && t.fireOn) hole(t.x * T + 8, t.y * T, 64, 1);
@@ -2450,6 +2699,12 @@ function drawLighting() {
   };
   torches().forEach((t, i) => glow(t.x * T + 8, t.y * T + 6, 22 + Math.sin(S.time * 11 + i) * 2, "rgba(255,140,40,0.22)"));
   for (let x = 0; x < W; x++) if (tileAt(x, H - 1) === "L") glow(x * T + 8, (H - 1) * T + 4, 20, "rgba(255,90,20,0.18)");
+  // The Hollow King's eyes and the soul in his chest burn through the dark.
+  if (S.phase !== "over") {
+    const b = S.boss, k = b.enraged ? 1.25 : 1;
+    for (const e of bossEyes(b)) glow(e.x, e.y, 6 * k, `rgba(255,23,68,${0.5 * k})`);
+    glow(centerX(b) * T, b.y * T + 26, 12 * k, `rgba(255,61,0,${0.22 * k})`);
+  }
   if (!inArena()) for (const t of S.traps) {
     if (t.type === "fire" && t.fireOn) glow(t.x * T + 8, t.y * T, 28, "rgba(255,120,30,0.35)");
     if (t.type === "frost") glow(t.x * T + 8, t.y * T + 4, frostRadius(t.lvl) * T * 0.8, "rgba(80,170,255,0.12)");
@@ -2589,7 +2844,7 @@ function drawHud() {
     drawText(`HEROES ${S.heroes.length}`, 240, 5, "#e6e0ec", { align: "center" });
     // Souls-style boss bar along the bottom during the battle.
     const bw = 300, bx = (W * T - bw) / 2, by = H * T - 9;
-    drawText("LORD OF THE TOWER", bx, by - 10, "#e6e0ec");
+    drawText(`${BOSS_NAME}, ${BOSS_TITLE}`, bx, by - 10, b.enraged ? "#ff8a80" : "#e6e0ec");
     drawMeter(bx, by, bw, 4, b.hp / b.maxHp, "#3b1016", "#c62828", "#ef5350");
     if (b.slamCd > 0) drawText("SLAM", bx + bw, by - 10, "#6b5f75", { align: "right" });
     else drawText("SLAM READY", bx + bw, by - 10, "#ffd54f", { align: "right" });
@@ -2613,7 +2868,7 @@ function drawHud() {
   }
   if (inside > TOWER_LIMIT) drawText(`+${inside - TOWER_LIMIT}`, 281 + TOWER_LIMIT * 9 + 2, 5, "#ff5252");
 
-  drawText("BOSS", W * T - 93, 5, "#ff8a80", { align: "right" });
+  drawText(BOSS_NAME, W * T - 93, 5, "#ff8a80", { align: "right" });
   drawMeter(W * T - 88, 6, 80, 5, b.hp / b.maxHp, "#3b1016", "#c62828", "#ef5350");
 }
 
@@ -2640,8 +2895,8 @@ function drawBanner() {
     // Title card, waiting for the first click (which also switches on the sound).
     const mid = H * T / 2;
     softBand(mid - 4, 42, 0.8);
-    drawText("LORD OF THE TOWER", cx, mid - 30, "#ff8a80", { align: "center", scale: 3, shadow: "#000" });
-    drawText("HEROES ARE COMING FOR YOUR TOWER. STOP THEM.", cx, mid - 3, "#e6e0ec", { align: "center" });
+    drawText(BOSS_TITLE, cx, mid - 30, "#ff5252", { align: "center", scale: 3, shadow: "#000" });
+    drawText("YOU ARE VORGATH. THE ORDER OF THE DAWN IS COMING FOR YOUR TOWER.", cx, mid - 3, "#e6e0ec", { align: "center" });
     if (Math.floor(S.time * 2) % 2 === 0) drawText("CLICK OR PRESS ANY KEY", cx, mid + 12, "#ffd54f", { align: "center" });
     return;
   }
@@ -2649,7 +2904,9 @@ function drawBanner() {
   if (!bn) return;
   if (S.phase === "over") {
     // Souls-style death screen across the middle.
-    const a = Math.min(1, bn.t / 1.2), mid = H * T / 2;
+    S.speech = S.speech.filter(s => bn.t < 0.3);
+    const a = Math.max(0, Math.min(1, bn.t / 1.2)), mid = H * T / 2;
+    if (!a) return;
     softBand(mid, 34, a * 0.9);
     ctx.globalAlpha = a;
     drawText(bn.text, cx, mid - 18, bn.color, { align: "center", scale: 4, shadow: "#000" });
@@ -2698,14 +2955,24 @@ function draw() {
   drawParticles(false);
   drawLighting();
   drawParticles(true);
+  if (arena) {
+    ctx.globalAlpha = 0.7 + Math.max(0, S.pulseRed || 0) * 0.8;
+    ctx.drawImage(vignette, 0, 0);
+    ctx.globalAlpha = 1;
+  }
+  drawStorm();
 
   if (!arena) for (const m of S.minions) if (m.hp < m.maxHp) drawBar(m, 10, "#e53935");
   for (const h of S.heroes) drawBar(h, 12, "#64b5f6");
   drawFloats();
+  drawSpeech();
   ctx.restore();
 
-  drawHud();
-  drawLoot();
+  if (S.phase === "prologue") drawPrologue();
+  else {
+    drawHud();
+    drawLoot();
+  }
   drawBanner();
 
   // Fade to black when moving between the level and the tower top.
@@ -2718,6 +2985,61 @@ function draw() {
     ctx.fillRect(0, 0, W * T, H * T);
     ctx.globalAlpha = 1;
   }
+}
+
+// Lightning: a flash across the sky, a jagged bolt, and the Hollow King black against it.
+function drawStorm() {
+  const L = S.lightning;
+  if (L.flash <= 0 || !L.bolt) return;
+  const a = Math.min(1, L.flash / 0.35);
+  ctx.globalAlpha = a * 0.45;
+  ctx.fillStyle = "#d8d0ff";
+  ctx.fillRect(0, 0, W * T, 96);
+  ctx.globalAlpha = a;
+  for (let i = 1; i < L.bolt.length; i++) {
+    const p = L.bolt[i - 1], q = L.bolt[i], n = Math.max(Math.abs(q.x - p.x), Math.abs(q.y - p.y));
+    for (let k = 0; k <= n; k++) {
+      const x = Math.round(p.x + (q.x - p.x) * k / n), y = Math.round(p.y + (q.y - p.y) * k / n);
+      ctx.fillStyle = "#9c8cff";
+      ctx.fillRect(x - 1, y, 3, 1);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  ctx.globalAlpha = 1;
+  if (L.flash > 0.12) drawBoss(S.boss, true);
+}
+
+function drawSpeech() {
+  for (const s of S.speech) {
+    const e = s.who, w = textWidth(s.text);
+    const x = Math.max(w / 2 + 3, Math.min(W * T - w / 2 - 3, centerX(e) * T));
+    const y = e.isBoss ? (e.y + e.h) * T - 56 : e.y * T - 14;
+    ctx.globalAlpha = Math.min(1, s.t * 3, (2.4 - s.t) * 8);
+    drawText(s.text, x, Math.max(20, y), s.color, { align: "center" });
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawPrologue() {
+  // Darkness over everything but the Hollow King's eyes, and the story typed out line by line.
+  ctx.globalAlpha = 0.82;
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, W * T, H * T);
+  ctx.globalAlpha = 1;
+  for (const e of bossEyes(S.boss)) {
+    ctx.fillStyle = "#ff1744";
+    ctx.fillRect(e.x - 1, e.y, 3, 1);
+  }
+  const p = S.prologue, text = PROLOGUE[p.line];
+  const shown = text.slice(0, Math.floor(p.t * 32));
+  const x = Math.round((W * T - textWidth(text)) / 2);
+  drawText(shown, x, H * T / 2 - 4, "#e6e0ec", { shadow: "#000" });
+  for (let i = 0; i < PROLOGUE.length; i++) {
+    ctx.fillStyle = i === p.line ? "#ff5252" : "#3a3448";
+    ctx.fillRect(W * T / 2 - PROLOGUE.length * 4 + i * 8, H * T / 2 + 14, 4, 2);
+  }
+  if (Math.floor(S.time * 2) % 2 === 0) drawText("CLICK TO CONTINUE", W * T / 2, H * T - 16, "#6b5f75", { align: "center" });
 }
 
 // ---------- toolbar ----------
@@ -2768,9 +3090,9 @@ function updateToolbar() {
     }
   });
   const go = document.getElementById("go");
-  const label = { over: "Play again", build: "Start wave", wave: "Wave in progress", intro: "Here they come...", title: "Click to begin" }[S.phase] || "Boss battle!";
+  const label = { over: "Play again", build: "Start wave", wave: "Wave in progress", intro: "Here they come...", title: "Click to begin", prologue: "Skip" }[S.phase] || "Boss battle!";
   if (go.textContent !== label) go.textContent = label;
-  go.disabled = !["over", "build", "title"].includes(S.phase);
+  go.disabled = !["over", "build", "title", "prologue"].includes(S.phase);
 }
 
 let last = performance.now();
@@ -2780,7 +3102,7 @@ function frame(now) {
   last = now;
   update(dt);
   update(dt);
-  Sound.music({ title: null, over: null, boss: "boss", felled: "boss" }[S.phase] ?? "level");
+  Sound.music({ title: null, prologue: null, over: null, boss: "boss", felled: "boss" }[S.phase] ?? "level");
   draw();
   present();
   updateToolbar();
