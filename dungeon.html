@@ -170,6 +170,7 @@
     Heroes who make it through the door hide inside the tower. Once 5 are inside, they climb up and fight you all at once.<br>
     <b>Build:</b> pick a tool and click the level. Spikes go on the ground; saws and turrets go anywhere, even over the lava pits.
     Click a placed trap to open its tab on the right side of the screen: upgrade it (U) or sell it for half what you paid (X).
+    Only one crusher fits in each column.
     At level 3 you can <b>specialize</b> it down one of two paths (press 1 or 2). Each makes the trap better at one thing and worse
     at another, and changes how it looks: a crusher can become a fast Steam Piston that hits softer, or a slow Obsidian Slab that
     hits harder and sends out a shockwave. The <b>Your traps</b> list below does the same for every trap at once. The path is twice as long as the screen:
@@ -369,6 +370,8 @@ function placeProblem(tool, x, y, existing) {
   if (existing) return null;
   if (kind.needsGround && !isSolid(x, y + 1)) return `${kind.name} needs solid ground under it.`;
   if (kind.needsAir && isSolid(x, y + 1)) return "Crushers need open space below to drop into.";
+  // One crusher per column: stacked crushers would make a wall nothing can get through.
+  if (tool === "crusher" && S.traps.some(t => t.type === "crusher" && t.x === x)) return "There's already a crusher in this column. Only one crusher fits per column.";
   return null;
 }
 // Monsters you summon with souls. unlock: heroes you must kill first, like the traps.
@@ -5888,6 +5891,7 @@ function drawHover() {
     if (placeProblem(S.tool, x, y, existing)) ok = false;
     const lvl = existing ? existing.lvl : 0;
     if (!unlocked(S.tool)) label = "LOCKED";
+    else if (S.tool === "crusher" && S.traps.some(t => t.type === "crusher" && t.x === x)) label = "1 PER COLUMN";
     else {
       label = `${kind.costs[lvl]}C`;
       if (S.coins < kind.costs[lvl]) ok = false;

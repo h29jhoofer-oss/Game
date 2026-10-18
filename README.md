@@ -20,6 +20,7 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
   - **Dark powers** (panel under the toolbar), bought once and kept: *Dark Mending* (key 1, heal 150), *Doom Nova* (key 2, 30 damage to every hero and a 1.5s stun), *Raise the Fallen* (key 3, three dark skeletons fight for 12s) and the passive *Unholy Might* (+150 max health in both forms, abilities recharge 20% faster).
   - **Dark infusion:** click a monster and give it a dark soul (or press I): it turns black and violet with a glowing aura, gets 2.5x health, double damage and 20% more speed, and drains life with every hit.
 - **Manage traps:** click a placed trap and its tab slides in from the right side of the screen: see its stats and what the next level adds, **Upgrade** it (up to level 3, or press U) or **Sell** it for half what you paid (or press X). The *Your traps* list under the toolbar does the same for every trap, with a **Find** button that scrolls to it.
+- **Crushers:** only one crusher fits in each column, so they can't be stacked into a wall.
 - **Specialize:** at level 3 each trap can go down one of two paths (click a card or press 1 / 2). Each path trades one strength for another and gives the trap a new look:
   - Spikes: *Barbed* (heroes bleed, less hit damage) or *Impaler* (double damage and pins heroes, much slower).
   - Saw blade: *Ripper* (huge blade, big damage, slow) or *Patrol Saw* (slides along a rail, less damage).
