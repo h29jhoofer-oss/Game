@@ -129,7 +129,7 @@ const MAP = [
   "..............................",
   "..............................",
   "..............................",
-  "........................######",
+  "..............................",
   "........................######",
   "........................######",
   "........................######",
@@ -157,10 +157,11 @@ const ARENA = [
 const W = 30, H = 12, T = 16;
 const TOWER_X = 24;                    // first column of the tower
 const ARENA_FLOOR = 9;
-const PERCH = { x: 26.2, y: 3 - 1.8 }; // where the boss waits on the tower top
+const TOWER_TOP = 4;
+const PERCH = { x: 26.2, y: TOWER_TOP - 1.8 }; // where the boss waits on the tower top
 const TORCHES = {
-  level: [{ x: 3, y: 7, post: true }, { x: 10, y: 7, post: true }, { x: 17, y: 7, post: true }, { x: 25, y: 5 }, { x: 28, y: 5 }],
-  arena: [{ x: 0, y: 5 }, { x: 29, y: 5 }, { x: 10, y: 7 }, { x: 19, y: 7 }],
+  level: [{ x: 3, y: 7, post: true }, { x: 10, y: 7, post: true }, { x: 17, y: 7, post: true }, { x: 25, y: 6 }, { x: 28, y: 6 }],
+  arena: [{ x: 0, y: 5 }, { x: 29, y: 5 }, { x: 12, y: 7 }, { x: 17, y: 7 }],
 };
 const MOON = { level: { x: 170, y: 38, r: 10 }, arena: { x: 330, y: 40, r: 14 } };
 const FADE = 0.5;
@@ -807,6 +808,7 @@ function bossDied() {
   burst(centerX(b), centerY(b), 40, ["#b71c1c", "#5d0f0f", "#ffeb3b"], 7);
   S.shake = 6;
   b.flash = 0;
+  S.hero.atkAnim = 0;
   S.phase = "over";
   banner("YOU DIED", `Waves survived: ${S.wave - 1}`, "#c62828");
   say(`You were slain by ${S.hero.name} (Lv ${S.hero.lv}). You held out for ${S.wave - 1} wave${S.wave === 2 ? "" : "s"}.`);
@@ -1100,36 +1102,53 @@ function heroSprite(h, white = false) {
   return sprite(art, { A: g.main, a: g.shade }, g.name, white);
 }
 
-// ---------- tiny pixel font (3x5) ----------
-const FONT = {
-  0: [7, 5, 5, 5, 7], 1: [2, 6, 2, 2, 7], 2: [7, 1, 7, 4, 7], 3: [7, 1, 3, 1, 7], 4: [5, 5, 7, 1, 1],
-  5: [7, 4, 7, 1, 7], 6: [7, 4, 7, 5, 7], 7: [7, 1, 1, 2, 2], 8: [7, 5, 7, 5, 7], 9: [7, 5, 7, 1, 7],
-  A: [2, 5, 7, 5, 5], B: [6, 5, 6, 5, 6], C: [3, 4, 4, 4, 3], D: [6, 5, 5, 5, 6], E: [7, 4, 6, 4, 7],
-  F: [7, 4, 6, 4, 4], G: [3, 4, 5, 5, 3], H: [5, 5, 7, 5, 5], I: [7, 2, 2, 2, 7], J: [1, 1, 1, 5, 2],
-  K: [5, 5, 6, 5, 5], L: [4, 4, 4, 4, 7], M: [5, 7, 7, 5, 5], N: [6, 5, 5, 5, 5], O: [2, 5, 5, 5, 2],
-  P: [6, 5, 6, 4, 4], Q: [2, 5, 5, 6, 3], R: [6, 5, 6, 5, 5], S: [3, 4, 2, 1, 6], T: [7, 2, 2, 2, 2],
-  U: [5, 5, 5, 5, 7], V: [5, 5, 5, 5, 2], W: [5, 5, 7, 7, 5], X: [5, 5, 2, 5, 5], Y: [5, 5, 2, 2, 2],
-  Z: [7, 1, 2, 4, 7], "+": [0, 2, 7, 2, 0], "-": [0, 0, 7, 0, 0], "!": [2, 2, 2, 0, 2], ".": [0, 0, 0, 0, 2],
-  ":": [0, 2, 0, 2, 0], "/": [1, 1, 2, 4, 4], " ": [0, 0, 0, 0, 0],
+// ---------- pixel font (5x7) ----------
+const GLYPHS = {
+  A: ".###. #...# #...# ##### #...# #...# #...#", B: "####. #...# #...# ####. #...# #...# ####.",
+  C: ".###. #...# #.... #.... #.... #...# .###.", D: "####. #...# #...# #...# #...# #...# ####.",
+  E: "##### #.... #.... ####. #.... #.... #####", F: "##### #.... #.... ####. #.... #.... #....",
+  G: ".###. #...# #.... #.### #...# #...# .####", H: "#...# #...# #...# ##### #...# #...# #...#",
+  I: ".###. ..#.. ..#.. ..#.. ..#.. ..#.. .###.", J: "..### ...#. ...#. ...#. ...#. #..#. .##..",
+  K: "#...# #..#. #.#.. ##... #.#.. #..#. #...#", L: "#.... #.... #.... #.... #.... #.... #####",
+  M: "#...# ##.## #.#.# #.#.# #...# #...# #...#", N: "#...# #...# ##..# #.#.# #..## #...# #...#",
+  O: ".###. #...# #...# #...# #...# #...# .###.", P: "####. #...# #...# ####. #.... #.... #....",
+  Q: ".###. #...# #...# #...# #.#.# #..#. .##.#", R: "####. #...# #...# ####. #.#.. #..#. #...#",
+  S: ".#### #.... #.... .###. ....# ....# ####.", T: "##### ..#.. ..#.. ..#.. ..#.. ..#.. ..#..",
+  U: "#...# #...# #...# #...# #...# #...# .###.", V: "#...# #...# #...# #...# #...# .#.#. ..#..",
+  W: "#...# #...# #...# #.#.# #.#.# #.#.# .#.#.", X: "#...# #...# .#.#. ..#.. .#.#. #...# #...#",
+  Y: "#...# #...# .#.#. ..#.. ..#.. ..#.. ..#..", Z: "##### ....# ...#. ..#.. .#... #.... #####",
+  0: ".###. #...# #..## #.#.# ##..# #...# .###.", 1: "..#.. .##.. ..#.. ..#.. ..#.. ..#.. .###.",
+  2: ".###. #...# ....# ...#. ..#.. .#... #####", 3: "####. ....# ....# .###. ....# ....# ####.",
+  4: "...#. ..##. .#.#. #..#. ##### ...#. ...#.", 5: "##### #.... ####. ....# ....# #...# .###.",
+  6: ".###. #.... #.... ####. #...# #...# .###.", 7: "##### ....# ...#. ..#.. .#... .#... .#...",
+  8: ".###. #...# #...# .###. #...# #...# .###.", 9: ".###. #...# #...# .#### ....# ....# .###.",
+  "+": "..... ..#.. ..#.. ##### ..#.. ..#.. .....", "-": "..... ..... ..... ##### ..... ..... .....",
+  "!": "..#.. ..#.. ..#.. ..#.. ..#.. ..... ..#..", ".": "..... ..... ..... ..... ..... ..... ..#..",
+  ":": "..... ..#.. ..... ..... ..... ..#.. .....", "/": "....# ...#. ...#. ..#.. .#... .#... #....",
+  "'": "..#.. ..#.. ..... ..... ..... ..... .....", ",": "..... ..... ..... ..... ..... ..#.. .#...",
+  " ": "..... ..... ..... ..... ..... ..... .....",
 };
-const textWidth = (s, scale = 1) => s.length * 4 * scale - scale;
+const FONT = {};
+for (const [ch, rows] of Object.entries(GLYPHS)) {
+  FONT[ch] = [];
+  rows.split(" ").forEach((row, y) => [...row].forEach((c, x) => { if (c === "#") FONT[ch].push([x, y]); }));
+}
+const FONT_H = 7;
+const textWidth = (s, scale = 1) => s.length * 6 * scale - scale;
 
 function drawText(str, x, y, color, { scale = 1, align = "left", shadow = OUTLINE } = {}) {
   str = String(str).toUpperCase();
-  let left = Math.round(align === "center" ? x - textWidth(str, scale) / 2 : align === "right" ? x - textWidth(str, scale) : x);
+  const left = Math.round(align === "center" ? x - textWidth(str, scale) / 2 : align === "right" ? x - textWidth(str, scale) : x);
   const top = Math.round(y);
   const paint = (ox, oy, c) => {
     ctx.fillStyle = c;
     [...str].forEach((ch, i) => {
-      const g = FONT[ch] || FONT[" "];
-      for (let r = 0; r < 5; r++) for (let b = 0; b < 3; b++) {
-        if (g[r] & (4 >> b)) ctx.fillRect(left + ox + (i * 4 + b) * scale, top + oy + r * scale, scale, scale);
-      }
+      for (const [gx, gy] of FONT[ch] || FONT[" "]) ctx.fillRect(left + ox + (i * 6 + gx) * scale, top + oy + gy * scale, scale, scale);
     });
   };
   // Small text gets a 1px outline; big text gets a chunky drop shadow.
   if (shadow && scale === 1) for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [1, 1]]) paint(ox, oy, shadow);
-  else if (shadow) paint(Math.ceil(scale / 2), Math.ceil(scale / 2), shadow);
+  else if (shadow) { paint(scale, scale, shadow); paint(-1, 0, shadow); paint(1, 0, shadow); paint(0, -1, shadow); }
   paint(0, 0, color);
 }
 
@@ -1170,18 +1189,22 @@ function buildBackground(map, arena) {
   for (let y = -moon.r - 4; y <= moon.r + 4; y++) for (let x = -moon.r - 4; x <= moon.r + 4; x++) {
     const d = Math.sqrt(x * x + y * y);
     if (d <= moon.r) px(moon.x + x, moon.y + y, x + y > moon.r * 0.6 ? "#d4c9a2" : "#f3ecd2");
-    else if (d <= moon.r + 4 && (x + y) % 2 === 0) px(moon.x + x, moon.y + y, d < moon.r + 2 ? "#3b3463" : "#2a2350");
+    else if (d <= moon.r + 1.5) px(moon.x + x, moon.y + y, "#3e3768");
+    else if (d <= moon.r + 3.5) px(moon.x + x, moon.y + y, "#2a2450");
   }
   for (const [cx, cy, r] of [[-3, -2, 2], [3, 3, 1], [-2, 4, 1], [4, -4, 1]]) {
     const k = moon.r / 10;
     px(moon.x + Math.round(cx * k), moon.y + Math.round(cy * k), "#cbbf96", Math.round(r * k) + 1, Math.round(r * k) + 1);
   }
   // Thin clouds drifting across the sky.
-  for (let i = 0; i < 7; i++) {
-    const cx = (rand() * W * T) | 0, cy = 30 + ((rand() * 50) | 0), len = 20 + ((rand() * 40) | 0);
-    px(cx, cy, "#221c44", len, 2);
-    px(cx + 6, cy - 1, "#2a2350", len - 12, 1);
-    px(cx + 3, cy + 2, "#1a1538", len - 6, 1);
+  for (let i = 0; i < 6; i++) {
+    const cx = (rand() * W * T) | 0, cy = 34 + ((rand() * 44) | 0), len = 26 + ((rand() * 40) | 0);
+    const puff = Math.round(len * (0.25 + rand() * 0.3));
+    px(cx + puff, cy - 3, "#2c2655", Math.round(len * 0.35), 1);
+    px(cx + puff - 2, cy - 2, "#251f4a", Math.round(len * 0.35) + 4, 2);
+    px(cx + 4, cy, "#251f4a", len - 8, 1);
+    px(cx, cy + 1, "#1d1840", len, 2);
+    px(cx + 3, cy + 3, "#17133a", len - 6, 1);
   }
 
   // Distant mountains: two jagged ridges.
@@ -1223,13 +1246,18 @@ function buildBackground(map, arena) {
       px(x, y - h, hi, w, 1);
     }
   };
-  const wallShades = ["#251f33", "#29223a", "#221c2f", "#2d263f"];
+  const wallShades = ["#1b1726", "#1d1929", "#191523", "#1f1a2b"];
+  // Darken the lower part of a back wall so the foreground pops.
+  const shade = (x0, y0, w, h) => {
+    for (let y = 0; y < h; y += 2) px(x0, y0 + y, `rgba(6,4,12,${(y / h) * 0.55})`, w, 2);
+  };
 
   if (arena) {
     // The low parapet that rings the tower top, with merlons.
-    bricks(T, 116, (W - 2) * T, 28, wallShades, "#17131f");
+    bricks(T, 116, (W - 2) * T, 28, wallShades, "#110e18");
+    shade(T, 116, (W - 2) * T, 28);
     px(T, 116, "#3a3448", (W - 2) * T, 1);
-    merlons(T + 4, (W - 1) * T, 116, 10, 7, 8, "#2d263f", "#4a4258");
+    merlons(T + 4, (W - 1) * T, 116, 10, 7, 8, "#221d30", "#3a3448");
     // Flagpoles with tattered red flags.
     for (const fx of [8 * T, 22 * T]) {
       px(fx, 52, "#3a2a20", 2, 92);
@@ -1243,14 +1271,26 @@ function buildBackground(map, arena) {
     }
   } else {
     // The castle's outer wall behind the path.
-    bricks(0, 96, TOWER_X * T, H * T - 96, wallShades, "#17131f");
-    px(0, 96, "#3a3448", TOWER_X * T, 1);
-    merlons(2, TOWER_X * T, 96, 8, 5, 6, "#2d263f", "#4a4258");
-    for (const sx of [40, 136, 232, 328]) {
-      px(sx - 1, 103, OUTLINE, 4, 11);
-      px(sx, 104, "#7a4a1a", 2, 9);
-      px(sx, 105, "#ffb74d", 2, 6);
+    bricks(0, 96, TOWER_X * T, H * T - 96, wallShades, "#110e18");
+    px(0, 96, "#2e2838", TOWER_X * T, 1);
+    merlons(2, TOWER_X * T, 96, 8, 5, 6, "#221d30", "#3a3448");
+    // Buttresses break up the wall, with a dim arched window between each pair.
+    for (let bx = 56; bx < TOWER_X * T - 8; bx += 96) {
+      px(bx - 1, 92, OUTLINE, 12, H * T);
+      px(bx, 93, "#231e30", 10, H * T);
+      px(bx, 93, "#2e2838", 1, H * T);
+      px(bx - 2, 91, "#2e2838", 14, 2);
+      const wx = bx + 48 - 3;
+      if (wx + 6 > TOWER_X * T - 4) continue;
+      px(wx - 1, 106, OUTLINE, 8, 14);
+      px(wx, 109, "#5a3518", 6, 10);
+      px(wx + 1, 107, "#5a3518", 4, 2);
+      px(wx + 1, 112, "#c77a2e", 4, 7);
+      px(wx + 2, 110, "#c77a2e", 2, 2);
+      px(wx + 2, 114, "#ffb74d", 2, 5);
+      px(wx, 113, "#110e18", 6, 1);
     }
+    shade(0, 97, TOWER_X * T, H * T - 97);
     // Wooden posts holding the path torches.
     for (const t of TORCHES.level) {
       if (!t.post) continue;
@@ -1261,40 +1301,61 @@ function buildBackground(map, arena) {
     }
   }
 
-  // Foreground stone blocks.
-  const stone = arena ? ["#4f4860", "#544c66", "#4a4359", "#58506b"] : ["#4b4559", "#504a5f", "#47415a", "#544d63"];
+  // Foreground stone blocks, lit from above: the deeper the block, the darker it gets.
+  const PALS = {
+    ground: [["#5b546c", "#615a73", "#575068", "#665e78"], ["#4a445a", "#4f4860", "#463f55", "#524b64"], ["#3a3448", "#3e384d", "#373145", "#413a51"]],
+    tower: [["#686178", "#6d6680", "#635c74", "#726a85"], ["#5d566d", "#625a73", "#59526a", "#665e78"], ["#524b62", "#564f67", "#4e475e", "#5a5369"]],
+  };
+  const lavaPit = x => tileIn(map, x, H - 1) === "L";
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       if (!solid(x, y)) continue;
       const X = x * T, Y = y * T;
-      px(X, Y, "#252130", T, T);
+      const tower = !arena && x >= TOWER_X;
+      let depth = 0;
+      while (y - depth - 1 >= 0 && solid(x, y - depth - 1)) depth++;
+      const pal = tower ? PALS.tower[Math.min(2, Math.floor(depth / 3))] : PALS.ground[Math.min(2, depth)];
+      px(X, Y, tower ? "#2c2738" : "#1e1a28", T, T);
       for (let by = 0; by < 2; by++) {
         const off = (x + y + by) % 2 ? 8 : 0;
         for (let bx = -1; bx < 2; bx++) {
           const sx = X + bx * 16 + off, sy = Y + by * 8;
           const l = Math.max(sx + 1, X), r = Math.min(sx + 16, X + T);
           if (r <= l) continue;
-          px(l, sy + 1, stone[(rand() * stone.length) | 0], r - l, 6);
-          px(l, sy + 1, "#665e78", r - l, 1);
-          px(l, sy + 6, "#3a3448", r - l, 1);
-          if (rand() < 0.15) px(l + 2 + ((rand() * 6) | 0), sy + 3, "#3a3448", 2, 1);
+          const col = pal[(rand() * pal.length) | 0];
+          px(l, sy + 1, col, r - l, 6);
+          px(l, sy + 1, depth === 0 && !tower ? "#7a7290" : tower ? "#7f7894" : pal[3], r - l, 1);
+          px(l, sy + 6, "#2c2738", r - l, 1);
+          if (rand() < 0.12) px(l + 2 + ((rand() * 8) | 0), sy + 3, "#2c2738", 2, 1);
         }
       }
       const air = (dx, dy) => !solid(x + dx, y + dy) && y + dy >= 0 && y + dy < H && x + dx >= 0 && x + dx < W;
       if (air(0, -1)) {
-        px(X, Y, "#7c7392", T, 2);
-        px(X, Y + 2, "#3a3448", T, 1);
-        // Moss grows on the open ground, not on the tower's stonework.
-        if (!arena && x < TOWER_X) {
+        px(X, Y, tower || arena ? "#8a82a0" : "#7c7392", T, 2);
+        px(X, Y + 2, "#2c2738", T, 1);
+        if (!arena && !tower) {
+          // A grassy lip, with blades poking up past the edge.
+          px(X, Y, "#4e7a3f", T, 1);
           for (let i = 0; i < T; i++) {
-            if (rand() < 0.45) px(X + i, Y, rand() < 0.5 ? "#4e7a3f" : "#5f8f4a");
-            if (rand() < 0.18) px(X + i, Y + 1, "#3f6534", 1, 1 + ((rand() * 3) | 0));
+            if (rand() < 0.5) px(X + i, Y + 1, rand() < 0.5 ? "#3f6534" : "#4e7a3f");
+            if (rand() < 0.3) px(X + i, Y - 1, rand() < 0.5 ? "#5f8f4a" : "#4e7a3f");
+            if (rand() < 0.08) px(X + i, Y - 2, "#76a85a");
+            if (rand() < 0.1) px(X + i, Y + 2, "#3f6534", 1, 1 + ((rand() * 3) | 0));
           }
         }
       }
-      if (air(-1, 0)) px(X, Y, "#2a2533", 1, T);
+      if (air(-1, 0)) px(X, Y, tower ? "#8a82a0" : "#2a2533", 1, T);
       if (air(1, 0)) px(X + T - 1, Y, "#1c1924", 1, T);
       if (air(0, 1)) px(X, Y + T - 1, "#1c1924", T, 1);
+      // Pit walls glow orange from the lava below.
+      for (const side of [-1, 1]) {
+        if (!air(side, 0) || !lavaPit(x + side)) continue;
+        const a = [0.08, 0.2, 0.38][Math.max(0, y - (H - 3))] || 0;
+        if (!a) continue;
+        for (let i = 0; i < 4; i++) {
+          px(side < 0 ? X + i : X + T - 1 - i, Y, `rgba(255,120,40,${a * (1 - i / 4)})`, 1, T);
+        }
+      }
     }
   }
 
@@ -1318,9 +1379,9 @@ function buildBackground(map, arena) {
     px(1 * T + 3, ARENA_FLOOR * T - 10, "#3b3746", 2, 1);
   } else {
     // The tower: battlements on top, a banner, a lit window and the door at its foot.
-    merlons(TOWER_X * T + 1, W * T, 3 * T, 7, 6, 4, "#544d63", "#7c7392");
-    skullBanner(26 * T + 3, 3 * T + 6, 20, 38);
-    const wx = 27 * T - 3, wy = 7 * T;
+    merlons(TOWER_X * T + 1, W * T, TOWER_TOP * T, 7, 6, 4, "#5f5872", "#8a82a0");
+    skullBanner(26 * T + 3, TOWER_TOP * T + 6, 20, 34);
+    const wx = 28 * T + 5, wy = 8 * T;
     px(wx - 1, wy - 1, OUTLINE, 8, 13);
     px(wx, wy + 2, "#ffb74d", 6, 10);
     px(wx + 1, wy, "#ffb74d", 4, 2);
@@ -1368,23 +1429,27 @@ function drawLava() {
 function drawTorches() {
   for (const [i, t] of torches().entries()) {
     const X = t.x * T + 8, Y = t.y * T + 10;
-    ctx.fillStyle = "#2e2a38";
-    ctx.fillRect(X - 2, Y, 4, 2);
+    // Iron bowl on a short stem.
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(X - 4, Y - 1, 8, 4);
+    ctx.fillRect(X - 2, Y + 3, 4, 4);
     ctx.fillStyle = "#4a4458";
+    ctx.fillRect(X - 3, Y, 6, 2);
     ctx.fillRect(X - 1, Y + 2, 2, 4);
-    ctx.fillStyle = "#5d4037";
-    ctx.fillRect(X - 1, Y - 2, 2, 2);
-    const f = Math.floor(S.time * 10 + i * 3) % 3;
+    ctx.fillStyle = "#6b6378";
+    ctx.fillRect(X - 3, Y, 6, 1);
+    const f = Math.floor(S.time * 8 + i * 3) % 4;
     const flame = [
-      ["..y..", ".yYy.", "yYWYy", ".yYy."],
-      [".y...", "..yy.", ".yWYy", ".yYy."],
-      ["...y.", ".yy..", "yYWy.", ".yYy."],
+      ["...y...", "..yy...", "..yYy..", ".yYYy..", ".yYWYy.", "yYWWWYy", ".yYWYy."],
+      ["..y....", "...y...", "..yYy..", "..yYYy.", ".yYWYy.", "yYWWWYy", ".yYWYy."],
+      ["....y..", "...yy..", "..yYy..", ".yYYy..", ".yYWYy.", "yYWWWYy", ".yYWYy."],
+      ["...y...", "...yy..", "..yYy..", ".yYYYy.", ".yYWYy.", "yYWWWYy", ".yYWYy."],
     ][f];
     const cols = { y: "#ff6f00", Y: "#ffb300", W: "#fff3c4" };
     flame.forEach((row, ry) => [...row].forEach((ch, rx) => {
       if (ch === ".") return;
       ctx.fillStyle = cols[ch];
-      ctx.fillRect(X - 2 + rx, Y - 6 + ry, 1, 1);
+      ctx.fillRect(X - 3 + rx, Y - 7 + ry, 1, 1);
     }));
   }
 }
@@ -1435,6 +1500,22 @@ function drawTrap(t, alpha = 1) {
     ctx.globalAlpha = 1;
     drawSaw(X + 8, Y + 8, t.lvl, S.time * (t.flash > 0 ? 30 : 14), alpha);
   } else {
+    // A carved stone pillar from the ground holds up the gargoyle.
+    let bot = t.y;
+    while (bot < H - 1 && !isSolid(t.x, bot + 1)) bot++;
+    const ph = (bot + 1) * T - (Y + 13);
+    if (ph > 0) {
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(X + 4, Y + 13, 8, ph);
+      ctx.fillStyle = "#4a4456";
+      ctx.fillRect(X + 5, Y + 13, 6, ph);
+      ctx.fillStyle = "#6b6378";
+      ctx.fillRect(X + 5, Y + 13, 1, ph);
+      ctx.fillStyle = "#2e2a38";
+      for (let yy = Y + 18; yy < Y + 13 + ph; yy += 8) ctx.fillRect(X + 5, yy, 6, 1);
+      ctx.globalAlpha = 1;
+    }
     const eye = t.flash > 0 ? "#ffffff" : TURRET_EYES[t.lvl - 1];
     const spr = sprite(ART.turret, { S: "#6b6378", s: "#4a4456", Y: eye, k: "#3b0a0d" }, "turret" + eye);
     drawSprite(spr, X + 8, Y + T - 1, t.face || -1, alpha);
@@ -1460,6 +1541,19 @@ function drawBar(e, width, color) {
   ctx.fillRect(x, y, Math.max(0, Math.round(width * e.hp / e.maxHp)), 2);
   ctx.fillStyle = "#ffffff55";
   ctx.fillRect(x, y, Math.max(0, Math.round(width * e.hp / e.maxHp)), 1);
+}
+
+// A soft shadow on the ground under a character, shrinking as it rises.
+function drawShadow(e) {
+  const fx = Math.floor(centerX(e));
+  let gy = Math.floor(e.y + e.h - 0.01);
+  while (gy < H && !isSolid(fx, gy)) gy++;
+  const lift = gy - (e.y + e.h);
+  if (gy >= H || lift > 3) return;
+  const w = Math.round(e.w * T * (1 - lift / 4)) + 2, x = Math.round(centerX(e) * T - w / 2), y = gy * T;
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.fillRect(x + 1, y - 1, w - 2, 1);
+  ctx.fillRect(x, y, w, 1);
 }
 
 function drawMinion(m) {
@@ -1592,7 +1686,7 @@ function drawLighting() {
   torches().forEach((t, i) => hole(t.x * T + 8, t.y * T + 6, 70 + Math.sin(S.time * 9 + i * 2) * 3));
   for (let x = 0; x < W; x++) if (tileAt(x, H - 1) === "L") hole(x * T + 8, (H - 1) * T + 4, 44, 0.9);
   if (S.hero) hole(centerX(S.hero) * T, centerY(S.hero) * T, 40, 0.7);
-  hole(centerX(S.boss) * T, S.boss.y * T + 12, 36, 0.6);
+  hole(centerX(S.boss) * T, S.boss.y * T + 14, 56, 0.8);
   for (const t of S.traps) if (t.type === "turret") hole(t.x * T + 8, t.y * T + 8, 18, 0.6);
 
   ctx.imageSmoothingEnabled = false;
@@ -1652,97 +1746,105 @@ function drawHover() {
     ctx.fillRect(x * T + cx + dx, y * T + cy, 1, 1);
     ctx.fillRect(x * T + cx, y * T + cy + dy, 1, 1);
   }
-  if (label && canBuild(x, y)) drawText(label, x * T + 8, y * T - 7, ok ? "#ffffff" : "#ff8a80", { align: "center" });
+  if (label && canBuild(x, y)) drawText(label, x * T + 8, y * T - 10, ok ? "#ffffff" : "#ff8a80", { align: "center" });
+}
+
+function drawMeter(x, y, w, h, frac, back, fill, shine) {
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+  ctx.fillStyle = back;
+  ctx.fillRect(x, y, w, h);
+  const fw = Math.max(0, Math.round(w * frac));
+  ctx.fillStyle = fill;
+  ctx.fillRect(x, y, fw, h);
+  ctx.fillStyle = shine;
+  ctx.fillRect(x, y, fw, 1);
 }
 
 function drawHud() {
-  // Ceiling strip with resources, the hero's name bar, and the boss bar.
-  ctx.fillStyle = "rgba(8,4,14,0.75)";
-  ctx.fillRect(0, 0, W * T, 14);
+  // Top strip: resources on the left, the hero in the middle, the boss on the right.
+  ctx.fillStyle = "rgba(8,4,14,0.8)";
+  ctx.fillRect(0, 0, W * T, 16);
   ctx.fillStyle = "#2e2838";
-  ctx.fillRect(0, 14, W * T, 1);
+  ctx.fillRect(0, 16, W * T, 1);
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
+  ctx.fillRect(0, 17, W * T, 1);
 
   const pc = S.pulse.coins > 0 ? -1 : 0, ps = S.pulse.souls > 0 ? -1 : 0;
-  drawSprite(sprite(ART.coin, ICON_PAL, "coin"), 10, 11 + pc);
-  drawText(S.coins, 17, 4 + pc, "#ffd54f");
-  drawSprite(sprite(ART.soul, SOUL_PAL, "soul"), 49, 11 + ps);
-  drawText(S.souls, 56, 4 + ps, "#6fd3ff");
-  drawText(`WAVE ${S.wave}`, 82, 4, "#e6e0ec");
+  drawSprite(sprite(ART.coin, ICON_PAL, "coin"), 10, 12 + pc);
+  drawText(S.coins, 18, 5 + pc, "#ffd54f");
+  drawSprite(sprite(ART.soul, SOUL_PAL, "soul"), 48, 12 + ps);
+  drawText(S.souls, 56, 5 + ps, "#6fd3ff");
+  drawText(`WAVE ${S.wave}`, 80, 5, "#e6e0ec");
 
-  const h = S.hero;
+  const h = S.hero, b = S.boss;
   if (h) {
-    const label = `${h.name}  LV ${h.lv}`;
-    drawText(label, 240, 2, "#e6e0ec", { align: "center" });
-    const bw = 120, bx = 240 - bw / 2;
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(bx - 1, 8, bw + 2, 5);
-    ctx.fillStyle = "#1e2a3a";
-    ctx.fillRect(bx, 9, bw, 3);
-    ctx.fillStyle = "#64b5f6";
-    ctx.fillRect(bx, 9, Math.max(0, Math.round(bw * h.hp / h.maxHp)), 3);
-    ctx.fillStyle = "#bbdefb";
-    ctx.fillRect(bx, 9, Math.max(0, Math.round(bw * h.hp / h.maxHp)), 1);
+    drawText(`${h.name} LV${h.lv}`, 236, 5, "#e6e0ec", { align: "right" });
+    drawMeter(242, 6, 100, 5, h.hp / h.maxHp, "#1e2a3a", "#64b5f6", "#bbdefb");
   } else if (S.phase === "build") {
-    drawText("BUILD PHASE", 240, 4, "#9cff9c", { align: "center" });
+    drawText("BUILD PHASE", 240, 5, "#9cff9c", { align: "center" });
   }
 
-  const b = S.boss;
   if (inArena()) {
     // Souls-style boss bar along the bottom during the battle.
-    const bw = 300, bx = (W * T - bw) / 2, by = H * T - 10;
-    drawText("LORD OF THE TOWER", bx, by - 8, "#e6e0ec");
-    ctx.fillStyle = OUTLINE;
-    ctx.fillRect(bx - 1, by - 1, bw + 2, 6);
-    ctx.fillStyle = "#3b1016";
-    ctx.fillRect(bx, by, bw, 4);
-    ctx.fillStyle = "#c62828";
-    ctx.fillRect(bx, by, Math.max(0, Math.round(bw * b.hp / b.maxHp)), 4);
-    ctx.fillStyle = "#ef5350";
-    ctx.fillRect(bx, by, Math.max(0, Math.round(bw * b.hp / b.maxHp)), 1);
-    if (b.slamCd > 0) drawText("SLAM", bx + bw, by - 8, "#6b5f75", { align: "right" });
-    else drawText("SLAM READY", bx + bw, by - 8, "#ffd54f", { align: "right" });
+    const bw = 300, bx = (W * T - bw) / 2, by = H * T - 9;
+    drawText("LORD OF THE TOWER", bx, by - 10, "#e6e0ec");
+    drawMeter(bx, by, bw, 4, b.hp / b.maxHp, "#3b1016", "#c62828", "#ef5350");
+    if (b.slamCd > 0) drawText("SLAM", bx + bw, by - 10, "#6b5f75", { align: "right" });
+    else drawText("SLAM READY", bx + bw, by - 10, "#ffd54f", { align: "right" });
     return;
   }
-  const bw = 80, bx = W * T - bw - 8;
-  drawText("BOSS", bx - 4, 4, "#ff8a80", { align: "right" });
-  ctx.fillStyle = OUTLINE;
-  ctx.fillRect(bx - 1, 4, bw + 2, 7);
-  ctx.fillStyle = "#3b1016";
-  ctx.fillRect(bx, 5, bw, 5);
-  ctx.fillStyle = "#c62828";
-  ctx.fillRect(bx, 5, Math.max(0, Math.round(bw * b.hp / b.maxHp)), 5);
-  ctx.fillStyle = "#ef5350";
-  ctx.fillRect(bx, 5, Math.max(0, Math.round(bw * b.hp / b.maxHp)), 1);
+  drawText("BOSS", W * T - 93, 5, "#ff8a80", { align: "right" });
+  drawMeter(W * T - 88, 6, 80, 5, b.hp / b.maxHp, "#3b1016", "#c62828", "#ef5350");
 }
 
 function drawFloats() {
   for (const f of S.floats) {
-    const pop = f.t > 0.75 ? 2 : 1;
+    const pop = f.t > 0.8 ? -2 : 0;
     ctx.globalAlpha = Math.min(1, f.t * 3);
-    drawText(f.text, f.x * T, f.y * T - 4, f.color, { align: "center", scale: pop });
+    drawText(f.text, f.x * T, f.y * T - 6 + pop, f.color, { align: "center" });
   }
   ctx.globalAlpha = 1;
+}
+
+// A band that fades out at the top and bottom edges.
+function softBand(cy, half, alpha) {
+  for (let i = -half; i < half; i += 2) {
+    ctx.fillStyle = `rgba(0,0,0,${alpha * (1 - Math.abs(i) / half)})`;
+    ctx.fillRect(0, cy + i, W * T, 2);
+  }
 }
 
 function drawBanner() {
   const bn = S.banner;
   if (!bn) return;
-  const persist = S.phase === "over";
-  const life = persist ? Math.min(bn.t, 1.5) : bn.t;
-  if (!persist && life > 2.4) { S.banner = null; return; }
-  const a = persist ? Math.min(1, life / 1.2) : Math.min(1, life * 4, (2.4 - life) * 3);
-  ctx.globalAlpha = a * 0.75;
-  ctx.fillStyle = "#000";
-  const top = H * T / 2 - 23;
-  ctx.fillRect(0, top, W * T, 46);
+  const cx = W * T / 2;
+  if (S.phase === "over") {
+    // Souls-style death screen across the middle.
+    const a = Math.min(1, bn.t / 1.2), mid = H * T / 2;
+    softBand(mid, 34, a * 0.9);
+    ctx.globalAlpha = a;
+    drawText(bn.text, cx, mid - 18, bn.color, { align: "center", scale: 4, shadow: "#000" });
+    drawText(bn.sub, cx, mid + 16, "#e6e0ec", { align: "center" });
+    drawText("PRESS PLAY AGAIN", cx, mid + 27, "#8a8296", { align: "center" });
+    ctx.globalAlpha = 1;
+    return;
+  }
+  const life = bn.t;
+  if (life > 2.4) { S.banner = null; return; }
+  // Announcements sit up in the sky, out of the way of the action.
+  const a = Math.min(1, life * 4, (2.4 - life) * 3);
+  const y = 34 - Math.round(Math.max(0, 1 - life * 6) * 6);
+  softBand(y + 16, 26, a * 0.55);
   ctx.globalAlpha = a;
+  drawText(bn.text, cx, y, bn.color, { align: "center", scale: 3, shadow: "#000" });
+  const lw = Math.round(Math.min(1, life * 3) * (textWidth(bn.text, 3) + 60));
   ctx.fillStyle = bn.color;
-  ctx.fillRect(0, top, W * T, 1);
-  ctx.fillRect(0, top + 45, W * T, 1);
-  const scale = persist ? 5 : 4;
-  drawText(bn.text, W * T / 2, top + 8, bn.color, { align: "center", scale, shadow: "#000" });
-  drawText(bn.sub, W * T / 2, top + 8 + scale * 5 + 6, "#e6e0ec", { align: "center" });
-  if (persist) drawText("PRESS PLAY AGAIN", W * T / 2, top + 52, "#8a8296", { align: "center" });
+  ctx.fillRect(Math.round(cx - lw / 2) + 4, y + 25, lw - 8, 1);
+  ctx.globalAlpha = a * 0.5;
+  ctx.fillRect(Math.round(cx - lw / 2), y + 25, lw, 1);
+  ctx.globalAlpha = a;
+  drawText(bn.sub, cx, y + 30, "#e6e0ec", { align: "center" });
   ctx.globalAlpha = 1;
 }
 
@@ -1759,8 +1861,9 @@ function draw() {
     S.traps.forEach(t => drawTrap(t));
     S.arrows.forEach(drawArrow);
     drawHover();
-    S.minions.forEach(drawMinion);
   }
+  for (const e of [S.boss, S.hero, ...(arena ? [] : S.minions)]) if (e) drawShadow(e);
+  if (!arena) S.minions.forEach(drawMinion);
   drawBoss(S.boss);
   if (S.hero) drawHero(S.hero);
   S.waves.forEach(drawWave);
@@ -1769,7 +1872,6 @@ function draw() {
   drawParticles(true);
 
   if (!arena) for (const m of S.minions) if (m.hp < m.maxHp) drawBar(m, 10, "#e53935");
-  if (S.hero) drawBar(S.hero, 12, "#64b5f6");
   drawFloats();
   ctx.restore();
 
