@@ -26,8 +26,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 14px;
-    padding: 12px 16px;
+    gap: 6px;
+    padding: 6px 12px;
     background: radial-gradient(ellipse at top, #1d1526 0%, var(--bg) 70%);
     color: var(--text);
     font-family: "Press Start 2P", "Courier New", monospace;
@@ -35,12 +35,12 @@
   }
   h1 {
     margin: 0;
-    font-size: 22px;
+    font-size: 13px;
     letter-spacing: 3px;
     color: var(--accent);
     text-shadow: 3px 3px 0 #3b0a0d;
   }
-  .wrap { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .wrap { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .frame {
     padding: 4px;
     background: #000;
@@ -54,7 +54,7 @@
     image-rendering: crisp-edges;
     cursor: crosshair;
   }
-  #tools { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; max-width: 100%; }
+  #tools { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; max-width: min(1400px, 100%); }
   button {
     font: inherit;
     font-size: 10px;
@@ -79,20 +79,23 @@
   button.locked canvas { filter: grayscale(1) brightness(0.5); }
   button.locked .cost { color: #8a8296; }
   button.fresh { box-shadow: inset 0 0 0 2px #9cff9c, inset 2px 2px 0 2px #d4ffd4, 0 4px 0 #000; }
+  /* Tool buttons are kept small so the game screen gets the room. */
+  #tools button { font-size: 7px; line-height: 1.5; gap: 4px; padding: 3px 6px 3px 3px; }
+  #tools button canvas { width: 20px; height: 20px; }
   button canvas { width: 32px; height: 32px; cursor: inherit; }
-  .cost { display: block; font-size: 9px; }
+  .cost { display: block; font-size: 6px; }
   .cost.c { color: var(--coin); }
   .cost.s { color: var(--soul); }
-  button#go {
-    min-width: 240px;
+  #tools button#go {
+    min-width: 150px;
     justify-content: center;
-    padding: 12px 18px;
-    font-size: 12px;
+    padding: 6px 12px;
+    font-size: 9px;
     background: #6b1a1a;
     box-shadow: inset 0 0 0 2px #e0574f, inset 2px 2px 0 2px #ff8a80, 0 4px 0 #000;
   }
   button#go:hover { background: #7f2020; }
-  button.toggle { font-size: 9px; padding: 8px 10px; }
+  #tools button.toggle { font-size: 7px; padding: 6px 8px; }
   button.toggle.off { color: var(--dim); }
   button:disabled { opacity: 0.45; cursor: default; transform: none; }
   #msg { min-height: 1.6em; font-size: 10px; line-height: 1.6; text-align: center; color: #cfc6da; max-width: 960px; }
@@ -143,6 +146,10 @@
     <button data-tool="crusher"><canvas width="16" height="16"></canvas><span>Crusher<span class="cost c">14 coins</span></span></button>
     <button data-tool="mine"><canvas width="16" height="16"></canvas><span>Bomb<span class="cost c">6 coins</span></span></button>
     <button data-tool="frost"><canvas width="16" height="16"></canvas><span>Frost totem<span class="cost c">10 coins</span></span></button>
+    <button data-tool="spring"><canvas width="16" height="16"></canvas><span>Spring trap<span class="cost c">8 coins</span></span></button>
+    <button data-tool="tar"><canvas width="16" height="16"></canvas><span>Tar pit<span class="cost c">7 coins</span></span></button>
+    <button data-tool="tesla"><canvas width="16" height="16"></canvas><span>Tesla coil<span class="cost c">16 coins</span></span></button>
+    <button data-tool="pendulum"><canvas width="16" height="16"></canvas><span>Pendulum<span class="cost c">15 coins</span></span></button>
     <button data-tool="skeleton"><canvas width="16" height="16"></canvas><span>Skeleton<span class="cost s">1 soul</span></span></button>
     <button data-tool="ogre"><canvas width="16" height="16"></canvas><span>Ogre<span class="cost s">3 souls</span></span></button>
     <button data-tool="imp"><canvas width="16" height="16"></canvas><span>Imp<span class="cost s">2 souls</span></span></button>
@@ -170,7 +177,10 @@
     Heroes who make it through the door hide inside the tower. Once 5 are inside, they climb up and fight you all at once.<br>
     <b>Build:</b> pick a tool and click the level. Spikes go on the ground; saws and turrets go anywhere, even over the lava pits.
     Click a placed trap to open its tab on the right side of the screen: upgrade it (U) or sell it for half what you paid (X).
-    Only one crusher fits in each column.
+    Only one crusher fits in each column. More traps unlock with kills: <b>spring traps</b> (8) fling heroes back the way they came,
+    <b>tar pits</b> (12) slow heroes and make fire hurt them more, <b>tesla coils</b> (20) shoot lightning that chains between heroes,
+    and <b>pendulums</b> (25) swing a blade under their mount. Any trap can also be <b>infused with a dark soul</b> (Infuse in its tab, or I):
+    +75% damage, 25% faster, 20% more reach.
     At level 3 you can <b>specialize</b> it down one of two paths (press 1 or 2). Each makes the trap better at one thing and worse
     at another, and changes how it looks: a crusher can become a fast Steam Piston that hits softer, or a slow Obsidian Slab that
     hits harder and sends out a shockwave. The <b>Your traps</b> list below does the same for every trap at once. The path is twice as long as the screen:
@@ -288,7 +298,13 @@ const TRAPS = {
   crusher: { name: "Crusher",      costs: [14, 16, 22], dmg: 18, needsAir: true, unlock: 6 },
   mine:    { name: "Bomb",         costs: [6, 9, 12],   dmg: 25, needsGround: true, unlock: 10 },
   frost:   { name: "Frost totem",  costs: [10, 14, 18], needsGround: true, unlock: 15 },
+  spring:  { name: "Spring trap",  costs: [8, 11, 15],  dmg: 2, cd: 2.4, needsGround: true, unlock: 8 },
+  tar:     { name: "Tar pit",      costs: [7, 10, 14],  needsGround: true, unlock: 12 },
+  tesla:   { name: "Tesla coil",   costs: [16, 20, 26], dmg: 9, needsGround: true, unlock: 20 },
+  pendulum: { name: "Pendulum",    costs: [15, 19, 25], dmg: 14, cd: 0.6, needsAir: true, unlock: 25 },
 };
+// A dark soul can be given to any trap too, at any level: harder hits, faster cycles, wider reach.
+const DARK_TRAP = { dmg: 1.75, cd: 0.75, reach: 1.2 };
 const unlocked = tool => { const k = TRAPS[tool] || MINIONS[tool]; return !k || S.kills >= (k.unlock || 0); };
 const lockMessage = tool => { const k = TRAPS[tool] || MINIONS[tool]; return `${k.name} unlocks after killing ${k.unlock} hero${k.unlock > 1 ? "es" : ""}.`; };
 // Fire vents erupt on a cycle; crushers drop when a hero walks under; frost slows anyone nearby.
@@ -336,6 +352,30 @@ const TRAP_PATHS = {
     { id: "keg", name: "Powder Keg", color: "#ff8a65", cost: 18, mods: { dmg: 1.6, radius: 1.7 }, fuse: 0.5,
       pros: ["+60% DAMAGE", "+70% BLAST SIZE"], cons: ["0.5S FUSE"] },
   ],
+  spring: [
+    { id: "catapult", name: "Catapult", color: "#ffb74d", cost: 20, mods: { throw: 1.6, cd: 1.5 },
+      pros: ["THROWS 60% FARTHER"], cons: ["RESETS 1.5X SLOWER"] },
+    { id: "rapid", name: "Rapid Spring", color: "#9cff9c", cost: 20, mods: { throw: 0.75, cd: 0.4 },
+      pros: ["RESETS 2.5X FASTER"], cons: ["-25% THROW"] },
+  ],
+  tar: [
+    { id: "glue", name: "Glue Trap", color: "#ffca28", cost: 18, mods: { slow: 1.45 },
+      pros: ["+45% SLOW"], cons: ["NO FIRE BONUS"] },
+    { id: "burning", name: "Burning Tar", color: "#ff6d00", cost: 18, mods: { slow: 0.6 },
+      pros: ["SETS HEROES ALIGHT"], cons: ["-40% SLOW"] },
+  ],
+  tesla: [
+    { id: "storm", name: "Storm Coil", color: "#80d8ff", cost: 30, mods: { dmg: 0.6 }, chains: 5,
+      pros: ["CHAINS TO 6 HEROES"], cons: ["-40% DAMAGE"] },
+    { id: "lance", name: "Lance Coil", color: "#ff5252", cost: 30, mods: { dmg: 2.5, range: 1.5, cd: 1.3 }, chains: 0,
+      pros: ["+150% DAMAGE", "+50% RANGE"], cons: ["NO CHAIN, SLOWER"] },
+  ],
+  pendulum: [
+    { id: "executioner", name: "Executioner", color: "#e0e0e0", cost: 30, mods: { dmg: 2, speed: 0.6 },
+      pros: ["+100% DAMAGE", "HUGE BLADE"], cons: ["SWINGS SLOWER"] },
+    { id: "twin", name: "Twin Blades", color: "#b388ff", cost: 30, mods: { dmg: 0.7 },
+      pros: ["TWO BLADES"], cons: ["-30% DAMAGE"] },
+  ],
   frost: [
     { id: "blizzard", name: "Blizzard", color: "#e1f5fe", cost: 26, mods: { radius: 1.5, slow: 0.7 },
       pros: ["+50% RANGE"], cons: ["-30% SLOW"] },
@@ -346,11 +386,27 @@ const TRAP_PATHS = {
 const pathInfo = (type, id) => id ? TRAP_PATHS[type].find(p => p.id === id) : null;
 
 // Every number a trap uses, for its level and path.
-function trapNums(type, lvl, pathId) {
+function trapNums(type, lvl, pathId, dark = false) {
+  const n = baseTrapNums(type, lvl, pathId);
+  if (!dark) return n;
+  // Dark infusion: everything a little deadlier.
+  const d = Object.assign({}, n);
+  if (d.dmg) d.dmg = Math.round(d.dmg * DARK_TRAP.dmg);
+  for (const key of ["cd", "period"]) if (d[key]) d[key] *= DARK_TRAP.cd;
+  for (const key of ["radius", "range", "throw", "speed", "rise"]) if (d[key]) d[key] *= DARK_TRAP.reach;
+  if (d.slow) d.slow = Math.min(0.85, d.slow * DARK_TRAP.reach);
+  if (d.fall) d.fall *= DARK_TRAP.reach;
+  return d;
+}
+function baseTrapNums(type, lvl, pathId) {
   const k = TRAPS[type], p = pathInfo(type, pathId);
-  const m = Object.assign({ dmg: 1, cd: 1, period: 1, rise: 1, fall: 1, radius: 1, slow: 1 }, p && p.mods);
+  const m = Object.assign({ dmg: 1, cd: 1, period: 1, rise: 1, fall: 1, radius: 1, slow: 1, throw: 1, range: 1, speed: 1 }, p && p.mods);
   const dmg = Math.round((k.dmg || 0) * lvl * m.dmg);
   switch (type) {
+    case "spring": return { dmg, cd: k.cd * m.cd, throw: (1 + 0.15 * (lvl - 1)) * m.throw };
+    case "tar": return { slow: Math.min(0.85, (0.25 + 0.1 * lvl) * m.slow), burn: pathId === "burning", fireBonus: pathId !== "glue" };
+    case "tesla": return { dmg, cd: (2.4 - 0.3 * (lvl - 1)) * m.cd, range: 4 * m.range, chains: p && p.chains !== undefined ? p.chains : 2 };
+    case "pendulum": return { dmg, cd: k.cd, speed: (1.8 + 0.25 * (lvl - 1)) * m.speed, blades: pathId === "twin" ? 2 : 1, big: pathId === "executioner" };
     case "spike": case "saw": return { dmg, cd: k.cd * m.cd };
     case "turret": return { dmg, cd: (1.6 - 0.4 * (lvl - 1)) * m.cd };
     case "fire": return { dmg, period: firePeriod(lvl) * m.period, always: pathId === "ember", tall: pathId === "pillar" ? 3 : 2 };
@@ -360,7 +416,7 @@ function trapNums(type, lvl, pathId) {
   }
   return {};
 }
-const numsOf = t => trapNums(t.type, t.lvl, t.path);
+const numsOf = t => trapNums(t.type, t.lvl, t.path, t.dark);
 
 // Why a trap can't go on a tile, or null if it can.
 function placeProblem(tool, x, y, existing) {
@@ -512,13 +568,13 @@ const HERO_KINDS = {
 };
 // Four kinds that shrug off certain traps (immune: the trap types that can't hurt them).
 Object.assign(HERO_KINDS, {
-  rogue: { label: "rogue", hp: 0.6, atk: 0.9, speed: 4.4, airSpeed: 4.0, w: 0.6, h: 0.9, coins: 1, cd: 0.5, dodge: 0.25, smart: 0.3, immune: ["spike", "mine"] },
+  rogue: { label: "rogue", hp: 0.6, atk: 0.9, speed: 4.4, airSpeed: 4.0, w: 0.6, h: 0.9, coins: 1, cd: 0.5, dodge: 0.25, smart: 0.3, immune: ["spike", "mine", "spring"] },
   warden: { label: "Flame Warden", hp: 1.4, atk: 1.1, speed: 3.3, airSpeed: 3.9, w: 0.6, h: 0.9, coins: 2, cd: 0.8, immune: ["fire", "fireball", "burn"] },
   berserker: { label: "berserker", hp: 1.6, atk: 1.3, speed: 3.6, airSpeed: 3.9, w: 0.65, h: 0.9, coins: 2, cd: 0.6, noDodge: true, immune: ["frost"] },
-  sapper: { label: "sapper", hp: 1.2, atk: 0.8, speed: 3.0, airSpeed: 3.9, w: 0.6, h: 0.9, coins: 2, cd: 0.9, immune: ["crusher", "saw"] },
+  sapper: { label: "sapper", hp: 1.2, atk: 0.8, speed: 3.0, airSpeed: 3.9, w: 0.6, h: 0.9, coins: 2, cd: 0.9, immune: ["crusher", "saw", "pendulum"] },
 });
 HERO_KINDS.archer.ranged = true;
-const IMMUNE_NAMES = { spike: "spikes", mine: "bombs", fire: "fire", fireball: "fireballs", burn: "burning", frost: "frost", crusher: "crushers", saw: "saw blades" };
+const IMMUNE_NAMES = { spring: "springs", pendulum: "pendulums", spike: "spikes", mine: "bombs", fire: "fire", fireball: "fireballs", burn: "burning", frost: "frost", crusher: "crushers", saw: "saw blades" };
 const immuneTo = (h, src) => !!src && (HERO_KINDS[h.kind].immune || []).includes(src);
 // A trap passing harmlessly over an immune hero says so, now and then.
 function shrug(h) {
@@ -602,7 +658,7 @@ let S;
 function newGame(title = false) {
   S = {
     coins: 20, souls: 2, wave: 1, kills: 0, named: 0,
-    serpents: [], shown: { coins: 20, souls: 2, dark: 0 }, coinFx: [], soulFx: [], darkSouls: 0, powers: new Set(), risen: [], monsterMenu: null,
+    serpents: [], bolts: [], shown: { coins: 20, souls: 2, dark: 0 }, coinFx: [], soulFx: [], darkSouls: 0, powers: new Set(), risen: [], monsterMenu: null,
     gain: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
     loss: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
     traps: [], minions: [], arrows: [], waves: [], boss: makeBoss(),
@@ -853,6 +909,8 @@ const Sound = (() => {
     upgrade: () => arp(523, [0, 4, 7, 12], { dur: 0.08, vol: 0.08, gap: 0.05 }),
     specialize: () => { arp(392, [0, 7, 12, 16, 19, 24], { dur: 0.12, vol: 0.08, gap: 0.06 }); tone(98, { to: 49, type: "sawtooth", dur: 0.5, vol: 0.12 }); },
     freeze: () => { noise({ dur: 0.35, vol: 0.18, filter: "highpass", freq: 3500, to: 1200 }); tone(1900, { to: 2600, type: "sine", dur: 0.3, vol: 0.05 }); },
+    boing: () => { tone(180, { to: 720, type: "triangle", dur: 0.22, vol: 0.12 }); tone(360, { to: 1100, type: "sine", dur: 0.18, vol: 0.05, at: 0.03 }); },
+    zap: () => { noise({ dur: 0.18, vol: 0.18, filter: "highpass", freq: 3000 }); tone(1600, { to: 300, type: "square", dur: 0.15, vol: 0.05 }); tone(110, { type: "sawtooth", dur: 0.12, vol: 0.06 }); },
     serpent: () => { tone(70, { to: 40, type: "sawtooth", dur: 0.6, vol: 0.18 }); noise({ dur: 0.5, vol: 0.2, freq: 500, to: 2500, attack: 0.1 }); },
     fireball: () => { noise({ dur: 0.18, vol: 0.1, freq: 900, to: 300 }); tone(240, { to: 120, type: "sawtooth", dur: 0.12, vol: 0.04 }); },
     darkSoul: () => { tone(220, { to: 110, type: "sawtooth", dur: 0.5, vol: 0.06, attack: 0.05 }); [0, 3, 6].forEach((st, i) => tone(semi(440, st), { type: "sine", dur: 0.3, vol: 0.05, at: i * 0.08 })); },
@@ -954,7 +1012,7 @@ const Sound = (() => {
     },
   };
   // Busy sounds are rate-limited so a crowd of heroes doesn't turn into noise.
-  const GAP = { spikes: 0.05, wailShot: 0.06, soulHit: 0.06, claw: 0.1, meteor: 0.08, meteorBoom: 0.07, bones: 0.15, stomp: 0.12, bow: 0.06, bolt: 0.06, fireball: 0.08, heal: 0.2, clang: 0.08, voiceBoss: 0.05, voiceHero: 0.04, growl: 0.5, thunder: 2, bounce: 0.07, hit: 0.05, minionHurt: 0.08, fire: 0.3, coinDrop: 0.2, saw: 0.12, spike: 0.1, arrow: 0.08, soulRise: 0.15 };
+  const GAP = { spikes: 0.05, wailShot: 0.06, soulHit: 0.06, claw: 0.1, meteor: 0.08, meteorBoom: 0.07, bones: 0.15, stomp: 0.12, bow: 0.06, bolt: 0.06, fireball: 0.08, zap: 0.08, boing: 0.08, heal: 0.2, clang: 0.08, voiceBoss: 0.05, voiceHero: 0.04, growl: 0.5, thunder: 2, bounce: 0.07, hit: 0.05, minionHurt: 0.08, fire: 0.3, coinDrop: 0.2, saw: 0.12, spike: 0.1, arrow: 0.08, soulRise: 0.15 };
 
   function play(name, arg) {
     if (!ac || ac.state !== "running" || !prefs.sfx || !SFX[name]) return;
@@ -1364,6 +1422,7 @@ document.addEventListener("keydown", e => {
     if (k === "u") upgradeTrap(S.trapMenu);
     if ((k === "1" || k === "2") && S.trapMenu.lvl >= 3 && !S.trapMenu.path) specializeTrap(S.trapMenu, TRAP_PATHS[S.trapMenu.type][+k - 1].id);
     if (k === "x" || k === "delete") sellTrap(S.trapMenu);
+    if (k === "i") infuseTrap(S.trapMenu);
     if (k === "escape") S.trapMenu = null;
   }
   if (S.monsterMenu) {
@@ -1494,7 +1553,7 @@ function fitCanvas() {
   const gw = W * T, gh = H * T;
   // Leave room for whatever sits below the game (the toolbar wraps onto more rows on narrow screens).
   const top = canvas.getBoundingClientRect().top + scrollY;
-  const below = document.getElementById("tools").getBoundingClientRect().bottom - canvas.getBoundingClientRect().bottom + 64;
+  const below = document.getElementById("tools").getBoundingClientRect().bottom - canvas.getBoundingClientRect().bottom + 30;
   const wide = Math.min(document.querySelector(".wrap").clientWidth - 24, (innerHeight - top - below) * gw / gh);
   const cssW = Math.max(160, Math.floor(wide));
   canvas.style.width = cssW + "px";
@@ -1558,9 +1617,13 @@ function place({ x, y }) {
 }
 
 // What a trap does, as label/value pairs, for the trap tab and the trap list.
-function trapStatLines(type, lvl, pathId) {
-  const n = trapNums(type, lvl, pathId), sec = v => v.toFixed(1) + "S";
+function trapStatLines(type, lvl, pathId, dark = false) {
+  const n = trapNums(type, lvl, pathId, dark), sec = v => v.toFixed(1) + "S";
   switch (type) {
+    case "spring": return [["THROW", n.throw.toFixed(1) + "X"], ["EVERY", sec(n.cd)]];
+    case "tar": return [["SLOW", Math.round(n.slow * 100) + "%"], ["FIRE", n.burn ? "IGNITES" : n.fireBonus ? "+50% DMG" : "NO BONUS"]];
+    case "tesla": return [["ZAP", n.chains ? `${n.dmg} X${n.chains + 1}` : n.dmg], ["EVERY", sec(n.cd)]];
+    case "pendulum": return [["DAMAGE", n.blades > 1 ? `${n.dmg} X2` : n.dmg], ["SPEED", n.speed.toFixed(1)]];
     case "spike": case "saw": return [["DAMAGE", n.dmg], ["EVERY", sec(n.cd)]];
     case "turret": return [["ARROW", n.dmg], ["EVERY", sec(n.cd)]];
     case "fire": return [["BURN", n.dmg], ["ERUPTS", n.always ? "NONSTOP" : "EVERY " + sec(n.period)]];
@@ -1570,7 +1633,7 @@ function trapStatLines(type, lvl, pathId) {
   }
   return [];
 }
-const trapStats = (type, lvl, pathId) => trapStatLines(type, lvl, pathId).map(([a, b]) => `${a} ${b}`).join("  ");
+const trapStats = (type, lvl, pathId, dark) => trapStatLines(type, lvl, pathId, dark).map(([a, b]) => `${a} ${b}`).join("  ");
 const trapRefund = t => Math.floor((TRAPS[t.type].costs.slice(0, t.lvl).reduce((a, c) => a + c, 0) + (t.path ? pathInfo(t.type, t.path).cost : 0)) / 2);
 const canManageTraps = () => !inArena() && !["over", "title", "prologue"].includes(S.phase);
 
@@ -1603,6 +1666,18 @@ function specializeTrap(t, id) {
   S.shake = Math.max(S.shake, 2);
   Sound.play("specialize");
   say(`${TRAPS[t.type].name} became a ${p.name}! Sell it if you want to start over.`);
+}
+
+function infuseTrap(t) {
+  if (!canManageTraps() || t.dark || !S.traps.includes(t)) return;
+  if (S.darkSouls < 1) { say("You need a dark soul. Heroes drop one 1 time in 4."); Sound.play("deny"); return; }
+  S.darkSouls--;
+  spend("dark", 1);
+  t.dark = true;
+  burst(t.x + 0.5, t.y + 0.5, 26, ["#d500f9", "#4a148c", "#ea80fc", "#000000"], 5, { glow: true });
+  S.shake = Math.max(S.shake, 2);
+  Sound.play("infuse");
+  say(`The ${TRAPS[t.type].name} drinks a dark soul: +75% damage, 25% faster, 20% more reach.`);
 }
 
 function sellTrap(t) {
@@ -2431,6 +2506,8 @@ function update(dt) {
     updateSerpents(dt);
     S.traps = S.traps.filter(t => !t.dead);
     updateArrows(dt);
+    S.bolts.forEach(b => (b.t -= dt));
+    S.bolts = S.bolts.filter(b => b.t > 0);
     updateHeroArrows(dt);
   }
 
@@ -2754,7 +2831,16 @@ function finishHeroMove(h, dt, arena) {
   if (!arena) {
     // Frost totems slow a hero down inside their aura.
     h.chill = 0;
+    h.tar = Math.max(0, (h.tar || 0) - dt);
     for (const t of S.traps) {
+      if (t.type === "tar" && !(t.jam > 0) && overlaps({ x: t.x + 0.05, y: t.y + 0.6, w: 0.9, h: 0.4 }, h)) {
+        // Wading through tar: slow, sticky, and (unless it's glue) ready to burn.
+        const n = numsOf(t);
+        h.chill = Math.max(h.chill, n.slow);
+        h.tar = 2.5;
+        h.tarFire = n.fireBonus;
+        if (n.burn && !immuneTo(h, "burn")) { h.bleed = Math.max(h.bleed || 0, 1.5); h.bleedDmg = Math.max(h.bleedDmg || 0, Math.round(t.lvl * 2 * (t.dark ? DARK_TRAP.dmg : 1))); }
+      }
       if (t.type === "frost" && !immuneTo(h, "frost") && Math.hypot(centerX(h) - t.x - 0.5, centerY(h) - t.y - 0.5) < numsOf(t).radius) {
         h.chill = Math.max(h.chill, numsOf(t).slow);
       }
@@ -2950,7 +3036,7 @@ function shouldJump(h, dir) {
   if (!isSolid(fx, feet + 1)) return true;     // pit ahead
 
   for (const t of S.traps) {
-    if (!["spike", "fire", "mine"].includes(t.type) || t.y !== feet) continue;
+    if (!["spike", "fire", "mine", "spring", "tar"].includes(t.type) || t.y !== feet) continue;
     const ahead = dir > 0 ? t.x - (h.x + h.w) : h.x - (t.x + 1);
     if (ahead < 0 || ahead > 0.6) continue;
     if (!h.spotted.has(t)) h.spotted.set(t, Math.random() < h.smart);
@@ -2996,7 +3082,12 @@ function updateTraps(dt) {
       }
       continue;
     }
+    if (t.dark && Math.random() < dt * 6) particle({ x: t.x + 0.15 + Math.random() * 0.7, y: t.y + 0.9, vy: -1.2, life: 0.5, color: Math.random() < 0.5 ? "#d500f9" : "#4a148c", glow: true });
     if (t.type === "fire") { updateFire(t, dt); continue; }
+    if (t.type === "spring") { updateSpring(t); continue; }
+    if (t.type === "tar") continue;
+    if (t.type === "tesla") { updateTesla(t); continue; }
+    if (t.type === "pendulum") { updatePendulum(t, dt); continue; }
     if (t.type === "crusher") { updateCrusher(t, dt); continue; }
     if (t.type === "mine") { updateMine(t, dt); continue; }
     if (t.type === "frost") {
@@ -3070,6 +3161,74 @@ function updateDeepFreeze(t, dt) {
   Sound.play("freeze");
 }
 
+// The spring trap flings a hero back the way they came, often into a pit.
+function updateSpring(t) {
+  if (t.cd > 0) return;
+  const [h] = heroesIn({ x: t.x + 0.15, y: t.y + 0.6, w: 0.7, h: 0.4 }, "spring");
+  if (!h) return;
+  const n = numsOf(t);
+  damage(h, n.dmg, "#ffb74d");
+  knock(h, -7 * n.throw, -10 - 2 * n.throw);
+  if (h.knock) h.knock *= 0.9 + 0.5 * n.throw;
+  t.cd = n.cd;
+  t.flash = 0.35;
+  burst(t.x + 0.5, t.y + 0.8, 8, ["#ffd54f", "#cfd8dc"], 4);
+  Sound.play("boing");
+}
+
+// The tesla coil charges up, then strikes the nearest hero; the bolt leaps on to others nearby.
+function updateTesla(t) {
+  if (t.cd > 0) return;
+  const n = numsOf(t), ox = t.x + 0.5, oy = t.y + 0.1;
+  const near = (x, y, r, skip) => S.heroes.filter(h => !skip.has(h) && h.evade <= 0 && Math.hypot(centerX(h) - x, centerY(h) - y) < r)
+    .sort((a, b) => Math.hypot(centerX(a) - x, centerY(a) - y) - Math.hypot(centerX(b) - x, centerY(b) - y))[0];
+  const hit = new Set();
+  let cur = near(ox, oy, n.range, hit);
+  if (!cur) return;
+  const pts = [[ox, oy]];
+  let dmg = n.dmg;
+  for (let i = 0; cur && i <= n.chains; i++) {
+    hit.add(cur);
+    pts.push([centerX(cur), centerY(cur)]);
+    damage(cur, Math.max(1, Math.round(dmg)), "#80d8ff", ["#ffffff", "#80d8ff"]);
+    dmg *= 0.75;
+    cur = near(centerX(cur), centerY(cur), 2.6, hit);
+  }
+  S.bolts.push({ pts, t: 0.25, color: t.path === "lance" ? "#ff5252" : t.dark ? "#ea80fc" : "#80d8ff" });
+  t.cd = n.cd;
+  t.flash = 0.2;
+  Sound.play("zap");
+}
+
+// The pendulum's blade (or blades) swing through the air under its mount.
+function pendulumReach(t) {
+  let gy = t.y + 1;
+  while (gy < H && !isSolid(t.x, gy)) gy++;
+  return Math.max(0.8, Math.min(4.5, gy - t.y - 0.6));
+}
+function pendulumBlades(t) {
+  const n = numsOf(t), L = pendulumReach(t), px = t.x + 0.5, py = t.y + 0.15;
+  const phase = (t.swing || 0) + t.x;
+  return Array.from({ length: n.blades }, (_, i) => {
+    const a = Math.sin(phase + i * Math.PI) * 1.0;
+    return { x: px + Math.sin(a) * L, y: py + Math.cos(a) * L, a };
+  });
+}
+function updatePendulum(t, dt) {
+  const n = numsOf(t);
+  t.swing = (t.swing || 0) + dt * n.speed;
+  if (t.cd > 0) return;
+  const r = n.big ? 0.6 : 0.45;
+  let any = false;
+  for (const b of pendulumBlades(t)) {
+    for (const h of heroesIn({ x: b.x - r, y: b.y - r, w: r * 2, h: r * 2 }, "pendulum")) {
+      damage(h, n.dmg, "#ff5252");
+      any = true;
+    }
+  }
+  if (any) { t.cd = n.cd; t.flash = 0.2; Sound.play("saw"); }
+}
+
 function updateFire(t, dt) {
   t.timer += dt;
   const n = numsOf(t), period = n.period, p = t.timer % period;
@@ -3088,7 +3247,7 @@ function updateFire(t, dt) {
   }
   if (t.cd > 0) return;
   const hit = heroesIn({ x: t.x + 0.15, y: t.y + 1 - n.tall, w: 0.7, h: n.tall }, "fire");
-  for (const h of hit) damage(h, n.dmg, "#ffb74d", t.path === "pillar" ? ["#40c4ff", "#e1f5fe"] : ["#ff6f00", "#ffd54f"]);
+  for (const h of hit) damage(h, Math.round(n.dmg * (h.tar > 0 && h.tarFire ? 1.5 : 1)), "#ffb74d", t.path === "pillar" ? ["#40c4ff", "#e1f5fe"] : ["#ff6f00", "#ffd54f"]);
   if (hit.length) t.cd = TRAPS.fire.cd;
 }
 
@@ -4152,6 +4311,10 @@ const ART = {
     "..dddddd..",
   ],
   frostShard: [".W.", "WcW", ".W."],
+  tesla: ["....oOOo....", "...oOWOOo...", "...oOOOOo...", "....oOOo....", ".....dd.....", "...cCCCCc...", ".....dd.....", "...cCCCCc...", ".....dd.....", "...cCCCCc...", ".....dd.....", "....dSSd....", "...dSSSSd...", "..dSSSSSSd..", "..dddddddd.."],
+  pendulumBlade: ["..mmmmmmmm..", ".MMMMMMMMMM.", "MMMMMMMMMMMM", ".WMMMMMMMMW.", "..WWWWWWWW.."],
+  pendulumBig: ["...mmmmmmmmmm...", ".mMMMMMMMMMMMMm.", "MMMMMMMMMMMMMMMM", "MMMMMMMMMMMMMMMM", ".WMMMMMMMMMMMMW.", "..WWMMMMMMMMWW..", "....WWWWWWWW...."],
+
   spikeDown: [
     ".W...W...W...W..",
     "MMm.MMm.MMm.MMm.",
@@ -5168,6 +5331,28 @@ function drawTrap(t, alpha = 1, preview = false) {
       const pal = { r: blink || near ? "#ff1744" : "#5d0f0f", M: ["#5d566a", "#7c7392", "#9a2a2a"][t.lvl - 1], m: "#3a3448" };
       drawSprite(sprite(ART.mine, pal, "mine" + pal.r + t.lvl), X + 8, Y + T - 1, 1, alpha);
     }
+  } else if (t.type === "spring") {
+    drawSpringTrap(t, X, Y, alpha, preview);
+  } else if (t.type === "tar") {
+    drawTarPit(t, X, Y, alpha);
+  } else if (t.type === "tesla") {
+    const look = TESLA_LOOKS[path] || TESLA_LOOKS.normal, ready = preview || t.cd <= 0.3;
+    const pal = { o: look.orb[1], O: ready ? look.orb[0] : look.orb[1], W: ready ? "#ffffff" : look.orb[0], c: look.coil[1], C: look.coil[0], d: "#26232e", S: "#5d566a" };
+    drawSprite(sprite(ART.tesla, pal, "tesla" + (path || "") + ready), X + 8, Y + T - 1, 1, alpha);
+    if (path === "lance") {
+      // A tall spike over the orb.
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(X + 7, Y - 6, 3, 7);
+      ctx.fillStyle = "#ffcdd2";
+      ctx.fillRect(X + 8, Y - 5, 1, 6);
+    }
+    if (ready && !preview && Math.floor(S.time * 12 + t.x) % 3 === 0) {
+      // Little arcs crackling around the orb while it's charged.
+      ctx.fillStyle = look.orb[0];
+      ctx.fillRect(X + 3 + Math.floor(Math.random() * 10), Y + Math.floor(Math.random() * 5), 1, 1);
+    }
+  } else if (t.type === "pendulum") {
+    drawPendulum(t, X, Y, alpha, preview);
   } else if (t.type === "frost") {
     const pal = Object.assign({}, STONE_PAL, PATH_FROST[path] || FROST_PALS[t.lvl - 1]);
     drawSprite(sprite(ART.frostBase, pal, "frostbase"), X + 8, Y + T - 1, 1, alpha);
@@ -5243,6 +5428,16 @@ function drawTrap(t, alpha = 1, preview = false) {
       ctx.globalAlpha = 1;
     }
   }
+  if (t.dark && alpha === 1) {
+    // Infused with a dark soul: violet flames lick around it.
+    for (let i = 0; i < 5; i++) {
+      const fx = X + 1 + i * 3.5, fh = 2 + Math.round((Math.sin(S.time * 9 + i * 1.9 + t.x) + 1) * 1.5);
+      ctx.fillStyle = "#4a148c";
+      ctx.fillRect(Math.round(fx), Y + T - fh - 1, 2, fh + 1);
+      ctx.fillStyle = "#d500f9";
+      ctx.fillRect(Math.round(fx), Y + T - fh, 1, fh - 1);
+    }
+  }
   if (preview || alpha !== 1) return;
   if (t.jam > 0) {
     // Jammed by a sapper: greyed out, with a spinning wrench mark.
@@ -5262,6 +5457,15 @@ function drawTrap(t, alpha = 1, preview = false) {
     ctx.fillStyle = "#ffd54f";
     ctx.fillRect(X + 2 + i * 3, Y + 2, 1, 1);
   }
+  if (t.dark) {
+    // A dark-soul mark in the corner.
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(X + 11, Y + 10, 5, 6);
+    ctx.fillStyle = "#d500f9";
+    ctx.fillRect(X + 12, Y + 11, 3, 4);
+    ctx.fillStyle = "#ea80fc";
+    ctx.fillRect(X + 13, Y + 11, 1, 2);
+  }
   if (path) {
     // A diamond in the path's colour marks a specialized trap.
     const c = pathInfo(t.type, path).color;
@@ -5274,6 +5478,112 @@ function drawTrap(t, alpha = 1, preview = false) {
   }
 }
 
+const TESLA_LOOKS = {
+  normal: { orb: ["#80d8ff", "#01579b"], coil: ["#d07a3a", "#7a4520"] },
+  storm: { orb: ["#e1f5fe", "#4fc3f7"], coil: ["#90caf9", "#3d6f9c"] },
+  lance: { orb: ["#ff8a80", "#b71c1c"], coil: ["#b71c1c", "#5d0f0f"] },
+};
+// A pressure plate on a coiled spring; it shoots up when it throws someone.
+function drawSpringTrap(t, X, Y, alpha, preview) {
+  const look = { catapult: ["#a1887f", "#6d4c41"], rapid: ["#9cff9c", "#2e7d32"] }[t.path] || ["#9aa3ad", "#5d6370"];
+  const up = !preview && t.flash > 0 ? Math.round(t.flash / 0.35 * 7) : 0, base = Y + T - 2;
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "#26232e";
+  ctx.fillRect(X, base, T, 2);
+  // The coil: a zigzag that stretches as the plate pops up.
+  const coilH = 3 + up;
+  for (let i = 0; i < coilH; i++) {
+    ctx.fillStyle = i % 2 ? "#ffd54f" : "#c79a1e";
+    ctx.fillRect(X + 4 + (i % 2) * 6, base - 1 - i, 2, 1);
+    ctx.fillRect(X + 6, base - 1 - i, 4, 1);
+  }
+  const py = base - coilH - 2;
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(X + 1, py - 1, T - 2, 4);
+  ctx.fillStyle = look[0];
+  ctx.fillRect(X + 2, py, T - 4, 2);
+  ctx.fillStyle = look[1];
+  ctx.fillRect(X + 2, py + 1, T - 4, 1);
+  if (t.path === "catapult") { ctx.fillStyle = OUTLINE; ctx.fillRect(X + 1, py - 4, 2, 4); ctx.fillRect(X + T - 3, py - 4, 2, 4); }
+  ctx.globalAlpha = 1;
+}
+// A pool of black tar on the ground: glossy, bubbling, and maybe burning.
+function drawTarPit(t, X, Y, alpha) {
+  const glue = t.path === "glue", burning = t.path === "burning";
+  const main = glue ? "#8d6e1f" : "#15111a", shine = glue ? "#ffca28" : "#4a4458";
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(X, Y + T - 5, T, 5);
+  ctx.fillStyle = main;
+  ctx.fillRect(X + 1, Y + T - 4, T - 2, 4);
+  ctx.fillRect(X + 3, Y + T - 5, T - 6, 1);
+  ctx.fillStyle = shine;
+  ctx.fillRect(X + 4, Y + T - 4, 3, 1);
+  ctx.fillRect(X + 10, Y + T - 3, 2, 1);
+  // A bubble rising and popping.
+  const b = (S.time * 1.3 + t.x * 0.37) % 1;
+  if (b < 0.7) {
+    ctx.fillStyle = shine;
+    ctx.fillRect(X + 6 + Math.round(t.x * 3) % 5, Y + T - 5 - Math.round(b * 2), 2, 2);
+  }
+  if (burning) {
+    for (let i = 0; i < 6; i++) {
+      const fh = 2 + Math.round((Math.sin(S.time * 14 + i * 2.3) + 1) * 2);
+      ctx.fillStyle = i % 2 ? "#ff6d00" : "#ffd180";
+      ctx.fillRect(X + 2 + i * 2, Y + T - 4 - fh, 1, fh);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+// The mount, the rod, and the swinging blade (or two).
+function drawPendulum(t, X, Y, alpha, preview) {
+  const blades = preview ? [{ x: t.x + 0.5, y: t.y + 0.75, a: 0 }] : pendulumBlades(t);
+  const px = X + 8, py = Y + 2, art = t.path === "executioner" ? ART.pendulumBig : ART.pendulumBlade;
+  const pal = { M: t.path === "twin" ? "#9575cd" : t.path === "executioner" ? "#cfd8dc" : "#9aa3ad", m: "#4a4458", W: t.flash > 0 ? "#ff8a80" : "#ffffff" };
+  const spr = sprite(art, pal, "blade" + (t.path || "") + pal.W);
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(px - 4, Y, 9, 4);
+  ctx.fillStyle = "#4a4458";
+  ctx.fillRect(px - 3, Y + 1, 7, 2);
+  for (const b of blades) {
+    const bx = b.x * T, by = b.y * T, steps = Math.ceil(Math.hypot(bx - px, by - py));
+    for (let i = 0; i <= steps; i += 1) {
+      const k = i / steps;
+      ctx.fillStyle = i % 4 < 2 ? "#6b6378" : "#4a4458";
+      ctx.fillRect(Math.round(px + (bx - px) * k), Math.round(py + (by - py) * k), 1, 1);
+    }
+    ctx.save();
+    ctx.translate(Math.round(bx), Math.round(by));
+    ctx.rotate(-b.a);
+    ctx.drawImage(spr, -Math.floor(spr.width / 2), -Math.floor(spr.height / 2));
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+function drawBolts() {
+  for (const b of S.bolts) {
+    ctx.globalAlpha = Math.min(1, b.t / 0.12);
+    for (let i = 1; i < b.pts.length; i++) {
+      const [x0, y0] = b.pts[i - 1], [x1, y1] = b.pts[i], segs = 7;
+      let lx = x0 * T, ly = y0 * T;
+      for (let k = 1; k <= segs; k++) {
+        const nx = (x0 + (x1 - x0) * k / segs) * T + (k < segs ? (Math.random() - 0.5) * 6 : 0);
+        const ny = (y0 + (y1 - y0) * k / segs) * T + (k < segs ? (Math.random() - 0.5) * 6 : 0);
+        const n = Math.ceil(Math.hypot(nx - lx, ny - ly));
+        for (let j = 0; j <= n; j++) {
+          const x = Math.round(lx + (nx - lx) * j / n), y = Math.round(ly + (ny - ly) * j / n);
+          ctx.fillStyle = b.color;
+          ctx.fillRect(x - 1, y, 3, 1);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(x, y, 1, 1);
+        }
+        lx = nx; ly = ny;
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+}
 const FLAME_COLORS = {
   normal: ["#c62828", "#ff6f00", "#ffb300", "#fff3c4"],
   pillar: ["#1565c0", "#40c4ff", "#b3e5fc", "#ffffff"],
@@ -5848,6 +6158,8 @@ function drawLighting() {
   for (const e of bossEyes(S.boss)) hole(e.x, e.y, 14, 1);
   if (!inArena()) for (const t of S.traps) {
     if (t.type === "turret") hole(t.x * T + 8, t.y * T + 8, 18, 0.6);
+    if (t.type === "tesla") hole(t.x * T + 8, t.y * T + 2, t.cd <= 0.3 ? 30 : 16, 0.7);
+    if (t.dark) hole(t.x * T + 8, t.y * T + 10, 22, 0.5);
     if (t.type === "fire" && t.fireOn) hole(t.x * T + 8, t.y * T, 64, 1);
     if (t.type === "frost") hole(t.x * T + 8, t.y * T + 6, 34, 0.6);
   }
@@ -5872,6 +6184,13 @@ function drawLighting() {
   if (!inArena()) for (const n of S.serpents) if (n.cd <= 0) glow(n.x * T, (H - 1) * T + 4, 14, "rgba(255,23,68,0.25)");
   for (const h of S.heroes) if (h.ampBy) glow(centerX(h) * T, centerY(h) * T, 18, "rgba(118,255,3,0.22)");
   for (const a of S.heroArrows) if (a.magic) glow(a.x * T, a.y * T, 8, "rgba(118,255,3,0.5)");
+  if (!inArena()) {
+    for (const b of S.bolts) for (const [x, y] of b.pts) glow(x * T, y * T, 16, "rgba(128,216,255,0.5)");
+    for (const t of S.traps) {
+      if (t.dark) glow(t.x * T + 8, t.y * T + 12, 12, "rgba(213,0,249,0.28)");
+      if (t.type === "tesla" && t.cd <= 0.3) glow(t.x * T + 8, t.y * T + 2, 8, "rgba(128,216,255,0.4)");
+    }
+  }
   // The Hollow King's eyes and the soul in his chest burn through the dark.
   if (S.phase !== "over") {
     const b = S.boss, k = b.enraged ? 1.25 : 1;
@@ -6012,7 +6331,7 @@ function trapIconBox(x, y, w, h, t, path) {
   ctx.beginPath();
   ctx.rect(x + 1, y + 1, w - 2, h - 2);
   ctx.clip();
-  const fake = { type: t.type, lvl: 3, path, x: (x + w / 2 - 8) / T, y: (y + h - 17) / T, flash: 0, face: 1, off: 0, state: "up", fireOn: true, used: 0 };
+  const fake = { type: t.type, lvl: 3, path, dark: t.dark, x: (x + w / 2 - 8) / T, y: (y + h - 17) / T, flash: 0, face: 1, off: 0, state: "up", fireOn: true, used: 0, cd: 0 };
   drawTrap(fake, 1, true);
   ctx.restore();
 }
@@ -6121,7 +6440,7 @@ function drawTrapMenu() {
 
   // Header: a picture of the trap, its name, and its level or path.
   trapIconBox(x0, y + 6, 20, 20, t, t.path);
-  drawText(kind.name, x0 + 26, y + 8, "#ffd54f");
+  drawText(kind.name, x0 + 26, y + 8, t.dark ? "#ea80fc" : "#ffd54f");
   if (path) drawText(path.name, x0 + 26, y + 18, path.color);
   else {
     for (let i = 0; i < 3; i++) {
@@ -6139,7 +6458,7 @@ function drawTrapMenu() {
 
   const divider = dy => { ctx.fillStyle = "#3a3448"; ctx.fillRect(x0, y + dy, w - 16, 1); };
   divider(29);
-  const now = trapStatLines(t.type, t.lvl, t.path);
+  const now = trapStatLines(t.type, t.lvl, t.path, t.dark);
   now.forEach(([label, val], i) => {
     drawText(label, x0, y + 33 + i * 9, "#8a8296");
     drawText(String(val), right, y + 33 + i * 9, "#e6e0ec", { align: "right" });
@@ -6162,7 +6481,7 @@ function drawTrapMenu() {
   if (!max) {
     const cost = kind.costs[t.lvl];
     drawText("NEXT LEVEL", x0, y + 56, "#9cff9c");
-    trapStatLines(t.type, t.lvl + 1, null).forEach(([label, val], i) => {
+    trapStatLines(t.type, t.lvl + 1, null, t.dark).forEach(([label, val], i) => {
       const changed = String(val) !== String(now[i][1]);
       drawText(label, x0, y + 66 + i * 9, "#8a8296");
       drawText(String(val), right, y + 66 + i * 9, changed ? "#9cff9c" : "#e6e0ec", { align: "right" });
@@ -6186,7 +6505,16 @@ function drawTrapMenu() {
     pathCard(x + 5, y + 65, w - 10, 39, t, path, { chosen: true });
     drawText("SELL IT TO START OVER", x0, y + 110, "#6b5f75");
   }
-  button(x0, y + h - 18, w - 16, `SELL  +${trapRefund(t)}C`, "#ff8a80", true, () => sellTrap(t));
+  // Sell and Infuse share the bottom row.
+  const half = Math.floor((w - 20) / 2);
+  button(x0, y + h - 18, half, `SELL +${trapRefund(t)}`, "#ff8a80", true, () => sellTrap(t));
+  if (t.dark) {
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x0 + half + 4, y + h - 18, half, 13);
+    ctx.fillStyle = "#2a0d38";
+    ctx.fillRect(x0 + half + 5, y + h - 17, half - 2, 11);
+    drawText("DARK", x0 + half + 4 + half / 2, y + h - 15, "#ea80fc", { align: "center" });
+  } else button(x0 + half + 4, y + h - 18, half, "INFUSE", "#ea80fc", S.darkSouls > 0, () => infuseTrap(t));
 }
 
 // A strip under the HUD showing the whole path: ground, lava, traps, heroes, and where the view is.
@@ -6413,6 +6741,7 @@ function draw() {
     S.serpents.forEach(n => { if (n.state === "lurk") drawSerpent(n); });
     S.traps.forEach(t => drawTrap(t));
     S.arrows.forEach(drawArrow);
+    drawBolts();
     S.heroArrows.forEach(drawArrow);
     drawHover();
   }
@@ -6651,6 +6980,11 @@ function drawIcons() {
       if (tool === "crusher") spr = sprite(ART.crusher, Object.assign({}, STONE_PAL, { Y: "#ffb300" }), "crusher#ffb300");
       if (tool === "mine") spr = sprite(ART.mine, { r: "#ff1744", M: "#5d566a", m: "#3a3448" }, "mine#ff17441");
       if (tool === "frost") spr = sprite(ART.frostCrystal, Object.assign({}, STONE_PAL, FROST_PALS[0]), "frost1");
+      if (["spring", "tar", "pendulum"].includes(tool)) {
+        ctxSwap(g, () => drawTrap({ type: tool, lvl: 1, x: 0, y: tool === "pendulum" ? -0.05 : 0, flash: 0, cd: 0 }, 1, true));
+        return;
+      }
+      if (tool === "tesla") spr = sprite(ART.tesla, { o: "#01579b", O: "#80d8ff", W: "#ffffff", c: "#7a4520", C: "#d07a3a", d: "#26232e", S: "#5d566a" }, "teslaIcon");
       if (MINIONS[tool]) spr = sprite(ART[tool], MINION_PALS[tool], tool);
       if (tool === "serpent") spr = sprite(ART.serpentOpen, { H: "#e8dcc0", h: "#a8987a", K: "#1a1420", E: "#ff1744", R: "#c62828" }, "serpentIcon");
       // Big sprites shrink to fit the 16px icon.
@@ -6673,7 +7007,7 @@ function trapIcon(type) {
 }
 let trapListKey = "";
 function updateTrapList() {
-  const key = [S.traps.map(t => `${t.type}${t.x},${t.y}:${t.lvl}${t.path || ""}`).join("|"), S.coins, canManageTraps(), S.traps.indexOf(S.trapMenu)].join("/");
+  const key = [S.traps.map(t => `${t.type}${t.x},${t.y}:${t.lvl}${t.path || ""}${t.dark ? "d" : ""}`).join("|"), S.coins, canManageTraps(), S.traps.indexOf(S.trapMenu)].join("/");
   if (key === trapListKey) return;
   trapListKey = key;
   document.getElementById("trapCount").textContent = S.traps.length;
@@ -6687,8 +7021,8 @@ function updateTrapList() {
     const upLabel = !max ? `Upgrade ${cost}c` : path ? path.name : "Specialize";
     return `<div class="trap-row${S.trapMenu === t ? " active" : ""}" data-i="${S.traps.indexOf(t)}">
       <img src="${trapIcon(t.type)}" alt="">
-      <div class="info"><span class="name">${kind.name}</span><span class="pips">${"&#9632;".repeat(t.lvl)}${"&#9633;".repeat(3 - t.lvl)}</span>${path ? `<span class="path" style="color:${path.color}">&#9670; ${path.name}</span>` : ""}
-        <div class="stat">${trapStats(t.type, t.lvl, t.path)}${next}</div></div>
+      <div class="info"><span class="name">${kind.name}</span><span class="pips">${"&#9632;".repeat(t.lvl)}${"&#9633;".repeat(3 - t.lvl)}</span>${path ? `<span class="path" style="color:${path.color}">&#9670; ${path.name}</span>` : ""}${t.dark ? `<span class="path" style="color:#ea80fc">&#9670; Dark</span>` : ""}
+        <div class="stat">${trapStats(t.type, t.lvl, t.path, t.dark)}${next}</div></div>
       <div class="acts">
         <button class="up" data-act="up" ${path || !can || (!max && S.coins < cost) ? "disabled" : ""}>${upLabel}</button>
         <button class="sell" data-act="sell" ${can ? "" : "disabled"}>Sell +${trapRefund(t)}c</button>
