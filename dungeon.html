@@ -75,6 +75,10 @@
   button:active { transform: translateY(2px); box-shadow: inset 0 0 0 2px var(--edge), 0 2px 0 #000; }
   button.selected { background: #2f1b22; box-shadow: inset 0 0 0 2px var(--accent), inset 2px 2px 0 2px #ff8a80, 0 4px 0 #000; }
   button.poor .cost { color: #6b5f75; }
+  button.locked { opacity: 0.55; }
+  button.locked canvas { filter: grayscale(1) brightness(0.5); }
+  button.locked .cost { color: #8a8296; }
+  button.fresh { box-shadow: inset 0 0 0 2px #9cff9c, inset 2px 2px 0 2px #d4ffd4, 0 4px 0 #000; }
   button canvas { width: 32px; height: 32px; cursor: inherit; }
   .cost { display: block; font-size: 9px; }
   .cost.c { color: var(--coin); }
@@ -104,6 +108,10 @@
     <button data-tool="spike"><canvas width="16" height="16"></canvas><span>Spikes<span class="cost c">5 coins</span></span></button>
     <button data-tool="saw"><canvas width="16" height="16"></canvas><span>Saw blade<span class="cost c">8 coins</span></span></button>
     <button data-tool="turret"><canvas width="16" height="16"></canvas><span>Arrow turret<span class="cost c">10 coins</span></span></button>
+    <button data-tool="fire"><canvas width="16" height="16"></canvas><span>Fire vent<span class="cost c">12 coins</span></span></button>
+    <button data-tool="crusher"><canvas width="16" height="16"></canvas><span>Crusher<span class="cost c">14 coins</span></span></button>
+    <button data-tool="mine"><canvas width="16" height="16"></canvas><span>Bomb<span class="cost c">6 coins</span></span></button>
+    <button data-tool="frost"><canvas width="16" height="16"></canvas><span>Frost totem<span class="cost c">10 coins</span></span></button>
     <button data-tool="skeleton"><canvas width="16" height="16"></canvas><span>Skeleton<span class="cost s">1 soul</span></span></button>
     <button data-tool="ogre"><canvas width="16" height="16"></canvas><span>Ogre<span class="cost s">3 souls</span></span></button>
     <button id="go">Start wave</button>
@@ -113,7 +121,8 @@
     <summary>How to play</summary>
     You are the boss, waiting at the top of your castle tower. Heroes run and jump through the level to reach it.<br>
     <b>Build:</b> pick a tool and click the level. Spikes go on the ground; saws and turrets go anywhere, even over the lava pits.
-    Click a trap of the same type again to upgrade it (max level 3).<br>
+    Click a trap of the same type again to upgrade it (max level 3).
+    Killing heroes unlocks new traps: fire vents, crushers, bombs and frost totems.<br>
     <b>Boss battle:</b> when a hero gets through the tower door, the fight moves to the tower top.
     A / D or arrows move, W jumps, Space swings your cleaver, S slams the ground and sends out shockwaves.<br>
     Each dead hero gives coins and souls, but the next one is stronger, better geared, and better at spotting traps and dodging.<br>
@@ -177,11 +186,34 @@ const canBuild = (x, y) => !inArena() && y > 0 && tileAt(x, y) === "." && x < TO
 
 // ---------- balance ----------
 const GRAVITY = 25, JUMP = 12;
+// unlock: how many heroes you must kill before the trap becomes available.
 const TRAPS = {
-  spike:  { costs: [5, 8, 12],   dmg: 8, cd: 0.8, needsGround: true },
-  saw:    { costs: [8, 10, 14],  dmg: 6, cd: 0.4 },
-  turret: { costs: [10, 12, 16], dmg: 6 },
+  spike:   { name: "Spikes",       costs: [5, 8, 12],   dmg: 8, cd: 0.8, needsGround: true },
+  saw:     { name: "Saw blade",    costs: [8, 10, 14],  dmg: 6, cd: 0.4 },
+  turret:  { name: "Arrow turret", costs: [10, 12, 16], dmg: 6 },
+  fire:    { name: "Fire vent",    costs: [12, 15, 20], dmg: 4, cd: 0.25, needsGround: true, unlock: 1 },
+  crusher: { name: "Crusher",      costs: [14, 16, 22], dmg: 18, needsAir: true, unlock: 2 },
+  mine:    { name: "Bomb",         costs: [6, 9, 12],   dmg: 25, needsGround: true, unlock: 3 },
+  frost:   { name: "Frost totem",  costs: [10, 14, 18], needsGround: true, unlock: 4 },
 };
+const wins = () => S.wave - 1;
+const unlocked = tool => !TRAPS[tool] || wins() >= (TRAPS[tool].unlock || 0);
+// Fire vents erupt on a cycle; crushers drop when a hero walks under; frost slows anyone nearby.
+const firePeriod = lvl => 2.6 - 0.4 * (lvl - 1);
+const FIRE_ON = 0.9;
+const frostRadius = lvl => 2.2 + 0.4 * (lvl - 1);
+const frostSlow = lvl => 0.3 + 0.1 * (lvl - 1);
+
+// Why a trap can't go on a tile, or null if it can.
+function placeProblem(tool, x, y, existing) {
+  const kind = TRAPS[tool];
+  if (!unlocked(tool)) return `${kind.name} unlocks after killing ${kind.unlock} hero${kind.unlock > 1 ? "es" : ""}.`;
+  if (existing && existing.type !== tool) return "There's already a different trap there.";
+  if (existing) return null;
+  if (kind.needsGround && !isSolid(x, y + 1)) return `${kind.name} needs solid ground under it.`;
+  if (kind.needsAir && isSolid(x, y + 1)) return "Crushers need open space below to drop into.";
+  return null;
+}
 const MINIONS = {
   skeleton: { cost: 1, hp: 15, atk: 3, speed: 2.0, w: 0.6, blood: ["#e8e2d0", "#a89f8a"] },
   ogre:     { cost: 3, hp: 50, atk: 8, speed: 1.2, w: 0.8, blood: ["#6aa84f", "#3f7a34"] },
@@ -224,7 +256,7 @@ function newGame() {
     traps: [], minions: [], arrows: [], waves: [], hero: null, boss: makeBoss(),
     phase: "build", scene: "level", floats: [], particles: [], tool: "spike", time: 0,
     fade: 0, fadeIn: 0, intro: 0, returnT: 0,
-    shake: 0, banner: null, pulse: { coins: 0, souls: 0 },
+    shake: 0, banner: null, bannerQueue: [], pulse: { coins: 0, souls: 0 }, fresh: new Set(),
   };
   say("Build your level, then press Start wave.");
 }
@@ -305,7 +337,12 @@ function damage(target, amount, color, colors) {
   burst(centerX(target), centerY(target), target.isBoss ? 8 : 5, colors || ["#d32f2f", "#8e1b1b"], 4);
 }
 
-function banner(text, sub, color) { S.banner = { text, sub, color, t: 0 }; }
+function banner(text, sub, color) { S.banner = { text, sub, color, t: 0 }; S.bannerQueue = []; }
+// Show this banner after the current one finishes.
+function queueBanner(text, sub, color) {
+  if (!S.banner) banner(text, sub, color);
+  else S.bannerQueue.push({ text, sub, color, t: 0 });
+}
 function say(text) { document.getElementById("msg").textContent = text; }
 
 // ---------- input ----------
@@ -346,7 +383,12 @@ canvas.addEventListener("click", e => place(tileFromEvent(e)));
 
 document.querySelectorAll("button").forEach(b => b.addEventListener("click", () => b.blur()));
 document.querySelectorAll("[data-tool]").forEach(b => {
-  b.addEventListener("click", () => { S.tool = b.dataset.tool; });
+  b.addEventListener("click", () => {
+    const tool = b.dataset.tool;
+    if (!unlocked(tool)) { say(placeProblem(tool, 0, 0, null)); return; }
+    S.tool = tool;
+    S.fresh.delete(tool);
+  });
 });
 document.getElementById("go").addEventListener("click", () => {
   if (S.phase === "over") newGame();
@@ -356,7 +398,10 @@ document.getElementById("go").addEventListener("click", () => {
 // Fill as much of the window as fits, leaving room for the toolbar underneath.
 function fitCanvas() {
   const gw = W * T, gh = H * T;
-  const wide = Math.min(document.querySelector(".wrap").clientWidth - 24, (innerHeight - 190) * gw / gh);
+  // Leave room for whatever sits below the game (the toolbar wraps onto more rows on narrow screens).
+  const top = canvas.getBoundingClientRect().top + scrollY;
+  const below = document.getElementById("tools").getBoundingClientRect().bottom - canvas.getBoundingClientRect().bottom + 64;
+  const wide = Math.min(document.querySelector(".wrap").clientWidth - 24, (innerHeight - top - below) * gw / gh);
   const cssW = Math.max(160, Math.floor(wide));
   canvas.style.width = cssW + "px";
   canvas.style.height = Math.round(cssW * gh / gw) + "px";
@@ -376,6 +421,7 @@ function present() {
   screenCtx.drawImage(big, 0, 0, canvas.width, canvas.height);
 }
 addEventListener("resize", fitCanvas);
+if (document.fonts) document.fonts.ready.then(fitCanvas);
 fitCanvas();
 
 function place({ x, y }) {
@@ -386,15 +432,15 @@ function place({ x, y }) {
 
   if (TRAPS[S.tool]) {
     const kind = TRAPS[S.tool];
-    if (trap && trap.type !== S.tool) { say("There's already a different trap there."); return; }
-    if (!trap && kind.needsGround && !isSolid(x, y + 1)) { say("Spikes need solid ground under them."); return; }
+    const problem = placeProblem(S.tool, x, y, trap);
+    if (problem) { say(problem); return; }
     const lvl = trap ? trap.lvl : 0;
     if (lvl >= 3) { say("That trap is already max level."); return; }
     const cost = kind.costs[lvl];
     if (S.coins < cost) { say(`Need ${cost} coins.`); return; }
     S.coins -= cost;
     if (trap) { trap.lvl++; say(`Upgraded to level ${trap.lvl}.`); }
-    else { S.traps.push({ type: S.tool, x, y, lvl: 1, cd: 0, flash: 0, face: -1 }); say("Trap placed."); }
+    else { S.traps.push(newTrap(S.tool, x, y)); say(`${kind.name} placed.`); }
     burst(x + 0.5, y + 0.6, 8, ["#ffd54f", "#fff3c4"], 3, { glow: true });
   } else {
     const kind = MINIONS[S.tool];
@@ -409,9 +455,14 @@ function place({ x, y }) {
   }
 }
 
+function newTrap(type, x, y) {
+  return { type, x, y, lvl: 1, cd: 0, flash: 0, face: -1, timer: 0, off: 0, v: 0, state: "up" };
+}
+
 function startWave() {
   S.hero = makeHero(S.heroLv);
   S.boss.hp = S.boss.maxHp;
+  for (const t of S.traps) Object.assign(t, { timer: 0, off: 0, v: 0, state: "up", cd: 0 });
   S.arrows = [];
   S.phase = "wave";
   banner(`WAVE ${S.wave}`, `${S.hero.name} approaches`, "#e6e0ec");
@@ -536,6 +587,7 @@ function update(dt) {
     updateHero(dt);
     if (S.phase !== "wave") return;
     updateTraps(dt);
+    S.traps = S.traps.filter(t => !t.dead);
     updateArrows(dt);
   }
 
@@ -685,6 +737,19 @@ function updateHero(dt) {
     h.face = dir;
     if (!arena && h.onGround && shouldJump(h, dir)) h.vy = -JUMP;
   }
+  if (!arena) {
+    // Frost totems slow the hero down while he's inside their aura.
+    h.chill = 0;
+    for (const t of S.traps) {
+      if (t.type === "frost" && Math.hypot(centerX(h) - t.x - 0.5, centerY(h) - t.y - 0.5) < frostRadius(t.lvl)) {
+        h.chill = Math.max(h.chill, frostSlow(t.lvl));
+      }
+    }
+    h.vx *= 1 - h.chill;
+    if (h.chill && Math.random() < dt * 20) {
+      particle({ x: h.x + Math.random() * h.w, y: h.y + Math.random() * h.h, vy: 0.6, life: 0.5, color: Math.random() < 0.5 ? "#e1f5fe" : "#81d4fa", glow: true });
+    }
+  }
   moveBody(h, dt);
   if (arena) return;
   if (inLava(h)) { h.hp = 0; h.lava = true; }
@@ -700,7 +765,7 @@ function shouldJump(h, dir) {
   if (!isSolid(fx, feet + 1)) return true;     // pit ahead
 
   for (const t of S.traps) {
-    if (t.type === "turret" || t.y !== feet) continue;
+    if (!["spike", "fire", "mine"].includes(t.type) || t.y !== feet) continue;
     const ahead = dir > 0 ? t.x - (h.x + h.w) : h.x - (t.x + 1);
     if (ahead < 0 || ahead > 0.6) continue;
     if (!h.spotted.has(t)) h.spotted.set(t, Math.random() < h.smart);
@@ -723,6 +788,16 @@ function updateTraps(dt) {
       }
       continue;
     }
+    if (t.type === "fire") { updateFire(t, h, dt); continue; }
+    if (t.type === "crusher") { updateCrusher(t, h, dt); continue; }
+    if (t.type === "mine") { updateMine(t, h); continue; }
+    if (t.type === "frost") {
+      if (Math.random() < dt * 3) {
+        const a = Math.random() * Math.PI * 2, r = Math.random() * frostRadius(t.lvl);
+        particle({ x: t.x + 0.5 + Math.cos(a) * r, y: t.y + 0.5 + Math.sin(a) * r * 0.6, vy: 0.4, life: 0.8, color: "#b3e5fc", glow: true });
+      }
+      continue;
+    }
     const kind = TRAPS[t.type];
     const box = t.type === "spike" ? { x: t.x + 0.1, y: t.y + 0.55, w: 0.8, h: 0.45 } : tileBox(t);
     if (t.cd <= 0 && h.evade <= 0 && overlaps(box, h)) {
@@ -732,6 +807,76 @@ function updateTraps(dt) {
       t.flash = 0.25;
     }
   }
+}
+
+function updateFire(t, h, dt) {
+  t.timer += dt;
+  const p = t.timer % firePeriod(t.lvl), period = firePeriod(t.lvl);
+  t.fireOn = p > period - FIRE_ON;
+  t.warn = !t.fireOn && p > period - FIRE_ON - 0.45;
+  if (t.warn && Math.random() < dt * 25) {
+    particle({ x: t.x + 0.3 + Math.random() * 0.4, y: t.y + 0.8, vy: -2, vx: (Math.random() - 0.5), life: 0.3, color: "#ffb300", glow: true });
+  }
+  if (!t.fireOn) return;
+  if (Math.random() < dt * 30) {
+    particle({ x: t.x + 0.25 + Math.random() * 0.5, y: t.y + 0.4, vy: -4 - Math.random() * 2, vx: (Math.random() - 0.5) * 0.8,
+      life: 0.35, color: Math.random() < 0.5 ? "#ff6f00" : "#ffd54f", glow: true });
+  }
+  const box = { x: t.x + 0.15, y: t.y - 1, w: 0.7, h: 2 };
+  if (t.cd <= 0 && h.evade <= 0 && overlaps(box, h)) {
+    damage(h, TRAPS.fire.dmg * t.lvl, "#ffb74d", ["#ff6f00", "#ffd54f"]);
+    t.cd = TRAPS.fire.cd;
+  }
+}
+
+// How far a crusher can fall before it hits the ground (or the lava).
+function crusherDrop(t) {
+  let gy = t.y + 1;
+  while (gy < H && !isSolid(t.x, gy)) gy++;
+  return Math.min(gy, H) - t.y - 1;
+}
+
+function updateCrusher(t, h, dt) {
+  const drop = crusherDrop(t);
+  if (t.state === "up") {
+    // Drop just ahead of a hero walking underneath.
+    const dx = t.x + 0.5 - centerX(h);
+    if (t.cd <= 0 && dx > -0.3 && dx < 1.1 && centerY(h) > t.y + 0.5) { t.state = "fall"; t.v = 0; t.hit = false; }
+  } else if (t.state === "fall") {
+    t.v += 70 * dt;
+    t.off = Math.min(drop, t.off + t.v * dt);
+    const box = { x: t.x + 0.05, y: t.y + t.off, w: 0.9, h: 1 };
+    if (!t.hit && h.evade <= 0 && overlaps(box, h)) {
+      t.hit = true;
+      damage(h, TRAPS.crusher.dmg * t.lvl, "#ff5252");
+      S.shake = Math.max(S.shake, 4);
+    }
+    if (t.off >= drop) {
+      t.state = "down";
+      t.timer = 0.5;
+      S.shake = Math.max(S.shake, 3);
+      dust(t.x + 0.5, t.y + t.off + 1, 10);
+    }
+  } else if (t.state === "down") {
+    t.timer -= dt;
+    if (t.timer <= 0) t.state = "rise";
+  } else {
+    t.off -= 1.6 * dt;
+    if (t.off <= 0) { t.off = 0; t.state = "up"; t.cd = 1.4 - 0.3 * (t.lvl - 1); }
+  }
+}
+
+function updateMine(t, h) {
+  if (h.evade > 0 || !overlaps({ x: t.x + 0.15, y: t.y + 0.6, w: 0.7, h: 0.4 }, h)) return;
+  // Boom: hurts the hero and any of your minions caught in the blast, then the bomb is gone.
+  const cx = t.x + 0.5, cy = t.y + 0.7;
+  damage(h, TRAPS.mine.dmg * t.lvl, "#ff5252", ["#ff6f00", "#ffd54f", "#5d566a"]);
+  h.vy = -8;
+  for (const m of S.minions) if (Math.hypot(centerX(m) - cx, centerY(m) - cy) < 1.6) damage(m, 20, "#ffb74d", MINIONS[m.type].blood);
+  burst(cx, cy, 30, ["#ffd54f", "#ff6f00", "#fff3c4", "#ff3d00"], 8, { glow: true });
+  burst(cx, cy, 14, ["#5d566a", "#3a3448"], 5);
+  S.shake = 6;
+  t.dead = true;
 }
 
 function updateArrows(dt) {
@@ -801,6 +946,12 @@ function heroDied(reason) {
   else S.phase = "build";
   banner("HERO FELLED", `+${coins} coins  +${souls} soul${souls > 1 ? "s" : ""}`, "#ffd54f");
   say(`${reason} The next hero arrives at Lv ${S.heroLv} in ${gearFor(S.heroLv).name}...`);
+  for (const [tool, kind] of Object.entries(TRAPS)) {
+    if (kind.unlock !== wins()) continue;
+    S.fresh.add(tool);
+    queueBanner("NEW TRAP", `${kind.name} unlocked`, "#9cff9c");
+    say(`${reason} New trap unlocked: ${kind.name}! The next hero arrives at Lv ${S.heroLv}...`);
+  }
 }
 
 function bossDied() {
@@ -1018,6 +1169,54 @@ const ART = {
     ".dssssssssssd.",
     "..dddddddddd..",
   ],
+  fireVent: [
+    "..dddddddddddd..",
+    ".dMgMgMgMgMgMgd.",
+    "dDDDDDDDDDDDDDDd",
+    "dddddddddddddddd",
+  ],
+  crusher: [
+    ".dddddddddddddd.",
+    "dSSSSSSSSSSSSSSd",
+    "dSssSSSSSSSSssSd",
+    "dSssSSSSSSSSssSd",
+    "dSSSSSSSSSSSSSSd",
+    "dSSKKKSSSSKKKSSd",
+    "dSSSKYKSSKYKSSSd",
+    "dSSSSSSSSSSSSSSd",
+    "dSSSSKKKKKKSSSSd",
+    "dSSSSSSSSSSSSSSd",
+    "dssssssssssssssd",
+    "dddddddddddddddd",
+    "MmMMmMMmMMmMMmMm",
+    ".Mm.Mm.Mm.Mm.Mm.",
+    ".m..m..m..m..m..",
+  ],
+  mine: [
+    ".......rr.......",
+    ".......dd.......",
+    ".....dMMMMd.....",
+    "....dMWMMMmd....",
+    "...dddddddddd...",
+  ],
+  frostCrystal: [
+    "...W...",
+    "..WCW..",
+    ".WCCCW.",
+    "WCCcCCW",
+    ".WCcCW.",
+    "..WCW..",
+    "...W...",
+  ],
+  frostBase: [
+    "....dSSSSd....",
+    ".....dSSd.....",
+    ".....dSSd.....",
+    ".....dSSd.....",
+    "....dSSSSd....",
+    "...dSSSSSSd...",
+    "..dddddddddd..",
+  ],
   coin: [".YYYY.", "YYWYYy", "YWYYYy", "YYYYYy", "YYYYyy", ".yyyy."],
   soul: ["...B..", "..BB..", ".BWBB.", "BBWWB.", "BWWWBB", "BBWWBB", ".BBBB."],
 };
@@ -1048,6 +1247,8 @@ const SPIKE_PALS = [
   { M: "#ef5350", m: "#9a2a2a", W: "#ffcdd2", D: "#3b3746", d: "#26232e" },
 ];
 const TURRET_EYES = ["#ffb300", "#ff7043", "#ff1744"];
+const STONE_PAL = { S: "#6b6378", s: "#4a4456", K: "#1a1420", Y: "#ff5252" };
+const FROST_PALS = [{ C: "#81d4fa", c: "#e1f5fe", W: "#4fc3f7" }, { C: "#4fc3f7", c: "#ffffff", W: "#0288d1" }, { C: "#b388ff", c: "#ffffff", W: "#7c4dff" }];
 const LEVEL_SAW = [["#9aa3ad", "#636b75"], ["#dfe6ea", "#9aa7b0"], ["#ef5350", "#9a2a2a"]];
 const ICON_PAL = { Y: "#ffd54f", y: "#c79a1e", W: "#fff8e1" };
 const SOUL_PAL = { B: "#4fc3f7", W: "#e1f5fe" };
@@ -1499,6 +1700,32 @@ function drawTrap(t, alpha = 1) {
     ctx.fillRect(X + 7, Y + 8, 1, (bot + 1) * T - Y - 8);
     ctx.globalAlpha = 1;
     drawSaw(X + 8, Y + 8, t.lvl, S.time * (t.flash > 0 ? 30 : 14), alpha);
+  } else if (t.type === "fire") {
+    drawFireVent(t, X, Y, alpha);
+  } else if (t.type === "crusher") {
+    // A chain from the top of the screen holds the block; it drops and winches back up.
+    const by = Math.round(Y + (t.off || 0) * T);
+    ctx.globalAlpha = alpha;
+    for (let y = 18; y < by + 1; y += 4) {
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(X + 6, y, 4, 3);
+      ctx.fillStyle = y % 8 ? "#6b6378" : "#4a4458";
+      ctx.fillRect(X + 7, y, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+    const angry = t.state === "fall" || t.state === "down";
+    const pal = Object.assign({}, STONE_PAL, { Y: angry ? "#ff1744" : ["#ffb300", "#ff7043", "#ff1744"][t.lvl - 1] });
+    drawSprite(sprite(ART.crusher, pal, "crusher" + pal.Y), X + 8, by + T - 1 + 1, 1, alpha);
+  } else if (t.type === "mine") {
+    const blink = Math.floor(S.time * 3 + t.x) % 2 === 0;
+    const near = S.hero && Math.abs(centerX(S.hero) - t.x - 0.5) < 2;
+    const pal = { r: blink || near ? "#ff1744" : "#5d0f0f", M: ["#5d566a", "#7c7392", "#9a2a2a"][t.lvl - 1], m: "#3a3448" };
+    drawSprite(sprite(ART.mine, pal, "mine" + pal.r + t.lvl), X + 8, Y + T - 1, 1, alpha);
+  } else if (t.type === "frost") {
+    const pal = Object.assign({}, STONE_PAL, FROST_PALS[t.lvl - 1]);
+    drawSprite(sprite(ART.frostBase, pal, "frostbase"), X + 8, Y + T - 1, 1, alpha);
+    const bob = Math.round(Math.sin(S.time * 3 + t.x) * 1.5);
+    drawSprite(sprite(ART.frostCrystal, pal, "frost" + t.lvl), X + 8, Y + 7 + bob, 1, alpha);
   } else {
     // A carved stone pillar from the ground holds up the gargoyle.
     let bot = t.y;
@@ -1526,6 +1753,30 @@ function drawTrap(t, alpha = 1) {
       ctx.fillRect(X + 1 + i * 3, Y + 1, 3, 3);
       ctx.fillStyle = "#ffd54f";
       ctx.fillRect(X + 2 + i * 3, Y + 2, 1, 1);
+    }
+  }
+}
+
+function drawFireVent(t, X, Y, alpha) {
+  const hot = t.fireOn || t.warn;
+  const pal = { M: hot ? "#ffb300" : "#5d566a", g: hot ? "#ff6f00" : "#2e2a38", D: "#3b3746", d: "#26232e" };
+  drawSprite(sprite(ART.fireVent, pal, "vent" + hot), X + 8, Y + T - 1, 1, alpha);
+  if (!t.fireOn) return;
+  // A roaring column of flame, two tiles tall.
+  const base = Y + T - 4;
+  for (let i = 0; i < 10; i++) {
+    const x = X + 3 + i;
+    const edge = Math.min(i, 9 - i);
+    const h = Math.round(14 + edge * 3 + Math.sin(S.time * 40 + i * 1.7) * 3 + t.lvl * 2);
+    ctx.fillStyle = "#c62828";
+    ctx.fillRect(x, base - h, 1, h);
+    ctx.fillStyle = "#ff6f00";
+    ctx.fillRect(x, base - Math.round(h * 0.8), 1, Math.round(h * 0.8));
+    ctx.fillStyle = "#ffb300";
+    ctx.fillRect(x, base - Math.round(h * 0.55), 1, Math.round(h * 0.55));
+    if (edge > 1) {
+      ctx.fillStyle = "#fff3c4";
+      ctx.fillRect(x, base - Math.round(h * 0.3), 1, Math.round(h * 0.3));
     }
   }
 }
@@ -1615,6 +1866,7 @@ function drawHero(h) {
   const cx = centerX(h) * T, bottom = (h.y + h.h) * T;
   drawSprite(heroSprite(h), cx, bottom, h.face, h.evade > 0 ? 0.6 : 1);
   if (h.flash > 0) drawSprite(heroSprite(h, true), cx, bottom, h.face, 0.85);
+  else if (h.chill > 0 && !inArena()) drawSprite(heroSprite(h, true), cx, bottom, h.face, 0.3);
 
   // Sword smear when attacking.
   if (h.atkAnim > 0) {
@@ -1687,7 +1939,11 @@ function drawLighting() {
   for (let x = 0; x < W; x++) if (tileAt(x, H - 1) === "L") hole(x * T + 8, (H - 1) * T + 4, 44, 0.9);
   if (S.hero) hole(centerX(S.hero) * T, centerY(S.hero) * T, 40, 0.7);
   hole(centerX(S.boss) * T, S.boss.y * T + 14, 56, 0.8);
-  for (const t of S.traps) if (t.type === "turret") hole(t.x * T + 8, t.y * T + 8, 18, 0.6);
+  if (!inArena()) for (const t of S.traps) {
+    if (t.type === "turret") hole(t.x * T + 8, t.y * T + 8, 18, 0.6);
+    if (t.type === "fire" && t.fireOn) hole(t.x * T + 8, t.y * T, 64, 1);
+    if (t.type === "frost") hole(t.x * T + 8, t.y * T + 6, 34, 0.6);
+  }
 
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(light, 0, 0, W * T, H * T);
@@ -1703,6 +1959,10 @@ function drawLighting() {
   };
   torches().forEach((t, i) => glow(t.x * T + 8, t.y * T + 6, 22 + Math.sin(S.time * 11 + i) * 2, "rgba(255,140,40,0.22)"));
   for (let x = 0; x < W; x++) if (tileAt(x, H - 1) === "L") glow(x * T + 8, (H - 1) * T + 4, 20, "rgba(255,90,20,0.18)");
+  if (!inArena()) for (const t of S.traps) {
+    if (t.type === "fire" && t.fireOn) glow(t.x * T + 8, t.y * T, 28, "rgba(255,120,30,0.35)");
+    if (t.type === "frost") glow(t.x * T + 8, t.y * T + 4, frostRadius(t.lvl) * T * 0.8, "rgba(80,170,255,0.12)");
+  }
   ctx.globalCompositeOperation = "source-over";
 }
 
@@ -1723,15 +1983,15 @@ function drawHover() {
   let ok = canBuild(x, y), label = "";
   if (TRAPS[S.tool]) {
     const kind = TRAPS[S.tool];
-    if (existing && existing.type !== S.tool) ok = false;
-    if (!existing && kind.needsGround && !isSolid(x, y + 1)) ok = false;
+    if (placeProblem(S.tool, x, y, existing)) ok = false;
     const lvl = existing ? existing.lvl : 0;
-    if (lvl >= 3) { ok = false; label = "MAX"; }
+    if (!unlocked(S.tool)) label = "LOCKED";
+    else if (lvl >= 3) { ok = false; label = "MAX"; }
     else {
       label = `${existing ? "UP " : ""}${kind.costs[lvl]}C`;
       if (S.coins < kind.costs[lvl]) ok = false;
     }
-    if (ok && !existing) drawTrap({ type: S.tool, x, y, lvl: 1, flash: 0, face: -1 }, 0.55);
+    if (ok && !existing) drawTrap(newTrap(S.tool, x, y), 0.55);
   } else {
     const kind = MINIONS[S.tool];
     label = `${kind.cost}S`;
@@ -1831,7 +2091,7 @@ function drawBanner() {
     return;
   }
   const life = bn.t;
-  if (life > 2.4) { S.banner = null; return; }
+  if (life > 2.4) { S.banner = S.bannerQueue.shift() || null; return; }
   // Announcements sit up in the sky, out of the way of the action.
   const a = Math.min(1, life * 4, (2.4 - life) * 3);
   const y = 34 - Math.round(Math.max(0, 1 - life * 6) * 6);
@@ -1903,6 +2163,13 @@ function drawIcons() {
       let spr;
       if (tool === "spike") spr = sprite(ART.spikeUp, SPIKE_PALS[1], "spike2");
       if (tool === "turret") spr = sprite(ART.turret, { S: "#6b6378", s: "#4a4456", Y: TURRET_EYES[0], k: "#3b0a0d" }, "turret" + TURRET_EYES[0]);
+      if (tool === "fire") {
+        ctxSwap(g, () => drawFireVent({ fireOn: true, lvl: 1 }, 0, 0, 1));
+        return;
+      }
+      if (tool === "crusher") spr = sprite(ART.crusher, Object.assign({}, STONE_PAL, { Y: "#ffb300" }), "crusher#ffb300");
+      if (tool === "mine") spr = sprite(ART.mine, { r: "#ff1744", M: "#5d566a", m: "#3a3448" }, "mine#ff17441");
+      if (tool === "frost") spr = sprite(ART.frostCrystal, Object.assign({}, STONE_PAL, FROST_PALS[0]), "frost1");
       if (tool === "skeleton") spr = sprite(ART.skeleton, SKELETON_PAL, "skeleton");
       if (tool === "ogre") spr = sprite(ART.ogre, {}, "ogre");
       g.drawImage(spr, Math.round(8 - spr.width / 2), 16 - spr.height);
@@ -1921,6 +2188,14 @@ function updateToolbar() {
     b.classList.toggle("selected", tool === S.tool);
     const poor = TRAPS[tool] ? S.coins < TRAPS[tool].costs[0] : S.souls < MINIONS[tool].cost;
     b.classList.toggle("poor", poor);
+    const locked = !unlocked(tool);
+    b.classList.toggle("locked", locked);
+    b.classList.toggle("fresh", S.fresh.has(tool) && tool !== S.tool);
+    if (TRAPS[tool]) {
+      const kind = TRAPS[tool], cost = b.querySelector(".cost");
+      const text = locked ? `Kill ${kind.unlock - wins()} more` : `${kind.costs[0]} coins`;
+      if (cost.textContent !== text) cost.textContent = text;
+    }
   });
   const go = document.getElementById("go");
   const label = { over: "Play again", build: "Start wave", wave: "Wave in progress" }[S.phase] || "Boss battle!";
