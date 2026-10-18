@@ -157,7 +157,7 @@
   <div id="msg"></div>
   <details id="darkPanel" open>
     <summary>Dark powers (<span id="darkCount">0</span> dark souls)</summary>
-    <div class="dark-intro">Heroes drop a dark soul instead of a normal one 1 time in 10. Spend them here on powers you keep for every boss battle, or click one of your monsters and give it one.</div>
+    <div class="dark-intro">Heroes drop a dark soul instead of a normal one 1 time in 4. Spend them here on powers you keep for every boss battle, or click one of your monsters and give it one.</div>
     <div id="darkRows"></div>
   </details>
   <details id="trapPanel" open>
@@ -180,7 +180,7 @@
     <b>bone golems</b> (huge, and smash every hero around them).
     The <b>Bone Serpent</b> costs 2 dark souls and lives in a lava pit (one per pit): it can't be killed, swims slowly,
     and every 7 seconds or so it lunges up and swallows a hero jumping over its pit. Champions are too big to swallow, so it bites them hard instead.<br>
-    <b>Dark souls:</b> one hero in ten drops a purple dark soul instead of a normal one. Spend them on <b>Dark powers</b>
+    <b>Dark souls:</b> one hero in four drops a purple dark soul instead of a normal one. Spend them on <b>Dark powers</b>
     (below the toolbar) that you keep for every boss battle: Dark Mending (1), Doom Nova (2), Raise the Fallen (3) and
     the passive Unholy Might. Or click one of your monsters and infuse it with a dark soul (I): it turns black and violet,
     with 2.5x health, double damage, more speed, and it drains life from what it hits.<br>
@@ -388,7 +388,7 @@ const MINIONS = {
 };
 // A dark soul given to a monster makes it a far deadlier version of itself.
 const DARK = { hp: 2.5, atk: 2, speed: 1.2, steal: 0.3 };
-const DARK_SOUL_CHANCE = 0.1;
+const DARK_SOUL_CHANCE = 0.25;
 // The Bone Serpent lives in a lava pit and can't be killed. Every so often it lunges up and
 // swallows a hero jumping over its pit. It's bought with dark souls, one per pit.
 const SERPENT = { cost: 2, cd: 7, swim: 0.7, reach: 1.4, height: 4.2, champBite: 0.5 };
@@ -6276,9 +6276,9 @@ function drawHud() {
   const b = S.boss;
   if (inArena()) {
     drawText(`HEROES ${S.heroes.length}`, 240, 5, "#e6e0ec", { align: "center" });
-    // Souls-style boss bar along the bottom during the battle; it steps aside for dialogue.
-    ctx.globalAlpha = 1 - dialogAlpha();
-    const bw = 250, bx = 14, by = H * T - 9;
+    // Souls-style boss bar across the top of the screen, just under the resource strip.
+    const bw = 300, bx = Math.round((W * T - bw) / 2), by = 32;
+    const hpText = `${Math.max(0, Math.ceil(b.hp))}/${b.maxHp}`;
     if (b.form === 2) {
       drawText(`${BOSS_NAME}, THE DEVOURER`, bx, by - 10, "#e1bee7");
       drawMeter(bx, by, bw, 4, b.hp / b.maxHp, "#24082e", "#8e24aa", "#e040fb");
@@ -6286,7 +6286,7 @@ function drawHud() {
       drawText(`${BOSS_NAME}, ${BOSS_TITLE}`, bx, by - 10, b.enraged ? "#ff8a80" : "#e6e0ec");
       drawMeter(bx, by, bw, 4, b.hp / b.maxHp, "#3b1016", "#c62828", "#ef5350");
     }
-    ctx.globalAlpha = 1;
+    drawText(hpText, bx + bw, by - 10, "#8a8296", { align: "right" });
     drawAbilityBar(b);
     return;
   }
@@ -6356,9 +6356,9 @@ function drawBanner() {
   }
   const life = bn.t;
   if (life > 2.4) { S.banner = S.bannerQueue.shift() || null; return; }
-  // Announcements sit up in the sky, out of the way of the action.
+  // Announcements sit up in the sky, out of the way of the action (below the boss bar on the tower top).
   const a = Math.min(1, life * 4, (2.4 - life) * 3);
-  const y = 34 - Math.round(Math.max(0, 1 - life * 6) * 6);
+  const y = (inArena() ? 46 : 34) - Math.round(Math.max(0, 1 - life * 6) * 6);
   softBand(y + 16, 26, a * 0.55);
   ctx.globalAlpha = a;
   drawText(bn.text, cx, y, bn.color, { align: "center", scale: 3, shadow: "#000" });
