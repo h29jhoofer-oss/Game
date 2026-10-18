@@ -12,6 +12,7 @@ A reverse side-scroller, inspired by *Hostile Architect*: you are the boss waiti
 - **Loot:** every hero you kill drops coins and exactly one soul, which fly into your counters.
 - **Unlockable traps:** kills unlock fire vents (3 kills), crushers (6), bombs (10) and frost totems that slow heroes down (15).
 - **Boss battle:** A / D move, W jumps, Space swings your cleaver and S slams the ground to send out shockwaves.
+- **Sound:** chiptune music and sound effects, all synthesized in the browser (no audio files). M mutes the music, N mutes sound effects, and the toolbar has toggles for both.
 - Lava pits kill heroes who miss a jump. Each wave brings one more hero than the last, and they're stronger, better geared, and better at spotting traps and dodging.
 
 ## Pixel Snake (`snake.html`)

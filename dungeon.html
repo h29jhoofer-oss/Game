@@ -92,6 +92,8 @@
     box-shadow: inset 0 0 0 2px #e0574f, inset 2px 2px 0 2px #ff8a80, 0 4px 0 #000;
   }
   button#go:hover { background: #7f2020; }
+  button.toggle { font-size: 9px; padding: 8px 10px; }
+  button.toggle.off { color: var(--dim); }
   button:disabled { opacity: 0.45; cursor: default; transform: none; }
   #msg { min-height: 1.6em; font-size: 10px; line-height: 1.6; text-align: center; color: #cfc6da; max-width: 960px; }
   details { font-size: 9px; line-height: 2; color: var(--dim); max-width: 960px; }
@@ -115,6 +117,8 @@
     <button data-tool="skeleton"><canvas width="16" height="16"></canvas><span>Skeleton<span class="cost s">1 soul</span></span></button>
     <button data-tool="ogre"><canvas width="16" height="16"></canvas><span>Ogre<span class="cost s">3 souls</span></span></button>
     <button id="go">Start wave</button>
+    <button id="music" class="toggle">Music on</button>
+    <button id="sfx" class="toggle">Sound on</button>
   </div>
   <div id="msg"></div>
   <details>
@@ -126,6 +130,7 @@
     Every hero you kill drops coins and exactly one soul, and kills unlock new traps: fire vents, crushers, bombs and frost totems.<br>
     <b>Boss battle:</b> when the tower fills up, the fight moves to the tower top.
     A / D or arrows move, W jumps, Space swings your cleaver, S slams the ground and sends out shockwaves.<br>
+    Press M to mute the music and N to mute sound effects.<br>
     Each wave brings one more hero than the last, and they're stronger, better geared, and better at spotting traps and dodging.<br>
     <a href="index.html">&larr; back to menu</a>
   </details>
@@ -251,7 +256,7 @@ function makeBoss() {
 }
 
 let S;
-function newGame() {
+function newGame(title = false) {
   S = {
     coins: 20, souls: 2, wave: 1, kills: 0, named: 0,
     shown: { coins: 20, souls: 2 }, coinFx: [], soulFx: [],
@@ -260,11 +265,17 @@ function newGame() {
     traps: [], minions: [], arrows: [], waves: [], boss: makeBoss(),
     heroes: [], towerHeroes: [], spawnQueue: [], spawnT: 0, loot: { kills: 0, coins: 0 }, doorFlash: 0,
     opening: { stage: "run", t: 0 },
-    phase: "intro", scene: "level", floats: [], particles: [], tool: "spike", time: 0,
+    phase: title ? "title" : "intro", scene: "level", floats: [], particles: [], tool: "spike", time: 0,
     fade: 0, fadeIn: 0, intro: 0, returnT: 0,
     shake: 0, banner: null, bannerQueue: [], pulse: { coins: 0, souls: 0 }, fresh: new Set(),
   };
-  // The opening: one reckless hero charges in alone.
+  if (title) { say("Click or press any key to begin."); return; }
+  startOpening();
+}
+
+// The opening: one reckless hero charges in alone.
+function startOpening() {
+  S.phase = "intro";
   const first = makeHero(1);
   first.reckless = true;
   S.heroes.push(first);
@@ -342,6 +353,7 @@ function dust(x, y, n) {
 
 function damage(target, amount, color, colors) {
   target.hp -= amount;
+  Sound.play(target.isBoss ? "bossHurt" : MINIONS[target.type] ? "minionHurt" : "hit");
   target.flash = 0.12;
   float(centerX(target), target.y - 0.1, "-" + amount, color);
   burst(centerX(target), centerY(target), target.isBoss ? 8 : 5, colors || ["#d32f2f", "#8e1b1b"], 4);
@@ -355,10 +367,234 @@ function queueBanner(text, sub, color) {
 }
 function say(text) { document.getElementById("msg").textContent = text; }
 
+// ---------- sound ----------
+// Everything is synthesized with the Web Audio API: no sound files. Browsers only allow audio
+// after the player clicks or presses a key, so unlock() runs on the first input.
+const Sound = (() => {
+  let ac = null, sfxBus, musicBus, noiseBuf;
+  const prefs = { music: true, sfx: true };
+  try { Object.assign(prefs, JSON.parse(localStorage.getItem("dungeonBossSound") || "{}")); } catch (e) { /* storage blocked */ }
+  const lastPlayed = {};
+
+  function unlock() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!ac) {
+      ac = new AC();
+      const comp = ac.createDynamicsCompressor();
+      comp.connect(ac.destination);
+      const master = ac.createGain();
+      master.gain.value = 0.6;
+      master.connect(comp);
+      sfxBus = ac.createGain();
+      musicBus = ac.createGain();
+      sfxBus.connect(master);
+      musicBus.connect(master);
+      noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      applyPrefs();
+    }
+    if (ac.state === "suspended") ac.resume();
+  }
+
+  function applyPrefs() {
+    if (!ac) return;
+    sfxBus.gain.value = prefs.sfx ? 1 : 0;
+    musicBus.gain.value = prefs.music ? 0.45 : 0;
+  }
+  function toggle(kind) {
+    prefs[kind] = !prefs[kind];
+    try { localStorage.setItem("dungeonBossSound", JSON.stringify(prefs)); } catch (e) { /* storage blocked */ }
+    applyPrefs();
+    return prefs[kind];
+  }
+
+  // One oscillator note with a quick attack and an exponential fade.
+  function tone(f, o = {}) {
+    const t = o.when ?? ac.currentTime + (o.at || 0), dur = o.dur ?? 0.1;
+    const osc = ac.createOscillator(), g = ac.createGain();
+    osc.type = o.type || "square";
+    osc.frequency.setValueAtTime(f, t);
+    if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(o.vol ?? 0.2, t + (o.attack ?? 0.005));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g);
+    g.connect(o.bus || sfxBus);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+  }
+
+  // Filtered white noise: hits, whooshes, explosions, drums.
+  function noise(o = {}) {
+    const t = o.when ?? ac.currentTime + (o.at || 0), dur = o.dur ?? 0.1;
+    const src = ac.createBufferSource(), filt = ac.createBiquadFilter(), g = ac.createGain();
+    src.buffer = noiseBuf;
+    filt.type = o.filter || "lowpass";
+    filt.frequency.setValueAtTime(o.freq || 2000, t);
+    if (o.to) filt.frequency.exponentialRampToValueAtTime(o.to, t + dur);
+    filt.Q.value = o.q || 1;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(o.vol ?? 0.2, t + (o.attack ?? 0.005));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(filt);
+    filt.connect(g);
+    g.connect(o.bus || sfxBus);
+    src.start(t, Math.random() * 0.5);
+    src.stop(t + dur + 0.02);
+  }
+
+  const semi = (f, s) => f * Math.pow(2, s / 12);
+  const arp = (base, steps, o) => steps.forEach((s, i) => tone(semi(base, s), Object.assign({}, o, { at: i * (o.gap || 0.06) })));
+
+  const SFX = {
+    // loot
+    coin: (streak = 0) => {
+      const f = semi(988, Math.min(streak, 12));
+      tone(f, { dur: 0.05, vol: 0.09 });
+      tone(f * 1.5, { dur: 0.14, vol: 0.09, at: 0.045 });
+    },
+    coinDrop: () => { for (let i = 0; i < 5; i++) tone(1400 + Math.random() * 900, { type: "triangle", dur: 0.05, vol: 0.06, at: i * 0.035 }); },
+    bounce: () => tone(1800 + Math.random() * 700, { type: "triangle", dur: 0.03, vol: 0.035 }),
+    soulRise: () => {
+      tone(300, { to: 900, type: "sine", dur: 0.8, vol: 0.1, attack: 0.25 });
+      tone(303, { to: 905, type: "triangle", dur: 0.8, vol: 0.05, attack: 0.3 });
+    },
+    soul: () => arp(660, [0, 4, 7, 12], { type: "sine", dur: 0.3, vol: 0.08, gap: 0.04 }),
+    // combat
+    hit: () => { noise({ dur: 0.08, vol: 0.22, freq: 1800, to: 400 }); tone(180, { to: 90, dur: 0.08, vol: 0.08 }); },
+    minionHurt: () => tone(300, { to: 160, dur: 0.07, vol: 0.08 }),
+    bossHurt: () => { tone(110, { to: 70, type: "sawtooth", dur: 0.15, vol: 0.14 }); noise({ dur: 0.06, vol: 0.12, freq: 900 }); },
+    heroDie: () => { tone(440, { to: 110, dur: 0.4, vol: 0.1 }); noise({ dur: 0.3, vol: 0.15, freq: 1200, to: 200 }); },
+    sizzle: () => { noise({ dur: 0.8, vol: 0.22, filter: "highpass", freq: 2500, to: 6000 }); tone(220, { to: 55, type: "sawtooth", dur: 0.5, vol: 0.08 }); },
+    swing: () => noise({ dur: 0.18, vol: 0.2, filter: "bandpass", freq: 500, to: 2600, q: 2 }),
+    bossHit: () => { tone(80, { to: 40, type: "sine", dur: 0.3, vol: 0.45 }); noise({ dur: 0.15, vol: 0.3, freq: 2000, to: 300 }); },
+    slamCharge: () => tone(120, { to: 300, type: "sawtooth", dur: 0.42, vol: 0.06, attack: 0.1 }),
+    slam: () => { tone(70, { to: 28, type: "sine", dur: 0.8, vol: 0.6 }); noise({ dur: 0.7, vol: 0.4, freq: 1200, to: 80 }); },
+    jump: () => tone(180, { to: 380, dur: 0.1, vol: 0.06 }),
+    dodge: () => noise({ dur: 0.15, vol: 0.12, filter: "bandpass", freq: 3200, to: 800, q: 2 }),
+    // traps and building
+    place: () => { tone(220, { to: 140, dur: 0.08, vol: 0.12 }); noise({ dur: 0.05, vol: 0.12, freq: 1500, at: 0.01 }); },
+    upgrade: () => arp(523, [0, 4, 7, 12], { dur: 0.08, vol: 0.08, gap: 0.05 }),
+    summon: () => { tone(150, { to: 600, type: "sawtooth", dur: 0.55, vol: 0.06, attack: 0.1 }); tone(156, { to: 620, type: "sawtooth", dur: 0.55, vol: 0.06, attack: 0.1 }); },
+    deny: () => { tone(140, { dur: 0.08, vol: 0.08 }); tone(115, { dur: 0.12, vol: 0.08, at: 0.09 }); },
+    click: () => tone(1200, { dur: 0.025, vol: 0.05 }),
+    arrow: () => { noise({ dur: 0.12, vol: 0.1, filter: "bandpass", freq: 3000, to: 1200, q: 3 }); tone(700, { to: 300, type: "triangle", dur: 0.08, vol: 0.05 }); },
+    saw: () => { noise({ dur: 0.15, vol: 0.12, filter: "bandpass", freq: 4000, q: 4 }); tone(1600, { to: 1100, type: "sawtooth", dur: 0.15, vol: 0.04 }); },
+    spike: () => { tone(900, { to: 1800, dur: 0.05, vol: 0.06 }); noise({ dur: 0.05, vol: 0.1, freq: 5000, filter: "highpass" }); },
+    fire: () => noise({ dur: 0.85, vol: 0.14, freq: 400, to: 1600, attack: 0.08 }),
+    crush: () => { tone(90, { to: 40, type: "sine", dur: 0.35, vol: 0.4 }); noise({ dur: 0.25, vol: 0.25, freq: 700, to: 150 }); },
+    boom: () => { tone(120, { to: 30, type: "sine", dur: 0.7, vol: 0.55 }); noise({ dur: 0.8, vol: 0.4, freq: 2500, to: 100 }); },
+    // story beats
+    door: () => { tone(160, { to: 120, dur: 0.12, vol: 0.1 }); tone(120, { to: 80, dur: 0.15, vol: 0.1, at: 0.12 }); },
+    bell: () => [0, 0.4].forEach(at => { tone(392, { type: "triangle", dur: 1.1, vol: 0.16, at }); tone(796, { type: "sine", dur: 0.9, vol: 0.06, at }); }),
+    rumble: () => { noise({ dur: 1.7, vol: 0.35, freq: 160, to: 90, attack: 0.3 }); tone(45, { type: "sine", dur: 1.7, vol: 0.3, attack: 0.3 }); },
+    horn: () => { tone(220, { type: "sawtooth", dur: 0.35, vol: 0.09, attack: 0.03 }); tone(330, { type: "sawtooth", dur: 0.6, vol: 0.09, attack: 0.03, at: 0.3 }); },
+    cleared: () => arp(392, [0, 4, 7, 12, 16], { dur: 0.14, vol: 0.08, gap: 0.09 }),
+    unlock: () => arp(523, [0, 7, 12, 19], { type: "triangle", dur: 0.35, vol: 0.12, gap: 0.08 }),
+    bossIntro: () => {
+      tone(73, { type: "sawtooth", dur: 1.8, vol: 0.14, attack: 0.05 });
+      tone(77.8, { type: "sawtooth", dur: 1.8, vol: 0.1, attack: 0.05 });
+      noise({ dur: 1.4, vol: 0.2, freq: 300, to: 80 });
+    },
+    victory: () => arp(294, [0, 3, 7, 12, 15], { dur: 0.25, vol: 0.1, gap: 0.12 }),
+    death: () => {
+      [0, 3, 7].forEach(s => tone(semi(110, s), { type: "sawtooth", dur: 2.8, vol: 0.08, attack: 0.05 }));
+      tone(55, { type: "sine", dur: 2.8, vol: 0.3 });
+    },
+  };
+  // Busy sounds are rate-limited so a crowd of heroes doesn't turn into noise.
+  const GAP = { bounce: 0.07, hit: 0.05, minionHurt: 0.08, fire: 0.3, coinDrop: 0.2, saw: 0.12, spike: 0.1, arrow: 0.08, soulRise: 0.15 };
+
+  function play(name, arg) {
+    if (!ac || ac.state !== "running" || !prefs.sfx || !SFX[name]) return;
+    const now = ac.currentTime;
+    if (now - (lastPlayed[name] || -1) < (GAP[name] ?? 0.03)) return;
+    lastPlayed[name] = now;
+    SFX[name](arg);
+  }
+
+  // ---------- music ----------
+  // Patterns are written one step per token; "." is a rest.
+  const NOTE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const freq = n => {
+    const [, l, acc, oct] = n.match(/^([A-G])([#b]?)(\d)$/);
+    const midi = 12 * (+oct + 1) + NOTE[l] + (acc === "#" ? 1 : acc === "b" ? -1 : 0);
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  };
+  const steps = s => s.replace(/\|/g, " ").split(/\s+/).filter(Boolean).map(t => (t === "." ? null : freq(t)));
+
+  const TRACKS = {
+    // A slow, brooding march in A minor while the heroes approach.
+    level: {
+      bpm: 96, perBeat: 2,
+      bass: steps("A2 . A2 . E2 . A2 . | F2 . F2 . C3 . F2 . | G2 . G2 . D3 . G2 . | E2 . E2 . B2 . G#2 ."),
+      lead: steps(`A4 . C5 . E5 . D5 C5 | F4 . A4 . C5 . B4 A4 | G4 . B4 . D5 . C5 B4 | E4 . G#4 . B4 . . .
+                   E5 . D5 C5 B4 . A4 . | C5 . B4 A4 G4 . F4 . | D5 . C5 B4 A4 . G4 . | G#4 . B4 . E5 . . .`),
+      drums: "k.h.k.h.",
+      leadVoice: { type: "square", dur: 0.28, vol: 0.05 },
+      bassVoice: { type: "triangle", dur: 0.3, vol: 0.2 },
+    },
+    // Driving and fast in D minor for the fight on the tower top.
+    boss: {
+      bpm: 160, perBeat: 2,
+      bass: steps(`D2 D2 D3 D2 D2 D2 C3 D2 | Bb1 Bb1 Bb2 Bb1 Bb1 Bb1 A2 Bb1 | C2 C2 C3 C2 C2 C2 Bb2 C2 | A1 A1 A2 A1 A1 C#2 E2 A2`),
+      lead: steps(`D5 . . A4 D5 . E5 F5 | F5 . E5 D5 . . A4 . | E5 . . C5 E5 . F5 G5 | A5 . G5 F5 E5 . C#5 .
+                   A5 . . F5 A5 . G5 F5 | D6 . C6 Bb5 A5 . F5 . | G5 . . E5 G5 . A5 Bb5 | A5 G5 F5 E5 C#5 . A4 .`),
+      drums: "khshkksh",
+      leadVoice: { type: "sawtooth", dur: 0.14, vol: 0.045 },
+      bassVoice: { type: "square", dur: 0.15, vol: 0.07 },
+    },
+  };
+
+  let track = null, step = 0, nextTime = 0;
+  function drum(ch, when) {
+    if (ch === "k") tone(150, { to: 40, type: "sine", dur: 0.16, vol: 0.5, when, bus: musicBus });
+    if (ch === "s") { noise({ dur: 0.12, vol: 0.18, filter: "highpass", freq: 1500, when, bus: musicBus }); tone(200, { type: "triangle", dur: 0.08, vol: 0.1, when, bus: musicBus }); }
+    if (ch === "h" || ch === "k" && track === "boss") noise({ dur: 0.03, vol: 0.05, filter: "highpass", freq: 7000, when, bus: musicBus });
+  }
+  function scheduleStep(t, i, when) {
+    const bass = t.bass[i % t.bass.length], lead = t.lead[i % t.lead.length];
+    if (bass) tone(bass, Object.assign({ when, bus: musicBus }, t.bassVoice));
+    if (lead) tone(lead, Object.assign({ when, bus: musicBus, attack: 0.01 }, t.leadVoice));
+    drum(t.drums[i % t.drums.length], when);
+  }
+  // Look ahead a little and schedule notes on the audio clock so the beat stays steady.
+  setInterval(() => {
+    if (!ac || ac.state !== "running" || !track) return;
+    const t = TRACKS[track], stepLen = 60 / t.bpm / t.perBeat;
+    if (nextTime < ac.currentTime) nextTime = ac.currentTime + 0.05;
+    while (nextTime < ac.currentTime + 0.15) {
+      scheduleStep(t, step, nextTime);
+      nextTime += stepLen;
+      step = (step + 1) % (t.lead.length * t.bass.length);
+    }
+  }, 30);
+
+  function music(name) {
+    if (track === name) return;
+    track = name;
+    step = 0;
+    if (ac) nextTime = ac.currentTime + 0.1;
+  }
+
+  return { unlock, play, music, toggle, prefs };
+})();
+
 // ---------- input ----------
 const keys = {};
+let startedAt = 0;
+function wake() {
+  Sound.unlock();
+  if (S.phase === "title") { startedAt = performance.now(); startOpening(); }
+}
+addEventListener("pointerdown", wake);
 document.addEventListener("keydown", e => {
+  wake();
   const k = e.key.toLowerCase();
+  if (k === "m" && !e.repeat) toggleSound("music");
+  if (k === "n" && !e.repeat) toggleSound("sfx");
   keys[k] = true;
   if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
   if (k === " ") bossAttack();
@@ -389,14 +625,31 @@ function tileFromEvent(e) {
 }
 canvas.addEventListener("mousemove", e => { hover = tileFromEvent(e); });
 canvas.addEventListener("mouseleave", () => { hover = null; });
-canvas.addEventListener("click", e => place(tileFromEvent(e)));
+// Ignore the click that dismissed the title screen.
+canvas.addEventListener("click", e => { if (performance.now() - startedAt > 300) place(tileFromEvent(e)); });
+
+function toggleSound(kind) {
+  Sound.toggle(kind);
+  updateSoundButtons();
+}
+function updateSoundButtons() {
+  for (const kind of ["music", "sfx"]) {
+    const b = document.getElementById(kind), on = Sound.prefs[kind];
+    b.textContent = `${kind === "music" ? "Music" : "Sound"} ${on ? "on" : "off"}`;
+    b.classList.toggle("off", !on);
+  }
+}
+document.getElementById("music").addEventListener("click", () => toggleSound("music"));
+document.getElementById("sfx").addEventListener("click", () => toggleSound("sfx"));
+updateSoundButtons();
 
 document.querySelectorAll("button").forEach(b => b.addEventListener("click", () => b.blur()));
 document.querySelectorAll("[data-tool]").forEach(b => {
   b.addEventListener("click", () => {
     const tool = b.dataset.tool;
-    if (!unlocked(tool)) { say(placeProblem(tool, 0, 0, null)); return; }
+    if (!unlocked(tool)) { say(placeProblem(tool, 0, 0, null)); Sound.play("deny"); return; }
     S.tool = tool;
+    Sound.play("click");
     S.fresh.delete(tool);
   });
 });
@@ -435,27 +688,28 @@ if (document.fonts) document.fonts.ready.then(fitCanvas);
 fitCanvas();
 
 function place({ x, y }) {
-  if (S.phase === "over") return;
-  if (inArena()) { say("You can't build during the boss battle."); return; }
-  if (!canBuild(x, y)) { say("You can't build there."); return; }
+  if (S.phase === "over" || S.phase === "title") return;
+  if (inArena()) { say("You can't build during the boss battle."); Sound.play("deny"); return; }
+  if (!canBuild(x, y)) { say("You can't build there."); Sound.play("deny"); return; }
   const trap = S.traps.find(t => t.x === x && t.y === y);
 
   if (TRAPS[S.tool]) {
     const kind = TRAPS[S.tool];
     const problem = placeProblem(S.tool, x, y, trap);
-    if (problem) { say(problem); return; }
+    if (problem) { say(problem); Sound.play("deny"); return; }
     const lvl = trap ? trap.lvl : 0;
-    if (lvl >= 3) { say("That trap is already max level."); return; }
+    if (lvl >= 3) { say("That trap is already max level."); Sound.play("deny"); return; }
     const cost = kind.costs[lvl];
-    if (S.coins < cost) { say(`Need ${cost} coins.`); return; }
+    if (S.coins < cost) { say(`Need ${cost} coins.`); Sound.play("deny"); return; }
     S.coins -= cost;
     spend("coins", cost);
-    if (trap) { trap.lvl++; say(`Upgraded to level ${trap.lvl}.`); }
-    else { S.traps.push(newTrap(S.tool, x, y)); say(`${kind.name} placed.`); }
+    if (trap) { trap.lvl++; say(`Upgraded to level ${trap.lvl}.`); Sound.play("upgrade"); }
+    else { S.traps.push(newTrap(S.tool, x, y)); say(`${kind.name} placed.`); Sound.play("place"); }
     burst(x + 0.5, y + 0.6, 8, ["#ffd54f", "#fff3c4"], 3, { glow: true });
   } else {
     const kind = MINIONS[S.tool];
-    if (S.souls < kind.cost) { say(`Need ${kind.cost} soul${kind.cost > 1 ? "s" : ""}.`); return; }
+    if (S.souls < kind.cost) { say(`Need ${kind.cost} soul${kind.cost > 1 ? "s" : ""}.`); Sound.play("deny"); return; }
+    Sound.play("summon");
     S.souls -= kind.cost;
     spend("souls", kind.cost);
     S.minions.push({
@@ -486,6 +740,7 @@ function startWave() {
   S.arrows = [];
   S.phase = "wave";
   S.loot = { kills: 0, coins: 0 };
+  Sound.play("horn");
   banner(`WAVE ${S.wave}`, `${n} heroes approach`, "#e6e0ec");
   say(`${n} Lv ${S.wave} heroes in ${gearFor(S.wave).name} storm your castle! If ${TOWER_LIMIT} get into the tower, they come for you.`);
 }
@@ -509,6 +764,7 @@ function updateOpening(dt) {
     if (o.t <= 0) {
       o.stage = "rumble";
       o.t = 1.6;
+      Sound.play("rumble");
       say("The ground rumbles... more heroes are coming. Place your traps!");
     }
   } else if (o.stage === "rumble") {
@@ -527,6 +783,8 @@ function heroReachedTower(h) {
   S.towerHeroes.push(h);
   const n = S.towerHeroes.length;
   S.doorFlash = 0.5;
+  Sound.play("door");
+  if (n === TOWER_LIMIT) Sound.play("bell");
   S.shake = Math.max(S.shake, 1.5);
   dust(TOWER_X - 0.2, ARENA_FLOOR, 8);
   float(TOWER_X + 0.5, 7.3, `${n}/${TOWER_LIMIT}`, n >= TOWER_LIMIT ? "#ff5252" : "#ff8a80");
@@ -546,6 +804,7 @@ function endWave(sub) {
   S.phase = "build";
   S.wave++;
   queueBanner("WAVE CLEARED", sub, "#ffd54f");
+  Sound.play("cleared");
   say(`Wave cleared! Build up, then start wave ${S.wave}.`);
 }
 
@@ -582,6 +841,7 @@ function startBossFight() {
   const b = S.boss;
   Object.assign(b, { x: 22, y: ARENA_FLOOR - b.h, vx: 0, vy: 0, face: -1, windup: 0, swing: 0, slam: 0, cd: 0, slamCd: 0, hp: b.maxHp });
   banner("LORD OF THE TOWER", `${S.heroes.length} heroes reached the top`, "#ff8a80");
+  Sound.play("bossIntro");
   say("Boss battle! A / D move, W jumps, Space swings, S slams the ground.");
 }
 
@@ -608,6 +868,7 @@ function bossAttack() {
       h.evade = 0.45;
       if (h.onGround) h.vy = -9;
       float(centerX(h), h.y - 0.3, "DODGE", "#6fd3ff");
+      Sound.play("dodge");
     }
   }
 }
@@ -618,11 +879,13 @@ function bossSlam() {
   if (!canFight() || b.slamCd > 0 || b.windup > 0 || b.slam > 0 || !b.onGround) return;
   b.slam = 0.45;
   b.slamCd = 3;
+  Sound.play("slamCharge");
 }
 
 function slamImpact(b) {
   b.swing = 0.15;
   S.shake = 6;
+  Sound.play("slam");
   const fy = b.y + b.h, fx = centerX(b) + b.face * 1.2;
   dust(fx, fy, 16);
   burst(fx, fy - 0.1, 12, ["#8a8296", "#c9c2d6", "#5d566a"], 6);
@@ -650,7 +913,7 @@ function update(dt) {
   S.traps.forEach(t => { t.cd -= dt; t.flash -= dt; });
   S.fadeIn = Math.max(0, S.fadeIn - dt);
   S.boss.flash -= dt;
-  if (S.phase === "over") return;
+  if (S.phase === "over" || S.phase === "title") return;
 
   if (S.phase === "enter") {
     S.fade += dt;
@@ -689,6 +952,7 @@ function update(dt) {
     S.phase = "felled";
     S.returnT = 2.4;
     banner("HEROES FELLED", "None of them will leave this tower", "#ffd54f");
+    Sound.play("victory");
   }
 }
 
@@ -742,7 +1006,7 @@ function updateBoss(dt) {
   if (b.slam <= 0) {
     if (keys.a || keys.arrowleft) dir--;
     if (keys.d || keys.arrowright) dir++;
-    if ((keys.w || keys.arrowup) && b.onGround) b.vy = -10;
+    if ((keys.w || keys.arrowup) && b.onGround) { b.vy = -10; Sound.play("jump"); }
   }
   b.vx = dir * BOSS_SPEED;
   if (dir) b.face = dir;
@@ -761,10 +1025,12 @@ function updateBoss(dt) {
     b.windup -= dt;
     if (b.windup <= 0) {
       b.swing = 0.15;
+      Sound.play("swing");
       // One swing cleaves through every hero in reach.
       for (const h of S.heroes) {
         if (h.evade <= 0 && overlaps(swingBox(b), h)) {
           damage(h, BOSS_DMG, "#ff5252");
+          Sound.play("bossHit");
           h.vx = 0;
           S.shake = 4;
         }
@@ -880,6 +1146,7 @@ function updateTraps(dt) {
       if (t.cd <= 0 && best !== null) {
         t.face = Math.sign(best) || -1;
         S.arrows.push({ x: t.x + 0.5 + t.face * 0.4, y: t.y + 0.5, vx: t.face * 9, dmg: TRAPS.turret.dmg * t.lvl });
+        Sound.play("arrow");
         t.cd = 1.6 - 0.4 * (t.lvl - 1);
         t.flash = 0.15;
         dust(t.x + 0.5 + t.face * 0.5, t.y + 0.6, 2);
@@ -901,6 +1168,7 @@ function updateTraps(dt) {
     const hit = t.cd <= 0 ? heroesIn(box) : [];
     for (const h of hit) damage(h, kind.dmg * t.lvl, "#ffb74d");
     if (hit.length) {
+      Sound.play(t.type);
       if (t.type === "saw") burst(t.x + 0.5, t.y + 0.5, 6, ["#fff59d", "#ffb300"], 6, { glow: true });
       t.cd = kind.cd;
       t.flash = 0.25;
@@ -911,7 +1179,9 @@ function updateTraps(dt) {
 function updateFire(t, dt) {
   t.timer += dt;
   const p = t.timer % firePeriod(t.lvl), period = firePeriod(t.lvl);
+  const wasOn = t.fireOn;
   t.fireOn = p > period - FIRE_ON;
+  if (t.fireOn && !wasOn) Sound.play("fire");
   t.warn = !t.fireOn && p > period - FIRE_ON - 0.45;
   if (t.warn && Math.random() < dt * 25) {
     particle({ x: t.x + 0.3 + Math.random() * 0.4, y: t.y + 0.8, vy: -2, vx: (Math.random() - 0.5), life: 0.3, color: "#ffb300", glow: true });
@@ -955,6 +1225,7 @@ function updateCrusher(t, dt) {
     if (t.off >= drop) {
       t.state = "down";
       t.timer = 0.5;
+      Sound.play("crush");
       S.shake = Math.max(S.shake, 3);
       dust(t.x + 0.5, t.y + t.off + 1, 10);
     }
@@ -980,6 +1251,7 @@ function updateMine(t) {
   burst(cx, cy, 30, ["#ffd54f", "#ff6f00", "#fff3c4", "#ff3d00"], 8, { glow: true });
   burst(cx, cy, 14, ["#5d566a", "#3a3448"], 5);
   S.shake = 6;
+  Sound.play("boom");
   t.dead = true;
 }
 
@@ -1044,11 +1316,13 @@ function dropCoins(x, y, total) {
     });
   }
   burst(x, y, 10, ["#fff3c4", "#ffd54f"], 5, { glow: true });
+  Sound.play("coinDrop");
 }
 
 function dropSoul(x, y) {
   S.soulFx.push({ x, y, ox: x, state: "rise", t: 0, wob: Math.random() * 6 });
   burst(x, y, 8, ["#e1f5fe", "#6fd3ff"], 2, { glow: true, g: -6 });
+  Sound.play("soulRise");
 }
 
 function spend(key, cost) {
@@ -1060,6 +1334,10 @@ function spend(key, cost) {
 // A piece of loot reached its counter.
 function collect(key, value, color) {
   S.shown[key] += value;
+  // Coins landing in quick succession climb in pitch.
+  S.streak = S.time - (S.streakAt || -9) < 0.4 ? (S.streak || 0) + 1 : 0;
+  S.streakAt = S.time;
+  Sound.play(key === "coins" ? "coin" : "soul", S.streak);
   S.gain[key] = { amount: (S.gain[key].t > 0 ? S.gain[key].amount : 0) + value, t: 1.4 };
   S.pulse[key] = 0.15;
   const hud = LOOT_HUD[key];
@@ -1093,7 +1371,7 @@ function updateLoot(dt) {
         c.y = Math.floor(ny + 0.2) - 0.2;
         c.vy = -c.vy * 0.45;
         c.vx *= 0.7;
-        if (Math.abs(c.vy) > 2) dust(c.x, c.y + 0.2, 1);
+        if (Math.abs(c.vy) > 2) { dust(c.x, c.y + 0.2, 1); Sound.play("bounce"); }
       } else c.y = ny;
       if (Math.random() < dt * 3) particle({ x: c.x, y: c.y - 0.2, life: 0.25, color: "#ffffff", glow: true });
       if (c.t <= 0) { c.state = "fly"; c.f = 0; c.sx = c.x; c.sy = c.y; }
@@ -1146,11 +1424,13 @@ function heroDied(h) {
   dropCoins(hx, hy, coins);
   dropSoul(hx, hy - 0.3);
   S.shake = Math.max(S.shake, 2.5);
+  Sound.play(h.lava ? "sizzle" : "heroDie");
   say(h.lava ? `${h.name} fell into the lava!` : `${h.name} has fallen!`);
   for (const [tool, kind] of Object.entries(TRAPS)) {
     if (kind.unlock !== S.kills) continue;
     S.fresh.add(tool);
     queueBanner("NEW TRAP", `${kind.name} unlocked`, "#9cff9c");
+    Sound.play("unlock");
     say(`New trap unlocked: ${kind.name}!`);
   }
 }
@@ -1164,6 +1444,7 @@ function bossDied() {
   S.phase = "over";
   const held = S.wave - 1;
   banner("YOU DIED", `Waves survived: ${held}`, "#c62828");
+  Sound.play("death");
   say(`The heroes have slain the Lord of the Tower. You held out for ${held} wave${held === 1 ? "" : "s"} and slew ${S.kills} heroes.`);
 }
 
@@ -2354,9 +2635,18 @@ function softBand(cy, half, alpha) {
 }
 
 function drawBanner() {
+  const cx = W * T / 2;
+  if (S.phase === "title") {
+    // Title card, waiting for the first click (which also switches on the sound).
+    const mid = H * T / 2;
+    softBand(mid - 4, 42, 0.8);
+    drawText("LORD OF THE TOWER", cx, mid - 30, "#ff8a80", { align: "center", scale: 3, shadow: "#000" });
+    drawText("HEROES ARE COMING FOR YOUR TOWER. STOP THEM.", cx, mid - 3, "#e6e0ec", { align: "center" });
+    if (Math.floor(S.time * 2) % 2 === 0) drawText("CLICK OR PRESS ANY KEY", cx, mid + 12, "#ffd54f", { align: "center" });
+    return;
+  }
   const bn = S.banner;
   if (!bn) return;
-  const cx = W * T / 2;
   if (S.phase === "over") {
     // Souls-style death screen across the middle.
     const a = Math.min(1, bn.t / 1.2), mid = H * T / 2;
@@ -2478,9 +2768,9 @@ function updateToolbar() {
     }
   });
   const go = document.getElementById("go");
-  const label = { over: "Play again", build: "Start wave", wave: "Wave in progress", intro: "Here they come..." }[S.phase] || "Boss battle!";
+  const label = { over: "Play again", build: "Start wave", wave: "Wave in progress", intro: "Here they come...", title: "Click to begin" }[S.phase] || "Boss battle!";
   if (go.textContent !== label) go.textContent = label;
-  go.disabled = S.phase !== "over" && S.phase !== "build";
+  go.disabled = !["over", "build", "title"].includes(S.phase);
 }
 
 let last = performance.now();
@@ -2490,13 +2780,14 @@ function frame(now) {
   last = now;
   update(dt);
   update(dt);
+  Sound.music({ title: null, over: null, boss: "boss", felled: "boss" }[S.phase] ?? "level");
   draw();
   present();
   updateToolbar();
   requestAnimationFrame(frame);
 }
 
-newGame();
+newGame(true);
 drawIcons();
 requestAnimationFrame(frame);
 </script>
