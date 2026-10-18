@@ -19,6 +19,12 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
   - **S – Ground Smash:** leap and slam down, hurting and hurling away everyone around you, with shockwaves along the floor.
   - **R – Grasp of the Damned:** a pool of blood opens under the heroes; bony hands hold them, and the weak are dragged down to hell.
   - **F – Hellfire:** the sky burns and fireballs rain down on the heroes.
+- **Phase two:** the first time Vorgath falls in a fight, his armour bursts apart and he rises again as the much larger **Devourer**, with a new health bar, a heavier theme and new attacks on the same keys:
+  - **Space – Claw Swipe:** a huge raking swipe that throws heroes.
+  - **Q – Soul Breath:** a torrent of soulfire poured along the ground.
+  - **S – Cataclysm:** a crushing leap that throws every hero into the air and sets stone spikes erupting across the floor.
+  - **R – Devour:** spectral chains drag the furthest heroes into his jaws; the weak are eaten (healing him), the rest are spat out.
+  - **F – Wailing Souls:** screaming skulls circle him, then hunt the heroes down.
 - **Sound:** chiptune music and sound effects, all synthesized in the browser (no audio files). M mutes the music, N mutes sound effects, and the toolbar has toggles for both.
 - Lava pits kill heroes who miss a jump. Each wave brings one more hero than the last, and they're stronger, better geared, and better at spotting traps and dodging.
 

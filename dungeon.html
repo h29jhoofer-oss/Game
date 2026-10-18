@@ -133,6 +133,9 @@
     <b>Q</b> Cleaver Slash (dash through the heroes), <b>S</b> Ground Smash (hurls away everyone around you),
     <b>R</b> Grasp of the Damned (a pool of blood that holds heroes and drags the weak down to hell),
     <b>F</b> Hellfire (fireballs rain from the sky).<br>
+    <b>Phase two:</b> the first time Vorgath falls in a fight, he transforms into the Devourer, with a second health bar
+    and new attacks on the same keys: Space claw swipe, <b>Q</b> Soul Breath, <b>S</b> Cataclysm (a quake and erupting spikes),
+    <b>R</b> Devour (chains drag heroes into his jaws; the weak are eaten and heal him), <b>F</b> Wailing Souls (homing skulls).<br>
     <b>Heroes:</b> knights charge in with swords. From wave 2, <b>archers</b> join: fast and fragile, they stop to shoot
     your minions and keep their distance on the tower. From wave 3, <b>Iron Knights</b> march in: slow and very tough,
     with a tower shield that blocks most arrow damage from the front. Crushers, fire and bombs work best on them.<br>
@@ -249,6 +252,17 @@ const ABILITIES = [
   { id: "hellfire", key: "F", name: "HELLFIRE", cd: 16 },
 ];
 const SLASH_DMG = 32, SMASH_RADIUS = 2.6, GRASP_TICK = 6, METEOR_DMG = 12;
+// Phase two: when his first life runs out, Vorgath tears free of his armour as the Devourer.
+const P2_HP = 360, P2_SPEED = 2.6;
+const ABILITIES2 = [
+  { id: "breath", key: "Q", name: "SOUL BREATH", cd: 6 },
+  { id: "quake", key: "S", name: "CATACLYSM", cd: 7 },
+  { id: "devour", key: "R", name: "DEVOUR", cd: 11 },
+  { id: "souls", key: "F", name: "WAILING SOULS", cd: 12 },
+];
+const CLAW_DMG = 40, BREATH_TICK = 6, QUAKE_DMG = 20, SPIKE_DMG = 14, DEVOUR_DMG = 28, DEVOUR_HEAL = 30, SKULL_DMG = 10;
+const abilitiesFor = b => b.form === 2 ? ABILITIES2 : ABILITIES;
+const freshCds = () => Object.fromEntries([...ABILITIES, ...ABILITIES2].map(a => [a.id, 0]));
 const GEAR = [
   { name: "Rags",         main: "#8d7b68", shade: "#5e5044" },
   { name: "Leather",      main: "#a0612d", shade: "#6b3f1d" },
@@ -349,7 +363,7 @@ function makeBoss() {
   return {
     x: PERCH.x, y: PERCH.y, w: 2.4, h: 2.75, vx: 0, vy: 0, onGround: true, isBoss: true,
     hp: BOSS_HP, maxHp: BOSS_HP, cd: 0, windup: 0, swing: 0, slam: 0, face: -1, flash: 0, arm: 1.2,
-    action: null, cds: { slash: 0, smash: 0, grasp: 0, hellfire: 0 },
+    action: null, cds: freshCds(), form: 1,
   };
 }
 
@@ -366,7 +380,7 @@ function newGame(title = false) {
     phase: title ? "title" : "intro", scene: "level", floats: [], particles: [], tool: "spike", time: 0,
     fade: 0, fadeIn: 0, intro: 0, returnT: 0,
     shake: 0, banner: null, bannerQueue: [], pulse: { coins: 0, souls: 0 }, fresh: new Set(),
-    dialog: { queue: [], cur: null }, heroArrows: [], pools: [], meteors: [], hell: null, ghosts: [], decals: [], rings: [], slashes: [], seenKinds: new Set(["knight"]), lightning: { next: 3 + Math.random() * 4, flash: 0, bolt: null }, prologue: null, heartbeat: 0,
+    dialog: { queue: [], cur: null }, heroArrows: [], pools: [], meteors: [], hell: null, ghosts: [], decals: [], rings: [], slashes: [], spikes: [], chains: [], skulls: [], whiteFlash: 0, seenKinds: new Set(["knight"]), lightning: { next: 3 + Math.random() * 4, flash: 0, bolt: null }, prologue: null, heartbeat: 0,
   };
   if (title) { say("Click or press any key to begin."); return; }
   startOpening();
@@ -467,10 +481,22 @@ function dust(x, y, n) {
 }
 
 function damage(target, amount, color, colors) {
+  if (target.invuln) return;
   target.hp -= amount;
   Sound.play(target.isBoss ? "bossHurt" : MINIONS[target.type] ? "minionHurt" : "hit");
   target.flash = 0.12;
-  float(centerX(target), target.y - 0.1, "-" + amount, color);
+  // Rapid hits on the same target add up in one number instead of a pile of them.
+  const f = target.hitFloat;
+  if (f && f.t > 0.55 && S.floats.includes(f)) {
+    f.sum += amount;
+    f.text = "-" + Math.round(f.sum);
+    f.t = 0.9;
+    f.x = centerX(target);
+  } else {
+    float(centerX(target), target.y - 0.1, "-" + Math.round(amount), color);
+    target.hitFloat = S.floats[S.floats.length - 1];
+    target.hitFloat.sum = amount;
+  }
   burst(centerX(target), centerY(target), target.isBoss ? 8 : 5, colors || ["#d32f2f", "#8e1b1b"], 4);
 }
 
@@ -630,6 +656,30 @@ const Sound = (() => {
       noise({ dur: 2.4, vol: 0.45, freq: 700, to: 60, attack: 0.05, at: 0.2 });
       tone(40, { type: "sine", dur: 2.2, vol: 0.3, attack: 0.1, at: 0.2 });
     },
+    transformCharge: () => {
+      tone(40, { to: 170, type: "sawtooth", dur: 1.7, vol: 0.2, attack: 0.4 });
+      tone(41, { to: 172, type: "square", dur: 1.7, vol: 0.08, attack: 0.4 });
+      noise({ dur: 1.7, vol: 0.25, freq: 150, to: 2600, attack: 0.6 });
+    },
+    transformBoom: () => { tone(60, { to: 20, type: "sine", dur: 1.5, vol: 0.7 }); noise({ dur: 1.5, vol: 0.55, freq: 3000, to: 60 }); },
+    roar2: () => {
+      tone(70, { to: 36, type: "sawtooth", dur: 2.0, vol: 0.35, attack: 0.1 });
+      tone(74, { to: 34, type: "square", dur: 2.0, vol: 0.14, attack: 0.1 });
+      tone(36, { to: 24, type: "sine", dur: 2.1, vol: 0.45, attack: 0.1 });
+      noise({ dur: 2.0, vol: 0.45, filter: "bandpass", freq: 300, to: 90, q: 2, attack: 0.1 });
+    },
+    claw: () => { noise({ dur: 0.25, vol: 0.3, filter: "bandpass", freq: 1800, to: 400, q: 1.2 }); tone(220, { to: 80, type: "sawtooth", dur: 0.2, vol: 0.1 }); },
+    breathCharge: () => { tone(80, { to: 200, type: "sawtooth", dur: 0.45, vol: 0.12, attack: 0.1 }); noise({ dur: 0.45, vol: 0.12, freq: 300, to: 1200, attack: 0.2 }); },
+    breath: () => { noise({ dur: 1.6, vol: 0.35, freq: 900, to: 500, attack: 0.05 }); tone(90, { to: 70, type: "sawtooth", dur: 1.6, vol: 0.12 }); },
+    quakeJump: () => tone(90, { to: 200, type: "sine", dur: 0.3, vol: 0.15 }),
+    quake: () => { tone(50, { to: 18, type: "sine", dur: 1.2, vol: 0.7 }); noise({ dur: 1.1, vol: 0.5, freq: 900, to: 50 }); },
+    spikes: () => { noise({ dur: 0.12, vol: 0.12, filter: "highpass", freq: 1500 }); tone(300, { to: 120, dur: 0.08, vol: 0.05 }); },
+    chainCast: () => { for (let i = 0; i < 5; i++) tone(1200 + i * 80, { dur: 0.03, vol: 0.05, at: i * 0.04 }); },
+    chain: () => noise({ dur: 0.3, vol: 0.14, filter: "bandpass", freq: 2500, to: 900, q: 3 }),
+    chomp: () => { tone(140, { to: 50, dur: 0.15, vol: 0.2 }); noise({ dur: 0.2, vol: 0.3, freq: 1500, to: 200 }); },
+    wail: () => { tone(880, { to: 440, type: "sine", dur: 1.0, vol: 0.08, attack: 0.2 }); tone(932, { to: 466, type: "sine", dur: 1.0, vol: 0.06, attack: 0.25 }); },
+    wailShot: () => tone(700 + Math.random() * 300, { to: 300, type: "triangle", dur: 0.25, vol: 0.05 }),
+    soulHit: () => { noise({ dur: 0.15, vol: 0.15, filter: "bandpass", freq: 1200, q: 2 }); tone(500, { to: 200, type: "sine", dur: 0.15, vol: 0.08 }); },
     slashCharge: () => tone(300, { to: 900, type: "sawtooth", dur: 0.22, vol: 0.06 }),
     slash: () => { noise({ dur: 0.3, vol: 0.32, filter: "bandpass", freq: 3200, to: 500, q: 1.5 }); tone(1400, { to: 260, type: "square", dur: 0.25, vol: 0.06 }); },
     graspCast: () => {
@@ -659,7 +709,7 @@ const Sound = (() => {
     },
   };
   // Busy sounds are rate-limited so a crowd of heroes doesn't turn into noise.
-  const GAP = { meteor: 0.08, meteorBoom: 0.07, bones: 0.15, stomp: 0.12, bow: 0.06, clang: 0.08, voiceBoss: 0.05, voiceHero: 0.04, growl: 0.5, thunder: 2, bounce: 0.07, hit: 0.05, minionHurt: 0.08, fire: 0.3, coinDrop: 0.2, saw: 0.12, spike: 0.1, arrow: 0.08, soulRise: 0.15 };
+  const GAP = { spikes: 0.05, wailShot: 0.06, soulHit: 0.06, claw: 0.1, meteor: 0.08, meteorBoom: 0.07, bones: 0.15, stomp: 0.12, bow: 0.06, clang: 0.08, voiceBoss: 0.05, voiceHero: 0.04, growl: 0.5, thunder: 2, bounce: 0.07, hit: 0.05, minionHurt: 0.08, fire: 0.3, coinDrop: 0.2, saw: 0.12, spike: 0.1, arrow: 0.08, soulRise: 0.15 };
 
   function play(name, arg) {
     if (!ac || ac.state !== "running" || !prefs.sfx || !SFX[name]) return;
@@ -689,6 +739,16 @@ const Sound = (() => {
       drums: "k.h.k.h.",
       leadVoice: { type: "square", dur: 0.28, vol: 0.05 },
       bassVoice: { type: "triangle", dur: 0.3, vol: 0.2 },
+    },
+    // Phase two: faster, lower and heavier, all half-steps and tritones.
+    boss2: {
+      bpm: 176, perBeat: 2,
+      bass: steps(`E1 E1 E2 E1 F1 F1 F2 F1 | E1 E1 E2 E1 G1 G1 Bb1 B1 | C2 C2 C3 C2 B1 B1 B2 B1 | Bb1 Bb1 Bb2 Bb1 A1 G1 F1 E1`),
+      lead: steps(`E5 . F5 . E5 . B4 . | E5 . F5 G5 F5 E5 . . | C6 . B5 . Bb5 . A5 . | G5 F5 E5 F5 E5 . . .
+                   E6 . . B5 C6 . Bb5 . | G5 . F5 . E5 . F5 . | G5 . Bb5 . B5 . C6 . | B5 . Bb5 . F5 . E5 .`),
+      drums: "kkshkksk",
+      leadVoice: { type: "square", dur: 0.12, vol: 0.05 },
+      bassVoice: { type: "sawtooth", dur: 0.14, vol: 0.06 },
     },
     // Driving and fast in D minor for the fight on the tower top.
     boss: {
@@ -753,10 +813,10 @@ document.addEventListener("keydown", e => {
   keys[k] = true;
   if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
   if (k === " ") bossAttack();
-  if (k === "s" || k === "arrowdown" || k === "e") useAbility("smash");
-  if (k === "q") useAbility("slash");
-  if (k === "r") useAbility("grasp");
-  if (k === "f") useAbility("hellfire");
+  if (k === "q") useSlot(0);
+  if (k === "s" || k === "arrowdown" || k === "e") useSlot(1);
+  if (k === "r") useSlot(2);
+  if (k === "f") useSlot(3);
 });
 document.addEventListener("keyup", e => {
   keys[e.key.toLowerCase()] = false;
@@ -980,7 +1040,7 @@ function endWave(sub) {
 }
 
 function swingBox(b) {
-  const reach = 1.3;
+  const reach = b.form === 2 ? 2.4 : 1.3;
   return {
     x: b.face > 0 ? b.x + b.w / 2 : b.x + b.w / 2 - reach - b.w / 2,
     y: b.y - 0.2, w: reach + b.w / 2, h: b.h + 0.2,
@@ -1011,8 +1071,9 @@ function startBossFight() {
     Object.assign(h, { x: 1.4 + slot * 0.5, y: ARENA_FLOOR - h.h, vx: 0, vy: 0, face: 1, evade: 0, trail: [], cd: 0.5 + i * 0.15, walkTo: 4 + slot });
   });
   const b = S.boss;
+  resetForm(b);
   Object.assign(b, { x: 21.5, y: ARENA_FLOOR - b.h, vx: 0, vy: 0, face: -1, windup: 0, swing: 0, slam: 0, cd: 0, hp: b.maxHp, enraged: false, roar: 0,
-    action: null, cds: { slash: 0, smash: 0, grasp: 0, hellfire: 0 } });
+    action: null, cds: freshCds() });
   clearSpecials();
   S.intro = 3.0;
   Sound.play("bossIntro");
@@ -1026,17 +1087,23 @@ function returnToLevel() {
   S.fadeIn = FADE;
   S.waves = [];
   S.particles = S.particles.filter(p => p.home);
-  Object.assign(S.boss, { x: PERCH.x, y: PERCH.y, vx: 0, vy: 0, face: -1, windup: 0, swing: 0, slam: 0, onGround: true });
+  resetForm(S.boss);
+  Object.assign(S.boss, { x: PERCH.x, y: PERCH.y, vx: 0, vy: 0, face: -1, windup: 0, swing: 0, slam: 0, onGround: true, hp: BOSS_HP });
   endWave("The tower is yours again");
 }
 
-const canFight = () => (S.phase === "boss" && S.intro <= 0) || S.phase === "felled";
+const canFight = () => ((S.phase === "boss" && S.intro <= 0) || S.phase === "felled") && !S.boss.transform;
+
+// Back to his first form, for the next fight.
+function resetForm(b) {
+  Object.assign(b, { form: 1, w: 2.4, h: 2.75, maxHp: BOSS_HP, transform: null, invuln: false });
+}
 
 function bossAttack() {
   const b = S.boss;
   if (!canFight() || b.cd > 0 || bossBusy(b)) return;
-  b.windup = 0.25;
-  b.cd = b.enraged ? 0.55 : 0.75;
+  b.windup = b.form === 2 ? 0.3 : 0.25;
+  b.cd = b.form === 2 ? 0.8 : b.enraged ? 0.55 : 0.75;
   // Stronger heroes sometimes see the swing coming and leap away.
   for (const h of S.heroes) {
     if (h.evade <= 0 && !h.grabbed && Math.abs(centerX(h) - centerX(b)) < 3 && Math.random() < h.dodge) {
@@ -1049,16 +1116,30 @@ function bossAttack() {
 }
 
 // ---------- special attacks ----------
-const abilityCd = (b, id) => ABILITIES.find(a => a.id === id).cd * (b.enraged ? 0.7 : 1);
+const abilityCd = (b, id) => [...ABILITIES, ...ABILITIES2].find(a => a.id === id).cd * (b.enraged ? 0.7 : 1);
+const useSlot = i => useAbility(abilitiesFor(S.boss)[i].id);
 const bossBusy = b => b.windup > 0 || b.slam > 0 || !!b.action;
 
 function useAbility(id) {
   const b = S.boss;
   if (!canFight()) return;
-  if (b.cds[id] > 0 || bossBusy(b) || (id === "smash" && !b.onGround)) { if (b.cds[id] > 0) Sound.play("deny"); return; }
+  if (b.cds[id] > 0 || bossBusy(b) || ((id === "smash" || id === "quake") && !b.onGround)) { if (b.cds[id] > 0) Sound.play("deny"); return; }
   b.cds[id] = abilityCd(b, id);
-  b.flashName = { text: ABILITIES.find(a => a.id === id).name, t: 1.2 };
-  if (id === "smash") {
+  b.flashName = { text: abilitiesFor(b).find(a => a.id === id).name, t: 1.2 };
+  if (id === "breath") {
+    b.action = { type: "breath", t: 0, ticks: new Map() };
+    Sound.play("breathCharge");
+  } else if (id === "quake") {
+    b.action = { type: "quake", t: 0 };
+    b.vy = -9;
+    Sound.play("quakeJump");
+  } else if (id === "devour") {
+    b.action = { type: "devour", t: 0 };
+    Sound.play("chainCast");
+  } else if (id === "souls") {
+    b.action = { type: "souls", t: 0, fired: 0, next: 0 };
+    Sound.play("wail");
+  } else if (id === "smash") {
     // Leap, then come down hard.
     b.slam = 0.45;
     b.vy = -6;
@@ -1079,7 +1160,8 @@ function useAbility(id) {
 
 function clearSpecials() {
   for (const h of S.heroes) { h.grabbed = null; h.sink = 0; h.doomed = false; }
-  Object.assign(S, { pools: [], meteors: [], hell: null, ghosts: [], decals: [], rings: [], slashes: [] });
+  for (const h of S.heroes) h.chained = false;
+  Object.assign(S, { pools: [], meteors: [], hell: null, ghosts: [], decals: [], rings: [], slashes: [], spikes: [], chains: [], skulls: [] });
   if (S.boss) S.boss.action = null;
 }
 
@@ -1134,6 +1216,236 @@ function updateAction(b, dt) {
       S.shake = Math.max(S.shake, 4);
       b.action = null;
     }
+  }
+}
+
+// Where the Devourer's mouth is, in tiles.
+function devourerMouth(b) {
+  return { x: centerX(b) + b.face * 0.3, y: b.y + 26 / T };
+}
+
+// Runs every frame of one of the Devourer's attacks.
+function updateAction2(b, dt) {
+  const a = b.action;
+  a.t += dt;
+  const m = devourerMouth(b);
+  if (a.type === "breath") {
+    // Rear back with fire gathering in the throat, then pour soulfire along the ground.
+    b.vx = 0;
+    if (a.t < 0.45) {
+      if (Math.random() < dt * 40) particle({ x: m.x + (Math.random() - 0.5) * 2, y: m.y + (Math.random() - 0.5) * 2, vx: 0, vy: 0, life: 0.2, color: "#b388ff", glow: true });
+      return;
+    }
+    if (!a.started) { a.started = true; Sound.play("breath"); }
+    if (a.t > 2.0) { b.action = null; return; }
+    S.shake = Math.max(S.shake, 1.5);
+    for (let i = 0; i < 3; i++) {
+      particle({ x: m.x + b.face * Math.random() * 0.6, y: m.y, vx: b.face * (8 + Math.random() * 4), vy: 2 + Math.random() * 2.5, g: 2,
+        life: 0.5 + Math.random() * 0.4, size: Math.random() < 0.5 ? 2 : 1, glow: true, color: pick(["#b388ff", "#ff1744", "#ff3d00", "#e1bee7"]) });
+    }
+    for (const h of S.heroes) {
+      const dx = (centerX(h) - m.x) * b.face;
+      if (dx < 0 || dx > 8.5 || h.evade > 0 || centerY(h) < m.y - 0.8) continue;
+      const last = a.ticks.get(h) ?? -1;
+      if (a.t - last < 0.2) continue;
+      a.ticks.set(h, a.t);
+      damage(h, BREATH_TICK, "#ce93d8", ["#b388ff", "#ff1744"]);
+    }
+  } else if (a.type === "quake") {
+    // Leap into the air and come down hard enough to split the floor.
+    if (!b.onGround) { a.left = true; b.vx = b.face * 2; }
+    else b.vx = 0;
+    if (a.left && b.onGround && !a.landed) { a.landed = a.t; quakeImpact(b); }
+    if ((a.landed && a.t - a.landed > 0.6) || a.t > 2.5) b.action = null;
+  } else if (a.type === "devour") {
+    // Spectral chains hook the heroes furthest away and haul them into the jaws.
+    b.vx = 0;
+    if (a.t < 0.4) return;
+    if (!a.fired) {
+      a.fired = true;
+      const prey = S.heroes.filter(h => !h.grabbed && !h.chained)
+        .sort((p, q) => Math.abs(centerX(q) - centerX(b)) - Math.abs(centerX(p) - centerX(b))).slice(0, 3);
+      for (const h of prey) { S.chains.push({ h, t: 0, state: "out" }); h.chained = true; }
+      Sound.play("chain");
+    }
+    if ((a.t > 0.8 && !S.chains.length) || a.t > 3.5) b.action = null;
+  } else if (a.type === "souls") {
+    // Screaming skulls circle him, then fly out one after another to hunt the heroes.
+    b.vx = 0;
+    if (a.t < 0.7) return;
+    a.next -= dt;
+    if (a.next <= 0 && a.fired < 8) {
+      a.next = 0.1;
+      const ang = a.fired / 8 * Math.PI * 2;
+      S.skulls.push({ x: centerX(b) + Math.cos(ang) * 1.6, y: b.y + 1.2 + Math.sin(ang) * 1.2, vx: Math.cos(ang) * 4, vy: -3, life: 3.5, target: S.heroes.length ? pick(S.heroes) : null });
+      a.fired++;
+      Sound.play("wailShot");
+    }
+    if (a.fired >= 8) b.action = null;
+  }
+}
+
+function quakeImpact(b) {
+  S.shake = 10;
+  Sound.play("quake");
+  const fy = b.y + b.h;
+  dust(centerX(b), fy, 24);
+  S.rings.push({ x: centerX(b), y: fy, t: 0.4 });
+  S.decals.push({ type: "crack", x: centerX(b), life: 4 });
+  // Every hero on the ground is thrown into the air...
+  for (const h of S.heroes) {
+    if (h.evade > 0 || h.grabbed || h.chained || h.y + h.h < ARENA_FLOOR - 0.3) continue;
+    damage(h, QUAKE_DMG, "#ff5252");
+    knock(h, (Math.sign(centerX(h) - centerX(b)) || 1) * 3, -8);
+  }
+  // ...and stone spikes burst up in a line running away from him on both sides.
+  for (const dir of [-1, 1]) {
+    for (let d = 0; d < 14; d++) {
+      const x = centerX(b) + dir * (b.w / 2 + 0.5 + d * 0.9);
+      if (x < 1.2 || x > W - 1.2) break;
+      S.spikes.push({ x, t: -d * 0.07, hit: new Set() });
+    }
+  }
+}
+
+function updateSpikes(dt) {
+  for (const sp of S.spikes) {
+    const before = sp.t;
+    sp.t += dt;
+    if (before < 0 && sp.t >= 0) {
+      Sound.play("spikes");
+      dust(sp.x, ARENA_FLOOR, 3);
+    }
+    if (sp.t >= 0 && sp.t < 0.25) {
+      for (const h of S.heroes) {
+        if (sp.hit.has(h) || h.evade > 0 || h.chained || Math.abs(centerX(h) - sp.x) > 0.5 || h.y + h.h < ARENA_FLOOR - 1) continue;
+        sp.hit.add(h);
+        damage(h, SPIKE_DMG, "#ff5252");
+        knock(h, 0, -7);
+      }
+    }
+  }
+  S.spikes = S.spikes.filter(sp => sp.t < 0.8);
+}
+
+function updateChains(dt) {
+  const b = S.boss, m = devourerMouth(b);
+  for (const c of S.chains) {
+    const h = c.h;
+    c.t += dt;
+    if (!S.heroes.includes(h)) { c.done = true; continue; }
+    if (c.state === "out") {
+      if (c.t >= 0.22) { c.state = "pull"; c.t = 0; c.sx = h.x; c.sy = h.y; float(centerX(h), h.y - 0.3, "HOOKED", "#b388ff"); }
+      continue;
+    }
+    // Reeled in, faster and faster, to the mouth.
+    const k = Math.min(1, c.t / 0.55), e = k * k;
+    h.x = c.sx + (m.x - h.w / 2 - c.sx) * e;
+    h.y = c.sy + (m.y - h.h / 2 - c.sy) * e;
+    h.vx = h.vy = 0;
+    if (k < 1) continue;
+    c.done = true;
+    h.chained = false;
+    S.shake = Math.max(S.shake, 4);
+    Sound.play("chomp");
+    if (h.hp <= DEVOUR_DMG + 10 || h.hp <= h.maxHp * 0.4) {
+      // Swallowed whole: the Devourer heals on the soul.
+      h.hp = 0;
+      h.devoured = true;
+      b.hp = Math.min(b.maxHp, b.hp + DEVOUR_HEAL);
+      float(centerX(b), b.y + 0.4, `+${DEVOUR_HEAL}`, "#9cff9c");
+      burst(m.x, m.y, 20, ["#c62828", "#5d0f0f", gearFor(h.lv).main], 5);
+    } else {
+      // Too much to swallow: chewed, and spat back out.
+      damage(h, DEVOUR_DMG, "#ff5252");
+      knock(h, b.face * 8, -6);
+    }
+  }
+  S.chains = S.chains.filter(c => !c.done);
+}
+
+function updateSkulls(dt) {
+  for (const sk of S.skulls) {
+    sk.life -= dt;
+    if (!sk.target || !S.heroes.includes(sk.target)) sk.target = S.heroes.length ? pick(S.heroes) : null;
+    if (sk.target) {
+      // Home in, swerving as they go.
+      const dx = centerX(sk.target) - sk.x, dy = centerY(sk.target) - sk.y, d = Math.hypot(dx, dy) || 1;
+      sk.vx += (dx / d * 7 - sk.vx) * Math.min(1, dt * 3);
+      sk.vy += (dy / d * 7 - sk.vy) * Math.min(1, dt * 3);
+      if (d < 0.5) {
+        sk.life = 0;
+        damage(sk.target, SKULL_DMG, "#ce93d8", ["#b388ff", "#e1bee7"]);
+        knock(sk.target, Math.sign(sk.vx) * 2, -3);
+        Sound.play("soulHit");
+      }
+    }
+    sk.x += sk.vx * dt;
+    sk.y += sk.vy * dt;
+    if (Math.random() < dt * 30) particle({ x: sk.x, y: sk.y, vx: -sk.vx * 0.1, vy: -0.3, life: 0.35, color: Math.random() < 0.5 ? "#7c4dff" : "#b388ff", glow: true });
+    if (sk.life <= 0) burst(sk.x, sk.y, 6, ["#b388ff", "#e1bee7"], 2, { glow: true });
+  }
+  S.skulls = S.skulls.filter(sk => sk.life > 0);
+}
+
+// ---------- the transformation ----------
+function startTransform(b) {
+  clearSpecials();
+  b.transform = { t: 0 };
+  b.invuln = true;
+  b.hp = 0;
+  Object.assign(b, { action: null, windup: 0, slam: 0, swing: 0, vx: 0 });
+  S.heroArrows = [];
+  S.dialog = { queue: [], cur: null };
+  for (const h of S.heroes) knock(h, (Math.sign(centerX(h) - centerX(b)) || 1) * 7, -6);
+  speak(b, "YOU THINK THIS IS MY END...");
+  Sound.play("transformCharge");
+}
+
+function updateTransform(b, dt) {
+  const tr = b.transform, before = tr.t;
+  tr.t += dt;
+  const cross = at => before < at && tr.t >= at;
+  if (tr.t < 1.6) {
+    // Shaking apart: power pulls in from everywhere and he rises off the ground.
+    S.shake = Math.max(S.shake, 1 + tr.t * 2.5);
+    if (tr.t > 0.6) b.y -= dt * 1.4;
+    for (let i = 0; i < 2; i++) {
+      const ang = Math.random() * Math.PI * 2, r = 3 + Math.random() * 2;
+      particle({ x: centerX(b) + Math.cos(ang) * r, y: centerY(b) + Math.sin(ang) * r, vx: -Math.cos(ang) * r * 2.5, vy: -Math.sin(ang) * r * 2.5, life: 0.4, color: Math.random() < 0.5 ? "#ff1744" : "#b388ff", glow: true });
+    }
+  }
+  if (cross(1.6)) {
+    // The armour bursts apart and something far larger comes out.
+    S.whiteFlash = 0.6;
+    S.shake = 12;
+    Sound.play("transformBoom");
+    burst(centerX(b), centerY(b), 40, ["#2b2535", "#4d4560", "#7a1420", "#c9a227", "#ff1744"], 9);
+    burst(centerX(b), centerY(b), 30, ["#ffffff", "#ffeb3b", "#ff3d00"], 7, { glow: true });
+    const cx = centerX(b);
+    Object.assign(b, { form: 2, w: 3.4, h: 3.75, maxHp: P2_HP, enraged: true, vy: 0 });
+    b.x = Math.max(1.05, Math.min(W - 1.05 - b.w, cx - b.w / 2));
+    b.y = ARENA_FLOOR - b.h - 2.5;
+  }
+  if (tr.t >= 1.6) {
+    const wasAir = !b.onGround;
+    moveBody(b, dt);
+    if (wasAir && b.onGround) { S.shake = 10; dust(centerX(b), b.y + b.h, 30); S.rings.push({ x: centerX(b), y: b.y + b.h, t: 0.4 }); Sound.play("quake"); }
+  }
+  if (cross(2.4)) {
+    b.roar = 1.1;
+    Sound.play("roar2");
+    banner(BOSS_NAME, "THE DEVOURER UNBOUND", "#b388ff");
+    speak(b, "NOW WITNESS WHAT I TRULY AM.");
+  }
+  if (cross(3.0) && S.heroes.length) speak(pick(S.heroes), pick(["IT'S... GROWING!", "WHAT HAVE WE DONE...", "HOLD! HOLD THE LINE!"]), true);
+  // His new life fills up.
+  if (tr.t >= 2.4) b.hp = Math.round(P2_HP * Math.min(1, (tr.t - 2.4) / 1.0));
+  if (tr.t >= 3.8) {
+    b.transform = null;
+    b.invuln = false;
+    b.hp = P2_HP;
+    for (const a of ABILITIES2) b.cds[a.id] = 1.5;
   }
 }
 
@@ -1242,6 +1554,10 @@ function updateHell(dt) {
 function updateSpecials(dt) {
   updatePools(dt);
   updateHell(dt);
+  updateSpikes(dt);
+  updateChains(dt);
+  updateSkulls(dt);
+  S.whiteFlash -= dt;
   for (const list of [S.ghosts, S.slashes, S.rings]) for (const g of list) g.t -= dt;
   for (const d of S.decals) d.life -= dt;
   S.ghosts = S.ghosts.filter(g => g.t > 0);
@@ -1334,7 +1650,10 @@ function update(dt) {
   }
 
   for (const h of [...S.heroes]) if (h.hp <= 0) heroDied(h);
-  if (S.boss.hp <= 0) { bossDied(); return; }
+  if (S.boss.hp <= 0 && !S.boss.invuln) {
+    if (S.boss.form !== 2 && inArena()) startTransform(S.boss);
+    else { bossDied(); return; }
+  }
   if (S.phase === "wave") checkWaveEnd();
   if (S.phase === "boss" && !S.heroes.length) {
     S.phase = "felled";
@@ -1352,7 +1671,7 @@ const TYPE_SPEED = 40, LINE_HOLD = 1.5, DIALOG_FADE = 0.15;
 function speak(who, text, force = false) {
   const d = S.dialog, busy = d.cur || d.queue.length;
   const line = who.isBoss
-    ? { boss: true, name: BOSS_NAME, title: BOSS_TITLE, text, rage: !!who.enraged }
+    ? { boss: true, name: BOSS_NAME, title: who.form === 2 ? "THE DEVOURER" : BOSS_TITLE, text, rage: !!who.enraged, form: who.form }
     : { boss: false, name: who.name.toUpperCase(), lv: who.lv, kind: who.kind, text };
   if (!line.boss && busy && !force) return;
   if (d.queue.length >= 2) d.queue.shift();
@@ -1416,6 +1735,7 @@ function bossRoar() {
 // Below half health the Hollow King is enraged: faster attacks, burning aura and a heartbeat.
 function updateRage(dt) {
   const b = S.boss;
+  if (b.transform) return;
   if (!b.enraged && b.hp > 0 && b.hp < b.maxHp / 2) {
     b.enraged = true;
     b.roar = 0.8;
@@ -1494,6 +1814,7 @@ function updateParticles(dt) {
 
 function updateBoss(dt) {
   const b = S.boss;
+  if (b.transform) { b.roar = (b.roar || 0) - dt; updateTransform(b, dt); return; }
   b.cd -= dt;
   b.swing -= dt;
   for (const id in b.cds) b.cds[id] -= dt;
@@ -1501,11 +1822,12 @@ function updateBoss(dt) {
   if (b.slam <= 0 && !b.action) {
     if (keys.a || keys.arrowleft) dir--;
     if (keys.d || keys.arrowright) dir++;
-    if ((keys.w || keys.arrowup) && b.onGround) { b.vy = -10; Sound.play("jump"); }
+    // The Devourer is far too heavy to jump.
+    if ((keys.w || keys.arrowup) && b.onGround && b.form !== 2) { b.vy = -10; Sound.play("jump"); }
   }
-  b.vx = dir * BOSS_SPEED;
+  b.vx = dir * (b.form === 2 ? P2_SPEED : BOSS_SPEED);
   if (dir) b.face = dir;
-  if (b.action) updateAction(b, dt);
+  if (b.action) (b.form === 2 ? updateAction2 : updateAction)(b, dt);
   moveBody(b, dt);
 
   // Cleaver angle: resting forward, raised back on windup, straight up for a slam, sweeping down on the swing.
@@ -1525,13 +1847,14 @@ function updateBoss(dt) {
     b.windup -= dt;
     if (b.windup <= 0) {
       b.swing = 0.15;
-      Sound.play("swing");
-      // One swing cleaves through every hero in reach.
+      Sound.play(b.form === 2 ? "claw" : "swing");
+      // One swing cleaves through every hero in reach; the Devourer's claws reach further and throw them.
       for (const h of S.heroes) {
         if (h.evade <= 0 && overlaps(swingBox(b), h)) {
-          damage(h, BOSS_DMG, "#ff5252");
+          damage(h, b.form === 2 ? CLAW_DMG : BOSS_DMG, "#ff5252");
           Sound.play("bossHit");
           h.vx = 0;
+          if (b.form === 2) knock(h, b.face * 6, -5);
           S.shake = 4;
         }
       }
@@ -1546,6 +1869,13 @@ function updateHero(h, dt) {
   h.atkAnim -= dt;
   h.trail = h.trail.filter(p => (p.t -= dt) > 0);
 
+  if (h.chained) return;
+  if (S.boss.transform && !(h.knock > 0)) {
+    // Frozen, watching the thing their foe is becoming.
+    h.vx = 0;
+    moveBody(h, dt);
+    return;
+  }
   if (h.grabbed) {
     // Held fast by the hands in the blood, struggling.
     h.vx = 0;
@@ -2007,7 +2337,9 @@ function heroDied(h) {
   S.heroes = S.heroes.filter(o => o !== h);
   const hx = centerX(h), hy = Math.min(centerY(h), H - 1.5);
   const gear = gearFor(h.lv);
-  if (h.hell) {
+  if (h.devoured) {
+    if (!S.dialog.cur && Math.random() < 0.5) speak(S.boss, pick(["DELICIOUS.", "MORE.", "YOUR SOUL TASTES OF FEAR."]));
+  } else if (h.hell) {
     burst(hx, ARENA_FLOOR - 0.1, 26, ["#c62828", "#5d0f0f", "#e8dcc0"], 5);
     if (!S.dialog.cur && Math.random() < 0.5) speak(S.boss, pick(TAUNTS.dragged));
   } else burst(hx, hy, 24, h.lava ? ["#ffb300", "#ff6f00", "#fff59d"] : ["#d32f2f", gear.main, gear.shade], 6, { glow: !!h.lava });
@@ -2492,6 +2824,187 @@ const ART = {
     "rRRRrRRRRRrR",
     ".rrrrrrrrrr.",
   ],
+  devourer: [
+    "H................HHH........................HHH................H",
+    "hh..............HHH..........................HHH..............hh",
+    ".hh............HHH............................HHH............hh.",
+    "chh............HHH............................HHH............hhc",
+    "c.hh...........HHH............................HHH...........hh.c",
+    "cchh..........hhHHH..........................HHHhh..........hhcc",
+    "cc.hh...........HHH............GG............HHH...........hh.cc",
+    "ccChh............HHH.....G...G.GG.G...G.....HHH............hhCcc",
+    "ccChhh..........hhHHHH...G.G.G.GG.G.G.G...HHHHhh..........hhhCcc",
+    "cchC.h..............HHHAAAAAAAAAAAAAAAAAAHHH..............h.Chcc",
+    "cchCChh............hhHHHHHAAAAAAAAAAAAHHHHHhh............hhCChcc",
+    "cchCC.h...............aAHHHLAALAALAALHHHAa...............h.CChcc",
+    "cchCCChh..............ahhAAAAAAAAAAAAAAhha..............hhCCChcc",
+    "cchCCChhh.............aAAAAAAAAAAAAAAAAAAa.............hhhCCChcc",
+    "cchCChChh.............aKKKLLLLLLLLLLLLKKKa.............hhChCChcc",
+    "chCCChCChh............aKEEKKKKAAAAKKKKEEKa............hhCChCCChc",
+    "chCCChCC.h.....H......aKKEYEKKAAAAKKEYEKKa......H.....h.CChCCChc",
+    "chCCChCCChhH...H...H..aKKKKEEKAAAAKEEKKKKa..H...H...HhhCCChCCChc",
+    "chCCChCCChhH...H...H..aKKKKKKKAAAAKKKKKKKa..H...H...HhhCCChCCChc",
+    "chCChCCChChH...hh..H..aAAAAAAKKAAKKAAAAAAa..H..hh...HhChCCChCChc",
+    "hcCChCCChC.hh...h..hh..aAAAAAKKKKKKAAAAAa..hh..h...hh.ChCCChCCch",
+    "hcCChCCChCChh.LLLLLLh..HKHKHKHKHHKHKHKHKH..hLLLLLL.hhCChCCChCCch",
+    "hcCChCCChCCLLLAAAAAAAL.HaHAHAHAHHAHAHAHaH.LAAAAAAALLLCChCCChCCch",
+    "ccCChCCChCLAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALChCCChCCcc",
+    "ccCChCCChLAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALhCCChCCcc",
+    "ccChCCChAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAhCCChCcc",
+    "ccChCCChAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaAAAAAAAAAAAAAAAAhCCChCcc",
+    ".cchCCLAAAAAaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaAAAAALCChcc.",
+    "..ccCCLAAAAAaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaAAAAALCCcc..",
+    "...ccCLAAAAAaAAAAAAAAKKKHHHHHHHrrHHHHHHHKKKAAAAAAAAaAAAAALCcc...",
+    "....ccLAAAAAaAAAAAAAAhhHrrrrrrrrrrrrrrrrHhhAAAAAAAAaAAAAALcc....",
+    "......LAAAAAaAAAAAAAAKKKrrrrrrFFFFrrrrrrKKKAAAAAAAAaAAAAAL......",
+    "......LAAAAAaAAAAAAAAKKKHHHHHHHYYHHHHHHHKKKAAAAAAAAaAAAAAL......",
+    "......LAAAAAa.AAAAAAAhhHrrrrFFYYYYFFrrrrHhhAAAAAAA.aAAAAAL......",
+    "......LAAAAAa.....AAAKKKrrrrFYYeeYYFrrrrKKKAAA.....aAAAAAL......",
+    "......LAAAAAa......AAKKKHHHHHHHeeHHHHHHHKKKAA......aAAAAAL......",
+    "......LAAAAAa......AAhhHrrrrFYYeeYYFrrrrHhhAA......aAAAAAL......",
+    "......LAAAAAa......AAKKKrrrrFFYYYYFFrrrrKKKAA......aAAAAAL......",
+    "......LAAAAAa.......AKKKHHHHHHHYYHHHHHHHKKKA.......aAAAAAL......",
+    "....LAAAAAa.........AhhHrrrrrrFFFFrrrrrrHhhA.........aAAAAAL....",
+    "....LAAAAAa.........AKKKrrrrrrrrrrrrrrrrKKKA.........aAAAAAL....",
+    "....LAAAAAa..........KKKHHHHHHHrrHHHHHHHKKK..........aAAAAAL....",
+    "....LAAAAAa..........hhHAAAAAAAAAAAAAAAAHhh..........aAAAAAL....",
+    "....PPPPPPPP.........AAAAAAAAAAAAAAAAAAAAAA.........PPPPPPPP....",
+    "....RRRRRRRR.........RRRRRRRRRRRRRRRRRRRRRR.........RRRRRRRR....",
+    "....RRRRRRRR.........RRRRRRRRRRRRRRRRRRRRRR.........RRRRRRRR....",
+    ".....LAAAAAa.......LAAAAAAAArrrrrrrrAAAAAAAAL.......aAAAAAL.....",
+    ".....LAAAAAa.......LAAAAAAAArrrrrrrrAAAAAAAAL.......aAAAAAL.....",
+    ".....LAAAAAa.......LAAAAAAAArrrrrrrrAAAAAAAAL.......aAAAAAL.....",
+    ".....LAAAAAa.......LAAAAAAAAr.rrrr.rAAAAAAAAL.......aAAAAAL.....",
+    "..LLLLLLLLLLL......LAAAAAAAA.rr..rr.AAAAAAAAL......LLLLLLLLLLL..",
+    "..AAAAAAAAAAA.......LAAAAAAArr.rr.rrAAAAAAAL.......AAAAAAAAAAA..",
+    "..AAAAAAAAAAA.......LAAAAAAA........AAAAAAAL.......AAAAAAAAAAA..",
+    "..AAAAAAAAAAA.......LAAAAAAA........AAAAAAAL.......AAAAAAAAAAA..",
+    "..H..H..H..H........LAAAAAAA........AAAAAAAL........H..H..H..H..",
+    "..H..H..H..H........LAAAAAAA........AAAAAAAL........H..H..H..H..",
+    "..H..H..H..H.........LAAAAAA........AAAAAAL.........H..H..H..H..",
+    "...h..h..h..h....AAAAAAAAAAAA......AAAAAAAAAAAA....h..h..h..h...",
+    "...h..h..h..h....HaaHaaaaaaaa......aaaaaaaaHaaH....h..h..h..h...",
+    ".................HaaHaaaaaaaa......aaaaaaaaHaaH.................",
+  ],
+  devourerRoar: [
+    "H................HHH........................HHH................H",
+    "hh..............HHH..........................HHH..............hh",
+    ".hh............HHH............................HHH............hh.",
+    "chh............HHH............................HHH............hhc",
+    "c.hh...........HHH............................HHH...........hh.c",
+    "cchh..........hhHHH..........................HHHhh..........hhcc",
+    "cc.hh...........HHH............GG............HHH...........hh.cc",
+    "ccChh............HHH.....G...G.GG.G...G.....HHH............hhCcc",
+    "ccChhh..........hhHHHH...G.G.G.GG.G.G.G...HHHHhh..........hhhCcc",
+    "cchC.h..............HHHAAAAAAAAAAAAAAAAAAHHH..............h.Chcc",
+    "cchCChh............hhHHHHHAAAAAAAAAAAAHHHHHhh............hhCChcc",
+    "cchCC.h...............aAHHHLAALAALAALHHHAa...............h.CChcc",
+    "cchCCChh..............ahhAAAAAAAAAAAAAAhha..............hhCCChcc",
+    "cchCCChhh.............aAAAAAAAAAAAAAAAAAAa.............hhhCCChcc",
+    "cchCChChh.............aKKKLLLLLLLLLLLLKKKa.............hhChCChcc",
+    "chCCChCChh............aKEEKKKKAAAAKKKKEEKa............hhCChCCChc",
+    "chCCChCC.h.....H......aKKEYEKKAAAAKKEYEKKa......H.....h.CChCCChc",
+    "chCCChCCChhH...H...H..aKKKKEEKAAAAKEEKKKKa..H...H...HhhCCChCCChc",
+    "chCCChCCChhH...H...H..aKKKKKKKAAAAKKKKKKKa..H...H...HhhCCChCCChc",
+    "chCChCCChChH...hh..H..aAAAAAAKKAAKKAAAAAAa..H..hh...HhChCCChCChc",
+    "hcCChCCChC.hh...h..hh..aAAAAAKKKKKKAAAAAa..hh..h...hh.ChCCChCCch",
+    "hcCChCCChCChh.LLLLLLh..HAHAHAHAHHAHAHAHAH..hLLLLLL.hhCChCCChCCch",
+    "hcCChCCChCCLLLAAAAAAAL.KKKKKKKKKKKKKKKKKK.LAAAAAAALLLCChCCChCCch",
+    "ccCChCCChCLAAAAAAAAAAAAKKKrrrrrrrrrrrrKKKAAAAAAAAAAAALChCCChCCcc",
+    "ccCChCCChLAAAAAAAAAAAAAKKKrrFFFFFFFFrrKKKAAAAAAAAAAAAALhCCChCCcc",
+    "ccChCCChAAAAAAAAAAAAAAAKKKrrFFYYYYFFrrKKKAAAAAAAAAAAAAAAhCCChCcc",
+    "ccChCCChAAAAAAAAAAAAAAAKKKrrFFFFFFFFrrKKKAAAAAAAAAAAAAAAhCCChCcc",
+    ".cchCCLAAAAAaAAAAAAAAAAKKKrrrrrrrrrrrrKKKAAAAAAAAAAaAAAAALCChcc.",
+    "..ccCCLAAAAAaAAAAAAAAAAKHKHKHKHKKHKHKHKHKAAAAAAAAAAaAAAAALCCcc..",
+    "...ccCLAAAAAaAAAAAAAAKKAAAAAAAAAAAAAAAAAAKKAAAAAAAAaAAAAALCcc...",
+    "....ccLAAAAAaAAAAAAAAhhAAAAAAAAAAAAAAAAAAhhAAAAAAAAaAAAAALcc....",
+    "......LAAAAAaAAAAAAAAKKAaaaaaaaaaaaaaaaaAKKAAAAAAAAaAAAAAL......",
+    "......LAAAAAaAAAAAAAAKKKHHHHHHHYYHHHHHHHKKKAAAAAAAAaAAAAAL......",
+    "......LAAAAAa.AAAAAAAhhHrrrrFFYYYYFFrrrrHhhAAAAAAA.aAAAAAL......",
+    "......LAAAAAa.....AAAKKKrrrrFYYeeYYFrrrrKKKAAA.....aAAAAAL......",
+    "......LAAAAAa......AAKKKHHHHHHHeeHHHHHHHKKKAA......aAAAAAL......",
+    "......LAAAAAa......AAhhHrrrrFYYeeYYFrrrrHhhAA......aAAAAAL......",
+    "......LAAAAAa......AAKKKrrrrFFYYYYFFrrrrKKKAA......aAAAAAL......",
+    "......LAAAAAa.......AKKKHHHHHHHYYHHHHHHHKKKA.......aAAAAAL......",
+    "....LAAAAAa.........AhhHrrrrrrFFFFrrrrrrHhhA.........aAAAAAL....",
+    "....LAAAAAa.........AKKKrrrrrrrrrrrrrrrrKKKA.........aAAAAAL....",
+    "....LAAAAAa..........KKKHHHHHHHrrHHHHHHHKKK..........aAAAAAL....",
+    "....LAAAAAa..........hhHAAAAAAAAAAAAAAAAHhh..........aAAAAAL....",
+    "....PPPPPPPP.........AAAAAAAAAAAAAAAAAAAAAA.........PPPPPPPP....",
+    "....RRRRRRRR.........RRRRRRRRRRRRRRRRRRRRRR.........RRRRRRRR....",
+    "....RRRRRRRR.........RRRRRRRRRRRRRRRRRRRRRR.........RRRRRRRR....",
+    ".....LAAAAAa.......LAAAAAAAArrrrrrrrAAAAAAAAL.......aAAAAAL.....",
+    ".....LAAAAAa.......LAAAAAAAArrrrrrrrAAAAAAAAL.......aAAAAAL.....",
+    ".....LAAAAAa.......LAAAAAAAArrrrrrrrAAAAAAAAL.......aAAAAAL.....",
+    ".....LAAAAAa.......LAAAAAAAAr.rrrr.rAAAAAAAAL.......aAAAAAL.....",
+    "..LLLLLLLLLLL......LAAAAAAAA.rr..rr.AAAAAAAAL......LLLLLLLLLLL..",
+    "..AAAAAAAAAAA.......LAAAAAAArr.rr.rrAAAAAAAL.......AAAAAAAAAAA..",
+    "..AAAAAAAAAAA.......LAAAAAAA........AAAAAAAL.......AAAAAAAAAAA..",
+    "..AAAAAAAAAAA.......LAAAAAAA........AAAAAAAL.......AAAAAAAAAAA..",
+    "..H..H..H..H........LAAAAAAA........AAAAAAAL........H..H..H..H..",
+    "..H..H..H..H........LAAAAAAA........AAAAAAAL........H..H..H..H..",
+    "..H..H..H..H.........LAAAAAA........AAAAAAL.........H..H..H..H..",
+    "...h..h..h..h....AAAAAAAAAAAA......AAAAAAAAAAAA....h..h..h..h...",
+    "...h..h..h..h....HaaHaaaaaaaa......aaaaaaaaHaaH....h..h..h..h...",
+    ".................HaaHaaaaaaaa......aaaaaaaaHaaH.................",
+  ],
+  skull: [".HHH.", "HKHKH", "HHHHH", ".HKH."],
+  iconBreath: [
+    "............",
+    ".HH.H.H.....",
+    "HKKKKKKH....",
+    "HKffFFFFFff.",
+    "HKfFYYYYFFFf",
+    "HKfFYWWWYYFf",
+    "HKfFYYYYFFFf",
+    "HKffFFFFFff.",
+    "HKKKKKKH....",
+    ".HH.H.H.....",
+    "............",
+    "............",
+  ],
+  iconQuake: [
+    "............",
+    "....H.......",
+    "....HH...H..",
+    "...HHH...HH.",
+    "...HHHH.HHH.",
+    "..HHHHH.HHHH",
+    "..HHHHHHHHHH",
+    "DDDDDDDDDDDD",
+    "dMdddMdddMdd",
+    "dddMdddMdddd",
+    "dddddddddddd",
+    "............",
+  ],
+  iconDevour: [
+    "....CC......",
+    "...C..C.....",
+    "....CC......",
+    "...C..C.....",
+    "....CC......",
+    "...C..C.....",
+    "....CC......",
+    "....C.......",
+    "....C...C...",
+    "....CC.CC...",
+    ".....CCC....",
+    "............",
+  ],
+  iconSouls: [
+    "....HHHH....",
+    "...HHHHHH...",
+    "..HHKHHKHH..",
+    "..HKKHHKKH..",
+    "..HHHHHHHH..",
+    "...HKKKKH...",
+    "...HKKKKH...",
+    "....HHHH....",
+    "..b..bb..b..",
+    ".b..b..b..b.",
+    "b..b....b..b",
+    "............",
+  ],
   iconHellfire: [
     "........yy..",
     ".......yYy..",
@@ -2543,12 +3056,20 @@ const BOSS_PAL = {
 const BOSS_RAGE_PAL = Object.assign({}, BOSS_PAL, { E: "#ffffff", Y: "#ffffff", F: "#ffeb3b", e: "#ffffff", R: "#c62828" });
 // Lit from behind by lightning: a black shape with burning eyes.
 const BOSS_SHADOW_PAL = Object.fromEntries(Object.keys(BOSS_PAL).map(k => [k, "EYe".includes(k) ? BOSS_PAL[k] : "#050308"]));
+// The Devourer: charred hide, bone, and a soul burning in its ribcage.
+const DEVOURER_PAL = { A: "#2b2535", a: "#1a1622", L: "#4d4560", H: "#e8dcc0", h: "#a8987a", K: "#08060c", E: "#ff1744", Y: "#ffeb3b", e: "#ffffff",
+  F: "#ff3d00", R: "#7a1420", r: "#4a0c14", P: "#c62828", C: "#4a0c18", c: "#2a0610", G: "#c9a227" };
+const SKULL_PAL = { H: "#e1d5ff", K: "#311b92" };
 const BOSS_GHOST_PAL = Object.fromEntries(Object.keys(BOSS_PAL).map(k => [k, "#ff1744"]));
 const ICON_PALS = {
   slash: { W: "#ffffff", R: "#ff1744" },
   smash: { H: "#6b6378", h: "#4a4458", k: "#2b2535", D: "#8a82a0", d: "#4a4458", M: "#1a1622" },
   grasp: { H: "#e8dcc0", h: "#a8987a", R: "#c62828", r: "#5d0f0f" },
   hellfire: { y: "#ff6f00", Y: "#ffb300", W: "#fff3c4", R: "#7a1420" },
+  breath: { H: "#e8dcc0", K: "#08060c", f: "#7b1fa2", F: "#ff3d00", Y: "#ffb300", W: "#ffffff" },
+  quake: { H: "#9a92b0", D: "#6b6378", d: "#3a3448", M: "#14101c" },
+  devour: { C: "#b388ff" },
+  souls: { H: "#d1c4e9", K: "#311b92", b: "#7c4dff" },
 };
 const CLEAVER_PAL = { M: "#4a4458", m: "#2b2535", W: "#c9c2d6", R: "#ff1744", B: "#3a2a20", G: "#c9a227", A: "#2b2535", L: "#4d4560", a: "#1a1622" };
 const SPIKE_PALS = [
@@ -3145,12 +3666,82 @@ function drawMinion(m) {
 
 // Where the Hollow King's eyes are, in canvas pixels.
 function bossEyes(b) {
+  if (b.form === 2) {
+    const left = Math.round(centerX(b) * T - 33), top = Math.round((b.y + b.h) * T - 61);
+    return [{ x: left + 27, y: top + 17 }, { x: left + 38, y: top + 17 }];
+  }
   const w = 42, h = 46;
   const left = Math.round(centerX(b) * T - w / 2), top = Math.round((b.y + b.h) * T - h + 1);
   return [{ x: left + 16, y: top + 15 }, { x: left + w - 17, y: top + 15 }];
 }
 
+// Rings of force bursting out from a roaring head.
+function drawRoarRings(cx, cy, roar) {
+  for (const k of [0, 0.25]) {
+    const r = (1.1 - roar + k) * 90;
+    if (r <= 0) continue;
+    ctx.globalAlpha = Math.max(0, roar - k) * 0.6;
+    ctx.fillStyle = "#ff1744";
+    for (let a = 0; a < Math.PI * 2; a += 0.04) ctx.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r * 0.6), 2, 1);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawDevourer(b) {
+  const act = b.action;
+  const jaw = b.roar > 0 || (act && ((act.type === "breath" && act.t > 0.25) || act.type === "devour" || (act.type === "souls" && act.t < 0.7)));
+  const art = jaw ? ART.devourerRoar : ART.devourer;
+  const spr = sprite(art, DEVOURER_PAL, jaw ? "devourerRoar" : "devourer");
+  const cx = centerX(b) * T, bottom = (b.y + b.h) * T, breathe = b.onGround && Math.floor(S.time * 1.5) % 2 ? 1 : 0;
+  const top = Math.round(bottom - spr.height + 1);
+  if (S.phase === "over") { drawSprite(spr, cx, bottom, b.face, 0.35); return; }
+  if (b.roar > 0) drawRoarRings(cx, top + 20, b.roar);
+  drawSprite(spr, cx, bottom + breathe, b.face);
+  if (b.flash > 0) drawSprite(sprite(art, DEVOURER_PAL, jaw ? "devourerRoar" : "devourer", true), cx, bottom + breathe, b.face, 0.6);
+  // Claws: raised and glowing on the windup, three raking arcs on the swipe.
+  const sx = cx + b.face * 18, sy = top + 32;
+  if (b.windup > 0) {
+    ctx.fillStyle = "#ff1744";
+    for (let i = 0; i < 3; i++) ctx.fillRect(Math.round(sx + b.face * (4 + i * 3)), top + 18 - i, 1, 4);
+  }
+  if (b.swing > 0) {
+    for (let line = 0; line < 3; line++) {
+      for (let a = -1.3; a <= 1.1; a += 0.04) {
+        const r = 24 + line * 4;
+        ctx.fillStyle = line === 1 ? "#ffffff" : "#ff1744";
+        ctx.globalAlpha = (b.swing / 0.15) * 0.8;
+        ctx.fillRect(Math.round(sx + b.face * Math.cos(a) * r * 0.9), Math.round(sy + Math.sin(a) * r), 2, 1);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+  // Soul breath: a roaring stream from the jaws, spreading as it hits the ground.
+  if (act && act.type === "breath" && act.started) {
+    const m = devourerMouth(b), mx = m.x * T, my = m.y * T, fy = ARENA_FLOOR * T;
+    for (let d = 0; d < 8.5 * T; d += 2) {
+      const y = Math.min(fy - 3, my + d * 0.45), thick = 3 + d * 0.08 + Math.sin(S.time * 40 + d) * 1.5;
+      for (let k = -thick; k <= thick; k += 1) {
+        if (Math.random() < 0.35) continue;
+        const edge = Math.abs(k) / thick;
+        ctx.fillStyle = edge < 0.3 ? "#ffffff" : edge < 0.6 ? "#e1bee7" : Math.random() < 0.5 ? "#b388ff" : "#ff1744";
+        ctx.fillRect(Math.round(mx + b.face * d), Math.round(y + k), 2, 1);
+      }
+    }
+  }
+  // Wailing souls gathering in a ring before they fly.
+  if (act && act.type === "souls" && act.t < 0.7) {
+    const skull = sprite(ART.skull, SKULL_PAL, "skull");
+    for (let i = 0; i < 8; i++) {
+      const ang = act.t * 6 + i / 8 * Math.PI * 2;
+      ctx.globalAlpha = Math.min(1, act.t * 3);
+      ctx.drawImage(skull, Math.round(cx + Math.cos(ang) * 30) - 3, Math.round(top + 34 + Math.sin(ang) * 22) - 3);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
 function drawBoss(b, shadow = false) {
+  if (b.form === 2) { drawDevourer(b); return; }
   const pal = shadow ? BOSS_SHADOW_PAL : b.enraged ? BOSS_RAGE_PAL : BOSS_PAL;
   const spr = sprite(ART.boss, pal, shadow ? "bossShadow" : b.enraged ? "bossRage" : "boss");
   const cx = centerX(b) * T, bottom = (b.y + b.h) * T;
@@ -3175,17 +3766,15 @@ function drawBoss(b, shadow = false) {
 
   if (S.phase === "over") { drawSprite(spr, cx, bottom, b.face, 0.35); return; }
   // Roar: rings of force burst out from his head.
-  if (b.roar > 0) {
-    for (const k of [0, 0.25]) {
-      const r = (1.1 - b.roar + k) * 90;
-      if (r <= 0) continue;
-      ctx.globalAlpha = Math.max(0, b.roar - k) * 0.6;
-      ctx.fillStyle = "#ff1744";
-      for (let a = 0; a < Math.PI * 2; a += 0.04) ctx.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(top + 14 + Math.sin(a) * r * 0.6), 2, 1);
-    }
-    ctx.globalAlpha = 1;
-  }
+  if (b.roar > 0) drawRoarRings(cx, top + 14, b.roar);
   drawSprite(spr, cx, bottom + breathe, b.face);
+  // Coming apart before the transformation: cracks of red light, then a blinding glow.
+  if (b.transform) {
+    const k = Math.min(1, b.transform.t / 1.6);
+    ctx.fillStyle = "#ff1744";
+    for (let i = 0; i < 40 * k; i++) ctx.fillRect(left + 6 + Math.floor(Math.random() * (spr.width - 12)), top + 8 + Math.floor(Math.random() * (spr.height - 12)), 1, 2);
+    drawSprite(sprite(ART.boss, pal, "boss", true), cx, bottom + breathe, b.face, k * 0.7);
+  }
   if (b.flash > 0) drawSprite(sprite(ART.boss, BOSS_PAL, "boss", true), cx, bottom + breathe, b.face, 0.7);
 
   const arm = sprite(ART.cleaverArm, shadow ? Object.fromEntries(Object.keys(CLEAVER_PAL).map(k => [k, "#050308"])) : CLEAVER_PAL, shadow ? "armShadow" : "arm");
@@ -3319,7 +3908,43 @@ function drawPools(front) {
   }
 }
 
+// Stone spikes from a Cataclysm, spectral chains, and the hunting skulls.
+function drawSpecials2() {
+  const fy = ARENA_FLOOR * T;
+  for (const sp of S.spikes) {
+    if (sp.t < 0) continue;
+    const k = sp.t < 0.12 ? sp.t / 0.12 : sp.t > 0.6 ? Math.max(0, (0.8 - sp.t) / 0.2) : 1;
+    const h = Math.round(16 * k), x = Math.round(sp.x * T);
+    for (let i = 0; i < h; i++) {
+      const w = Math.max(1, Math.round(4 * (1 - i / 16)));
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(x - w - 1, fy - i - 1, w * 2 + 2, 1);
+      ctx.fillStyle = i > h - 3 ? "#c9c2d6" : "#6b6378";
+      ctx.fillRect(x - w, fy - i - 1, w * 2, 1);
+      ctx.fillStyle = "#8a82a0";
+      ctx.fillRect(x - w, fy - i - 1, 1, 1);
+    }
+  }
+  const b = S.boss, m = devourerMouth(b);
+  for (const c of S.chains) {
+    // The chain shoots out to the hero, then hauls them back in.
+    const hx = centerX(c.h) * T, hy = centerY(c.h) * T, mx = m.x * T, my = m.y * T;
+    const k = c.state === "out" ? Math.min(1, c.t / 0.22) : 1;
+    const ex = mx + (hx - mx) * k, ey = my + (hy - my) * k, n = Math.max(1, Math.round(Math.hypot(ex - mx, ey - my) / 2));
+    for (let i = 0; i <= n; i++) {
+      const x = Math.round(mx + (ex - mx) * i / n), y = Math.round(my + (ey - my) * i / n);
+      ctx.fillStyle = i % 2 ? "#4a148c" : "#b388ff";
+      ctx.fillRect(x, y, 2, 2);
+    }
+    ctx.fillStyle = "#e1d5ff";
+    ctx.fillRect(Math.round(ex) - 1, Math.round(ey) - 2, 3, 4);
+  }
+  const skull = sprite(ART.skull, SKULL_PAL, "skull");
+  for (const sk of S.skulls) ctx.drawImage(skull, Math.round(sk.x * T) - 3, Math.round(sk.y * T) - 3);
+}
+
 function drawSpecials() {
+  drawSpecials2();
   // Afterimages of the dash.
   for (const g of S.ghosts) drawSprite(sprite(ART.boss, BOSS_GHOST_PAL, "bossGhost"), (g.x + S.boss.w / 2) * T, (g.y + S.boss.h) * T, g.face, g.t * 2);
   // The long red cut left by a cleaver slash.
@@ -3439,6 +4064,11 @@ function drawLighting() {
   for (const h of S.heroes) hole(centerX(h) * T, centerY(h) * T, 40, 0.7);
   for (const p of S.pools) hole(p.x * T, ARENA_FLOOR * T, p.r * T * 2.2, 0.8);
   for (const m of S.meteors) hole(m.x * T, m.y * T, 40, 1);
+  for (const sk of S.skulls) hole(sk.x * T, sk.y * T, 26, 0.8);
+  if (S.boss.action && S.boss.action.type === "breath" && S.boss.action.started) {
+    const m = devourerMouth(S.boss);
+    for (let d = 0; d < 8; d += 2) hole((m.x + S.boss.face * d) * T, Math.min(ARENA_FLOOR - 0.2, m.y + d * 0.45) * T, 50, 0.9);
+  }
   if (S.doorFlash > 0 && !inArena()) hole(TOWER_X * T + 6, 8.5 * T, 50, S.doorFlash * 2);
   hole(centerX(S.boss) * T, S.boss.y * T + 14, 56, 0.8);
   for (const e of bossEyes(S.boss)) hole(e.x, e.y, 14, 1);
@@ -3464,6 +4094,7 @@ function drawLighting() {
   for (let x = 0; x < W; x++) if (tileAt(x, H - 1) === "L") glow(x * T + 8, (H - 1) * T + 4, 20, "rgba(255,90,20,0.18)");
   for (const p of S.pools) glow(p.x * T, ARENA_FLOOR * T, p.r * T * 1.4, "rgba(200,20,30,0.3)");
   for (const m of S.meteors) glow(m.x * T, m.y * T, 14, "rgba(255,110,20,0.5)");
+  for (const sk of S.skulls) glow(sk.x * T, sk.y * T, 10, "rgba(150,100,255,0.45)");
   // The Hollow King's eyes and the soul in his chest burn through the dark.
   if (S.phase !== "over") {
     const b = S.boss, k = b.enraged ? 1.25 : 1;
@@ -3528,9 +4159,10 @@ function coinSprite(spin, white = false, big = false) {
 
 // Four ability slots: icon, key, and a cooldown shade that drains away with the seconds left.
 function drawAbilityBar(b) {
-  const size = 24, gap = 4, x0 = W * T - 8 - ABILITIES.length * (size + gap) + gap, y0 = H * T - size - 5;
+  const list = abilitiesFor(b);
+  const size = 24, gap = 4, x0 = W * T - 8 - list.length * (size + gap) + gap, y0 = H * T - size - 5;
   const alpha = ctx.globalAlpha;
-  ABILITIES.forEach((ab, i) => {
+  list.forEach((ab, i) => {
     const x = x0 + i * (size + gap), cd = Math.max(0, b.cds[ab.id]), total = abilityCd(b, ab.id), ready = cd <= 0;
     drawPanel(x, y0, size, size, ready ? "rgba(30,14,22,0.95)" : "rgba(12,10,18,0.95)");
     const icon = sprite(ART["icon" + ab.id[0].toUpperCase() + ab.id.slice(1)], ICON_PALS[ab.id], "icon" + ab.id);
@@ -3646,8 +4278,13 @@ function drawHud() {
     // Souls-style boss bar along the bottom during the battle; it steps aside for dialogue.
     ctx.globalAlpha = 1 - dialogAlpha();
     const bw = 250, bx = 14, by = H * T - 9;
-    drawText(`${BOSS_NAME}, ${BOSS_TITLE}`, bx, by - 10, b.enraged ? "#ff8a80" : "#e6e0ec");
-    drawMeter(bx, by, bw, 4, b.hp / b.maxHp, "#3b1016", "#c62828", "#ef5350");
+    if (b.form === 2) {
+      drawText(`${BOSS_NAME}, THE DEVOURER`, bx, by - 10, "#e1bee7");
+      drawMeter(bx, by, bw, 4, b.hp / b.maxHp, "#24082e", "#8e24aa", "#e040fb");
+    } else {
+      drawText(`${BOSS_NAME}, ${BOSS_TITLE}`, bx, by - 10, b.enraged ? "#ff8a80" : "#e6e0ec");
+      drawMeter(bx, by, bw, 4, b.hp / b.maxHp, "#3b1016", "#c62828", "#ef5350");
+    }
     ctx.globalAlpha = 1;
     drawAbilityBar(b);
     return;
@@ -3780,6 +4417,13 @@ function draw() {
   drawBanner();
   drawDialog();
 
+  if (S.whiteFlash > 0) {
+    ctx.globalAlpha = Math.min(1, S.whiteFlash / 0.6);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, W * T, H * T);
+    ctx.globalAlpha = 1;
+  }
+
   // Fade to black when moving between the level and the tower top.
   let dark = S.fadeIn / FADE;
   if (S.phase === "enter") dark = S.fade / FADE;
@@ -3852,9 +4496,14 @@ function drawPortrait(c, x, y, w, h, talking) {
   const bob = talking && Math.floor(c.t * 8) % 2 ? 1 : 0;
   if (c.boss) {
     // His own head and horns, cropped from the full sprite.
-    const spr = sprite(ART.boss, c.rage ? BOSS_RAGE_PAL : BOSS_PAL, c.rage ? "bossRage" : "boss");
-    ctx.drawImage(spr, 1, 0, 40, h, x + Math.round((w - 40) / 2), y + 2 + bob, 40, h);
-    if (Math.floor(S.time * 3) % 4 === 0) {
+    if (c.form === 2) {
+      const spr = sprite(ART.devourerRoar, DEVOURER_PAL, "devourerRoar");
+      ctx.drawImage(spr, 10, 1, 46, h, x, y + bob, 46, h);
+    } else {
+      const spr = sprite(ART.boss, c.rage ? BOSS_RAGE_PAL : BOSS_PAL, c.rage ? "bossRage" : "boss");
+      ctx.drawImage(spr, 1, 0, 40, h, x + Math.round((w - 40) / 2), y + 2 + bob, 40, h);
+    }
+    if (c.form !== 2 && Math.floor(S.time * 3) % 4 === 0) {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(x + Math.round((w - 40) / 2) + 15, y + 2 + bob + 15, 1, 1);
       ctx.fillRect(x + Math.round((w - 40) / 2) + 24, y + 2 + bob + 15, 1, 1);
@@ -3998,7 +4647,8 @@ function frame(now) {
   last = now;
   update(dt);
   update(dt);
-  Sound.music({ title: null, prologue: null, over: null, boss: "boss", felled: "boss" }[S.phase] ?? "level");
+  const fightMusic = S.boss.transform ? null : S.boss.form === 2 ? "boss2" : "boss";
+  Sound.music({ title: null, prologue: null, over: null, boss: fightMusic, felled: fightMusic }[S.phase] ?? "level");
   draw();
   present();
   updateToolbar();
