@@ -97,6 +97,24 @@
   button:disabled { opacity: 0.45; cursor: default; transform: none; }
   #msg { min-height: 1.6em; font-size: 10px; line-height: 1.6; text-align: center; color: #cfc6da; max-width: 960px; }
   details { font-size: 9px; line-height: 2; color: var(--dim); max-width: 960px; }
+  #trapPanel { width: min(960px, 100%); }
+  #trapRows { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  #trapRows .empty { color: var(--dim); }
+  .trap-row {
+    display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 10px;
+    padding: 6px 8px; background: var(--panel); box-shadow: inset 0 0 0 2px var(--edge);
+  }
+  .trap-row.active { box-shadow: inset 0 0 0 2px var(--coin); }
+  .trap-row img { width: 32px; height: 32px; image-rendering: pixelated; }
+  .trap-row .info { line-height: 1.8; }
+  .trap-row .name { color: var(--text); }
+  .trap-row .pips { color: var(--coin); margin-left: 6px; }
+  .trap-row .stat { color: var(--dim); }
+  .trap-row .stat b { color: #9cff9c; font-weight: normal; }
+  .trap-row .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .trap-row button { font-size: 8px; padding: 6px 8px; }
+  .trap-row button.up { color: #9cff9c; }
+  .trap-row button.sell { color: #ff8a80; }
   summary { cursor: pointer; color: var(--text); }
   details b { color: var(--text); }
   a { color: var(--soul); }
@@ -121,12 +139,18 @@
     <button id="sfx" class="toggle">Sound on</button>
   </div>
   <div id="msg"></div>
+  <details id="trapPanel" open>
+    <summary>Your traps (<span id="trapCount">0</span>)</summary>
+    <div id="trapRows"></div>
+  </details>
   <details>
     <summary>How to play</summary>
     You are the boss, waiting at the top of your castle tower. Each wave, a group of heroes runs and jumps through the level to reach it.
     Heroes who make it through the door hide inside the tower. Once 5 are inside, they climb up and fight you all at once.<br>
     <b>Build:</b> pick a tool and click the level. Spikes go on the ground; saws and turrets go anywhere, even over the lava pits.
-    Click a trap of the same type again to upgrade it (max level 3).
+    Click a placed trap to open its menu and upgrade it (max level 3) or sell it for half what you paid; the
+    <b>Your traps</b> list below does the same for every trap at once. The path is twice as long as the screen:
+    scroll with A / D, the arrow keys, the mouse wheel, by moving the mouse to the screen edge, or by clicking the mini-map.
     Every hero you kill drops coins and exactly one soul, and kills unlock new traps: fire vents, crushers, bombs and frost totems.<br>
     <b>Boss battle:</b> when the tower fills up, the fight moves to the tower top.
     A / D or arrows move, W jumps, Space swings your cleaver. Special attacks, each with a cooldown:
@@ -159,20 +183,20 @@
 <script>
 // ---------- level (side view) ----------
 // # stone   . air   L lava   S hero start
-// The approach to your castle tower. You wait on top; a hero who reaches the door climbs up to fight you.
+// The approach to your castle tower: twice as wide as the screen, so the view scrolls. You wait on top; a hero who reaches the door climbs up to fight you.
 const MAP = [
-  "..............................",
-  "..............................",
-  "..............................",
-  "..............................",
-  "........................######",
-  "........................######",
-  "........................######",
-  "........................######",
-  ".S......##..............######",
-  "####..######...####..#########",
-  "####..######...####..#########",
-  "####LL######LLL####LL#########",
+  "............................................................",
+  "............................................................",
+  "............................................................",
+  "............................................................",
+  "......................................................######",
+  "......................................................######",
+  "......................................................######",
+  ".......................................####...........######",
+  ".S......##.....................#.....########.....#...######",
+  "####..######...####..######..#####...########..#############",
+  "####..######...####..######..#####...########..#############",
+  "####LL######LLL####LL######LL#####LLL########LL#############",
 ];
 // The top of the tower, where the boss battle happens.
 const ARENA = [
@@ -189,13 +213,15 @@ const ARENA = [
   "##############################",
   "##############################",
 ];
-const W = 30, H = 12, T = 16;
-const TOWER_X = 24;                    // first column of the tower
+const W = 30, H = 12, T = 16;          // W is the width of the view, in tiles
+const LEVEL_W = MAP[0].length;
+const TOWER_X = 54;                    // first column of the tower
 const ARENA_FLOOR = 9;
 const TOWER_TOP = 4;
-const PERCH = { x: 25.8, y: TOWER_TOP - 2.75 }; // where the boss waits on the tower top
+const PERCH = { x: TOWER_X + 1.8, y: TOWER_TOP - 2.75 }; // where the boss waits on the tower top
 const TORCHES = {
-  level: [{ x: 3, y: 7, post: true }, { x: 10, y: 7, post: true }, { x: 17, y: 7, post: true }, { x: 25, y: 6 }, { x: 28, y: 6 }],
+  level: [{ x: 3, y: 7, post: true }, { x: 10, y: 7, post: true }, { x: 17, y: 7, post: true }, { x: 25, y: 7, post: true },
+    { x: 32, y: 6, post: true }, { x: 40, y: 5, post: true }, { x: 48, y: 7, post: true }, { x: TOWER_X + 1, y: 6 }, { x: TOWER_X + 4, y: 6 }],
   arena: [{ x: 0, y: 5 }, { x: 29, y: 5 }, { x: 12, y: 7 }, { x: 17, y: 7 }],
 };
 const MOON = { level: { x: 170, y: 38, r: 10 }, arena: { x: 330, y: 40, r: 14 } };
@@ -204,6 +230,7 @@ let START;
 MAP.forEach((row, y) => { const x = row.indexOf("S"); if (x >= 0) START = { x, y }; });
 
 const inArena = () => !!S && S.scene === "arena";
+const mapW = () => (inArena() ? ARENA : MAP)[0].length;
 const tileIn = (map, x, y) => (map[y] || "")[x] || "#";
 const tileAt = (x, y) => tileIn(inArena() ? ARENA : MAP, x, y);
 const isSolid = (x, y) => tileAt(x, y) === "#";
@@ -243,7 +270,7 @@ const MINIONS = {
   skeleton: { cost: 1, hp: 15, atk: 3, speed: 2.0, w: 0.6, blood: ["#e8e2d0", "#a89f8a"] },
   ogre:     { cost: 3, hp: 50, atk: 8, speed: 1.2, w: 0.8, blood: ["#6aa84f", "#3f7a34"] },
 };
-const BOSS_HP = 300, BOSS_DMG = 30, BOSS_SPEED = 4, SLAM_DMG = 26, WAVE_DMG = 12;
+const BOSS_HP = 600, BOSS_DMG = 30, BOSS_SPEED = 4, SLAM_DMG = 26, WAVE_DMG = 12;
 // The Hollow King's special attacks. Cooldowns are in seconds, and shorter while he is enraged.
 const ABILITIES = [
   { id: "slash", key: "Q", name: "CLEAVER SLASH", cd: 4 },
@@ -253,7 +280,7 @@ const ABILITIES = [
 ];
 const SLASH_DMG = 32, SMASH_RADIUS = 2.6, GRASP_TICK = 6, METEOR_DMG = 12;
 // Phase two: when his first life runs out, Vorgath tears free of his armour as the Devourer.
-const P2_HP = 360, P2_SPEED = 2.6;
+const P2_HP = 720, P2_SPEED = 2.6;
 const ABILITIES2 = [
   { id: "breath", key: "Q", name: "SOUL BREATH", cd: 6 },
   { id: "quake", key: "S", name: "CATACLYSM", cd: 7 },
@@ -380,6 +407,7 @@ function newGame(title = false) {
     phase: title ? "title" : "intro", scene: "level", floats: [], particles: [], tool: "spike", time: 0,
     fade: 0, fadeIn: 0, intro: 0, returnT: 0,
     shake: 0, banner: null, bannerQueue: [], pulse: { coins: 0, souls: 0 }, fresh: new Set(),
+    camX: LEVEL_W - W, camGoal: null, trapMenu: null,
     dialog: { queue: [], cur: null }, heroArrows: [], pools: [], meteors: [], hell: null, ghosts: [], decals: [], rings: [], slashes: [], spikes: [], chains: [], skulls: [], whiteFlash: 0, seenKinds: new Set(["knight"]), lightning: { next: 3 + Math.random() * 4, flash: 0, bolt: null }, prologue: null, heartbeat: 0,
   };
   if (title) { say("Click or press any key to begin."); return; }
@@ -405,6 +433,7 @@ function advancePrologue() {
 // The opening: one reckless hero charges in alone.
 function startOpening() {
   S.phase = "intro";
+  S.camGoal = 0;
   const first = makeHero(1);
   first.reckless = true;
   S.heroes.push(first);
@@ -813,6 +842,11 @@ document.addEventListener("keydown", e => {
   keys[k] = true;
   if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
   if (k === " ") bossAttack();
+  if (S.trapMenu) {
+    if (k === "u") upgradeTrap(S.trapMenu);
+    if (k === "x" || k === "delete") sellTrap(S.trapMenu);
+    if (k === "escape") S.trapMenu = null;
+  }
   if (k === "q") useSlot(0);
   if (k === "s" || k === "arrowdown" || k === "e") useSlot(1);
   if (k === "r") useSlot(2);
@@ -832,19 +866,67 @@ buffer.width = W * T; buffer.height = H * T;
 let ctx = buffer.getContext("2d");
 const big = document.createElement("canvas");
 const bigCtx = big.getContext("2d");
-let hover = null;
 
-function tileFromEvent(e) {
+// Mouse position in game pixels on the screen (not the scrolled world).
+function screenFromEvent(e) {
   const r = canvas.getBoundingClientRect();
-  return {
-    x: Math.floor((e.clientX - r.left) / r.width * W),
-    y: Math.floor((e.clientY - r.top) / r.height * H),
-  };
+  return { x: (e.clientX - r.left) / r.width * W * T, y: (e.clientY - r.top) / r.height * H * T };
 }
-canvas.addEventListener("mousemove", e => { hover = tileFromEvent(e); });
-canvas.addEventListener("mouseleave", () => { hover = null; });
+const camX = () => (S && !inArena() ? S.camX : 0);
+const tileAtScreen = p => ({ x: Math.floor(p.x / T + camX()), y: Math.floor(p.y / T) });
+let mouse = null;
+canvas.addEventListener("mousemove", e => { mouse = screenFromEvent(e); });
+canvas.addEventListener("mouseleave", () => { mouse = null; });
+// Scroll the level with the mouse wheel (or a trackpad swipe).
+canvas.addEventListener("wheel", e => {
+  if (inArena()) return;
+  e.preventDefault();
+  S.camX += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * 0.02;
+  S.camGoal = null;
+}, { passive: false });
+
+// The view follows the arrow keys / A and D, the mouse at the screen edges, and clicks on the mini-map.
+function updateCamera(dt) {
+  if (inArena()) return;
+  const max = LEVEL_W - W;
+  let pan = 0;
+  if (["build", "wave", "intro"].includes(S.phase)) {
+    if (keys.a || keys.arrowleft) pan--;
+    if (keys.d || keys.arrowright) pan++;
+    if (mouse && mouse.y > 26 && mouse.x < 10) pan--;
+    if (mouse && mouse.y > 26 && mouse.x > W * T - 10) pan++;
+  }
+  if (pan) { S.camX += pan * 18 * dt; S.camGoal = null; }
+  else if (S.camGoal != null) {
+    S.camX += (S.camGoal - S.camX) * Math.min(1, dt * 3);
+    if (Math.abs(S.camGoal - S.camX) < 0.02) S.camGoal = null;
+  }
+  S.camX = Math.max(0, Math.min(max, S.camX));
+}
+const focusCamera = x => { S.camGoal = Math.max(0, Math.min(LEVEL_W - W, x - W / 2)); };
 // Ignore the click that dismissed the title screen.
-canvas.addEventListener("click", e => { if (performance.now() - startedAt > 300) place(tileFromEvent(e)); });
+canvas.addEventListener("click", e => {
+  // Ignore the click that dismissed the title screen.
+  if (performance.now() - startedAt < 300) return;
+  const p = screenFromEvent(e);
+  // A button in the open trap menu?
+  if (S.trapMenu) {
+    for (const r of S.menuRects || []) {
+      if (p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) { r.act(); return; }
+    }
+  }
+  // The mini-map jumps the view.
+  if (!inArena() && p.y >= MINIMAP.y && p.y < MINIMAP.y + MINIMAP.h + 2 && canManageTraps()) {
+    focusCamera(p.x / (W * T) * LEVEL_W);
+    S.trapMenu = null;
+    return;
+  }
+  const tile = tileAtScreen(p);
+  const onTrap = S.traps.some(t => t.x === tile.x && t.y === tile.y);
+  // Clicking away from an open menu just closes it.
+  if (S.trapMenu && !onTrap) { S.trapMenu = null; return; }
+  place(tile);
+});
 
 function toggleSound(kind) {
   Sound.toggle(kind);
@@ -908,21 +990,21 @@ fitCanvas();
 function place({ x, y }) {
   if (["over", "title", "prologue"].includes(S.phase)) return;
   if (inArena()) { say("You can't build during the boss battle."); Sound.play("deny"); return; }
-  if (!canBuild(x, y)) { say("You can't build there."); Sound.play("deny"); return; }
   const trap = S.traps.find(t => t.x === x && t.y === y);
+  if (trap) { S.trapMenu = trap; Sound.play("click"); return; }
+  if (!canBuild(x, y)) { say("You can't build there."); Sound.play("deny"); return; }
 
   if (TRAPS[S.tool]) {
     const kind = TRAPS[S.tool];
     const problem = placeProblem(S.tool, x, y, trap);
     if (problem) { say(problem); Sound.play("deny"); return; }
-    const lvl = trap ? trap.lvl : 0;
-    if (lvl >= 3) { say("That trap is already max level."); Sound.play("deny"); return; }
-    const cost = kind.costs[lvl];
+    const cost = kind.costs[0];
     if (S.coins < cost) { say(`Need ${cost} coins.`); Sound.play("deny"); return; }
     S.coins -= cost;
     spend("coins", cost);
-    if (trap) { trap.lvl++; say(`Upgraded to level ${trap.lvl}.`); Sound.play("upgrade"); }
-    else { S.traps.push(newTrap(S.tool, x, y)); say(`${kind.name} placed.`); Sound.play("place"); }
+    S.traps.push(newTrap(S.tool, x, y));
+    say(`${kind.name} placed. Click it to upgrade or sell it.`);
+    Sound.play("place");
     burst(x + 0.5, y + 0.6, 8, ["#ffd54f", "#fff3c4"], 3, { glow: true });
   } else {
     const kind = MINIONS[S.tool];
@@ -937,6 +1019,50 @@ function place({ x, y }) {
     burst(x + 0.5, y + 0.5, 14, ["#6fd3ff", "#e1f5fe"], 3, { glow: true, g: -4 });
     say(`${S.tool === "ogre" ? "Ogre" : "Skeleton"} summoned.`);
   }
+}
+
+// What a trap does at a given level, for the trap menu and the trap list.
+function trapStats(type, lvl) {
+  const k = TRAPS[type];
+  switch (type) {
+    case "spike": return `DMG ${k.dmg * lvl}  EVERY ${k.cd}S`;
+    case "saw": return `DMG ${k.dmg * lvl}  EVERY ${k.cd}S`;
+    case "turret": return `ARROW ${k.dmg * lvl}  EVERY ${(1.6 - 0.4 * (lvl - 1)).toFixed(1)}S`;
+    case "fire": return `BURN ${k.dmg * lvl}  ERUPTS EVERY ${firePeriod(lvl).toFixed(1)}S`;
+    case "crusher": return `CRUSH ${k.dmg * lvl}  RESETS ${(1.4 - 0.3 * (lvl - 1)).toFixed(1)}S`;
+    case "mine": return `BLAST ${k.dmg * lvl}  ONE USE`;
+    case "frost": return `SLOW ${Math.round(frostSlow(lvl) * 100)}%  RANGE ${frostRadius(lvl).toFixed(1)}`;
+  }
+  return "";
+}
+const trapRefund = t => Math.floor(TRAPS[t.type].costs.slice(0, t.lvl).reduce((a, c) => a + c, 0) / 2);
+const canManageTraps = () => !inArena() && !["over", "title", "prologue"].includes(S.phase);
+
+function upgradeTrap(t) {
+  const kind = TRAPS[t.type];
+  if (!canManageTraps()) return;
+  if (t.lvl >= 3) { say(`${kind.name} is already at max level.`); Sound.play("deny"); return; }
+  const cost = kind.costs[t.lvl];
+  if (S.coins < cost) { say(`Need ${cost} coins to upgrade.`); Sound.play("deny"); return; }
+  S.coins -= cost;
+  spend("coins", cost);
+  t.lvl++;
+  burst(t.x + 0.5, t.y + 0.6, 12, ["#ffd54f", "#fff3c4", "#9cff9c"], 3, { glow: true });
+  Sound.play("upgrade");
+  say(`${kind.name} upgraded to level ${t.lvl}.`);
+}
+
+function sellTrap(t) {
+  if (!canManageTraps()) return;
+  const refund = trapRefund(t);
+  S.traps = S.traps.filter(o => o !== t);
+  S.coins += refund;
+  S.shown.coins += refund;
+  S.gain.coins = { amount: refund, t: 1.4 };
+  burst(t.x + 0.5, t.y + 0.6, 10, ["#8a8296", "#ffd54f"], 3);
+  Sound.play("coin");
+  if (S.trapMenu === t) S.trapMenu = null;
+  say(`${TRAPS[t.type].name} sold for ${refund} coins.`);
 }
 
 function newTrap(type, x, y) {
@@ -1601,6 +1727,7 @@ function update(dt) {
   S.traps.forEach(t => { t.cd -= dt; t.flash -= dt; });
   S.fadeIn = Math.max(0, S.fadeIn - dt);
   S.boss.flash -= dt;
+  updateCamera(dt);
   updateDialog(dt);
   updateLightning(dt);
   if (S.phase !== "title") bossAura(dt);
@@ -1761,7 +1888,7 @@ function updateLightning(dt) {
   L.next = 9 + Math.random() * 12;
   L.flash = 0.35;
   // A jagged bolt from the clouds down to the tower top.
-  const pts = [{ x: 300 + Math.random() * 160, y: 18 }];
+  const pts = [{ x: TOWER_X * T - 120 + Math.random() * 160, y: 18 }];
   const end = { x: TOWER_X * T + 20 + Math.random() * 60, y: TOWER_TOP * T - 4 };
   for (let i = 1; i <= 7; i++) {
     const k = i / 7;
@@ -1798,7 +1925,7 @@ function updateParticles(dt) {
   S.particles = S.particles.filter(p => p.life > 0);
 
   // Embers drifting up from the lava, sparks from the torches.
-  for (let x = 0; x < W; x++) {
+  for (let x = 0; x < mapW(); x++) {
     if (tileAt(x, H - 1) === "L" && Math.random() < dt * 1.5) {
       particle({ x: x + Math.random(), y: H - 0.8, vx: (Math.random() - 0.5) * 0.5, vy: -1 - Math.random() * 1.5,
         life: 0.8 + Math.random() * 0.8, color: Math.random() < 0.5 ? "#ffb300" : "#ff6f00", glow: true });
@@ -2012,7 +2139,7 @@ function updateArcher(h, dt, arena) {
 function updateHeroArrows(dt) {
   for (const a of S.heroArrows) {
     a.x += a.vx * dt;
-    if (isSolid(Math.floor(a.x), Math.floor(a.y)) || a.x < 0 || a.x > W) { a.dead = true; continue; }
+    if (isSolid(Math.floor(a.x), Math.floor(a.y)) || a.x < 0 || a.x > mapW()) { a.dead = true; continue; }
     const box = { x: a.x - 0.2, y: a.y - 0.05, w: 0.4, h: 0.1 };
     const hit = inArena() ? (overlaps(box, S.boss) ? S.boss : null) : S.minions.find(m => overlaps(box, m));
     if (hit) {
@@ -2167,7 +2294,7 @@ function updateMine(t) {
 function updateArrows(dt) {
   for (const a of S.arrows) {
     a.x += a.vx * dt;
-    if (isSolid(Math.floor(a.x), Math.floor(a.y)) || a.x < 0 || a.x > W) {
+    if (isSolid(Math.floor(a.x), Math.floor(a.y)) || a.x < 0 || a.x > mapW()) {
       a.dead = true;
       burst(a.x, a.y, 3, ["#a1887f", "#d7ccc8"], 2);
       continue;
@@ -2291,13 +2418,13 @@ function updateLoot(dt) {
         if (Math.abs(c.vy) > 2) { dust(c.x, c.y + 0.2, 1); Sound.play("bounce"); }
       } else c.y = ny;
       if (Math.random() < dt * 3) particle({ x: c.x, y: c.y - 0.2, life: 0.25, color: "#ffffff", glow: true });
-      if (c.t <= 0) { c.state = "fly"; c.f = 0; c.sx = c.x; c.sy = c.y; }
+      if (c.t <= 0) { c.state = "fly"; c.f = 0; c.sx = c.x - camX(); c.sy = c.y; }
     } else {
       // Arc up to the coin counter, speeding up as it goes.
       c.f += dt / 0.55;
       const k = Math.min(1, c.f);
       Object.assign(c, arc(c.sx, c.sy, LOOT_HUD.coins, k * k));
-      if (Math.random() < dt * 40) particle({ x: c.x, y: c.y, life: 0.2, color: Math.random() < 0.5 ? "#ffd54f" : "#fff3c4", glow: true });
+      if (Math.random() < dt * 40) particle({ x: c.x, y: c.y, life: 0.2, color: Math.random() < 0.5 ? "#ffd54f" : "#fff3c4", glow: true, hud: true });
       if (k >= 1) { c.done = true; collect("coins", c.value, "#fff3c4"); }
     }
   }
@@ -2310,7 +2437,7 @@ function updateLoot(dt) {
       // Drift up out of the body, swaying like a flame.
       s.y -= dt * 1.4;
       s.x = s.ox + Math.sin(s.t * 7 + s.wob) * 0.25;
-      if (s.t > 0.9) { s.state = "fly"; s.f = 0; s.sx = s.x; s.sy = s.y; }
+      if (s.t > 0.9) { s.state = "fly"; s.f = 0; s.sx = s.x - camX(); s.sy = s.y; }
     } else {
       // Glide to the soul counter, slow at first and then swooping in.
       s.f += dt / 0.8;
@@ -2321,7 +2448,7 @@ function updateLoot(dt) {
     }
     if (Math.random() < dt * 30) {
       particle({ x: s.x + (Math.random() - 0.5) * 0.2, y: s.y + 0.15, vy: 0.5, vx: (Math.random() - 0.5) * 0.4, life: 0.45,
-        color: Math.random() < 0.5 ? "#6fd3ff" : "#b3e5fc", glow: true });
+        color: Math.random() < 0.5 ? "#6fd3ff" : "#b3e5fc", glow: true, hud: s.state === "fly" });
     }
   }
   S.soulFx = S.soulFx.filter(s => !s.done);
@@ -3204,11 +3331,13 @@ function rng(seed) {
   return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
 }
 
-// Paint one scene's backdrop and stonework into an offscreen canvas.
+// Paint one scene into two layers: a sky that stays put, and the castle and ground that scroll.
 function buildBackground(map, arena) {
-  const c = document.createElement("canvas");
-  c.width = W * T; c.height = H * T;
-  const g = c.getContext("2d");
+  const mw = map[0].length;
+  const sky = document.createElement("canvas"), world = document.createElement("canvas");
+  sky.width = W * T; sky.height = H * T;
+  world.width = mw * T; world.height = H * T;
+  let g = sky.getContext("2d");
   const rand = rng(arena ? 11 : 7);
   const px = (x, y, col, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
   const solid = (x, y) => tileIn(map, x, y) === "#";
@@ -3276,6 +3405,7 @@ function buildBackground(map, arena) {
     ridge(92, 14, "#1a1533", 0.4);
     ridge(108, 10, "#141029", 2.1);
   }
+  g = world.getContext("2d");
 
   // Brick wall helper for castle walls in the background.
   const bricks = (x0, y0, w, h, shades, mortar) => {
@@ -3357,7 +3487,7 @@ function buildBackground(map, arena) {
   };
   const lavaPit = x => tileIn(map, x, H - 1) === "L";
   for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
+    for (let x = 0; x < mw; x++) {
       if (!solid(x, y)) continue;
       const X = x * T, Y = y * T;
       const tower = !arena && x >= TOWER_X;
@@ -3378,7 +3508,7 @@ function buildBackground(map, arena) {
           if (rand() < 0.12) px(l + 2 + ((rand() * 8) | 0), sy + 3, "#2c2738", 2, 1);
         }
       }
-      const air = (dx, dy) => !solid(x + dx, y + dy) && y + dy >= 0 && y + dy < H && x + dx >= 0 && x + dx < W;
+      const air = (dx, dy) => !solid(x + dx, y + dy) && y + dy >= 0 && y + dy < H && x + dx >= 0 && x + dx < mw;
       if (air(0, -1)) {
         px(X, Y, tower || arena ? "#8a82a0" : "#7c7392", T, 2);
         px(X, Y + 2, "#2c2738", T, 1);
@@ -3428,9 +3558,9 @@ function buildBackground(map, arena) {
     px(1 * T + 3, ARENA_FLOOR * T - 10, "#3b3746", 2, 1);
   } else {
     // The tower: battlements on top, a banner, a lit window and the door at its foot.
-    merlons(TOWER_X * T + 1, W * T, TOWER_TOP * T, 7, 6, 4, "#5f5872", "#8a82a0");
-    skullBanner(26 * T + 3, TOWER_TOP * T + 6, 20, 34);
-    const wx = 28 * T + 5, wy = 8 * T;
+    merlons(TOWER_X * T + 1, mw * T, TOWER_TOP * T, 7, 6, 4, "#5f5872", "#8a82a0");
+    skullBanner((TOWER_X + 2) * T + 3, TOWER_TOP * T + 6, 20, 34);
+    const wx = (TOWER_X + 4) * T + 5, wy = 8 * T;
     px(wx - 1, wy - 1, OUTLINE, 8, 13);
     px(wx, wy + 2, "#ffb74d", 6, 10);
     px(wx + 1, wy, "#ffb74d", 4, 2);
@@ -3447,13 +3577,13 @@ function buildBackground(map, arena) {
     px(dx + 1, dy + 12, "#3b3746", 11, 1);
     px(dx + 9, dy + 9, "#e0b84a", 1, 1);
   }
-  return c;
+  return { sky, world };
 }
 const BG = { level: buildBackground(MAP, false), arena: buildBackground(ARENA, true) };
 
 // ---------- drawing ----------
 function drawLava() {
-  for (let x = 0; x < W; x++) {
+  for (let x = 0; x < mapW(); x++) {
     if (tileAt(x, H - 1) !== "L") continue;
     const X = x * T, Y = (H - 1) * T;
     ctx.fillStyle = "#8e1b0e";
@@ -3593,6 +3723,12 @@ function drawTrap(t, alpha = 1) {
     const eye = t.flash > 0 ? "#ffffff" : TURRET_EYES[t.lvl - 1];
     const spr = sprite(ART.turret, { S: "#6b6378", s: "#4a4456", Y: eye, k: "#3b0a0d" }, "turret" + eye);
     drawSprite(spr, X + 8, Y + T - 1, t.face || -1, alpha);
+  }
+  if (alpha === 1 && S.trapMenu === t) {
+    ctx.fillStyle = Math.floor(S.time * 4) % 2 ? "#ffd54f" : "#fff3c4";
+    for (const [cx, cy, dx, dy] of [[0, 0, 1, 1], [15, 0, -1, 1], [0, 15, 1, -1], [15, 15, -1, -1]]) {
+      ctx.fillRect(X + cx, Y + cy, 1, 1); ctx.fillRect(X + cx + dx, Y + cy, 1, 1); ctx.fillRect(X + cx, Y + cy + dy, 1, 1);
+    }
   }
   if (alpha === 1) {
     for (let i = 0; i < t.lvl; i++) {
@@ -4028,7 +4164,7 @@ function drawArrow(a) {
 
 // Darkness with soft pools of light, rendered at half resolution for chunky bands.
 const light = document.createElement("canvas");
-light.width = W * T / 2; light.height = H * T / 2;
+light.width = LEVEL_W * T / 2; light.height = H * T / 2;
 const lctx = light.getContext("2d");
 
 // A blood-red vignette around the edges of the tower top.
@@ -4058,9 +4194,9 @@ function drawLighting() {
     lctx.fillRect(x / 2 - r / 2, y / 2 - r / 2, r, r);
   };
   const moon = MOON[inArena() ? "arena" : "level"];
-  hole(moon.x, moon.y, moon.r * 9, 0.6);
+  hole(moon.x + camX() * T, moon.y, moon.r * 9, 0.6);
   torches().forEach((t, i) => hole(t.x * T + 8, t.y * T + 6, 70 + Math.sin(S.time * 9 + i * 2) * 3));
-  for (let x = 0; x < W; x++) if (tileAt(x, H - 1) === "L") hole(x * T + 8, (H - 1) * T + 4, 44, 0.9);
+  for (let x = 0; x < mapW(); x++) if (tileAt(x, H - 1) === "L") hole(x * T + 8, (H - 1) * T + 4, 44, 0.9);
   for (const h of S.heroes) hole(centerX(h) * T, centerY(h) * T, 40, 0.7);
   for (const p of S.pools) hole(p.x * T, ARENA_FLOOR * T, p.r * T * 2.2, 0.8);
   for (const m of S.meteors) hole(m.x * T, m.y * T, 40, 1);
@@ -4079,7 +4215,7 @@ function drawLighting() {
   }
 
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(light, 0, 0, W * T, H * T);
+  ctx.drawImage(light, 0, 0, mapW() * T / 2, H * T / 2, 0, 0, mapW() * T, H * T);
 
   // Warm glow around flames and lava.
   ctx.globalCompositeOperation = "lighter";
@@ -4091,7 +4227,7 @@ function drawLighting() {
     ctx.fillRect(x - r, y - r, r * 2, r * 2);
   };
   torches().forEach((t, i) => glow(t.x * T + 8, t.y * T + 6, 22 + Math.sin(S.time * 11 + i) * 2, "rgba(255,140,40,0.22)"));
-  for (let x = 0; x < W; x++) if (tileAt(x, H - 1) === "L") glow(x * T + 8, (H - 1) * T + 4, 20, "rgba(255,90,20,0.18)");
+  for (let x = 0; x < mapW(); x++) if (tileAt(x, H - 1) === "L") glow(x * T + 8, (H - 1) * T + 4, 20, "rgba(255,90,20,0.18)");
   for (const p of S.pools) glow(p.x * T, ARENA_FLOOR * T, p.r * T * 1.4, "rgba(200,20,30,0.3)");
   for (const m of S.meteors) glow(m.x * T, m.y * T, 14, "rgba(255,110,20,0.5)");
   for (const sk of S.skulls) glow(sk.x * T, sk.y * T, 10, "rgba(150,100,255,0.45)");
@@ -4119,18 +4255,22 @@ function drawParticles(glowing) {
 }
 
 function drawHover() {
-  if (!hover || S.phase === "over" || inArena() || hover.x < 0 || hover.x >= W || hover.y < 0 || hover.y >= H) return;
+  if (!mouse || mouse.y < 26 || S.trapMenu) return;
+  const hover = tileAtScreen(mouse);
+  if (S.phase === "over" || inArena() || hover.x < 0 || hover.x >= mapW() || hover.y < 0 || hover.y >= H) return;
   const { x, y } = hover;
   const existing = S.traps.find(t => t.x === x && t.y === y);
   let ok = canBuild(x, y), label = "";
-  if (TRAPS[S.tool]) {
+  if (existing) {
+    // A placed trap: clicking opens its menu.
+    label = `LV${existing.lvl} - CLICK`;
+  } else if (TRAPS[S.tool]) {
     const kind = TRAPS[S.tool];
     if (placeProblem(S.tool, x, y, existing)) ok = false;
     const lvl = existing ? existing.lvl : 0;
     if (!unlocked(S.tool)) label = "LOCKED";
-    else if (lvl >= 3) { ok = false; label = "MAX"; }
     else {
-      label = `${existing ? "UP " : ""}${kind.costs[lvl]}C`;
+      label = `${kind.costs[lvl]}C`;
       if (S.coins < kind.costs[lvl]) ok = false;
     }
     if (ok && !existing) drawTrap(newTrap(S.tool, x, y), 0.55);
@@ -4140,7 +4280,7 @@ function drawHover() {
     if (S.souls < kind.cost) ok = false;
     if (ok) drawSprite(sprite(ART[S.tool], S.tool === "skeleton" ? SKELETON_PAL : {}, S.tool), x * T + 8, y * T + T - 1, -1, 0.55);
   }
-  const c = ok ? "#9cff9c" : "#ff5252";
+  const c = existing ? "#ffd54f" : ok ? "#9cff9c" : "#ff5252";
   ctx.fillStyle = c;
   // Corner brackets around the tile.
   for (const [cx, cy, dx, dy] of [[0, 0, 1, 1], [15, 0, -1, 1], [0, 15, 1, -1], [15, 15, -1, -1]]) {
@@ -4148,7 +4288,7 @@ function drawHover() {
     ctx.fillRect(x * T + cx + dx, y * T + cy, 1, 1);
     ctx.fillRect(x * T + cx, y * T + cy + dy, 1, 1);
   }
-  if (label && canBuild(x, y)) drawText(label, x * T + 8, y * T - 10, ok ? "#ffffff" : "#ff8a80", { align: "center" });
+  if (label && canBuild(x, y)) drawText(label, x * T + 8, y * T - 10, existing ? "#ffd54f" : ok ? "#ffffff" : "#ff8a80", { align: "center" });
 }
 
 function coinSprite(spin, white = false, big = false) {
@@ -4194,6 +4334,82 @@ function drawAbilityBar(b) {
   }
 }
 
+// The trap menu: a panel above the selected trap with its stats, Upgrade and Sell.
+function drawTrapMenu() {
+  const t = S.trapMenu;
+  S.menuRects = [];
+  if (!t) return;
+  // Close when the trap is gone, or scrolled out of view.
+  const onScreen = t.x + 1 > camX() && t.x < camX() + W;
+  if (!S.traps.includes(t) || !canManageTraps() || !onScreen) { S.trapMenu = null; return; }
+  const kind = TRAPS[t.type], max = t.lvl >= 3, cost = max ? 0 : kind.costs[t.lvl];
+  const w = 150, h = max ? 46 : 56;
+  const sx = (t.x - camX()) * T + 8, sy = t.y * T;
+  const x = Math.round(Math.max(4, Math.min(W * T - w - 4, sx - w / 2)));
+  const y = Math.round(sy - h - 6 >= 28 ? sy - h - 6 : sy + T + 6);
+  drawPanel(x, y, w, h);
+  // A little pointer down (or up) to the trap.
+  ctx.fillStyle = "#4a4258";
+  const px = Math.round(Math.max(x + 8, Math.min(x + w - 8, sx)));
+  if (y < sy) { ctx.fillRect(px - 2, y + h, 5, 1); ctx.fillRect(px - 1, y + h + 1, 3, 1); ctx.fillRect(px, y + h + 2, 1, 1); }
+  else { ctx.fillRect(px - 2, y - 1, 5, 1); ctx.fillRect(px - 1, y - 2, 3, 1); ctx.fillRect(px, y - 3, 1, 1); }
+
+  drawText(kind.name, x + 7, y + 6, "#ffd54f");
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x + w - 32 + i * 8, y + 6, 6, 6);
+    ctx.fillStyle = i < t.lvl ? "#ffd54f" : "#3a3448";
+    ctx.fillRect(x + w - 31 + i * 8, y + 7, 4, 4);
+  }
+  drawText(trapStats(t.type, t.lvl), x + 7, y + 17, "#e6e0ec");
+  if (!max) drawText(`NEXT ${trapStats(t.type, t.lvl + 1)}`, x + 7, y + 27, "#9cff9c");
+
+  // Buttons: hovered ones light up.
+  const by = y + h - 17;
+  const button = (bx, bw, label, color, enabled, act) => {
+    const hot = enabled && mouse && mouse.x >= bx && mouse.x < bx + bw && mouse.y >= by && mouse.y < by + 13;
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(bx, by, bw, 13);
+    ctx.fillStyle = hot ? "#3a2f4a" : "#241e2e";
+    ctx.fillRect(bx + 1, by + 1, bw - 2, 11);
+    ctx.fillStyle = enabled ? color : "#4a4258";
+    ctx.fillRect(bx + 1, by + 1, bw - 2, 1);
+    drawText(label, bx + bw / 2, by + 3, enabled ? color : "#6b5f75", { align: "center" });
+    if (enabled) S.menuRects.push({ x: bx, y: by, w: bw, h: 13, act });
+  };
+  if (max) button(x + 6, 70, "MAX LEVEL", "#ffd54f", false);
+  else button(x + 6, 76, `UPGRADE ${cost}C`, "#9cff9c", S.coins >= cost, () => upgradeTrap(t));
+  button(x + w - 64, 46, `SELL +${trapRefund(t)}`, "#ff8a80", true, () => sellTrap(t));
+  // Close box.
+  S.menuRects.push({ x: x + w - 12, y: y + 1, w: 11, h: 10, act: () => { S.trapMenu = null; } });
+}
+
+// A strip under the HUD showing the whole path: ground, lava, traps, heroes, and where the view is.
+const MINIMAP = { y: 19, h: 5 };
+function drawMinimap() {
+  const k = W * T / LEVEL_W, y0 = MINIMAP.y, h = MINIMAP.h;
+  ctx.fillStyle = "rgba(8,4,14,0.75)";
+  ctx.fillRect(0, y0 - 1, W * T, h + 2);
+  for (let x = 0; x < LEVEL_W; x++) {
+    let top = 9;
+    while (top > 0 && tileIn(MAP, x, top - 1) === "#") top--;
+    const lava = tileIn(MAP, x, 9) !== "#";
+    const height = lava ? 1 : Math.min(h, 2 + (9 - top));
+    ctx.fillStyle = lava ? "#ff6f00" : x >= TOWER_X ? "#6b6378" : "#4a4458";
+    ctx.fillRect(Math.floor(x * k), y0 + h - height, Math.ceil(k), height);
+  }
+  ctx.fillStyle = "#ffd54f";
+  for (const t of S.traps) ctx.fillRect(Math.floor((t.x + 0.5) * k), y0, 2, 1);
+  for (const hr of S.heroes) { ctx.fillStyle = "#6fd3ff"; ctx.fillRect(Math.floor(centerX(hr) * k) - 1, y0 + 1, 2, 2); }
+  // The window the screen is showing.
+  const vx = Math.round(S.camX * k), vw = Math.round(W * k);
+  ctx.fillStyle = "rgba(230,224,236,0.7)";
+  ctx.fillRect(vx, y0 - 1, vw, 1);
+  ctx.fillRect(vx, y0 + h, vw, 1);
+  ctx.fillRect(vx, y0 - 1, 1, h + 2);
+  ctx.fillRect(vx + vw - 1, y0 - 1, 1, h + 2);
+}
+
 function drawLoot() {
   // Sparkles where loot lands on a counter sit on top of the HUD.
   for (const p of S.particles) {
@@ -4204,16 +4420,16 @@ function drawLoot() {
   }
   ctx.globalAlpha = 1;
   for (const c of S.coinFx) {
-    // Coins shrink to counter size as they reach the HUD.
-    const big = c.state === "pop" || c.f < 0.7;
+    // Coins shrink to counter size as they reach the HUD. Until they take off they sit in the scrolling world.
+    const big = c.state === "pop" || c.f < 0.7, off = c.state === "pop" ? camX() : 0;
     const { spr, face } = coinSprite(c.spin, false, big);
-    drawSprite(spr, c.x * T, c.y * T + (big ? 4 : 3), face);
+    drawSprite(spr, (c.x - off) * T, c.y * T + (big ? 4 : 3), face);
   }
   for (const s of S.soulFx) {
-    const big = s.state === "rise" || s.f < 0.75;
+    const big = s.state === "rise" || s.f < 0.75, off = s.state === "rise" ? camX() : 0;
     const art = big ? (Math.floor(s.t * 8) % 2 ? ART.wisp : ART.wisp2) : ART.soul;
     // Souls flicker as they fly.
-    drawSprite(sprite(art, SOUL_PAL, "soul"), s.x * T, s.y * T + (big ? 5 : 3), 1, 0.75 + Math.sin(s.t * 20) * 0.2);
+    drawSprite(sprite(art, SOUL_PAL, "soul"), (s.x - off) * T, s.y * T + (big ? 5 : 3), 1, 0.75 + Math.sin(s.t * 20) * 0.2);
   }
 }
 
@@ -4271,6 +4487,7 @@ function drawHud() {
   if (S.pulse.souls > 0) drawSprite(sprite(ART.soul, SOUL_PAL, "soul", true), 74, 12 + ps, 1, 0.6);
   drawCounter("souls", 82, "#6fd3ff");
   drawText(`WAVE ${S.wave}`, 112, 5, "#e6e0ec");
+  if (!inArena() && canManageTraps()) drawMinimap();
 
   const b = S.boss;
   if (inArena()) {
@@ -4377,7 +4594,11 @@ function draw() {
   if (S.shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * S.shake), Math.round((Math.random() - 0.5) * S.shake));
 
   const arena = inArena();
-  ctx.drawImage(BG[arena ? "arena" : "level"], 0, 0);
+  const layers = BG[arena ? "arena" : "level"];
+  ctx.drawImage(layers.sky, 0, 0);
+  // Everything after this is drawn in world space, scrolled by the camera.
+  ctx.translate(-Math.round(camX() * T), 0);
+  ctx.drawImage(layers.world, 0, 0);
   drawTorches();
   if (!arena) {
     drawLava();
@@ -4415,6 +4636,7 @@ function draw() {
     drawLoot();
   }
   drawBanner();
+  drawTrapMenu();
   drawDialog();
 
   if (S.whiteFlash > 0) {
@@ -4443,7 +4665,7 @@ function drawStorm() {
   const a = Math.min(1, L.flash / 0.35);
   ctx.globalAlpha = a * 0.45;
   ctx.fillStyle = "#d8d0ff";
-  ctx.fillRect(0, 0, W * T, 96);
+  ctx.fillRect(camX() * T, 0, W * T, 96);
   ctx.globalAlpha = a;
   for (let i = 1; i < L.bolt.length; i++) {
     const p = L.bolt[i - 1], q = L.bolt[i], n = Math.max(Math.abs(q.x - p.x), Math.abs(q.y - p.y));
@@ -4574,7 +4796,7 @@ function drawPrologue() {
   ctx.globalAlpha = 1;
   for (const e of bossEyes(S.boss)) {
     ctx.fillStyle = "#ff1744";
-    ctx.fillRect(e.x - 1, e.y, 3, 1);
+    ctx.fillRect(e.x - 1 - Math.round(camX() * T), e.y, 3, 1);
   }
   const p = S.prologue, text = PROLOGUE[p.line];
   const shown = text.slice(0, Math.floor(p.t * 32));
@@ -4619,7 +4841,49 @@ function ctxSwap(g, fn) {
   try { fn(); } finally { ctx = real; }
 }
 
+// "Your traps": every placed trap, with Upgrade, Sell and Find. Rebuilt only when something changes.
+const trapIcons = {};
+function trapIcon(type) {
+  if (!trapIcons[type]) trapIcons[type] = document.querySelector(`[data-tool="${type}"] canvas`).toDataURL();
+  return trapIcons[type];
+}
+let trapListKey = "";
+function updateTrapList() {
+  const key = [S.traps.map(t => `${t.type}${t.x},${t.y}:${t.lvl}`).join("|"), S.coins, canManageTraps(), S.traps.indexOf(S.trapMenu)].join("/");
+  if (key === trapListKey) return;
+  trapListKey = key;
+  document.getElementById("trapCount").textContent = S.traps.length;
+  const rows = document.getElementById("trapRows");
+  const list = [...S.traps].sort((a, b) => a.x - b.x || a.y - b.y);
+  if (!list.length) { rows.innerHTML = `<div class="empty">No traps yet. Pick one above and click the level to place it.</div>`; return; }
+  const can = canManageTraps();
+  rows.innerHTML = list.map(t => {
+    const kind = TRAPS[t.type], max = t.lvl >= 3, cost = max ? 0 : kind.costs[t.lvl];
+    const next = max ? "" : ` &gt; <b>${trapStats(t.type, t.lvl + 1)}</b>`;
+    return `<div class="trap-row${S.trapMenu === t ? " active" : ""}" data-i="${S.traps.indexOf(t)}">
+      <img src="${trapIcon(t.type)}" alt="">
+      <div class="info"><span class="name">${kind.name}</span><span class="pips">${"&#9632;".repeat(t.lvl)}${"&#9633;".repeat(3 - t.lvl)}</span>
+        <div class="stat">${trapStats(t.type, t.lvl)}${next}</div></div>
+      <div class="acts">
+        <button class="up" data-act="up" ${max || !can || S.coins < cost ? "disabled" : ""}>${max ? "Max level" : `Upgrade ${cost}c`}</button>
+        <button class="sell" data-act="sell" ${can ? "" : "disabled"}>Sell +${trapRefund(t)}c</button>
+        <button data-act="find">Find</button>
+      </div></div>`;
+  }).join("");
+}
+document.getElementById("trapRows").addEventListener("click", e => {
+  const btn = e.target.closest("button"), row = e.target.closest(".trap-row");
+  if (!btn || !row) return;
+  btn.blur();
+  const t = S.traps[+row.dataset.i];
+  if (!t) return;
+  if (btn.dataset.act === "up") upgradeTrap(t);
+  if (btn.dataset.act === "sell") sellTrap(t);
+  if (btn.dataset.act === "find" && !inArena()) { focusCamera(t.x + 0.5); S.trapMenu = t; }
+});
+
 function updateToolbar() {
+  updateTrapList();
   document.querySelectorAll("[data-tool]").forEach(b => {
     const tool = b.dataset.tool;
     b.classList.toggle("selected", tool === S.tool);

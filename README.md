@@ -11,10 +11,12 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
 - **Opening:** a lone hero charges in and falls into the lava, the ground rumbles, and the first wave comes running.
 - **Heroes:** sword knights; archers from wave 2 (fast, fragile, shoot from range and keep their distance); Iron Knights from wave 3 (slow, very tough, and their tower shields block most arrow damage from the front).
 - **Waves:** each wave is a group of heroes. Heroes who reach the tower door hide inside; once 5 are in the tower, they all climb up for the boss battle.
-- **Build:** spend coins on spikes, saw blades and arrow turrets (click a trap of the same type again to upgrade it, up to level 3), and souls on skeletons and ogres. You can build during waves too.
+- **The path** to the tower is twice as wide as the screen. Scroll with A / D, the arrow keys, the mouse wheel, the screen edges, or by clicking the mini-map under the HUD.
+- **Build:** spend coins on spikes, saw blades and arrow turrets, and souls on skeletons and ogres. You can build during waves too.
+- **Manage traps:** click a placed trap to open its menu: see its stats and what the next level adds, **Upgrade** it (up to level 3, or press U) or **Sell** it for half what you paid (or press X). The *Your traps* list under the toolbar does the same for every trap, with a **Find** button that scrolls to it.
 - **Loot:** every hero you kill drops coins and exactly one soul, which fly into your counters.
 - **Unlockable traps:** kills unlock fire vents (3 kills), crushers (6), bombs (10) and frost totems that slow heroes down (15).
-- **Boss battle:** Vorgath roars to open the fight and becomes enraged (faster, deadlier) below half health. A / D move, W jumps and Space swings your cleaver. Special attacks, each on a cooldown shown in the action bar:
+- **Boss battle:** Vorgath has 600 HP (his Devourer form has 720). He roars to open the fight and becomes enraged (faster, deadlier) below half health. A / D move, W jumps and Space swings your cleaver. Special attacks, each on a cooldown shown in the action bar:
   - **Q – Cleaver Slash:** dash forward, cutting through every hero in the way.
   - **S – Ground Smash:** leap and slam down, hurting and hurling away everyone around you, with shockwaves along the floor.
   - **R – Grasp of the Damned:** a pool of blood opens under the heroes; bony hands hold them, and the weak are dragged down to hell.
