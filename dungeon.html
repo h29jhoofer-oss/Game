@@ -130,6 +130,9 @@
     Every hero you kill drops coins and exactly one soul, and kills unlock new traps: fire vents, crushers, bombs and frost totems.<br>
     <b>Boss battle:</b> when the tower fills up, the fight moves to the tower top.
     A / D or arrows move, W jumps, Space swings your cleaver, S slams the ground and sends out shockwaves.<br>
+    <b>Heroes:</b> knights charge in with swords. From wave 2, <b>archers</b> join: fast and fragile, they stop to shoot
+    your minions and keep their distance on the tower. From wave 3, <b>Iron Knights</b> march in: slow and very tough,
+    with a tower shield that blocks most arrow damage from the front. Crushers, fire and bombs work best on them.<br>
     Press M to mute the music and N to mute sound effects.<br>
     Each wave brings one more hero than the last, and they're stronger, better geared, and better at spotting traps and dodging.<br>
     <a href="index.html">&larr; back to menu</a>
@@ -276,21 +279,57 @@ const HERO_LINES = {
   lava: ["IT BURNS!", "AAARGH!"],
   fear: ["WHAT IS THAT...", "GODS PRESERVE US!", "HOLD THE LINE!"],
 };
+HERO_LINES.archer = ["FROM AFAR, HOLLOW KING!", "MY ARROWS NEVER MISS.", "KEEP YOUR DISTANCE!"];
+HERO_LINES.brute = ["NOTHING STOPS THE IRON VOW.", "STAND ASIDE, LITTLE ONES.", "I AM THE WALL."];
+const DEBUT = {
+  archer: { hero: "STAY BACK AND LOOSE! FROM AFAR HE CANNOT TOUCH US!", boss: "ARCHERS. THEY BLEED THE SAME.",
+    tip: "Archers are here: fast and fragile, and they shoot your minions from range." },
+  brute: { hero: "THE IRON VOW DOES NOT BREAK.", boss: "AT LAST. SOMETHING WORTH CRUSHING.",
+    tip: "Iron Knights are here: slow and tough, and their shields block arrows from the front. Use crushers, fire and bombs." },
+};
 const pick = list => list[Math.floor(Math.random() * list.length)];
 
 const HERO_NAMES = ["Sir Aldric", "Sir Borin", "Dame Elara", "Sir Cedric", "Dame Isolde", "Sir Galen", "Sir Thorne",
   "Dame Wren", "Sir Roland", "Sir Percival", "Dame Maren", "Sir Edmund"];
 
-function makeHero(lv) {
-  const hp = 40 + 20 * (lv - 1);
+// Three kinds of hero. Archers are quick and fragile and shoot from range; Iron Knights are slow,
+// tough, and carry a tower shield that blocks most damage from arrows hitting the front.
+const HERO_KINDS = {
+  knight: { label: "knight", hp: 1, atk: 1, speed: 3.7, w: 0.6, h: 0.9, coins: 1, cd: 0.7 },
+  archer: { label: "archer", hp: 0.65, atk: 0.7, speed: 4.1, w: 0.6, h: 0.9, coins: 1, cd: 1.1, range: 5.5, dodge: 0.1, smart: 0.1 },
+  brute: { label: "Iron Knight", hp: 2.2, atk: 1.5, speed: 2.1, airSpeed: 4.1, w: 0.9, h: 1.2, coins: 2, cd: 1.0, noDodge: true, smart: -0.5 },
+};
+const ARCHER_NAMES = ["Ranger Wren", "Ranger Lark", "Ranger Fenn", "Ranger Ivy", "Ranger Rook", "Ranger Sable"];
+const BRUTE_NAMES = ["Brother Gorm", "Iron Hallard", "Brother Osric", "Iron Bram", "Brother Tobin"];
+
+function makeHero(lv, kind = "knight") {
+  const k = HERO_KINDS[kind];
+  const hp = Math.round((40 + 20 * (lv - 1)) * k.hp);
+  const names = kind === "archer" ? ARCHER_NAMES : kind === "brute" ? BRUTE_NAMES : HERO_NAMES;
   return {
-    x: START.x + 0.2, y: START.y + 0.1, w: 0.6, h: 0.9, vx: 0, vy: 0, onGround: false,
-    lv, hp, maxHp: hp, atk: 5 + 3 * (lv - 1), speed: 3.7,
-    dodge: Math.min(0.12 * (lv - 1), 0.6),        // chance to dodge a boss swing
-    smart: Math.min(0.15 * (lv - 1), 0.75),       // chance to spot and jump a trap
-    spotted: new Map(), cd: 0, evade: 0, face: 1, flash: 0, atkAnim: 0, trail: [],
-    name: HERO_NAMES[S.named++ % HERO_NAMES.length],
+    kind, x: START.x + 0.2, y: START.y + 0.9 - k.h, w: k.w, h: k.h, vx: 0, vy: 0, onGround: false,
+    lv, hp, maxHp: hp, atk: Math.round((5 + 3 * (lv - 1)) * k.atk), speed: k.speed,
+    // Chance to dodge a boss swing, and to spot and jump a trap.
+    dodge: k.noDodge ? 0 : Math.min(0.12 * (lv - 1) + (k.dodge || 0), 0.65),
+    smart: Math.max(0, Math.min(0.15 * (lv - 1) * (1 + (k.smart || 0)) + (k.smart > 0 ? k.smart : 0), 0.8)),
+    spotted: new Map(), cd: 0, evade: 0, face: 1, flash: 0, atkAnim: 0, trail: [], step: 0,
+    name: names[S.named++ % names.length],
   };
+}
+
+// Who marches in a wave. Archers join from wave 2, Iron Knights from wave 3.
+function waveRoster(w) {
+  const n = heroesInWave(w), list = [];
+  for (let i = 0; i < n; i++) {
+    const r = Math.random();
+    if (w >= 3 && r < 0.22 && list.filter(k => k === "brute").length < Math.ceil(n / 4)) list.push("brute");
+    else if (w >= 2 && r < 0.55) list.push("archer");
+    else list.push("knight");
+  }
+  // Make sure a new kind shows up on its first wave.
+  if (w === 2 && !list.includes("archer")) list[1] = "archer";
+  if (w === 3 && !list.includes("brute")) list[n - 1] = "brute";
+  return list;
 }
 function makeBoss() {
   return {
@@ -312,7 +351,7 @@ function newGame(title = false) {
     phase: title ? "title" : "intro", scene: "level", floats: [], particles: [], tool: "spike", time: 0,
     fade: 0, fadeIn: 0, intro: 0, returnT: 0,
     shake: 0, banner: null, bannerQueue: [], pulse: { coins: 0, souls: 0 }, fresh: new Set(),
-    dialog: { queue: [], cur: null }, lightning: { next: 3 + Math.random() * 4, flash: 0, bolt: null }, prologue: null, heartbeat: 0,
+    dialog: { queue: [], cur: null }, heroArrows: [], seenKinds: new Set(["knight"]), lightning: { next: 3 + Math.random() * 4, flash: 0, bolt: null }, prologue: null, heartbeat: 0,
   };
   if (title) { say("Click or press any key to begin."); return; }
   startOpening();
@@ -576,6 +615,9 @@ const Sound = (() => {
       noise({ dur: 2.4, vol: 0.45, freq: 700, to: 60, attack: 0.05, at: 0.2 });
       tone(40, { type: "sine", dur: 2.2, vol: 0.3, attack: 0.1, at: 0.2 });
     },
+    bow: () => { tone(320, { to: 140, type: "triangle", dur: 0.12, vol: 0.09 }); noise({ dur: 0.08, vol: 0.06, filter: "bandpass", freq: 2500, q: 3 }); },
+    stomp: () => { tone(70, { to: 45, type: "sine", dur: 0.12, vol: 0.22 }); noise({ dur: 0.06, vol: 0.06, freq: 400 }); },
+    clang: () => { tone(1250, { type: "square", dur: 0.08, vol: 0.06 }); tone(1870, { type: "triangle", dur: 0.25, vol: 0.06 }); noise({ dur: 0.05, vol: 0.1, filter: "highpass", freq: 4000 }); },
     voiceBoss: () => tone(72 + Math.random() * 10, { type: "sawtooth", dur: 0.06, vol: 0.07 }),
     voiceHero: () => tone(520 + Math.random() * 120, { type: "triangle", dur: 0.04, vol: 0.05 }),
     heartbeat: () => { tone(62, { to: 40, type: "sine", dur: 0.16, vol: 0.45 }); tone(56, { to: 38, type: "sine", dur: 0.16, vol: 0.38, at: 0.22 }); },
@@ -585,7 +627,7 @@ const Sound = (() => {
     },
   };
   // Busy sounds are rate-limited so a crowd of heroes doesn't turn into noise.
-  const GAP = { voiceBoss: 0.05, voiceHero: 0.04, growl: 0.5, thunder: 2, bounce: 0.07, hit: 0.05, minionHurt: 0.08, fire: 0.3, coinDrop: 0.2, saw: 0.12, spike: 0.1, arrow: 0.08, soulRise: 0.15 };
+  const GAP = { stomp: 0.12, bow: 0.06, clang: 0.08, voiceBoss: 0.05, voiceHero: 0.04, growl: 0.5, thunder: 2, bounce: 0.07, hit: 0.05, minionHurt: 0.08, fire: 0.3, coinDrop: 0.2, saw: 0.12, spike: 0.1, arrow: 0.08, soulRise: 0.15 };
 
   function play(name, arg) {
     if (!ac || ac.state !== "running" || !prefs.sfx || !SFX[name]) return;
@@ -811,11 +853,11 @@ function newTrap(type, x, y) {
 // the tower; once TOWER_LIMIT are inside, they all climb up together and the boss battle begins.
 const TOWER_LIMIT = 5;
 const heroesInWave = w => 2 + w;
-const heroCoins = lv => 3 + lv;
+const heroCoins = h => (3 + h.lv) * HERO_KINDS[h.kind].coins;
 
 function startWave() {
-  const n = heroesInWave(S.wave);
-  S.spawnQueue = Array.from({ length: n }, (_, i) => ({ lv: S.wave, delay: i === 0 ? 0.4 : 1.3 }));
+  const roster = waveRoster(S.wave), n = roster.length;
+  S.spawnQueue = roster.map((kind, i) => ({ lv: S.wave, kind, delay: i === 0 ? 0.4 : kind === "brute" ? 1.7 : 1.3 }));
   S.spawnT = 0;
   for (const t of S.traps) Object.assign(t, { timer: 0, off: 0, v: 0, state: "up", cd: 0 });
   S.arrows = [];
@@ -824,7 +866,9 @@ function startWave() {
   Sound.play("horn");
   banner(`WAVE ${S.wave}`, `${n} heroes - ${WAVE_LORE[Math.min(S.wave, WAVE_LORE.length) - 1]}`, "#e6e0ec");
   if (S.wave === 1 || Math.random() < 0.5) setTimeout(() => speak(S.boss, pick(TAUNTS.wave)), 1200);
-  say(`${n} Lv ${S.wave} heroes in ${gearFor(S.wave).name} storm your castle! If ${TOWER_LIMIT} get into the tower, they come for you.`);
+  const count = kind => roster.filter(k => k === kind).length;
+  const parts = ["knight", "archer", "brute"].filter(count).map(kind => `${count(kind)} ${HERO_KINDS[kind].label}${count(kind) > 1 ? "s" : ""}`);
+  say(`Lv ${S.wave} heroes storm your castle: ${parts.join(", ")}. If ${TOWER_LIMIT} get into the tower, they come for you.`);
 }
 
 function spawnHeroes(dt) {
@@ -832,9 +876,17 @@ function spawnHeroes(dt) {
   S.spawnT += dt;
   if (S.spawnT < S.spawnQueue[0].delay) return;
   S.spawnT = 0;
-  const h = makeHero(S.spawnQueue.shift().lv);
+  const next = S.spawnQueue.shift(), h = makeHero(next.lv, next.kind);
   S.heroes.push(h);
-  if (Math.random() < 0.35) speak(h, pick(HERO_LINES.charge));
+  if (!S.seenKinds.has(h.kind)) {
+    // The first of a new kind introduces itself, and Vorgath answers.
+    S.seenKinds.add(h.kind);
+    if (DEBUT[h.kind]) {
+      speak(h, DEBUT[h.kind].hero, true);
+      speak(S.boss, DEBUT[h.kind].boss);
+      say(DEBUT[h.kind].tip);
+    }
+  } else if (Math.random() < 0.35) speak(h, pick(HERO_LINES[h.kind] || HERO_LINES.charge));
 }
 
 // The opening: one hero charges in alone and tumbles into the lava, the ground rumbles,
@@ -915,6 +967,7 @@ function startBossFight() {
   S.fadeIn = FADE;
   S.waves = [];
   S.particles = [];
+  S.heroArrows = [];
   S.heroes = S.towerHeroes;
   S.towerHeroes = [];
   // They climb out of the hatch in a line.
@@ -1029,6 +1082,7 @@ function update(dt) {
     updateRage(dt);
     updateBoss(dt);
     for (const h of S.heroes) updateHero(h, dt);
+    updateHeroArrows(dt);
     updateWaves(dt);
   } else {
     updateMinions(dt);
@@ -1039,6 +1093,7 @@ function update(dt) {
     updateTraps(dt);
     S.traps = S.traps.filter(t => !t.dead);
     updateArrows(dt);
+    updateHeroArrows(dt);
   }
 
   for (const h of [...S.heroes]) if (h.hp <= 0) heroDied(h);
@@ -1057,12 +1112,12 @@ function update(dt) {
 // One line at a time in a box along the bottom, with the speaker's portrait. Lines queue up;
 // heroes' battle cries are dropped when the box is busy so it never falls far behind.
 const TYPE_SPEED = 40, LINE_HOLD = 1.5, DIALOG_FADE = 0.15;
-function speak(who, text) {
+function speak(who, text, force = false) {
   const d = S.dialog, busy = d.cur || d.queue.length;
   const line = who.isBoss
     ? { boss: true, name: BOSS_NAME, title: BOSS_TITLE, text, rage: !!who.enraged }
-    : { boss: false, name: who.name.toUpperCase(), lv: who.lv, text };
-  if (!line.boss && busy) return;
+    : { boss: false, name: who.name.toUpperCase(), lv: who.lv, kind: who.kind, text };
+  if (!line.boss && busy && !force) return;
   if (d.queue.length >= 2) d.queue.shift();
   d.queue.push(line);
 }
@@ -1277,6 +1332,8 @@ function updateHero(h, dt) {
     }
   }
 
+  if (h.kind === "archer") { updateArcher(h, dt, arena); return; }
+
   // Fight a minion standing in the way (in the level), or the boss (on the tower).
   const foe = arena ? null : S.minions.find(m =>
     Math.abs(centerY(m) - centerY(h)) < 0.8 && m.x - (h.x + h.w) < 0.4 && m.x + m.w > h.x - 0.2);
@@ -1289,8 +1346,9 @@ function updateHero(h, dt) {
     if (h.cd <= 0) {
       const colors = target.isBoss ? ["#b71c1c", "#5d0f0f"] : MINIONS[target.type].blood;
       damage(target, h.atk, "#ffffff", colors);
-      h.cd = 0.7;
+      h.cd = HERO_KINDS[h.kind].cd;
       h.atkAnim = 0.18;
+      if (h.kind === "brute") S.shake = Math.max(S.shake, 2);
     }
   } else {
     const dir = arena ? Math.sign(centerX(b) - centerX(h)) || 1 : 1;
@@ -1298,7 +1356,14 @@ function updateHero(h, dt) {
     h.face = dir;
     // The opening's lone hero never looks where they're going.
     if (!arena && !h.reckless && h.onGround && shouldJump(h, dir)) h.vy = -JUMP;
+    // Iron Knights are slow on foot but throw their weight into a jump.
+    if (!h.onGround && HERO_KINDS[h.kind].airSpeed) h.vx = dir * HERO_KINDS[h.kind].airSpeed;
   }
+  finishHeroMove(h, dt, arena);
+}
+
+// Frost, movement, heavy footsteps, and reaching the lava or the tower door.
+function finishHeroMove(h, dt, arena) {
   if (!arena) {
     // Frost totems slow a hero down inside their aura.
     h.chill = 0;
@@ -1313,9 +1378,67 @@ function updateHero(h, dt) {
     }
   }
   moveBody(h, dt);
+  if (h.kind === "brute" && h.onGround && Math.abs(h.vx) > 0.1) {
+    h.step -= dt;
+    if (h.step <= 0) {
+      h.step = 0.42;
+      S.shake = Math.max(S.shake, 0.8);
+      dust(centerX(h), h.y + h.h, 3);
+      Sound.play("stomp");
+    }
+  }
   if (arena) return;
   if (inLava(h)) { h.hp = 0; h.lava = true; }
   else if (h.x + h.w > TOWER_X - 0.3) heroReachedTower(h);
+}
+
+// Archers stop to shoot at minions in their way, and keep their distance from the Hollow King.
+function updateArcher(h, dt, arena) {
+  const b = S.boss, k = HERO_KINDS.archer;
+  let target = null, dir = 1;
+  if (arena) {
+    const dx = centerX(b) - centerX(h), dist = Math.abs(dx);
+    const away = -Math.sign(dx) || -1;
+    const cornered = away < 0 ? h.x < 1.3 : h.x + h.w > W - 1.3;
+    if (dist < 3.5 && !cornered) dir = away;            // back off
+    else if (dist > 6.5) dir = Math.sign(dx);           // close in
+    else { dir = 0; target = b; }                        // hold and shoot
+    if (dist <= 7.5 && Math.abs(centerY(b) - centerY(h)) < 1.6) target = b;
+  } else {
+    target = S.minions.find(m => {
+      const dx = centerX(m) - centerX(h);
+      return dx > 0 && dx < k.range && Math.abs(centerY(m) - centerY(h)) < 0.8;
+    }) || null;
+    if (target) dir = 0;
+  }
+  if (target) {
+    h.face = Math.sign(centerX(target) - centerX(h)) || 1;
+    if (h.cd <= 0) {
+      S.heroArrows.push({ x: centerX(h) + h.face * 0.4, y: h.y + 0.4, vx: h.face * 10, dmg: h.atk });
+      h.cd = k.cd;
+      h.atkAnim = 0.25;
+      Sound.play("bow");
+    }
+  }
+  h.vx = dir * h.speed;
+  if (dir) h.face = dir;
+  if (!arena && dir && !h.reckless && h.onGround && shouldJump(h, dir)) h.vy = -JUMP;
+  finishHeroMove(h, dt, arena);
+}
+
+// Arrows the archers loose: they hit the Hollow King on the tower, or your minions in the level.
+function updateHeroArrows(dt) {
+  for (const a of S.heroArrows) {
+    a.x += a.vx * dt;
+    if (isSolid(Math.floor(a.x), Math.floor(a.y)) || a.x < 0 || a.x > W) { a.dead = true; continue; }
+    const box = { x: a.x - 0.2, y: a.y - 0.05, w: 0.4, h: 0.1 };
+    const hit = inArena() ? (overlaps(box, S.boss) ? S.boss : null) : S.minions.find(m => overlaps(box, m));
+    if (hit) {
+      damage(hit, a.dmg, "#ffffff", hit.isBoss ? ["#b71c1c", "#5d0f0f"] : MINIONS[hit.type].blood);
+      a.dead = true;
+    }
+  }
+  S.heroArrows = S.heroArrows.filter(a => !a.dead);
 }
 
 // Platformer AI: jump over walls, pits, and (if clever enough) traps.
@@ -1468,7 +1591,15 @@ function updateArrows(dt) {
       continue;
     }
     const [h] = heroesIn({ x: a.x - 0.2, y: a.y - 0.05, w: 0.4, h: 0.1 });
-    if (h) { damage(h, a.dmg, "#ffb74d"); a.dead = true; }
+    if (!h) continue;
+    a.dead = true;
+    if (h.kind === "brute" && Math.sign(a.vx) === -h.face) {
+      // Caught on the tower shield: a clang, sparks, and only a scratch.
+      damage(h, Math.max(1, Math.round(a.dmg * 0.25)), "#cfd8dc", ["#ffffff", "#cfd8dc"]);
+      float(centerX(h), h.y - 0.5, "BLOCK", "#cfd8dc");
+      burst(centerX(h) + h.face * 0.5, a.y, 6, ["#fff59d", "#ffffff"], 4, { glow: true });
+      Sound.play("clang");
+    } else damage(h, a.dmg, "#ffb74d");
   }
   S.arrows = S.arrows.filter(a => !a.dead);
 }
@@ -1616,7 +1747,7 @@ function updateLoot(dt) {
 }
 
 function heroDied(h) {
-  const coins = heroCoins(h.lv);
+  const coins = heroCoins(h);
   S.coins += coins;
   S.souls += 1;
   S.kills++;
@@ -1694,6 +1825,64 @@ const HERO_ATTACK_TOP = [
   ".cC.BBhBBB......",
   "..c.aAAAAa......",
 ];
+const ARCHER_TOP = [
+  "................",
+  "......vVVv...O..",
+  ".....vVVVVv..WO.",
+  ".....vVSkSv..W.O",
+  ".....vSSSSv..W.O",
+  "..P...vVVv...W.O",
+  "..QP.aAAAAaSSW.O",
+  "..Q.aAAAAAa..W.O",
+  "..Q.aAAAAa...W.O",
+  "..Q..aAAAa...WO.",
+  ".....BBhBB...O..",
+  ".....aAAAa......",
+];
+const ARCHER_SHOOT_TOP = [
+  "................",
+  "......vVVv....O.",
+  ".....vVVVVv..W.O",
+  ".....vVSkSv.W..O",
+  ".....vSSSSvW...O",
+  "..P...vVVvW....O",
+  "..QP.aAAAASTTTTT",
+  "..Q.aAAAAAaW...O",
+  "..Q.aAAAAa..W..O",
+  "..Q..aAAAa...W.O",
+  ".....BBhBB....O.",
+  ".....aAAAa......",
+];
+const BRUTE_BODY = [
+  "......aAAAa.........",
+  ".....aAAAAAa........",
+  ".....AWAAAAAa.......",
+  ".....AAkkkkAa.DDDD..",
+  ".....aAAAAAAaDMMMMD.",
+  "..aaaaAAAAAaaDMMMMMD",
+  ".aAAAAAAAAAAADMMhMMD",
+  ".aAAAAAAAAAAADMhhhMD",
+  "aAAaAAAAAAAAADMMhMMD",
+  "aAA.aAAAAAAAADMMhMMD",
+  "aAA.aAAAAAAAADMMMMMD",
+  ".aa.BBBhBBBBBDMMMMMD",
+  ".mm.aAAAAAAAADMMMMMD",
+  ".MM.aAAAAAAAA.DMMMD.",
+  "MMMM.aAA..AAa..DDD..",
+  ".MM..aAA..AAa.......",
+  ".....aAA..AAa.......",
+  ".....aAA..AAa.......",
+  "....BBBB..BBBB......",
+  "....BBBB..BBBB......",
+];
+const BRUTE_STEP_LEGS = [
+  "MMMM.aAA...aAA......",
+  ".MM.aAA.....AAa.....",
+  "....aAA......AAa....",
+  "....aAA......AAa....",
+  "...BBBB.....BBBB....",
+  "...BBBB.....BBBB....",
+];
 const HERO_LEGS = {
   stand: ["....aA..Aa......", "....aA..Aa......", "....BB..BB......", "...BBB..BBB....."],
   stride: ["...aA....Aa.....", "...aA.....Aa....", "..BB.......BB...", "..BB.......BB..."],
@@ -1707,6 +1896,53 @@ const ART = {
   heroClose: heroFrame(HERO_TOP, HERO_LEGS.close),
   heroJump: heroFrame(HERO_TOP, HERO_LEGS.jump),
   heroAttack: heroFrame(HERO_ATTACK_TOP, HERO_LEGS.stand),
+  archerStand: heroFrame(ARCHER_TOP, HERO_LEGS.stand),
+  archerStride: heroFrame(ARCHER_TOP, HERO_LEGS.stride),
+  archerClose: heroFrame(ARCHER_TOP, HERO_LEGS.close),
+  archerJump: heroFrame(ARCHER_TOP, HERO_LEGS.jump),
+  archerShoot: heroFrame(ARCHER_SHOOT_TOP, HERO_LEGS.stand),
+  brute: BRUTE_BODY,
+  bruteStep: [...BRUTE_BODY.slice(0, 14), ...BRUTE_STEP_LEGS],
+  archerFace: [
+    "......vVVVVv......",
+    ".....vVVVVVVv.....",
+    "....vVVVVVVVVv....",
+    "...vVVvvvvvvVVv...",
+    "...vVvSSSSSSvVv...",
+    "..vVvSSSSSSSSvVv..",
+    "..vVvSkkSSkkSvVv..",
+    "..vVvSSSSSSSSvVv..",
+    "..vVvSSSSnSSSvVv..",
+    "..vVvvSSSSSSvvVv..",
+    "..vVVvvSSSSvvVVv..",
+    "...vVVvvvvvvVVv...",
+    "...vVVVVVVVVVVv...",
+    "..vAAvVVVVVVvAAv..",
+    ".vAAAAvvVVvvAAAAv.",
+    "vAAAAAAAhhAAAAAAAv",
+    "aAAAAAAAhhAAAAAAAa",
+    "aAAAAAAAAAAAAAAAAa",
+  ],
+  bruteFace: [
+    "....aaAAAAAAaa....",
+    "...aAAAAAAAAAAa...",
+    "..aAAWWAAAAAAAAa..",
+    "..aAWAAAAAAAAAAa..",
+    "..aAAAAAhhAAAAAa..",
+    "..aAAAAAhhAAAAAa..",
+    "..aAkkkkkkkkkkAa..",
+    "..aAkkkkkkkkkkAa..",
+    "..aAAAAAhhAAAAAa..",
+    "..aAkAkAhhAkAkAa..",
+    "..aAAAAAhhAAAAAa..",
+    "..aAkAkAAAAkAkAa..",
+    "...aAAAAAAAAAAa...",
+    ".aaaaaaAAAAaaaaaa.",
+    "aAAAAAAAAAAAAAAAAa",
+    "aAAAAAAAhhAAAAAAAa",
+    "aAAAAAAhhhhAAAAAAa",
+    "aAAAAAAAhhAAAAAAAa",
+  ],
 
   skeleton: [
     "................",
@@ -2049,8 +2285,23 @@ function drawSprite(spr, cx, bottom, face = 1, alpha = 1) {
   ctx.globalAlpha = 1;
 }
 
+// Archers wear a green hood over leather in their gear colours; Iron Knights are all black iron and gold.
+const ARCHER_PAL = { V: "#3f7a46", v: "#25502d", O: "#a0703a", Q: "#6d4c2f", P: "#c62828", T: "#d7ccc8", n: "#c9955a" };
+const BRUTE_PAL = { A: "#5a6470", a: "#363c45", W: "#b8c2cc", k: "#120e18", D: "#2e2a38", M: "#9aa3ad", h: "#e0b84a", B: "#2a1f18", m: "#5d4037" };
+
 function heroSprite(h, white = false) {
-  const g = gearFor(h.lv);
+  const g = gearFor(h.lv), moving = Math.abs(h.vx) > 0.1;
+  if (h.kind === "brute") {
+    const art = h.onGround && moving && Math.floor(S.time * 5) % 2 ? ART.bruteStep : ART.brute;
+    return sprite(art, BRUTE_PAL, "brute", white);
+  }
+  if (h.kind === "archer") {
+    let art = ART.archerStand;
+    if (h.atkAnim > 0) art = ART.archerShoot;
+    else if (!h.onGround) art = ART.archerJump;
+    else if (moving) art = Math.floor(S.time * 10) % 2 ? ART.archerStride : ART.archerClose;
+    return sprite(art, Object.assign({ A: g.main, a: g.shade }, ARCHER_PAL), "archer" + g.name, white);
+  }
   let art = ART.heroStand;
   if (h.atkAnim > 0) art = ART.heroAttack;
   else if (!h.onGround) art = ART.heroJump;
@@ -2539,7 +2790,7 @@ function drawFireVent(t, X, Y, alpha) {
 
 function drawBar(e, width, color) {
   const x = Math.round(centerX(e) * T - width / 2);
-  const y = Math.round((e.y + e.h) * T - (e.isBoss ? 37 : 21));
+  const y = Math.round(e.isBoss ? (e.y + e.h) * T - 37 : e.y * T - 6);
   ctx.fillStyle = OUTLINE;
   ctx.fillRect(x - 1, y - 1, width + 2, 4);
   ctx.fillStyle = "#3b1016";
@@ -2643,14 +2894,15 @@ function drawHero(h) {
   if (h.flash > 0) drawSprite(heroSprite(h, true), cx, bottom, h.face, 0.85);
   else if (h.chill > 0 && !inArena()) drawSprite(heroSprite(h, true), cx, bottom, h.face, 0.3);
 
-  // Sword smear when attacking.
-  if (h.atkAnim > 0) {
-    const ox = cx + h.face * 3, oy = bottom - 9;
-    for (let a = -1.1; a <= 1.1; a += 0.15) {
-      ctx.fillStyle = "#ffffff";
-      ctx.globalAlpha = h.atkAnim / 0.18;
-      ctx.fillRect(Math.round(ox + h.face * Math.cos(a) * 9), Math.round(oy + Math.sin(a) * 9), 1, 1);
-      ctx.fillRect(Math.round(ox + h.face * Math.cos(a) * 8), Math.round(oy + Math.sin(a) * 8), 1, 1);
+  // Sword (or mace) smear when attacking.
+  if (h.atkAnim > 0 && h.kind !== "archer") {
+    const big = h.kind === "brute", r = big ? 12 : 9;
+    const ox = cx + h.face * (big ? 5 : 3), oy = bottom - (big ? 12 : 9);
+    for (let a = -1.1; a <= 1.1; a += 0.12) {
+      ctx.fillStyle = big ? "#ffe082" : "#ffffff";
+      ctx.globalAlpha = Math.min(1, h.atkAnim / 0.18);
+      ctx.fillRect(Math.round(ox + h.face * Math.cos(a) * r), Math.round(oy + Math.sin(a) * r), 1, 1);
+      ctx.fillRect(Math.round(ox + h.face * Math.cos(a) * (r - 1)), Math.round(oy + Math.sin(a) * (r - 1)), 1, 1);
     }
     ctx.globalAlpha = 1;
   }
@@ -2995,6 +3247,7 @@ function draw() {
     drawLava();
     S.traps.forEach(t => drawTrap(t));
     S.arrows.forEach(drawArrow);
+    S.heroArrows.forEach(drawArrow);
     drawHover();
   }
   for (const e of [S.boss, ...S.heroes, ...(arena ? [] : S.minions)]) drawShadow(e);
@@ -3002,6 +3255,7 @@ function draw() {
   drawBoss(S.boss);
   S.heroes.forEach(drawHero);
   S.waves.forEach(drawWave);
+  if (arena) S.heroArrows.forEach(drawArrow);
   drawParticles(false);
   drawLighting();
   drawParticles(true);
@@ -3106,7 +3360,9 @@ function drawPortrait(c, x, y, w, h, talking) {
     }
   } else {
     const g = gearFor(c.lv);
-    const spr = sprite(ART.heroFace, { A: g.main, a: g.shade }, "face" + g.name);
+    const spr = c.kind === "brute" ? sprite(ART.bruteFace, BRUTE_PAL, "bruteFace")
+      : c.kind === "archer" ? sprite(ART.archerFace, Object.assign({ A: g.main, a: g.shade }, ARCHER_PAL), "archerFace" + g.name)
+      : sprite(ART.heroFace, { A: g.main, a: g.shade }, "face" + g.name);
     ctx.drawImage(spr, x + Math.round((w - spr.width) / 2), y + h - spr.height + 1 + bob);
   }
   ctx.restore();

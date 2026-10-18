@@ -9,6 +9,7 @@ A reverse side-scroller, inspired by *Hostile Architect*: you are the boss waiti
 You are **Vorgath, the Hollow King**: a king who sold his soul so his tower would never fall, and who now feeds on the souls of the heroes the Order of the Dawn sends to end him. The game opens with a short prologue, and the full story is under *Lore* on the game page.
 
 - **Opening:** a lone hero charges in and falls into the lava, the ground rumbles, and the first wave comes running.
+- **Heroes:** sword knights; archers from wave 2 (fast, fragile, shoot from range and keep their distance); Iron Knights from wave 3 (slow, very tough, and their tower shields block most arrow damage from the front).
 - **Waves:** each wave is a group of heroes. Heroes who reach the tower door hide inside; once 5 are in the tower, they all climb up for the boss battle.
 - **Build:** spend coins on spikes, saw blades and arrow turrets (click a trap of the same type again to upgrade it, up to level 3), and souls on skeletons and ogres. You can build during waves too.
 - **Loot:** every hero you kill drops coins and exactly one soul, which fly into your counters.
