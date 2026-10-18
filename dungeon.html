@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dungeon Boss</title>
+<style>
+  :root {
+    --bg: #0f0d14;
+    --panel: #1c1824;
+    --text: #e6e0ec;
+    --accent: #e0574f;
+    --coin: #ffd54f;
+    --soul: #8fd3ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 16px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Courier New", monospace;
+  }
+  h1 { margin: 0; font-size: 26px; letter-spacing: 4px; color: var(--accent); }
+  .wrap { width: min(960px, 100%); display: flex; flex-direction: column; gap: 10px; }
+  #hud {
+    display: flex; flex-wrap: wrap; gap: 6px 18px;
+    background: var(--panel); padding: 8px 12px; font-size: 16px;
+  }
+  #hud b.coin { color: var(--coin); }
+  #hud b.soul { color: var(--soul); }
+  canvas {
+    width: 100%;
+    aspect-ratio: 2 / 1;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #000;
+    border: 4px solid var(--panel);
+    cursor: crosshair;
+  }
+  #tools { display: flex; flex-wrap: wrap; gap: 8px; }
+  button {
+    font: inherit; font-size: 15px;
+    padding: 8px 12px;
+    background: var(--panel); color: var(--text);
+    border: 2px solid #3a3346; cursor: pointer;
+  }
+  button.selected { border-color: var(--accent); color: #fff; }
+  button#go { margin-left: auto; background: #5b1a1a; border-color: var(--accent); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  #msg { min-height: 1.4em; font-size: 15px; }
+  #help { font-size: 13px; opacity: 0.7; line-height: 1.5; }
+  a { color: var(--soul); }
+</style>
+</head>
+<body>
+<h1>DUNGEON BOSS</h1>
+<div class="wrap">
+  <div id="hud">
+    <span>COINS <b class="coin" id="coins">0</b></span>
+    <span>SOULS <b class="soul" id="souls">0</b></span>
+    <span>WAVE <b id="wave">1</b></span>
+    <span>HERO <b id="hero">Lv 1</b></span>
+    <span>BOSS HP <b id="bosshp">0</b></span>
+  </div>
+  <canvas id="game" width="320" height="160"></canvas>
+  <div id="tools">
+    <button data-tool="spike">Spike trap (5c) / upgrade</button>
+    <button data-tool="skeleton">Skeleton (1 soul)</button>
+    <button data-tool="ogre">Ogre (3 souls)</button>
+    <button id="go">Start wave</button>
+  </div>
+  <div id="msg"></div>
+  <div id="help">
+    You are the boss. A hero is coming to kill you.<br>
+    <b>Build:</b> pick a tool, then click the dungeon to place it. Click a trap again to upgrade it (max level 3).<br>
+    <b>Fight:</b> WASD / arrows move the boss, Space swings your cleaver. You can't leave your lair.<br>
+    Killing the hero earns coins and souls, but he comes back stronger, with better gear, and learns to dodge.<br>
+    <a href="index.html">&larr; back to menu</a>
+  </div>
+</div>
+
+<script>
+// ---------- map ----------
+// # wall   . floor   S hero start   D door to the boss lair
+const MAP = [
+  "####################",
+  "#S.........#.......#",
+  "#########..#.......#",
+  "#..........#.......#",
+  "#..#########.......#",
+  "#..........#.......#",
+  "#########..D.......#",
+  "#..........#.......#",
+  "#..........#.......#",
+  "####################",
+];
+const W = 20, H = 10, T = 16;          // tiles wide/high, pixels per tile
+const LAIR = { x0: 12, y0: 1, x1: 18, y1: 8 };
+let START;
+MAP.forEach((row, y) => { const x = row.indexOf("S"); if (x >= 0) START = { x, y }; });
+
+const tileAt = (x, y) => (MAP[y] || "")[x] || "#";
+const isFloor = (x, y) => tileAt(x, y) !== "#";
+const inLair = (x, y) => x >= LAIR.x0 && x <= LAIR.x1 && y >= LAIR.y0 && y <= LAIR.y1;
+const canBuild = (x, y) => isFloor(x, y) && !inLair(x, y) && tileAt(x, y) === ".";
+
+// ---------- balance ----------
+const TRAP_COST = [5, 8, 12];          // place, upgrade to 2, upgrade to 3
+const TRAP_DAMAGE = 8;                 // per trap level
+const MINIONS = {
+  skeleton: { cost: 1, hp: 15, atk: 3, speed: 2.4 },
+  ogre:     { cost: 3, hp: 50, atk: 8, speed: 1.5 },
+};
+const BOSS_HP = 300, BOSS_DMG = 30, BOSS_RANGE = 1.9, BOSS_SPEED = 3.5;
+const GEAR = [
+  { name: "Rags",        color: "#8d7b68" },
+  { name: "Leather",     color: "#a0522d" },
+  { name: "Chainmail",   color: "#9e9e9e" },
+  { name: "Iron Plate",  color: "#cfd8dc" },
+  { name: "Steel Plate", color: "#64b5f6" },
+  { name: "Knight Armor",color: "#ffd54f" },
+  { name: "Holy Armor",  color: "#ffffff" },
+];
+const gearFor = lv => GEAR[Math.min(lv - 1, GEAR.length - 1)];
+
+function makeHero(lv) {
+  const hp = 40 + 20 * (lv - 1);
+  return {
+    x: START.x + 0.5, y: START.y + 0.5, lv, hp, maxHp: hp,
+    atk: 5 + 3 * (lv - 1), speed: 2.2 + 0.1 * lv,
+    dodge: Math.min(0.12 * (lv - 1), 0.6),
+    cd: 0, roll: 0, rdx: 0, rdy: 0, face: 1,
+  };
+}
+function makeBoss() {
+  return { x: 15.5, y: 4.5, r: 0.8, hp: BOSS_HP, maxHp: BOSS_HP, cd: 0, windup: 0, swing: 0, face: -1 };
+}
+
+let S;
+function newGame() {
+  S = {
+    coins: 15, souls: 3, wave: 1, heroLv: 1,
+    traps: [], minions: [], hero: null, boss: makeBoss(),
+    phase: "build", floats: [], tool: "spike",
+  };
+  say("Build your dungeon, then press Start wave.");
+}
+
+// ---------- helpers ----------
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+function moveTo(e, tx, ty, speed, dt) {
+  const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy);
+  if (d < 0.001) return;
+  const step = Math.min(speed * dt, d);
+  e.x += dx / d * step;
+  e.y += dy / d * step;
+  if (Math.abs(dx) > 0.05) e.face = Math.sign(dx);
+}
+
+// Distance (in tiles) from every floor tile to the target tile.
+function flowField(tx, ty) {
+  const d = new Array(W * H).fill(Infinity);
+  const q = [[tx, ty]];
+  d[ty * W + tx] = 0;
+  while (q.length) {
+    const [x, y] = q.shift();
+    for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+      if (isFloor(nx, ny) && d[ny * W + nx] === Infinity) {
+        d[ny * W + nx] = d[y * W + x] + 1;
+        q.push([nx, ny]);
+      }
+    }
+  }
+  return d;
+}
+
+// Walk one step downhill on a flow field. Heading for the centre of a
+// neighbouring tile never cuts through a wall corner.
+function followField(e, field, speed, dt) {
+  const cx = Math.floor(e.x), cy = Math.floor(e.y);
+  let best = null, bestD = field[cy * W + cx];
+  for (const [nx, ny] of [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]]) {
+    if (field[ny * W + nx] < bestD) { bestD = field[ny * W + nx]; best = [nx, ny]; }
+  }
+  if (!best) return false;
+  moveTo(e, best[0] + 0.5, best[1] + 0.5, speed, dt);
+  return true;
+}
+
+function float(x, y, text, color) {
+  S.floats.push({ x, y, text, color, t: 0.8 });
+}
+
+function damage(target, amount, color) {
+  target.hp -= amount;
+  float(target.x, target.y - 0.6, "-" + amount, color);
+}
+
+function say(text) { document.getElementById("msg").textContent = text; }
+
+// ---------- input ----------
+const keys = {};
+document.addEventListener("keydown", e => {
+  keys[e.key.toLowerCase()] = true;
+  if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(e.key.toLowerCase())) e.preventDefault();
+  if (e.key === " ") bossAttack();
+});
+document.addEventListener("keyup", e => {
+  keys[e.key.toLowerCase()] = false;
+  // Stop Space from also clicking whichever button was last pressed.
+  if (e.key === " ") e.preventDefault();
+});
+document.querySelectorAll("button").forEach(b => b.addEventListener("click", () => b.blur()));
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+let hover = null;
+
+function tileFromEvent(e) {
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: Math.floor((e.clientX - r.left) / r.width * W),
+    y: Math.floor((e.clientY - r.top) / r.height * H),
+  };
+}
+canvas.addEventListener("mousemove", e => { hover = tileFromEvent(e); });
+canvas.addEventListener("mouseleave", () => { hover = null; });
+canvas.addEventListener("click", e => place(tileFromEvent(e)));
+
+document.querySelectorAll("[data-tool]").forEach(b => {
+  b.addEventListener("click", () => { S.tool = b.dataset.tool; });
+});
+document.getElementById("go").addEventListener("click", () => {
+  if (S.phase === "over") newGame();
+  else if (S.phase === "build") startWave();
+});
+
+function place({ x, y }) {
+  if (S.phase === "over") return;
+  if (!canBuild(x, y)) { say("You can't build there."); return; }
+
+  if (S.tool === "spike") {
+    const trap = S.traps.find(t => t.x === x && t.y === y);
+    const lvl = trap ? trap.lvl : 0;
+    if (lvl >= 3) { say("That trap is already max level."); return; }
+    const cost = TRAP_COST[lvl];
+    if (S.coins < cost) { say(`Need ${cost} coins.`); return; }
+    S.coins -= cost;
+    if (trap) { trap.lvl++; say(`Spike trap upgraded to level ${trap.lvl}.`); }
+    else { S.traps.push({ x, y, lvl: 1, cd: 0, flash: 0 }); say("Spike trap placed."); }
+  } else {
+    const kind = MINIONS[S.tool];
+    if (S.souls < kind.cost) { say(`Need ${kind.cost} soul${kind.cost > 1 ? "s" : ""}.`); return; }
+    S.souls -= kind.cost;
+    S.minions.push({ type: S.tool, x: x + 0.5, y: y + 0.5, hp: kind.hp, maxHp: kind.hp, cd: 0, face: 1 });
+    say(`${S.tool === "ogre" ? "Ogre" : "Skeleton"} summoned.`);
+  }
+}
+
+function startWave() {
+  S.hero = makeHero(S.heroLv);
+  S.boss = Object.assign(makeBoss(), { x: S.boss.x, y: S.boss.y });
+  S.phase = "wave";
+  say(`Wave ${S.wave}: a Lv ${S.heroLv} hero in ${gearFor(S.heroLv).name} enters the dungeon!`);
+}
+
+function bossAttack() {
+  const b = S.boss;
+  if (S.phase === "over" || b.cd > 0 || b.windup > 0) return;
+  b.windup = 0.25;
+  b.cd = 0.75;
+  // A stronger hero sometimes sees the swing coming and rolls away.
+  const h = S.hero;
+  if (h && h.roll <= 0 && dist(h, b) < 2.5 && Math.random() < h.dodge) {
+    const d = dist(h, b) || 1;
+    h.roll = 0.3;
+    h.rdx = (h.x - b.x) / d;
+    h.rdy = (h.y - b.y) / d;
+    float(h.x, h.y - 0.8, "dodge!", "#8fd3ff");
+  }
+}
+
+// ---------- update ----------
+function update(dt) {
+  S.floats.forEach(f => { f.t -= dt; f.y -= dt * 0.8; });
+  S.floats = S.floats.filter(f => f.t > 0);
+  if (S.phase === "over") return;
+
+  updateBoss(dt);
+  if (S.phase !== "wave") return;
+
+  updateHero(dt);
+  updateTraps(dt);
+  updateMinions(dt);
+
+  S.minions = S.minions.filter(m => m.hp > 0);
+  const h = S.hero;
+  if (h.hp <= 0) heroDied();
+  else if (S.boss.hp <= 0) bossDied();
+}
+
+function updateBoss(dt) {
+  const b = S.boss;
+  b.cd -= dt;
+  b.swing -= dt;
+  let dx = 0, dy = 0;
+  if (keys.a || keys.arrowleft) dx--;
+  if (keys.d || keys.arrowright) dx++;
+  if (keys.w || keys.arrowup) dy--;
+  if (keys.s || keys.arrowdown) dy++;
+  if (dx || dy) {
+    const len = Math.hypot(dx, dy);
+    b.x += dx / len * BOSS_SPEED * dt;
+    b.y += dy / len * BOSS_SPEED * dt;
+    if (dx) b.face = dx;
+  }
+  // The lair is a rectangle, so clamping keeps the boss inside it.
+  b.x = Math.min(Math.max(b.x, LAIR.x0 + b.r), LAIR.x1 + 1 - b.r);
+  b.y = Math.min(Math.max(b.y, LAIR.y0 + b.r), LAIR.y1 + 1 - b.r);
+
+  if (b.windup > 0) {
+    b.windup -= dt;
+    if (b.windup <= 0) {
+      b.swing = 0.15;
+      const h = S.hero;
+      if (h && h.roll <= 0 && dist(h, b) <= BOSS_RANGE) damage(h, BOSS_DMG, "#ff5252");
+    }
+  }
+}
+
+function updateHero(dt) {
+  const h = S.hero, b = S.boss;
+  h.cd -= dt;
+
+  if (h.roll > 0) {
+    h.roll -= dt;
+    h.x += h.rdx * 7 * dt;
+    h.y += h.rdy * 7 * dt;
+    h.x = Math.min(Math.max(h.x, LAIR.x0 + 0.4), LAIR.x1 + 0.6);
+    h.y = Math.min(Math.max(h.y, LAIR.y0 + 0.4), LAIR.y1 + 0.6);
+    return;
+  }
+
+  // Fight whatever is in reach: minions first, then the boss.
+  let target = null, best = 1.0;
+  for (const m of S.minions) {
+    const d = dist(h, m);
+    if (d < best) { best = d; target = m; }
+  }
+  if (!target && dist(h, b) < b.r + 0.7) target = b;
+  if (target) {
+    h.face = Math.sign(target.x - h.x) || h.face;
+    if (h.cd <= 0) { damage(target, h.atk, "#ffffff"); h.cd = 0.7; }
+    return;
+  }
+
+  if (inLair(Math.floor(h.x), Math.floor(h.y))) {
+    moveTo(h, b.x, b.y, h.speed, dt);
+  } else {
+    followField(h, flowField(Math.floor(b.x), Math.floor(b.y)), h.speed, dt);
+  }
+}
+
+function updateTraps(dt) {
+  const h = S.hero;
+  const hx = Math.floor(h.x), hy = Math.floor(h.y);
+  for (const t of S.traps) {
+    t.cd -= dt;
+    t.flash -= dt;
+    if (t.x === hx && t.y === hy && t.cd <= 0) {
+      damage(h, TRAP_DAMAGE * t.lvl, "#ffb74d");
+      t.cd = 1.0;
+      t.flash = 0.25;
+    }
+  }
+}
+
+function updateMinions(dt) {
+  const h = S.hero;
+  const field = flowField(Math.floor(h.x), Math.floor(h.y));
+  for (const m of S.minions) {
+    const kind = MINIONS[m.type];
+    m.cd -= dt;
+    const d = dist(m, h);
+    if (d < 0.8) {
+      if (m.cd <= 0 && h.roll <= 0) { damage(h, kind.atk, "#ffb74d"); m.cd = 0.9; }
+    } else if (field[Math.floor(m.y) * W + Math.floor(m.x)] <= 8) {
+      if (d < 1.0 || !followField(m, field, kind.speed, dt)) moveTo(m, h.x, h.y, kind.speed, dt);
+    }
+  }
+}
+
+function heroDied() {
+  const lv = S.heroLv;
+  const coins = 6 + 2 * lv, souls = 1 + Math.floor(lv / 2);
+  S.coins += coins;
+  S.souls += souls;
+  float(S.hero.x, S.hero.y, `+${coins}c +${souls}s`, "#ffd54f");
+  S.hero = null;
+  S.heroLv++;
+  S.wave++;
+  S.phase = "build";
+  const g = gearFor(S.heroLv);
+  say(`The hero fell! +${coins} coins, +${souls} soul${souls > 1 ? "s" : ""}. He'll return at Lv ${S.heroLv} in ${g.name}...`);
+}
+
+function bossDied() {
+  S.phase = "over";
+  say(`You were slain by a Lv ${S.hero.lv} hero. You held out for ${S.wave - 1} wave${S.wave === 2 ? "" : "s"}.`);
+}
+
+// ---------- drawing ----------
+// 8x8 (or 16x16) pixel art, drawn at 2 canvas pixels per art pixel.
+const ART = {
+  hero: [
+    "..AAA...",
+    "..ASA...",
+    "...S...w",
+    ".AAAAA.w",
+    ".SAAAS.w",
+    "..AAA.SH",
+    "..L.L...",
+    "..L.L...",
+  ],
+  skeleton: [
+    "..WWW...",
+    ".WKWKW..",
+    "..WWW...",
+    "...W....",
+    ".WWWWW..",
+    "...W....",
+    "..W.W...",
+    ".W...W..",
+  ],
+  ogre: [
+    ".GGGG...",
+    "GKGGKG..",
+    "GGGGGG..",
+    ".GTTG...",
+    "GGGGGGB.",
+    "GGGGGGB.",
+    ".GG.GGB.",
+    ".GG.GG..",
+  ],
+  boss: [
+    "..H..........H..",
+    "..HH........HH..",
+    "...HRRRRRRRRH...",
+    "...RRRRRRRRRR...",
+    "..RRYYRRRRYYRR..",
+    "..RRYKRRRRKYRR..",
+    "..RRRRRRRRRRRR..",
+    "..RRRTTTTTTRRR..",
+    ".DRRRRRRRRRRRRD.",
+    "DDRRRRRRRRRRRRDD",
+    "DD.RRRRRRRRRR.DD",
+    "D..RRRRRRRRRR..D",
+    "...DDDDDDDDDD...",
+    "...RRR....RRR...",
+    "...RRR....RRR...",
+    "..DDDD....DDDD..",
+  ],
+};
+const PALETTE = {
+  S: "#f1c27d", w: "#cfd8dc", H: "#e0d6c0", L: "#3e2723",
+  W: "#e8e8e8", K: "#111111", G: "#6aa84f", T: "#ffffff", B: "#795548",
+  R: "#b71c1c", Y: "#ffeb3b", D: "#5d0f0f",
+};
+
+function drawArt(art, cx, cy, face, colors = {}) {
+  const size = art.length * 2;
+  const left = Math.round(cx * T - size / 2), top = Math.round(cy * T - size / 2);
+  art.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const c = row[face < 0 ? row.length - 1 - x : x];
+      if (c === ".") continue;
+      ctx.fillStyle = colors[c] || PALETTE[c];
+      ctx.fillRect(left + x * 2, top + y * 2, 2, 2);
+    }
+  });
+}
+
+function drawMap() {
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const px = x * T, py = y * T, t = tileAt(x, y);
+      if (t === "#") {
+        ctx.fillStyle = "#4a4458";
+        ctx.fillRect(px, py, T, T);
+        ctx.fillStyle = "#36313f";
+        ctx.fillRect(px, py + 7, T, 1);
+        ctx.fillRect(px, py + 15, T, 1);
+        ctx.fillRect(px + (y % 2 ? 4 : 11), py, 1, 7);
+        ctx.fillRect(px + (y % 2 ? 11 : 4), py + 8, 1, 7);
+      } else {
+        const lair = inLair(x, y);
+        ctx.fillStyle = (x + y) % 2
+          ? (lair ? "#2e1c22" : "#23202d")
+          : (lair ? "#33202a" : "#27232f");
+        ctx.fillRect(px, py, T, T);
+        if (t === "D") {
+          ctx.fillStyle = "#6d4c2f";
+          ctx.fillRect(px + 2, py, 12, T);
+          ctx.fillStyle = "#3e2a1a";
+          ctx.fillRect(px + 2, py + 4, 12, 1);
+          ctx.fillRect(px + 2, py + 11, 12, 1);
+        }
+        if (t === "S") {
+          ctx.fillStyle = "#3f6b3f";
+          ctx.fillRect(px + 3, py + 3, 10, 10);
+          ctx.fillStyle = "#27232f";
+          ctx.fillRect(px + 5, py + 5, 6, 6);
+        }
+      }
+    }
+  }
+}
+
+function drawTrap(t) {
+  const px = t.x * T, py = t.y * T;
+  ctx.fillStyle = t.flash > 0 ? "#7a2a2a" : "#3a3a4a";
+  ctx.fillRect(px + 2, py + 2, 12, 12);
+  ctx.fillStyle = t.lvl === 3 ? "#ff7961" : t.lvl === 2 ? "#e0e0e0" : "#a0a0b0";
+  const spots = [[4, 4], [10, 4], [4, 10], [10, 10], [7, 7]].slice(0, t.lvl + 1);
+  for (const [sx, sy] of spots) {
+    ctx.fillRect(px + sx, py + sy - 1, 2, 3);
+    ctx.fillRect(px + sx - 1, py + sy + 1, 4, 1);
+  }
+}
+
+function drawBar(e, width) {
+  const x = Math.round(e.x * T - width / 2), y = Math.round(e.y * T - (e === S.boss ? 19 : 11));
+  ctx.fillStyle = "#000";
+  ctx.fillRect(x - 1, y - 1, width + 2, 4);
+  ctx.fillStyle = "#4a1010";
+  ctx.fillRect(x, y, width, 2);
+  ctx.fillStyle = e === S.hero ? "#64b5f6" : "#e53935";
+  ctx.fillRect(x, y, Math.max(0, Math.round(width * e.hp / e.maxHp)), 2);
+}
+
+function draw() {
+  drawMap();
+  S.traps.forEach(drawTrap);
+
+  if (hover && S.phase !== "over" && hover.x >= 0 && hover.x < W && hover.y >= 0 && hover.y < H) {
+    ctx.strokeStyle = canBuild(hover.x, hover.y) ? "#ffffffaa" : "#ff525288";
+    ctx.strokeRect(hover.x * T + 0.5, hover.y * T + 0.5, T - 1, T - 1);
+  }
+
+  for (const m of S.minions) {
+    drawArt(ART[m.type], m.x, m.y, m.face);
+    drawBar(m, 10);
+  }
+
+  const b = S.boss;
+  if (b.windup > 0 || b.swing > 0) {
+    ctx.beginPath();
+    ctx.arc(b.x * T, b.y * T, BOSS_RANGE * T, 0, Math.PI * 2);
+    ctx.fillStyle = b.swing > 0 ? "#ff525266" : "#ff525222";
+    ctx.fill();
+    ctx.strokeStyle = "#ff5252aa";
+    ctx.stroke();
+  }
+  drawArt(ART.boss, b.x, b.y, b.face);
+  drawBar(b, 24);
+
+  const h = S.hero;
+  if (h) {
+    if (h.roll > 0) ctx.globalAlpha = 0.5;
+    drawArt(ART.hero, h.x, h.y, h.face, { A: gearFor(h.lv).color });
+    ctx.globalAlpha = 1;
+    drawBar(h, 12);
+  }
+
+  ctx.textAlign = "center";
+  ctx.font = "bold 7px monospace";
+  for (const f of S.floats) {
+    ctx.globalAlpha = Math.min(1, f.t * 2);
+    ctx.fillStyle = "#000";
+    ctx.fillText(f.text, f.x * T + 1, f.y * T + 1);
+    ctx.fillStyle = f.color;
+    ctx.fillText(f.text, f.x * T, f.y * T);
+  }
+  ctx.globalAlpha = 1;
+
+  if (S.phase === "over") {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    ctx.fillRect(0, 55, canvas.width, 50);
+    ctx.fillStyle = "#e0574f";
+    ctx.font = "bold 14px monospace";
+    ctx.fillText("YOU DIED", canvas.width / 2, 78);
+    ctx.fillStyle = "#e6e0ec";
+    ctx.font = "8px monospace";
+    ctx.fillText(`Waves survived: ${S.wave - 1}`, canvas.width / 2, 94);
+  }
+}
+
+function updateHud() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el.textContent !== String(v)) el.textContent = v; };
+  set("coins", S.coins);
+  set("souls", S.souls);
+  set("wave", S.wave);
+  set("hero", `Lv ${S.heroLv} (${gearFor(S.heroLv).name})`);
+  set("bosshp", `${Math.max(0, Math.ceil(S.boss.hp))}/${S.boss.maxHp}`);
+  document.querySelectorAll("[data-tool]").forEach(b => b.classList.toggle("selected", b.dataset.tool === S.tool));
+  const go = document.getElementById("go");
+  go.textContent = S.phase === "over" ? "Play again" : S.phase === "wave" ? "Wave in progress" : "Start wave";
+  go.disabled = S.phase === "wave";
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  update(dt);
+  draw();
+  updateHud();
+  requestAnimationFrame(frame);
+}
+
+newGame();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
