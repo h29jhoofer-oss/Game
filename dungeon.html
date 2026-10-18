@@ -195,6 +195,9 @@
     <b>Heroes:</b> knights charge in with swords. From wave 2, <b>archers</b> join: fast and fragile, they stop to shoot
     your minions and keep their distance on the tower. From wave 3, <b>Iron Knights</b> march in: slow and very tough,
     with a tower shield that blocks most arrow damage from the front. Crushers, fire and bombs work best on them.<br>
+    Later waves bring heroes immune to some traps: <b>rogues</b> (wave 6) never set off spikes or bombs,
+    <b>Flame Wardens</b> (wave 7) ignore fire and fireballs, <b>berserkers</b> (wave 8) can't be slowed or frozen and rage when
+    hurt, and <b>sappers</b> (wave 9) ignore crushers and saws and jam the traps they pass. Mix your traps!<br>
     From wave 4, a <b>Champion</b> leads the charge (one more every three waves): a hero boss, huge and slow, with far
     more health and a heavy greatsword. Champions grow tougher every wave. From wave 5, <b>mages</b> join: their bolts are
     weak, but they heal hurt heroes around them and empower one ally, who glows green and gains speed, strength and
@@ -466,8 +469,20 @@ const HERO_LINES = {
 HERO_LINES.archer = ["FROM AFAR, HOLLOW KING!", "MY ARROWS NEVER MISS.", "KEEP YOUR DISTANCE!"];
 HERO_LINES.brute = ["NOTHING STOPS THE IRON VOW.", "STAND ASIDE, LITTLE ONES.", "I AM THE WALL."];
 HERO_LINES.mage = ["THE LIGHT MENDS ALL WOUNDS.", "STAY CLOSE TO ME!", "BE STRONG, BROTHER. I AM WITH YOU."];
+HERO_LINES.rogue = ["STEP LIGHT, AND NOTHING BITES.", "TOO SLOW!", "I SEE EVERY TRAP."];
+HERO_LINES.warden = ["FIRE IS MY OATH.", "YOUR FLAMES ARE CANDLES TO ME.", "BURN? I THINK NOT."];
+HERO_LINES.berserker = ["BLOOD AND ICE!", "I FEAR NO COLD!", "RAAAAGH!"];
+HERO_LINES.sapper = ["I'LL JAM EVERY GEAR YOU OWN.", "NICE TRAP. SHAME ABOUT IT.", "CLANK, AND IT'S DONE."];
 HERO_LINES.champion = ["KNEEL, HOLLOW KING.", "I HAVE SLAIN GREATER THINGS THAN YOU.", "FOLLOW ME TO THE TOWER!", "THE DAWN MARCHES WITH ME."];
 const DEBUT = {
+  rogue: { hero: "SOFT FEET, BROTHERS. HIS SPIKES WON'T EVEN FEEL ME.", boss: "A THIEF IN MY HALLS. I WILL FIND YOU.",
+    tip: "Rogues are here: fast and fragile, and they never set off spikes or bombs. Use saws, turrets and monsters." },
+  warden: { hero: "I WAS FORGED IN FIRE. YOUR VENTS ARE NOTHING.", boss: "FIRE WILL NOT TAKE YOU? THEN I WILL.",
+    tip: "Flame Wardens are here: tough, and immune to fire vents, imp fireballs and burning. Use crushers, spikes and frost." },
+  berserker: { hero: "COLD? WHERE I COME FROM, THIS IS SUMMER.", boss: "A BEAST OF THE NORTH. GOOD. BEASTS BREAK.",
+    tip: "Berserkers are here: frost totems can't slow or freeze them, and they fly into a rage when badly hurt." },
+  sapper: { hero: "LET'S SEE HOW YOUR LITTLE MACHINES LIKE A WRENCH.", boss: "TINKERER. I WILL WEAR YOUR BONES AS A NECKLACE.",
+    tip: "Sappers are here: crushers and saws can't hurt them, and they jam any trap they pass for a few seconds." },
   archer: { hero: "STAY BACK AND LOOSE! FROM AFAR HE CANNOT TOUCH US!", boss: "ARCHERS. THEY BLEED THE SAME.",
     tip: "Archers are here: fast and fragile, and they shoot your minions from range." },
   brute: { hero: "THE IRON VOW DOES NOT BREAK.", boss: "AT LAST. SOMETHING WORTH CRUSHING.",
@@ -492,7 +507,23 @@ const HERO_KINDS = {
   // Champions are the heroes' own bosses: huge, slow, and they grow tougher every wave (see champScale).
   champion: { label: "Champion", hp: 2.6, atk: 1.8, speed: 1.5, airSpeed: 4.2, w: 1.1, h: 1.5, coins: 4, cd: 1.5, noDodge: true, smart: -0.5, step: 0.55, heavy: true },
 };
+// Four kinds that shrug off certain traps (immune: the trap types that can't hurt them).
+Object.assign(HERO_KINDS, {
+  rogue: { label: "rogue", hp: 0.6, atk: 0.9, speed: 4.4, airSpeed: 4.0, w: 0.6, h: 0.9, coins: 1, cd: 0.5, dodge: 0.25, smart: 0.3, immune: ["spike", "mine"] },
+  warden: { label: "Flame Warden", hp: 1.4, atk: 1.1, speed: 3.3, airSpeed: 3.9, w: 0.6, h: 0.9, coins: 2, cd: 0.8, immune: ["fire", "fireball", "burn"] },
+  berserker: { label: "berserker", hp: 1.6, atk: 1.3, speed: 3.6, airSpeed: 3.9, w: 0.65, h: 0.9, coins: 2, cd: 0.6, noDodge: true, immune: ["frost"] },
+  sapper: { label: "sapper", hp: 1.2, atk: 0.8, speed: 3.0, airSpeed: 3.9, w: 0.6, h: 0.9, coins: 2, cd: 0.9, immune: ["crusher", "saw"] },
+});
 HERO_KINDS.archer.ranged = true;
+const IMMUNE_NAMES = { spike: "spikes", mine: "bombs", fire: "fire", fireball: "fireballs", burn: "burning", frost: "frost", crusher: "crushers", saw: "saw blades" };
+const immuneTo = (h, src) => !!src && (HERO_KINDS[h.kind].immune || []).includes(src);
+// A trap passing harmlessly over an immune hero says so, now and then.
+function shrug(h) {
+  if ((h.immuneT || 0) > S.time) return;
+  h.immuneT = S.time + 1.6;
+  float(centerX(h), h.y - 0.3, "IMMUNE", "#cfd8dc");
+}
+const SAPPER_JAM = { cd: 6, time: 4, reach: 1.2 };
 // On top of the usual per-level growth, a champion gains extra health and strength each wave.
 const champScale = lv => ({ hp: 1 + 0.08 * Math.max(0, lv - 4), atk: 1 + 0.05 * Math.max(0, lv - 4) });
 // Mages heal the heroes around them and empower one ally.
@@ -502,7 +533,13 @@ const ARCHER_NAMES = ["Ranger Wren", "Ranger Lark", "Ranger Fenn", "Ranger Ivy",
 const BRUTE_NAMES = ["Brother Gorm", "Iron Hallard", "Brother Osric", "Iron Bram", "Brother Tobin"];
 const MAGE_NAMES = ["Magus Orin", "Sister Vey", "Magus Halden", "Sister Lune", "Magus Corvin", "Sister Ysolt"];
 const CHAMPION_NAMES = ["Lord Aurelian", "High Paladin Sera", "Lord Varric", "Dawnlord Malchior", "High Paladin Kaeda"];
-const NAMES_BY_KIND = { knight: HERO_NAMES, archer: ARCHER_NAMES, brute: BRUTE_NAMES, mage: MAGE_NAMES, champion: CHAMPION_NAMES };
+const NAMES_BY_KIND = {
+  knight: HERO_NAMES, archer: ARCHER_NAMES, brute: BRUTE_NAMES, mage: MAGE_NAMES, champion: CHAMPION_NAMES,
+  rogue: ["Vex the Quick", "Silent Mara", "Nim Halfshadow", "Kestrel", "Sly Odo"],
+  warden: ["Warden Pyra", "Warden Cinder", "Warden Ashby", "Warden Brand", "Warden Solenne"],
+  berserker: ["Ulfgar", "Brynja", "Hrothgar", "Sigrun", "Torvald"],
+  sapper: ["Sapper Dunn", "Sapper Pike", "Sapper Hobb", "Sapper Wedge", "Sapper Rusk"],
+};
 
 function makeHero(lv, kind = "knight") {
   const k = HERO_KINDS[kind];
@@ -522,23 +559,30 @@ function makeHero(lv, kind = "knight") {
   };
 }
 
-// Who marches in a wave. Archers join from wave 2, Iron Knights from wave 3, Champions from
-// wave 4 (one more every three waves), and mages from wave 5.
+// Who marches in a wave. New kinds join as the waves go on: archers (2), Iron Knights (3),
+// Champions (4, one more every three waves), mages (5), rogues (6), Flame Wardens (7),
+// berserkers (8) and sappers (9). Each new kind is sure to show up on its first wave.
 const championsInWave = w => w < 4 ? 0 : 1 + Math.floor((w - 4) / 3);
+const ROSTER = [
+  { kind: "knight", from: 1, weight: 3 },
+  { kind: "archer", from: 2, weight: 2 },
+  { kind: "brute", from: 3, weight: 1.2, cap: 4 },
+  { kind: "mage", from: 5, weight: 0.8, cap: 5 },
+  { kind: "rogue", from: 6, weight: 1 },
+  { kind: "warden", from: 7, weight: 1, cap: 4 },
+  { kind: "berserker", from: 8, weight: 1, cap: 4 },
+  { kind: "sapper", from: 9, weight: 0.8, cap: 5 },
+];
 function waveRoster(w) {
   const n = heroesInWave(w), list = [];
   const has = kind => list.filter(k => k === kind).length;
   for (let i = 0; i < n; i++) {
-    const r = Math.random();
-    if (w >= 5 && r < 0.16 && has("mage") < Math.ceil(n / 5)) list.push("mage");
-    else if (w >= 3 && r < 0.36 && has("brute") < Math.ceil(n / 4)) list.push("brute");
-    else if (w >= 2 && r < 0.66) list.push("archer");
-    else list.push("knight");
+    const open = ROSTER.filter(r => w >= r.from && (!r.cap || has(r.kind) < Math.ceil(n / r.cap)));
+    let roll = Math.random() * open.reduce((a, r) => a + r.weight, 0);
+    const pickR = open.find(r => (roll -= r.weight) < 0) || open[0];
+    list.push(pickR.kind);
   }
-  // Make sure a new kind shows up on its first wave.
-  if (w === 2 && !list.includes("archer")) list[1] = "archer";
-  if (w === 3 && !list.includes("brute")) list[n - 1] = "brute";
-  if (w === 5 && !list.includes("mage")) list[2] = "mage";
+  ROSTER.forEach((r, i) => { if (w === r.from && i > 0 && !list.includes(r.kind)) list[Math.min(n - 1, i)] = r.kind; });
   // Champions march in the back half of the column, behind the heroes they lead.
   for (let c = 0; c < championsInWave(w); c++) list.splice(Math.floor(n * (0.5 + 0.4 * Math.random())), 0, "champion");
   return list;
@@ -1587,7 +1631,7 @@ function startWave() {
   const gap = { brute: 1.7, champion: 2.2 };
   S.spawnQueue = roster.map((kind, i) => ({ lv: S.wave, kind, delay: i === 0 ? 0.4 : gap[kind] || 1.3 }));
   S.spawnT = 0;
-  for (const t of S.traps) Object.assign(t, { timer: 0, off: 0, v: 0, state: "up", cd: 0, fuse: 0, rearm: 0, pulse: 2 });
+  for (const t of S.traps) Object.assign(t, { timer: 0, off: 0, v: 0, state: "up", cd: 0, fuse: 0, rearm: 0, pulse: 2, jam: 0 });
   S.arrows = [];
   S.phase = "wave";
   S.loot = { kills: 0, coins: 0 };
@@ -1595,7 +1639,7 @@ function startWave() {
   banner(`WAVE ${S.wave}`, `${n} heroes - ${WAVE_LORE[Math.min(S.wave, WAVE_LORE.length) - 1]}`, "#e6e0ec");
   if (S.wave === 1 || Math.random() < 0.5) setTimeout(() => speak(S.boss, pick(TAUNTS.wave)), 1200);
   const count = kind => roster.filter(k => k === kind).length;
-  const parts = ["champion", "knight", "archer", "brute", "mage"].filter(count).map(kind => `${count(kind)} ${HERO_KINDS[kind].label}${count(kind) > 1 ? "s" : ""}`);
+  const parts = ["champion", "knight", "archer", "brute", "mage", "rogue", "warden", "berserker", "sapper"].filter(count).map(kind => `${count(kind)} ${HERO_KINDS[kind].label}${count(kind) > 1 ? "s" : ""}`);
   say(`Lv ${S.wave} heroes storm your castle: ${parts.join(", ")}. If ${TOWER_LIMIT} get into the tower, they come for you.`);
 }
 
@@ -2603,6 +2647,7 @@ function updateHero(h, dt) {
   h.trail = h.trail.filter(p => (p.t -= dt) > 0);
 
   if (h.chained || h.serpentHeld) return;
+  heroTraits(h, dt);
   if (h.bleed > 0) {
     // Barbed spikes: bleeding a little every half second.
     h.bleed -= dt;
@@ -2701,7 +2746,7 @@ function finishHeroMove(h, dt, arena) {
     // Frost totems slow a hero down inside their aura.
     h.chill = 0;
     for (const t of S.traps) {
-      if (t.type === "frost" && Math.hypot(centerX(h) - t.x - 0.5, centerY(h) - t.y - 0.5) < numsOf(t).radius) {
+      if (t.type === "frost" && !immuneTo(h, "frost") && Math.hypot(centerX(h) - t.x - 0.5, centerY(h) - t.y - 0.5) < numsOf(t).radius) {
         h.chill = Math.max(h.chill, numsOf(t).slow);
       }
     }
@@ -2724,6 +2769,35 @@ function finishHeroMove(h, dt, arena) {
   if (arena) return;
   if (inLava(h)) { h.hp = 0; h.lava = true; }
   else if (h.x + h.w > TOWER_X - 0.3) heroReachedTower(h);
+}
+
+// What makes the newer kinds different: the warden's flames, the berserker's rage, the sapper's wrench.
+function heroTraits(h, dt) {
+  if (h.kind === "warden" && Math.random() < dt * 14) {
+    particle({ x: centerX(h) + (Math.random() - 0.5) * 0.25, y: h.y + 0.05, vy: -1.6, vx: (Math.random() - 0.5) * 0.6, life: 0.35, color: Math.random() < 0.5 ? "#ff6f00" : "#ffd54f", glow: true });
+  }
+  if (h.kind === "berserker" && !h.rage && h.hp > 0 && h.hp < h.maxHp * 0.5) {
+    h.rage = true;
+    h.speed *= 1.4;
+    h.atk = Math.round(h.atk * 1.5);
+    float(centerX(h), h.y - 0.5, "RAGE!", "#ff5252");
+    burst(centerX(h), centerY(h), 12, ["#ff1744", "#ff8a80"], 4, { glow: true });
+    Sound.play("growl");
+    if (!S.dialog.cur && Math.random() < 0.5) speak(h, pick(["RAAAAGH!", "YOU'LL PAY IN BLOOD!", "NOW I'M ANGRY!"]));
+  }
+  if (h.kind === "sapper" && !inArena()) {
+    h.jamCd = (h.jamCd ?? 0) - dt;
+    if (h.jamCd > 0) return;
+    const t = S.traps.find(o => !(o.jam > 0) && Math.hypot(o.x + 0.5 - centerX(h), o.y + 0.5 - centerY(h)) < SAPPER_JAM.reach);
+    if (!t) return;
+    t.jam = SAPPER_JAM.time;
+    t.fireOn = false;
+    h.jamCd = SAPPER_JAM.cd;
+    h.atkAnim = 0.2;
+    float(t.x + 0.5, t.y - 0.2, "JAMMED", "#ffd54f");
+    burst(t.x + 0.5, t.y + 0.5, 10, ["#ffd54f", "#ffffff", "#8a8296"], 4, { glow: true });
+    Sound.play("clang");
+  }
 }
 
 // A mage heals every hurt hero around them now and then, and keeps one ally empowered.
@@ -2876,10 +2950,22 @@ function shouldJump(h, dir) {
   return false;
 }
 
-const heroesIn = box => S.heroes.filter(h => h.evade <= 0 && overlaps(box, h));
+// Heroes inside a box; a trap type (src) leaves out the heroes immune to it.
+const heroesIn = (box, src) => S.heroes.filter(h => {
+  if (h.evade > 0 || !overlaps(box, h)) return false;
+  if (immuneTo(h, src)) { shrug(h); return false; }
+  return true;
+});
 
 function updateTraps(dt) {
   for (const t of S.traps) {
+    if (t.jam > 0) {
+      // Jammed by a sapper: sparks and nothing else until it frees itself.
+      t.jam -= dt;
+      t.fireOn = false;
+      if (Math.random() < dt * 8) particle({ x: t.x + 0.5, y: t.y + 0.4, vx: (Math.random() - 0.5) * 4, vy: -2 - Math.random() * 2, g: 14, life: 0.3, color: Math.random() < 0.5 ? "#ffd54f" : "#ffffff", glow: true });
+      continue;
+    }
     if (t.type === "turret") {
       // Shoot at the nearest hero on this row.
       let best = null;
@@ -2922,7 +3008,7 @@ function updateTraps(dt) {
     if (t.path === "impaler") box = { x: t.x + 0.1, y: t.y + 0.3, w: 0.8, h: 0.7 };
     if (t.path === "ripper") box = { x: t.x - 0.15, y: t.y - 0.15, w: 1.3, h: 1.3 };
     if (t.path === "patrol") box.x += sawSlide(t);
-    const hit = t.cd <= 0 ? heroesIn(box) : [];
+    const hit = t.cd <= 0 ? heroesIn(box, t.type) : [];
     for (const h of hit) {
       damage(h, n.dmg, "#ffb74d");
       if (t.path === "barbed") { h.bleed = 3; h.bleedDmg = Math.max(1, Math.round(t.lvl * 1.5)); }
@@ -2959,7 +3045,7 @@ function sawSlide(t) {
 function updateDeepFreeze(t, dt) {
   t.pulse = (t.pulse ?? 2) - dt;
   if (t.pulse > 0) return;
-  const r = numsOf(t).radius, caught = S.heroes.filter(h => h.evade <= 0 && Math.hypot(centerX(h) - t.x - 0.5, centerY(h) - t.y - 0.5) < r);
+  const r = numsOf(t).radius, caught = S.heroes.filter(h => h.evade <= 0 && !immuneTo(h, "frost") && Math.hypot(centerX(h) - t.x - 0.5, centerY(h) - t.y - 0.5) < r);
   if (!caught.length) { t.pulse = 0.3; return; }
   t.pulse = 4;
   for (const h of caught) {
@@ -2992,7 +3078,7 @@ function updateFire(t, dt) {
       life: 0.35, color: blue ? (Math.random() < 0.5 ? "#40c4ff" : "#e1f5fe") : Math.random() < 0.5 ? "#ff6f00" : "#ffd54f", glow: true });
   }
   if (t.cd > 0) return;
-  const hit = heroesIn({ x: t.x + 0.15, y: t.y + 1 - n.tall, w: 0.7, h: n.tall });
+  const hit = heroesIn({ x: t.x + 0.15, y: t.y + 1 - n.tall, w: 0.7, h: n.tall }, "fire");
   for (const h of hit) damage(h, n.dmg, "#ffb74d", t.path === "pillar" ? ["#40c4ff", "#e1f5fe"] : ["#ff6f00", "#ffd54f"]);
   if (hit.length) t.cd = TRAPS.fire.cd;
 }
@@ -3009,6 +3095,7 @@ function updateCrusher(t, dt) {
   if (t.state === "up") {
     // Drop just ahead of a hero walking underneath.
     const under = S.heroes.some(h => {
+      if (immuneTo(h, "crusher")) return false;
       const dx = t.x + 0.5 - centerX(h);
       return dx > -0.3 && dx < 1.1 && centerY(h) > t.y + 0.5;
     });
@@ -3016,7 +3103,7 @@ function updateCrusher(t, dt) {
   } else if (t.state === "fall") {
     t.v += numsOf(t).fall * dt;
     t.off = Math.min(drop, t.off + t.v * dt);
-    for (const h of heroesIn({ x: t.x + 0.05, y: t.y + t.off, w: 0.9, h: 1 })) {
+    for (const h of heroesIn({ x: t.x + 0.05, y: t.y + t.off, w: 0.9, h: 1 }, "crusher")) {
       if (t.hits.has(h)) continue;
       t.hits.add(h);
       damage(h, numsOf(t).dmg, "#ff5252");
@@ -3049,7 +3136,7 @@ function obsidianShockwave(t) {
   const gx = t.x + 0.5, gy = t.y + t.off + 1, n = numsOf(t);
   for (const h of S.heroes) {
     const dx = Math.abs(centerX(h) - gx);
-    if (dx > 2.2 || dx < 0.45 || Math.abs(h.y + h.h - gy) > 0.6 || h.evade > 0) continue;
+    if (dx > 2.2 || dx < 0.45 || Math.abs(h.y + h.h - gy) > 0.6 || h.evade > 0 || immuneTo(h, "crusher")) continue;
     damage(h, Math.round(n.dmg * 0.4), "#b388ff", ["#b388ff", "#4a148c"]);
     h.vy = -7;
   }
@@ -3070,7 +3157,7 @@ function updateMine(t, dt) {
     if (t.fuse <= 0) explodeMine(t, n);
     return;
   }
-  if (!heroesIn({ x: t.x + 0.15, y: t.y + 0.6, w: 0.7, h: 0.4 }).length) return;
+  if (!heroesIn({ x: t.x + 0.15, y: t.y + 0.6, w: 0.7, h: 0.4 }, "mine").length) return;
   if (n.fuse) { t.fuse = n.fuse; Sound.play("fuse"); return; }
   explodeMine(t, n);
 }
@@ -3080,6 +3167,7 @@ function explodeMine(t, n) {
   const cx = t.x + 0.5, cy = t.y + 0.7, r = n.radius;
   for (const h of S.heroes) {
     if (h.evade > 0 || Math.hypot(centerX(h) - cx, centerY(h) - cy) > r) continue;
+    if (immuneTo(h, "mine")) { shrug(h); continue; }
     damage(h, n.dmg, "#ff5252", ["#ff6f00", "#ffd54f", "#5d566a"]);
     h.vy = -8;
   }
@@ -3103,7 +3191,7 @@ function updateArrows(dt) {
       burst(a.x, a.y, 3, ["#a1887f", "#d7ccc8"], 2);
       continue;
     }
-    const h = heroesIn({ x: a.x - 0.2, y: a.y - 0.05, w: 0.4, h: 0.1 }).find(o => !a.hits || !a.hits.has(o));
+    const h = heroesIn({ x: a.x - 0.2, y: a.y - 0.05, w: 0.4, h: 0.1 }, a.fireball ? "fireball" : null).find(o => !a.hits || !a.hits.has(o));
     if (!h) continue;
     // Ballista bolts carry on through every hero in the row.
     if (a.hits) a.hits.add(h);
@@ -3317,7 +3405,7 @@ function minionHit(m, kind, h) {
   for (const o of targets) {
     damage(o, m.atk, m.dark ? "#ea80fc" : "#ffb74d");
     if (kind.smash) knock(o, (Math.sign(centerX(o) - centerX(m)) || 1) * 5, -5);
-    if (kind.burn) { o.bleed = Math.max(o.bleed || 0, 2); o.bleedDmg = Math.max(o.bleedDmg || 0, m.dark ? 4 : 2); }
+    if (kind.burn && !immuneTo(o, "burn")) { o.bleed = Math.max(o.bleed || 0, 2); o.bleedDmg = Math.max(o.bleedDmg || 0, m.dark ? 4 : 2); }
     const steal = (kind.drain || 0) + (m.dark ? DARK.steal : 0);
     if (steal) m.hp = Math.min(m.maxHp, m.hp + m.atk * steal);
   }
@@ -3706,6 +3794,10 @@ const CHAMPION_LEGS = {
   step: ["...aAA.......AAa........", "..aAA.........AAa.......", "..BBBB.......BBBB.......", "..BBBB.......BBBB......."],
   jump: ["....aAAa..aAAa..........", "....BBBB..BBBB..........", "........................", "........................"],
 };
+const ROGUE_TOP = ["................", "......vVVv......", ".....vVVVVv.....", ".....vVkkkv.....", ".....vVkEkE.....", ".....vvkkkv..W..", "......vVVv..W...", ".....aAAAAaSW...", "....aAAhAAa.....", "..W.aAAAAa......", "..WSaAAAAa......", ".....aBBBa......"];
+const ROGUE_ATTACK_TOP = ["................", "......vVVv......", ".....vVVVVv.....", ".....vVkkkv.....", ".....vVkEkE.....", ".....vvkkkv.....", "......vVVv......", ".....aAAAAaSWWW.", "....aAAhAAa.....", "..W.aAAAAa......", "..WSaAAAAa......", ".....aBBBa......"];
+const BERSERKER_TOP = ["..H.......H.....", "..HHMMMMMMHH....", "...MMMMMMMM.....", "...MSSSkSSk.....", "...SSSSSSSS..mm.", "...rRRRRRRr.mMMm", ".FFrRRRRRRrFmMMm", "FFSSSSSSSSSSSO..", "FSSS.SSSSSS.SO..", ".SS..SSSSSS..O..", ".SS..BBhBBB..O..", "..m..aAAAAa....."];
+const SAPPER_TOP = ["................", ".....mMMMMm.....", "....mMMMMMMm....", "...mMMMMMMMMm...", "....kSSkSSk.....", ".....SSSSS..O...", "..PP.aAAAa.MMMM.", ".PPPaAAAAAaSO..M", ".PPPaAAhAAa.O...", ".PP.aAAAAa..O...", "....BBBBBB......", "....aAAAAa......"];
 const HERO_LEGS = {
   stand: ["....aA..Aa......", "....aA..Aa......", "....BB..BB......", "...BBB..BBB....."],
   stride: ["...aA....Aa.....", "...aA.....Aa....", "..BB.......BB...", "..BB.......BB..."],
@@ -3725,6 +3817,20 @@ const ART = {
   archerJump: heroFrame(ARCHER_TOP, HERO_LEGS.jump),
   archerShoot: heroFrame(ARCHER_SHOOT_TOP, HERO_LEGS.stand),
   brute: BRUTE_BODY,
+  rogueStand: heroFrame(ROGUE_TOP, HERO_LEGS.stand),
+  rogueStride: heroFrame(ROGUE_TOP, HERO_LEGS.stride),
+  rogueClose: heroFrame(ROGUE_TOP, HERO_LEGS.close),
+  rogueJump: heroFrame(ROGUE_TOP, HERO_LEGS.jump),
+  rogueAttack: heroFrame(ROGUE_ATTACK_TOP, HERO_LEGS.stand),
+  berserkerStand: heroFrame(BERSERKER_TOP, HERO_LEGS.stand),
+  berserkerStride: heroFrame(BERSERKER_TOP, HERO_LEGS.stride),
+  berserkerClose: heroFrame(BERSERKER_TOP, HERO_LEGS.close),
+  berserkerJump: heroFrame(BERSERKER_TOP, HERO_LEGS.jump),
+  sapperStand: heroFrame(SAPPER_TOP, HERO_LEGS.stand),
+  sapperStride: heroFrame(SAPPER_TOP, HERO_LEGS.stride),
+  sapperClose: heroFrame(SAPPER_TOP, HERO_LEGS.close),
+  sapperJump: heroFrame(SAPPER_TOP, HERO_LEGS.jump),
+  berserkerFace: ["..H............H..", "..HH..........HH..", "...HH.mMMMMm.HH...", "....HMMMMMMMMH....", "....MMMMMMMMMM....", "....MSSSSSSSSM....", "....SSkkSSkkSS....", "....SSSSSSSSSS....", "....SSSSnnSSSS....", "....RRSSSSSSRR....", "....RRRRRRRRRR....", "....RRRRRRRRRR....", ".....RRRRRRRR.....", "..FFFRRRRRRRRFFF..", ".FFFFFRRRRRRFFFFF.", "FFFFSSSRRRRSSSFFFF", "FFFSSSSSRRSSSSSFFF", "FFSSSSSSSSSSSSSSFF"],
   mageStand: heroFrame(MAGE_TOP, MAGE_LEGS.stand),
   mageStride: heroFrame(MAGE_TOP, MAGE_LEGS.stride),
   mageJump: heroFrame(MAGE_TOP, MAGE_LEGS.jump),
@@ -4480,10 +4586,28 @@ const ARCHER_PAL = { V: "#3f7a46", v: "#25502d", O: "#a0703a", Q: "#6d4c2f", P: 
 const MAGE_PAL = { T: "#2f6b4f", t: "#1b4332", R: "#e4dfee", r: "#9f98b3", g: "#43a047", O: "#8d6e63", E: "#76ff03", G: "#ccff90", n: "#c9955a", s: "#8d5a3a" };
 const MAGE_CAST_PAL = Object.assign({}, MAGE_PAL, { E: "#ccff90", G: "#ffffff" });
 const CHAMPION_PAL = { A: "#dfe6ec", a: "#8f9aa6", W: "#ffffff", M: "#b0bec5", k: "#120e18", C: "#1e4fa0", c: "#123270", P: "#c62828", Y: "#fff59d", B: "#4a2f1f" };
+// Rogues: a dark purple hood and leathers; Flame Wardens: ember-red plate and an orange cape;
+// berserkers: furs, a horned helm and a red beard; sappers: an iron pot helm, leather and a pack.
+const ROGUE_PAL = { V: "#3a2f4a", v: "#1f1828", k: "#0d0a14", E: "#e0e0e0", A: "#4a3b5c", a: "#2a2236", W: "#cfd8dc", h: "#b39ddb", B: "#2a1f18" };
+const WARDEN_PAL = { A: "#c0471f", a: "#7a2410", C: "#ff9800", c: "#c25e00", W: "#ffcc80", h: "#ffd54f", k: "#2a0d05" };
+const BERSERKER_PAL = { H: "#e8dcc0", M: "#78909c", m: "#455a64", S: "#e0ac69", k: "#1a1420", R: "#d84315", r: "#8d2a0b", F: "#8d6e63", O: "#6d4c2f", B: "#3b2a20", h: "#ffd54f", A: "#5d4037", a: "#3e2723", n: "#b5835a" };
+const BERSERKER_RAGE_PAL = Object.assign({}, BERSERKER_PAL, { S: "#ef6c50", k: "#ff1744" });
+const SAPPER_PAL = { M: "#90a4ae", m: "#546e7a", k: "#1a1420", O: "#8d6e63", P: "#795548", A: "#a1887f", a: "#6d4c41", B: "#3b2a20", h: "#ffd54f" };
 const BRUTE_PAL = { A: "#5a6470", a: "#363c45", W: "#b8c2cc", k: "#120e18", D: "#2e2a38", M: "#9aa3ad", h: "#e0b84a", B: "#2a1f18", m: "#5d4037" };
 
+// The usual run cycle for kinds drawn as `prefix + Stand/Stride/Close/Jump`.
+function runFrame(prefix, h, moving, rate = 9) {
+  if (h.atkAnim > 0 && ART[prefix + "Attack"]) return ART[prefix + "Attack"];
+  if (!h.onGround) return ART[prefix + "Jump"];
+  if (moving) return Math.floor(S.time * rate) % 2 ? ART[prefix + "Stride"] : ART[prefix + "Close"];
+  return ART[prefix + "Stand"];
+}
 function heroSprite(h, white = false) {
   const g = gearFor(h.lv), moving = Math.abs(h.vx) > 0.1;
+  if (h.kind === "rogue") return sprite(runFrame("rogue", h, moving, 12), ROGUE_PAL, "rogue", white);
+  if (h.kind === "berserker") return sprite(runFrame("berserker", h, moving, 10), h.rage ? BERSERKER_RAGE_PAL : BERSERKER_PAL, h.rage ? "berserkerRage" : "berserker", white);
+  if (h.kind === "sapper") return sprite(runFrame("sapper", h, moving, 8), SAPPER_PAL, "sapper", white);
+  if (h.kind === "warden") return sprite(runFrame("hero", h, moving), WARDEN_PAL, "warden", white);
   if (h.kind === "champion") {
     let art = ART.champion;
     if (h.atkAnim > 0) art = ART.championAttack;
@@ -4539,6 +4663,7 @@ const GLYPHS = {
   "+": "..... ..#.. ..#.. ##### ..#.. ..#.. .....", "-": "..... ..... ..... ##### ..... ..... .....",
   "!": "..#.. ..#.. ..#.. ..#.. ..#.. ..... ..#..", ".": "..... ..... ..... ..... ..... ..... ..#..",
   "%": "##..# ##.#. ...#. ..#.. .#... .#.## #..##",
+  "?": ".###. #...# ....# ...#. ..#.. ..... ..#..",
   ":": "..... ..#.. ..... ..... ..... ..#.. .....", "/": "....# ...#. ...#. ..#.. .#... .#... #....",
   "'": "..#.. ..#.. ..... ..... ..... ..... .....", ",": "..... ..... ..... ..... ..... ..#.. .#...",
   " ": "..... ..... ..... ..... ..... ..... .....",
@@ -5101,6 +5226,12 @@ function drawTrap(t, alpha = 1, preview = false) {
     }
   }
   if (preview || alpha !== 1) return;
+  if (t.jam > 0) {
+    // Jammed by a sapper: greyed out, with a spinning wrench mark.
+    ctx.fillStyle = "rgba(20,16,28,0.55)";
+    ctx.fillRect(X, Y, T, T);
+    if (Math.floor(S.time * 4) % 2) drawText("X", X + 5, Y + 4, "#ffd54f");
+  }
   if (S.trapMenu === t) {
     ctx.fillStyle = Math.floor(S.time * 4) % 2 ? "#ffd54f" : "#fff3c4";
     for (const [cx, cy, dx, dy] of [[0, 0, 1, 1], [15, 0, -1, 1], [0, 15, 1, -1], [15, 15, -1, -1]]) {
@@ -6397,6 +6528,10 @@ function drawPortrait(c, x, y, w, h, talking) {
       : c.kind === "mage" ? sprite(ART.mageFace, MAGE_PAL, "mageFace")
       : c.kind === "brute" ? sprite(ART.bruteFace, BRUTE_PAL, "bruteFace")
       : c.kind === "archer" ? sprite(ART.archerFace, Object.assign({ A: g.main, a: g.shade }, ARCHER_PAL), "archerFace" + g.name)
+      : c.kind === "rogue" ? sprite(ART.archerFace, Object.assign({}, ARCHER_PAL, ROGUE_PAL, { k: "#1a1420" }), "rogueFace")
+      : c.kind === "warden" ? sprite(ART.heroFace, WARDEN_PAL, "wardenFace")
+      : c.kind === "berserker" ? sprite(ART.berserkerFace, BERSERKER_PAL, "berserkerFace")
+      : c.kind === "sapper" ? sprite(ART.bruteFace, Object.assign({}, BRUTE_PAL, { A: "#90a4ae", a: "#546e7a", W: "#cfd8dc" }), "sapperFace")
       : sprite(ART.heroFace, { A: g.main, a: g.shade }, "face" + g.name);
     ctx.drawImage(spr, x + Math.round((w - spr.width) / 2), y + h - spr.height + 1 + bob);
   }
