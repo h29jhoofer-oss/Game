@@ -119,13 +119,14 @@
   <div id="msg"></div>
   <details>
     <summary>How to play</summary>
-    You are the boss, waiting at the top of your castle tower. Heroes run and jump through the level to reach it.<br>
+    You are the boss, waiting at the top of your castle tower. Each wave, a group of heroes runs and jumps through the level to reach it.
+    Heroes who make it through the door hide inside the tower. Once 5 are inside, they climb up and fight you all at once.<br>
     <b>Build:</b> pick a tool and click the level. Spikes go on the ground; saws and turrets go anywhere, even over the lava pits.
     Click a trap of the same type again to upgrade it (max level 3).
-    Killing heroes unlocks new traps: fire vents, crushers, bombs and frost totems.<br>
-    <b>Boss battle:</b> when a hero gets through the tower door, the fight moves to the tower top.
+    Every hero you kill drops coins and exactly one soul, and kills unlock new traps: fire vents, crushers, bombs and frost totems.<br>
+    <b>Boss battle:</b> when the tower fills up, the fight moves to the tower top.
     A / D or arrows move, W jumps, Space swings your cleaver, S slams the ground and sends out shockwaves.<br>
-    Each dead hero gives coins and souls, but the next one is stronger, better geared, and better at spotting traps and dodging.<br>
+    Each wave brings one more hero than the last, and they're stronger, better geared, and better at spotting traps and dodging.<br>
     <a href="index.html">&larr; back to menu</a>
   </details>
 </div>
@@ -191,13 +192,12 @@ const TRAPS = {
   spike:   { name: "Spikes",       costs: [5, 8, 12],   dmg: 8, cd: 0.8, needsGround: true },
   saw:     { name: "Saw blade",    costs: [8, 10, 14],  dmg: 6, cd: 0.4 },
   turret:  { name: "Arrow turret", costs: [10, 12, 16], dmg: 6 },
-  fire:    { name: "Fire vent",    costs: [12, 15, 20], dmg: 4, cd: 0.25, needsGround: true, unlock: 1 },
-  crusher: { name: "Crusher",      costs: [14, 16, 22], dmg: 18, needsAir: true, unlock: 2 },
-  mine:    { name: "Bomb",         costs: [6, 9, 12],   dmg: 25, needsGround: true, unlock: 3 },
-  frost:   { name: "Frost totem",  costs: [10, 14, 18], needsGround: true, unlock: 4 },
+  fire:    { name: "Fire vent",    costs: [12, 15, 20], dmg: 4, cd: 0.25, needsGround: true, unlock: 3 },
+  crusher: { name: "Crusher",      costs: [14, 16, 22], dmg: 18, needsAir: true, unlock: 6 },
+  mine:    { name: "Bomb",         costs: [6, 9, 12],   dmg: 25, needsGround: true, unlock: 10 },
+  frost:   { name: "Frost totem",  costs: [10, 14, 18], needsGround: true, unlock: 15 },
 };
-const wins = () => S.wave - 1;
-const unlocked = tool => !TRAPS[tool] || wins() >= (TRAPS[tool].unlock || 0);
+const unlocked = tool => !TRAPS[tool] || S.kills >= (TRAPS[tool].unlock || 0);
 // Fire vents erupt on a cycle; crushers drop when a hero walks under; frost slows anyone nearby.
 const firePeriod = lvl => 2.6 - 0.4 * (lvl - 1);
 const FIRE_ON = 0.9;
@@ -229,7 +229,8 @@ const GEAR = [
   { name: "Holy Armor",   main: "#f5f5f5", shade: "#b9b4cc" },
 ];
 const gearFor = lv => GEAR[Math.min(lv - 1, GEAR.length - 1)];
-const HERO_NAMES = ["Sir Aldric", "Sir Borin", "Sir Cedric", "Sir Galen", "Sir Thorne", "Sir Roland", "Sir Percival", "Sir Edmund"];
+const HERO_NAMES = ["Sir Aldric", "Sir Borin", "Dame Elara", "Sir Cedric", "Dame Isolde", "Sir Galen", "Sir Thorne",
+  "Dame Wren", "Sir Roland", "Sir Percival", "Dame Maren", "Sir Edmund"];
 
 function makeHero(lv) {
   const hp = 40 + 20 * (lv - 1);
@@ -239,7 +240,7 @@ function makeHero(lv) {
     dodge: Math.min(0.12 * (lv - 1), 0.6),        // chance to dodge a boss swing
     smart: Math.min(0.15 * (lv - 1), 0.75),       // chance to spot and jump a trap
     spotted: new Map(), cd: 0, evade: 0, face: 1, flash: 0, atkAnim: 0, trail: [],
-    name: HERO_NAMES[(lv - 1) % HERO_NAMES.length],
+    name: HERO_NAMES[S.named++ % HERO_NAMES.length],
   };
 }
 function makeBoss() {
@@ -252,14 +253,22 @@ function makeBoss() {
 let S;
 function newGame() {
   S = {
-    coins: 20, souls: 3, wave: 1, heroLv: 1,
-    shownCoins: 20, coinFx: [], coinGain: { amount: 0, t: 0 }, coinLoss: { amount: 0, t: 0 },
-    traps: [], minions: [], arrows: [], waves: [], hero: null, boss: makeBoss(),
-    phase: "build", scene: "level", floats: [], particles: [], tool: "spike", time: 0,
+    coins: 20, souls: 2, wave: 1, kills: 0, named: 0,
+    shown: { coins: 20, souls: 2 }, coinFx: [], soulFx: [],
+    gain: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 } },
+    loss: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 } },
+    traps: [], minions: [], arrows: [], waves: [], boss: makeBoss(),
+    heroes: [], towerHeroes: [], spawnQueue: [], spawnT: 0, loot: { kills: 0, coins: 0 }, doorFlash: 0,
+    opening: { stage: "run", t: 0 },
+    phase: "intro", scene: "level", floats: [], particles: [], tool: "spike", time: 0,
     fade: 0, fadeIn: 0, intro: 0, returnT: 0,
     shake: 0, banner: null, bannerQueue: [], pulse: { coins: 0, souls: 0 }, fresh: new Set(),
   };
-  say("Build your level, then press Start wave.");
+  // The opening: one reckless hero charges in alone.
+  const first = makeHero(1);
+  first.reckless = true;
+  S.heroes.push(first);
+  say(`${first.name} charges at your castle alone...`);
 }
 
 // ---------- physics ----------
@@ -440,7 +449,7 @@ function place({ x, y }) {
     const cost = kind.costs[lvl];
     if (S.coins < cost) { say(`Need ${cost} coins.`); return; }
     S.coins -= cost;
-    spendCoins(cost);
+    spend("coins", cost);
     if (trap) { trap.lvl++; say(`Upgraded to level ${trap.lvl}.`); }
     else { S.traps.push(newTrap(S.tool, x, y)); say(`${kind.name} placed.`); }
     burst(x + 0.5, y + 0.6, 8, ["#ffd54f", "#fff3c4"], 3, { glow: true });
@@ -448,6 +457,7 @@ function place({ x, y }) {
     const kind = MINIONS[S.tool];
     if (S.souls < kind.cost) { say(`Need ${kind.cost} soul${kind.cost > 1 ? "s" : ""}.`); return; }
     S.souls -= kind.cost;
+    spend("souls", kind.cost);
     S.minions.push({
       type: S.tool, x: x + (1 - kind.w) / 2, y: y + 0.1, w: kind.w, h: 0.9,
       vx: 0, vy: 0, onGround: false, hp: kind.hp, maxHp: kind.hp, cd: 0, face: -1, flash: 0, walk: 0,
@@ -461,14 +471,82 @@ function newTrap(type, x, y) {
   return { type, x, y, lvl: 1, cd: 0, flash: 0, face: -1, timer: 0, off: 0, v: 0, state: "up" };
 }
 
+// ---------- waves ----------
+// Each wave is a group of heroes running in one after another. Heroes who reach the door hide in
+// the tower; once TOWER_LIMIT are inside, they all climb up together and the boss battle begins.
+const TOWER_LIMIT = 5;
+const heroesInWave = w => 2 + w;
+const heroCoins = lv => 3 + lv;
+
 function startWave() {
-  S.hero = makeHero(S.heroLv);
-  S.boss.hp = S.boss.maxHp;
+  const n = heroesInWave(S.wave);
+  S.spawnQueue = Array.from({ length: n }, (_, i) => ({ lv: S.wave, delay: i === 0 ? 0.4 : 1.3 }));
+  S.spawnT = 0;
   for (const t of S.traps) Object.assign(t, { timer: 0, off: 0, v: 0, state: "up", cd: 0 });
   S.arrows = [];
   S.phase = "wave";
-  banner(`WAVE ${S.wave}`, `${S.hero.name} approaches`, "#e6e0ec");
-  say(`${S.hero.name}, a Lv ${S.heroLv} hero in ${gearFor(S.heroLv).name}, storms your dungeon!`);
+  S.loot = { kills: 0, coins: 0 };
+  banner(`WAVE ${S.wave}`, `${n} heroes approach`, "#e6e0ec");
+  say(`${n} Lv ${S.wave} heroes in ${gearFor(S.wave).name} storm your castle! If ${TOWER_LIMIT} get into the tower, they come for you.`);
+}
+
+function spawnHeroes(dt) {
+  if (!S.spawnQueue.length) return;
+  S.spawnT += dt;
+  if (S.spawnT < S.spawnQueue[0].delay) return;
+  S.spawnT = 0;
+  S.heroes.push(makeHero(S.spawnQueue.shift().lv));
+}
+
+// The opening: one hero charges in alone and tumbles into the lava, the ground rumbles,
+// and the real wave comes running.
+function updateOpening(dt) {
+  const o = S.opening;
+  if (o.stage === "run") {
+    if (!S.heroes.length) { o.stage = "wait"; o.t = 1.0; }
+  } else if (o.stage === "wait") {
+    o.t -= dt;
+    if (o.t <= 0) {
+      o.stage = "rumble";
+      o.t = 1.6;
+      say("The ground rumbles... more heroes are coming. Place your traps!");
+    }
+  } else if (o.stage === "rumble") {
+    o.t -= dt;
+    S.shake = Math.max(S.shake, 1.3);
+    if (Math.random() < dt * 25) {
+      // Grit shaken loose from the castle wall.
+      particle({ x: Math.random() * TOWER_X, y: 6.1, vy: 1, g: 14, life: 0.6, color: Math.random() < 0.5 ? "#5d566a" : "#3a3448" });
+    }
+    if (o.t <= 0) startWave();
+  }
+}
+
+function heroReachedTower(h) {
+  S.heroes = S.heroes.filter(o => o !== h);
+  S.towerHeroes.push(h);
+  const n = S.towerHeroes.length;
+  S.doorFlash = 0.5;
+  S.shake = Math.max(S.shake, 1.5);
+  dust(TOWER_X - 0.2, ARENA_FLOOR, 8);
+  float(TOWER_X + 0.5, 7.3, `${n}/${TOWER_LIMIT}`, n >= TOWER_LIMIT ? "#ff5252" : "#ff8a80");
+  say(n >= TOWER_LIMIT
+    ? `${h.name} got into the tower. ${n} heroes inside: they're coming for you!`
+    : `${h.name} slipped into your tower! (${n}/${TOWER_LIMIT})`);
+}
+
+// The level is empty: either the tower is full and the fight starts, or you get to build.
+function checkWaveEnd() {
+  if (S.spawnQueue.length || S.heroes.length) return;
+  if (S.towerHeroes.length >= TOWER_LIMIT) { enterTower(); return; }
+  endWave(`${S.loot.kills} slain  ${S.towerHeroes.length}/${TOWER_LIMIT} in tower`);
+}
+
+function endWave(sub) {
+  S.phase = "build";
+  S.wave++;
+  queueBanner("WAVE CLEARED", sub, "#ffd54f");
+  say(`Wave cleared! Build up, then start wave ${S.wave}.`);
 }
 
 function swingBox(b) {
@@ -479,12 +557,12 @@ function swingBox(b) {
   };
 }
 
-// The hero made it to the tower door: fade out, then climb to the top.
+// Enough heroes are inside: fade out, then they climb to the top.
 function enterTower() {
   S.phase = "enter";
   S.fade = 0;
   S.arrows = [];
-  say(`${S.hero.name} enters your tower and climbs the stairs...`);
+  say(`${S.towerHeroes.length} heroes climb the stairs of your tower...`);
 }
 
 function startBossFight() {
@@ -494,21 +572,27 @@ function startBossFight() {
   S.fadeIn = FADE;
   S.waves = [];
   S.particles = [];
-  const h = S.hero, b = S.boss;
-  Object.assign(h, { x: 1.7, y: ARENA_FLOOR - h.h, vx: 0, vy: 0, face: 1, evade: 0, trail: [], cd: 0.5 });
-  Object.assign(b, { x: 22, y: ARENA_FLOOR - b.h, vx: 0, vy: 0, face: -1, windup: 0, swing: 0, slam: 0, cd: 0, slamCd: 0 });
-  banner("LORD OF THE TOWER", `${h.name} has reached the top`, "#ff8a80");
+  S.heroes = S.towerHeroes;
+  S.towerHeroes = [];
+  // They climb out of the hatch in a line.
+  S.heroes.forEach((h, i) => {
+    const slot = Math.min(i, 7) * 0.8;
+    Object.assign(h, { x: 1.4 + slot * 0.5, y: ARENA_FLOOR - h.h, vx: 0, vy: 0, face: 1, evade: 0, trail: [], cd: 0.5 + i * 0.15, walkTo: 4 + slot });
+  });
+  const b = S.boss;
+  Object.assign(b, { x: 22, y: ARENA_FLOOR - b.h, vx: 0, vy: 0, face: -1, windup: 0, swing: 0, slam: 0, cd: 0, slamCd: 0, hp: b.maxHp });
+  banner("LORD OF THE TOWER", `${S.heroes.length} heroes reached the top`, "#ff8a80");
   say("Boss battle! A / D move, W jumps, Space swings, S slams the ground.");
 }
 
 // After the boss wins, go back down to the level to build for the next wave.
 function returnToLevel() {
   S.scene = "level";
-  S.phase = "build";
   S.fadeIn = FADE;
   S.waves = [];
   S.particles = S.particles.filter(p => p.home);
   Object.assign(S.boss, { x: PERCH.x, y: PERCH.y, vx: 0, vy: 0, face: -1, windup: 0, swing: 0, slam: 0, onGround: true });
+  endWave("The tower is yours again");
 }
 
 const canFight = () => (S.phase === "boss" && S.intro <= 0) || S.phase === "felled";
@@ -518,12 +602,13 @@ function bossAttack() {
   if (!canFight() || b.cd > 0 || b.windup > 0 || b.slam > 0) return;
   b.windup = 0.25;
   b.cd = 0.75;
-  // A stronger hero sometimes sees the swing coming and leaps away.
-  const h = S.hero;
-  if (h && h.evade <= 0 && Math.abs(centerX(h) - centerX(b)) < 3 && Math.random() < h.dodge) {
-    h.evade = 0.45;
-    if (h.onGround) h.vy = -9;
-    float(centerX(h), h.y - 0.3, "DODGE", "#6fd3ff");
+  // Stronger heroes sometimes see the swing coming and leap away.
+  for (const h of S.heroes) {
+    if (h.evade <= 0 && Math.abs(centerX(h) - centerX(b)) < 3 && Math.random() < h.dodge) {
+      h.evade = 0.45;
+      if (h.onGround) h.vy = -9;
+      float(centerX(h), h.y - 0.3, "DODGE", "#6fd3ff");
+    }
   }
 }
 
@@ -541,11 +626,12 @@ function slamImpact(b) {
   const fy = b.y + b.h, fx = centerX(b) + b.face * 1.2;
   dust(fx, fy, 16);
   burst(fx, fy - 0.1, 12, ["#8a8296", "#c9c2d6", "#5d566a"], 6);
-  for (const dir of [-1, 1]) S.waves.push({ x: centerX(b) + dir * 0.8, y: fy, dir, life: 1.1 });
-  const h = S.hero;
-  if (h && h.evade <= 0 && h.onGround && Math.abs(centerX(h) - centerX(b)) < 1.8) {
-    damage(h, SLAM_DMG, "#ff5252");
-    h.vy = -6;
+  for (const dir of [-1, 1]) S.waves.push({ x: centerX(b) + dir * 0.8, y: fy, dir, life: 1.1, hits: new Set(), jumps: new Map() });
+  for (const h of S.heroes) {
+    if (h.evade <= 0 && h.onGround && Math.abs(centerX(h) - centerX(b)) < 1.8) {
+      damage(h, SLAM_DMG, "#ff5252");
+      h.vy = -6;
+    }
   }
 }
 
@@ -556,10 +642,11 @@ function update(dt) {
   if (S.banner) S.banner.t += dt;
   S.pulse.coins -= dt;
   S.pulse.souls -= dt;
+  S.doorFlash -= dt;
   S.floats.forEach(f => { f.t -= dt; f.y -= dt * 0.7; });
   S.floats = S.floats.filter(f => f.t > 0);
   updateParticles(dt);
-  updateCoins(dt);
+  updateLoot(dt);
   S.traps.forEach(t => { t.cd -= dt; t.flash -= dt; });
   S.fadeIn = Math.max(0, S.fadeIn - dt);
   S.boss.flash -= dt;
@@ -571,7 +658,7 @@ function update(dt) {
     return;
   }
   if (S.phase === "felled") {
-    // The hero is dead; the boss stands on the tower a moment before the scene fades back.
+    // The heroes are dead; the boss stands on the tower a moment before the scene fades back.
     updateBoss(dt);
     updateWaves(dt);
     S.returnT -= dt;
@@ -582,34 +669,41 @@ function update(dt) {
   if (inArena()) {
     S.intro -= dt;
     updateBoss(dt);
-    updateHero(dt);
+    for (const h of S.heroes) updateHero(h, dt);
     updateWaves(dt);
   } else {
     updateMinions(dt);
-    if (S.phase !== "wave") return;
-    updateHero(dt);
-    if (S.phase !== "wave") return;
+    if (S.phase === "intro") updateOpening(dt);
+    if (S.phase !== "wave" && S.phase !== "intro") return;
+    if (S.phase === "wave") spawnHeroes(dt);
+    for (const h of [...S.heroes]) updateHero(h, dt);
     updateTraps(dt);
     S.traps = S.traps.filter(t => !t.dead);
     updateArrows(dt);
   }
 
-  const h = S.hero;
-  if (h.hp <= 0) heroDied(h.lava ? `${h.name} fell into the lava!` : `${h.name} has fallen!`);
-  else if (S.boss.hp <= 0) bossDied();
+  for (const h of [...S.heroes]) if (h.hp <= 0) heroDied(h);
+  if (S.boss.hp <= 0) { bossDied(); return; }
+  if (S.phase === "wave") checkWaveEnd();
+  if (S.phase === "boss" && !S.heroes.length) {
+    S.phase = "felled";
+    S.returnT = 2.4;
+    banner("HEROES FELLED", "None of them will leave this tower", "#ffd54f");
+  }
 }
 
 function updateWaves(dt) {
-  const h = S.hero;
   for (const w of S.waves) {
     w.life -= dt;
     w.x += w.dir * 8 * dt;
     if (isSolid(Math.floor(w.x), Math.floor(w.y - 0.5))) w.life = 0;
     if (Math.random() < dt * 25) dust(w.x, w.y, 1);
-    if (h && !w.hit && h.evade <= 0 && h.onGround && Math.abs(centerX(h) - w.x) < 0.45) {
-      w.hit = true;
-      damage(h, WAVE_DMG, "#ff5252");
-      h.vy = -6;
+    for (const h of S.heroes) {
+      if (!w.hits.has(h) && h.evade <= 0 && h.onGround && Math.abs(centerX(h) - w.x) < 0.45) {
+        w.hits.add(h);
+        damage(h, WAVE_DMG, "#ff5252");
+        h.vy = -6;
+      }
     }
   }
   S.waves = S.waves.filter(w => w.life > 0);
@@ -618,14 +712,6 @@ function updateWaves(dt) {
 function updateParticles(dt) {
   for (const p of S.particles) {
     p.life -= dt;
-    if (p.home) {
-      // Fly toward a HUD counter, then bump it.
-      const k = Math.min(1, dt * 6 * Math.max(0, 1 - p.life / p.max) * 3);
-      p.x += (p.home.x - p.x) * k;
-      p.y += (p.home.y - p.y) * k;
-      if (Math.hypot(p.home.x - p.x, p.home.y - p.y) < 0.3) { p.life = 0; S.pulse[p.home.key] = 0.2; }
-      continue;
-    }
     p.vy += p.g * dt;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
@@ -675,18 +761,20 @@ function updateBoss(dt) {
     b.windup -= dt;
     if (b.windup <= 0) {
       b.swing = 0.15;
-      const h = S.hero;
-      if (h && h.evade <= 0 && overlaps(swingBox(b), h)) {
-        damage(h, BOSS_DMG, "#ff5252");
-        h.vx = 0;
-        S.shake = 4;
+      // One swing cleaves through every hero in reach.
+      for (const h of S.heroes) {
+        if (h.evade <= 0 && overlaps(swingBox(b), h)) {
+          damage(h, BOSS_DMG, "#ff5252");
+          h.vx = 0;
+          S.shake = 4;
+        }
       }
     }
   }
 }
 
-function updateHero(dt) {
-  const h = S.hero, b = S.boss;
+function updateHero(h, dt) {
+  const b = S.boss;
   h.cd -= dt;
   h.flash -= dt;
   h.atkAnim -= dt;
@@ -704,7 +792,7 @@ function updateHero(dt) {
   const arena = inArena();
   if (arena && S.intro > 0) {
     // Step out of the stairwell and square up.
-    h.vx = h.x < 5 ? h.speed * 0.6 : 0;
+    h.vx = h.x < h.walkTo ? h.speed * 0.6 : 0;
     h.face = 1;
     moveBody(h, dt);
     return;
@@ -714,8 +802,8 @@ function updateHero(dt) {
     for (const w of S.waves) {
       const dist = (centerX(h) - w.x) * w.dir;
       if (dist < 0 || dist > 1.3 || !h.onGround) continue;
-      if (w.jump === undefined) w.jump = Math.random() < 0.25 + h.smart;
-      if (w.jump) h.vy = -JUMP * 0.8;
+      if (!w.jumps.has(h)) w.jumps.set(h, Math.random() < 0.25 + h.smart);
+      if (w.jumps.get(h)) h.vy = -JUMP * 0.8;
     }
   }
 
@@ -738,10 +826,11 @@ function updateHero(dt) {
     const dir = arena ? Math.sign(centerX(b) - centerX(h)) || 1 : 1;
     h.vx = dir * h.speed;
     h.face = dir;
-    if (!arena && h.onGround && shouldJump(h, dir)) h.vy = -JUMP;
+    // The opening's lone hero never looks where they're going.
+    if (!arena && !h.reckless && h.onGround && shouldJump(h, dir)) h.vy = -JUMP;
   }
   if (!arena) {
-    // Frost totems slow the hero down while he's inside their aura.
+    // Frost totems slow a hero down inside their aura.
     h.chill = 0;
     for (const t of S.traps) {
       if (t.type === "frost" && Math.hypot(centerX(h) - t.x - 0.5, centerY(h) - t.y - 0.5) < frostRadius(t.lvl)) {
@@ -756,7 +845,7 @@ function updateHero(dt) {
   moveBody(h, dt);
   if (arena) return;
   if (inLava(h)) { h.hp = 0; h.lava = true; }
-  else if (h.x + h.w > TOWER_X - 0.3) enterTower();
+  else if (h.x + h.w > TOWER_X - 0.3) heroReachedTower(h);
 }
 
 // Platformer AI: jump over walls, pits, and (if clever enough) traps.
@@ -777,13 +866,19 @@ function shouldJump(h, dir) {
   return false;
 }
 
+const heroesIn = box => S.heroes.filter(h => h.evade <= 0 && overlaps(box, h));
+
 function updateTraps(dt) {
-  const h = S.hero;
   for (const t of S.traps) {
     if (t.type === "turret") {
-      const dx = centerX(h) - (t.x + 0.5);
-      if (t.cd <= 0 && Math.abs(dx) < 10 && Math.abs(centerY(h) - (t.y + 0.5)) < 1) {
-        t.face = Math.sign(dx);
+      // Shoot at the nearest hero on this row.
+      let best = null;
+      for (const h of S.heroes) {
+        const dx = centerX(h) - (t.x + 0.5);
+        if (Math.abs(dx) < 10 && Math.abs(centerY(h) - (t.y + 0.5)) < 1 && (!best || Math.abs(dx) < Math.abs(best))) best = dx;
+      }
+      if (t.cd <= 0 && best !== null) {
+        t.face = Math.sign(best) || -1;
         S.arrows.push({ x: t.x + 0.5 + t.face * 0.4, y: t.y + 0.5, vx: t.face * 9, dmg: TRAPS.turret.dmg * t.lvl });
         t.cd = 1.6 - 0.4 * (t.lvl - 1);
         t.flash = 0.15;
@@ -791,9 +886,9 @@ function updateTraps(dt) {
       }
       continue;
     }
-    if (t.type === "fire") { updateFire(t, h, dt); continue; }
-    if (t.type === "crusher") { updateCrusher(t, h, dt); continue; }
-    if (t.type === "mine") { updateMine(t, h); continue; }
+    if (t.type === "fire") { updateFire(t, dt); continue; }
+    if (t.type === "crusher") { updateCrusher(t, dt); continue; }
+    if (t.type === "mine") { updateMine(t); continue; }
     if (t.type === "frost") {
       if (Math.random() < dt * 3) {
         const a = Math.random() * Math.PI * 2, r = Math.random() * frostRadius(t.lvl);
@@ -803,8 +898,9 @@ function updateTraps(dt) {
     }
     const kind = TRAPS[t.type];
     const box = t.type === "spike" ? { x: t.x + 0.1, y: t.y + 0.55, w: 0.8, h: 0.45 } : tileBox(t);
-    if (t.cd <= 0 && h.evade <= 0 && overlaps(box, h)) {
-      damage(h, kind.dmg * t.lvl, "#ffb74d");
+    const hit = t.cd <= 0 ? heroesIn(box) : [];
+    for (const h of hit) damage(h, kind.dmg * t.lvl, "#ffb74d");
+    if (hit.length) {
       if (t.type === "saw") burst(t.x + 0.5, t.y + 0.5, 6, ["#fff59d", "#ffb300"], 6, { glow: true });
       t.cd = kind.cd;
       t.flash = 0.25;
@@ -812,7 +908,7 @@ function updateTraps(dt) {
   }
 }
 
-function updateFire(t, h, dt) {
+function updateFire(t, dt) {
   t.timer += dt;
   const p = t.timer % firePeriod(t.lvl), period = firePeriod(t.lvl);
   t.fireOn = p > period - FIRE_ON;
@@ -825,11 +921,10 @@ function updateFire(t, h, dt) {
     particle({ x: t.x + 0.25 + Math.random() * 0.5, y: t.y + 0.4, vy: -4 - Math.random() * 2, vx: (Math.random() - 0.5) * 0.8,
       life: 0.35, color: Math.random() < 0.5 ? "#ff6f00" : "#ffd54f", glow: true });
   }
-  const box = { x: t.x + 0.15, y: t.y - 1, w: 0.7, h: 2 };
-  if (t.cd <= 0 && h.evade <= 0 && overlaps(box, h)) {
-    damage(h, TRAPS.fire.dmg * t.lvl, "#ffb74d", ["#ff6f00", "#ffd54f"]);
-    t.cd = TRAPS.fire.cd;
-  }
+  if (t.cd > 0) return;
+  const hit = heroesIn({ x: t.x + 0.15, y: t.y - 1, w: 0.7, h: 2 });
+  for (const h of hit) damage(h, TRAPS.fire.dmg * t.lvl, "#ffb74d", ["#ff6f00", "#ffd54f"]);
+  if (hit.length) t.cd = TRAPS.fire.cd;
 }
 
 // How far a crusher can fall before it hits the ground (or the lava).
@@ -839,18 +934,21 @@ function crusherDrop(t) {
   return Math.min(gy, H) - t.y - 1;
 }
 
-function updateCrusher(t, h, dt) {
+function updateCrusher(t, dt) {
   const drop = crusherDrop(t);
   if (t.state === "up") {
     // Drop just ahead of a hero walking underneath.
-    const dx = t.x + 0.5 - centerX(h);
-    if (t.cd <= 0 && dx > -0.3 && dx < 1.1 && centerY(h) > t.y + 0.5) { t.state = "fall"; t.v = 0; t.hit = false; }
+    const under = S.heroes.some(h => {
+      const dx = t.x + 0.5 - centerX(h);
+      return dx > -0.3 && dx < 1.1 && centerY(h) > t.y + 0.5;
+    });
+    if (t.cd <= 0 && under) { t.state = "fall"; t.v = 0; t.hits = new Set(); }
   } else if (t.state === "fall") {
     t.v += 70 * dt;
     t.off = Math.min(drop, t.off + t.v * dt);
-    const box = { x: t.x + 0.05, y: t.y + t.off, w: 0.9, h: 1 };
-    if (!t.hit && h.evade <= 0 && overlaps(box, h)) {
-      t.hit = true;
+    for (const h of heroesIn({ x: t.x + 0.05, y: t.y + t.off, w: 0.9, h: 1 })) {
+      if (t.hits.has(h)) continue;
+      t.hits.add(h);
       damage(h, TRAPS.crusher.dmg * t.lvl, "#ff5252");
       S.shake = Math.max(S.shake, 4);
     }
@@ -869,12 +967,15 @@ function updateCrusher(t, h, dt) {
   }
 }
 
-function updateMine(t, h) {
-  if (h.evade > 0 || !overlaps({ x: t.x + 0.15, y: t.y + 0.6, w: 0.7, h: 0.4 }, h)) return;
-  // Boom: hurts the hero and any of your minions caught in the blast, then the bomb is gone.
+function updateMine(t) {
+  if (!heroesIn({ x: t.x + 0.15, y: t.y + 0.6, w: 0.7, h: 0.4 }).length) return;
+  // Boom: hurts every hero and minion caught in the blast, then the bomb is gone.
   const cx = t.x + 0.5, cy = t.y + 0.7;
-  damage(h, TRAPS.mine.dmg * t.lvl, "#ff5252", ["#ff6f00", "#ffd54f", "#5d566a"]);
-  h.vy = -8;
+  for (const h of S.heroes) {
+    if (h.evade > 0 || Math.hypot(centerX(h) - cx, centerY(h) - cy) > 1.6) continue;
+    damage(h, TRAPS.mine.dmg * t.lvl, "#ff5252", ["#ff6f00", "#ffd54f", "#5d566a"]);
+    h.vy = -8;
+  }
   for (const m of S.minions) if (Math.hypot(centerX(m) - cx, centerY(m) - cy) < 1.6) damage(m, 20, "#ffb74d", MINIONS[m.type].blood);
   burst(cx, cy, 30, ["#ffd54f", "#ff6f00", "#fff3c4", "#ff3d00"], 8, { glow: true });
   burst(cx, cy, 14, ["#5d566a", "#3a3448"], 5);
@@ -883,27 +984,28 @@ function updateMine(t, h) {
 }
 
 function updateArrows(dt) {
-  const h = S.hero;
   for (const a of S.arrows) {
     a.x += a.vx * dt;
     if (isSolid(Math.floor(a.x), Math.floor(a.y)) || a.x < 0 || a.x > W) {
       a.dead = true;
       burst(a.x, a.y, 3, ["#a1887f", "#d7ccc8"], 2);
-    } else if (h.evade <= 0 && overlaps({ x: a.x - 0.2, y: a.y - 0.05, w: 0.4, h: 0.1 }, h)) {
-      damage(h, a.dmg, "#ffb74d");
-      a.dead = true;
+      continue;
     }
+    const [h] = heroesIn({ x: a.x - 0.2, y: a.y - 0.05, w: 0.4, h: 0.1 });
+    if (h) { damage(h, a.dmg, "#ffb74d"); a.dead = true; }
   }
   S.arrows = S.arrows.filter(a => !a.dead);
 }
 
 function updateMinions(dt) {
-  const h = S.hero;
   for (const m of S.minions) {
     const kind = MINIONS[m.type];
     m.cd -= dt;
     m.flash -= dt;
     m.vx = 0;
+    // Go after the closest hero.
+    let h = null;
+    for (const o of S.heroes) if (!h || Math.abs(centerX(o) - centerX(m)) < Math.abs(centerX(h) - centerX(m))) h = o;
     if (h) {
       const dx = centerX(h) - centerX(m);
       const close = Math.abs(dx) < (m.w + h.w) / 2 + 0.2 && Math.abs(centerY(h) - centerY(m)) < 0.9;
@@ -925,10 +1027,10 @@ function updateMinions(dt) {
   S.minions = S.minions.filter(m => m.hp > 0);
 }
 
-// ---------- coin pickups ----------
-// Coins burst out of a fallen hero, bounce on the ground, then stream into the HUD counter.
-// The counter only ticks up as each coin lands, so you see your gold arrive.
-const COIN_HUD = { x: 10 / T, y: 8 / T };
+// ---------- loot ----------
+// Coins burst out of a fallen hero and bounce on the ground; the soul rises out of the body as a
+// wisp. Both then fly into their HUD counters, which only tick up as each one lands.
+const LOOT_HUD = { coins: { x: 10 / T, y: 8 / T }, souls: { x: 74 / T, y: 8 / T } };
 
 function dropCoins(x, y, total) {
   const n = Math.min(total, 16);
@@ -944,15 +1046,41 @@ function dropCoins(x, y, total) {
   burst(x, y, 10, ["#fff3c4", "#ffd54f"], 5, { glow: true });
 }
 
-function spendCoins(cost) {
-  S.shownCoins -= cost;
-  S.coinGain.t = 0;
-  S.coinLoss = { amount: (S.coinLoss.t > 0 ? S.coinLoss.amount : 0) + cost, t: 1 };
+function dropSoul(x, y) {
+  S.soulFx.push({ x, y, ox: x, state: "rise", t: 0, wob: Math.random() * 6 });
+  burst(x, y, 8, ["#e1f5fe", "#6fd3ff"], 2, { glow: true, g: -6 });
 }
 
-function updateCoins(dt) {
-  S.coinGain.t -= dt;
-  S.coinLoss.t -= dt;
+function spend(key, cost) {
+  S.shown[key] -= cost;
+  S.gain[key].t = 0;
+  S.loss[key] = { amount: (S.loss[key].t > 0 ? S.loss[key].amount : 0) + cost, t: 1 };
+}
+
+// A piece of loot reached its counter.
+function collect(key, value, color) {
+  S.shown[key] += value;
+  S.gain[key] = { amount: (S.gain[key].t > 0 ? S.gain[key].amount : 0) + value, t: 1.4 };
+  S.pulse[key] = 0.15;
+  const hud = LOOT_HUD[key];
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2 + Math.PI / 4;
+    particle({ x: hud.x, y: hud.y, vx: Math.cos(a) * 3, vy: Math.sin(a) * 3, life: 0.25, color, glow: true, hud: true });
+  }
+}
+
+// Quadratic arc from (sx, sy) up and over to a HUD counter.
+function arc(sx, sy, hud, e) {
+  const mx = (sx + hud.x) / 2, my = Math.min(sy, hud.y) - 2.5;
+  return {
+    x: (1 - e) * (1 - e) * sx + 2 * (1 - e) * e * mx + e * e * hud.x,
+    y: (1 - e) * (1 - e) * sy + 2 * (1 - e) * e * my + e * e * hud.y,
+  };
+}
+
+function updateLoot(dt) {
+  for (const key of ["coins", "souls"]) { S.gain[key].t -= dt; S.loss[key].t -= dt; }
+
   for (const c of S.coinFx) {
     c.spin += dt * (c.state === "fly" ? 16 : 9);
     if (c.state === "pop") {
@@ -972,53 +1100,58 @@ function updateCoins(dt) {
     } else {
       // Arc up to the coin counter, speeding up as it goes.
       c.f += dt / 0.55;
-      const k = Math.min(1, c.f), e = k * k;
-      const mx = (c.sx + COIN_HUD.x) / 2, my = Math.min(c.sy, COIN_HUD.y) - 2.5;
-      c.x = (1 - e) * (1 - e) * c.sx + 2 * (1 - e) * e * mx + e * e * COIN_HUD.x;
-      c.y = (1 - e) * (1 - e) * c.sy + 2 * (1 - e) * e * my + e * e * COIN_HUD.y;
+      const k = Math.min(1, c.f);
+      Object.assign(c, arc(c.sx, c.sy, LOOT_HUD.coins, k * k));
       if (Math.random() < dt * 40) particle({ x: c.x, y: c.y, life: 0.2, color: Math.random() < 0.5 ? "#ffd54f" : "#fff3c4", glow: true });
-      if (k >= 1) {
-        c.done = true;
-        S.shownCoins += c.value;
-        S.coinGain = { amount: (S.coinGain.t > 0 ? S.coinGain.amount : 0) + c.value, t: 1.4 };
-        S.pulse.coins = 0.15;
-        for (let i = 0; i < 4; i++) {
-          const a = i * Math.PI / 2 + Math.PI / 4;
-          particle({ x: COIN_HUD.x, y: COIN_HUD.y, vx: Math.cos(a) * 3, vy: Math.sin(a) * 3, life: 0.25, color: "#fff3c4", glow: true, hud: true });
-        }
-      }
+      if (k >= 1) { c.done = true; collect("coins", c.value, "#fff3c4"); }
     }
   }
   S.coinFx = S.coinFx.filter(c => !c.done);
-  if (!S.coinFx.length) S.shownCoins = S.coins;
+  if (!S.coinFx.length) S.shown.coins = S.coins;
+
+  for (const s of S.soulFx) {
+    s.t += dt;
+    if (s.state === "rise") {
+      // Drift up out of the body, swaying like a flame.
+      s.y -= dt * 1.4;
+      s.x = s.ox + Math.sin(s.t * 7 + s.wob) * 0.25;
+      if (s.t > 0.9) { s.state = "fly"; s.f = 0; s.sx = s.x; s.sy = s.y; }
+    } else {
+      // Glide to the soul counter, slow at first and then swooping in.
+      s.f += dt / 0.8;
+      const k = Math.min(1, s.f), e = k * k * (3 - 2 * k);
+      Object.assign(s, arc(s.sx, s.sy, LOOT_HUD.souls, e));
+      s.x += Math.sin(s.t * 9 + s.wob) * 0.08 * (1 - k);
+      if (k >= 1) { s.done = true; collect("souls", 1, "#e1f5fe"); }
+    }
+    if (Math.random() < dt * 30) {
+      particle({ x: s.x + (Math.random() - 0.5) * 0.2, y: s.y + 0.15, vy: 0.5, vx: (Math.random() - 0.5) * 0.4, life: 0.45,
+        color: Math.random() < 0.5 ? "#6fd3ff" : "#b3e5fc", glow: true });
+    }
+  }
+  S.soulFx = S.soulFx.filter(s => !s.done);
+  if (!S.soulFx.length) S.shown.souls = S.souls;
 }
 
-function heroDied(reason) {
-  const lv = S.heroLv, h = S.hero;
-  const coins = 6 + 2 * lv, souls = 1 + Math.floor(lv / 2);
+function heroDied(h) {
+  const coins = heroCoins(h.lv);
   S.coins += coins;
-  S.souls += souls;
+  S.souls += 1;
+  S.kills++;
+  S.loot.kills++;
+  S.heroes = S.heroes.filter(o => o !== h);
   const hx = centerX(h), hy = Math.min(centerY(h), H - 1.5);
-  burst(hx, hy, 24, h.lava ? ["#ffb300", "#ff6f00", "#fff59d"] : ["#d32f2f", gearFor(lv).main, gearFor(lv).shade], 6, { glow: !!h.lava });
+  const gear = gearFor(h.lv);
+  burst(hx, hy, 24, h.lava ? ["#ffb300", "#ff6f00", "#fff59d"] : ["#d32f2f", gear.main, gear.shade], 6, { glow: !!h.lava });
   dropCoins(hx, hy, coins);
-  for (let i = 0; i < souls; i++) {
-    particle({ x: hx + (Math.random() - 0.5), y: hy - 0.5, life: 1.3, color: "#6fd3ff", size: 2, glow: true,
-      home: { x: 74 / T, y: 0.45, key: "souls" } });
-  }
-  S.shake = 3;
-  S.hero = null;
-  S.arrows = [];
-  S.heroLv++;
-  S.wave++;
-  if (inArena()) { S.phase = "felled"; S.returnT = 2.2; }
-  else S.phase = "build";
-  banner("HERO FELLED", `+${coins} coins  +${souls} soul${souls > 1 ? "s" : ""}`, "#ffd54f");
-  say(`${reason} The next hero arrives at Lv ${S.heroLv} in ${gearFor(S.heroLv).name}...`);
+  dropSoul(hx, hy - 0.3);
+  S.shake = Math.max(S.shake, 2.5);
+  say(h.lava ? `${h.name} fell into the lava!` : `${h.name} has fallen!`);
   for (const [tool, kind] of Object.entries(TRAPS)) {
-    if (kind.unlock !== wins()) continue;
+    if (kind.unlock !== S.kills) continue;
     S.fresh.add(tool);
     queueBanner("NEW TRAP", `${kind.name} unlocked`, "#9cff9c");
-    say(`${reason} New trap unlocked: ${kind.name}! The next hero arrives at Lv ${S.heroLv}...`);
+    say(`New trap unlocked: ${kind.name}!`);
   }
 }
 
@@ -1027,10 +1160,11 @@ function bossDied() {
   burst(centerX(b), centerY(b), 40, ["#b71c1c", "#5d0f0f", "#ffeb3b"], 7);
   S.shake = 6;
   b.flash = 0;
-  S.hero.atkAnim = 0;
+  for (const h of S.heroes) h.atkAnim = 0;
   S.phase = "over";
-  banner("YOU DIED", `Waves survived: ${S.wave - 1}`, "#c62828");
-  say(`You were slain by ${S.hero.name} (Lv ${S.hero.lv}). You held out for ${S.wave - 1} wave${S.wave === 2 ? "" : "s"}.`);
+  const held = S.wave - 1;
+  banner("YOU DIED", `Waves survived: ${held}`, "#c62828");
+  say(`The heroes have slain the Lord of the Tower. You held out for ${held} wave${held === 1 ? "" : "s"} and slew ${S.kills} heroes.`);
 }
 
 // ======================================================================
@@ -1286,6 +1420,9 @@ const ART = {
     "..dddddddddd..",
   ],
   coin: [".YYYY.", "YYWYYy", "YWYYYy", "YYYYYy", "YYYYyy", ".yyyy."],
+  wisp: ["...B...", "..BB...", ".BBWB..", ".BWWWB.", "BWKWKWB", "BWWWWWB", "BBWWWBB", ".BBBBB.", "..B.B.B"],
+  wisp2: ["...B...", "...BB..", "..BWBB.", ".BWWWB.", "BWKWKWB", "BWWWWWB", "BBWWWBB", ".BBBBB.", "B.B.B.."],
+  helm: [".aAa.", "aAAAa", "AkkkA", "aAAAa"],
   coin2: [".YY.", "YWYy", "WYYy", "YYYy", "YYyy", ".yy."],
   coin3: ["Yy", "Wy", "Yy", "Yy", "Yy", "yy"],
   bigCoin: ["..YYYY..", ".YYWWYy.", "YYWYYYYy", "YWYYOYYy", "YYYYOYyy", "YYYYYyyy", ".yYYyyy.", "..yyyy.."],
@@ -1324,7 +1461,7 @@ const STONE_PAL = { S: "#6b6378", s: "#4a4456", K: "#1a1420", Y: "#ff5252" };
 const FROST_PALS = [{ C: "#81d4fa", c: "#e1f5fe", W: "#4fc3f7" }, { C: "#4fc3f7", c: "#ffffff", W: "#0288d1" }, { C: "#b388ff", c: "#ffffff", W: "#7c4dff" }];
 const LEVEL_SAW = [["#9aa3ad", "#636b75"], ["#dfe6ea", "#9aa7b0"], ["#ef5350", "#9a2a2a"]];
 const ICON_PAL = { Y: "#ffd54f", y: "#c79a1e", W: "#fff8e1", O: "#e0a82e" };
-const SOUL_PAL = { B: "#4fc3f7", W: "#e1f5fe" };
+const SOUL_PAL = { B: "#4fc3f7", W: "#e1f5fe", K: "#0d47a1" };
 
 const spriteCache = new Map();
 // Build a canvas for a sprite, with a dark outline (and an all-white version for hit flashes).
@@ -1756,8 +1893,7 @@ function drawSaw(cx, cy, lvl, spin, alpha = 1) {
 function drawTrap(t, alpha = 1) {
   const X = t.x * T, Y = t.y * T;
   if (t.type === "spike") {
-    const h = S.hero;
-    const near = h && Math.abs(centerX(h) - (t.x + 0.5)) < 1.6 && Math.abs(centerY(h) - (t.y + 0.5)) < 1.2;
+    const near = S.heroes.some(h => Math.abs(centerX(h) - (t.x + 0.5)) < 1.6 && Math.abs(centerY(h) - (t.y + 0.5)) < 1.2);
     const art = near || t.flash > 0 ? ART.spikeUp : ART.spikeDown;
     drawSprite(sprite(art, SPIKE_PALS[t.lvl - 1], "spike" + t.lvl), X + 8, Y + T - 1, 1, alpha);
   } else if (t.type === "saw") {
@@ -1791,7 +1927,7 @@ function drawTrap(t, alpha = 1) {
     drawSprite(sprite(ART.crusher, pal, "crusher" + pal.Y), X + 8, by + T - 1 + 1, 1, alpha);
   } else if (t.type === "mine") {
     const blink = Math.floor(S.time * 3 + t.x) % 2 === 0;
-    const near = S.hero && Math.abs(centerX(S.hero) - t.x - 0.5) < 2;
+    const near = S.heroes.some(h => Math.abs(centerX(h) - t.x - 0.5) < 2);
     const pal = { r: blink || near ? "#ff1744" : "#5d0f0f", M: ["#5d566a", "#7c7392", "#9a2a2a"][t.lvl - 1], m: "#3a3448" };
     drawSprite(sprite(ART.mine, pal, "mine" + pal.r + t.lvl), X + 8, Y + T - 1, 1, alpha);
   } else if (t.type === "frost") {
@@ -2010,7 +2146,8 @@ function drawLighting() {
   hole(moon.x, moon.y, moon.r * 9, 0.6);
   torches().forEach((t, i) => hole(t.x * T + 8, t.y * T + 6, 70 + Math.sin(S.time * 9 + i * 2) * 3));
   for (let x = 0; x < W; x++) if (tileAt(x, H - 1) === "L") hole(x * T + 8, (H - 1) * T + 4, 44, 0.9);
-  if (S.hero) hole(centerX(S.hero) * T, centerY(S.hero) * T, 40, 0.7);
+  for (const h of S.heroes) hole(centerX(h) * T, centerY(h) * T, 40, 0.7);
+  if (S.doorFlash > 0 && !inArena()) hole(TOWER_X * T + 6, 8.5 * T, 50, S.doorFlash * 2);
   hole(centerX(S.boss) * T, S.boss.y * T + 14, 56, 0.8);
   if (!inArena()) for (const t of S.traps) {
     if (t.type === "turret") hole(t.x * T + 8, t.y * T + 8, 18, 0.6);
@@ -2088,8 +2225,8 @@ function coinSprite(spin, white = false, big = false) {
   return { spr: sprite(art, ICON_PAL, "coin", white), face: f === 3 ? -1 : 1 };
 }
 
-function drawCoins() {
-  // Sparkles where coins land on the counter sit on top of the HUD.
+function drawLoot() {
+  // Sparkles where loot lands on a counter sit on top of the HUD.
   for (const p of S.particles) {
     if (!p.hud) continue;
     ctx.globalAlpha = Math.min(1, p.life / p.max * 2);
@@ -2102,6 +2239,12 @@ function drawCoins() {
     const big = c.state === "pop" || c.f < 0.7;
     const { spr, face } = coinSprite(c.spin, false, big);
     drawSprite(spr, c.x * T, c.y * T + (big ? 4 : 3), face);
+  }
+  for (const s of S.soulFx) {
+    const big = s.state === "rise" || s.f < 0.75;
+    const art = big ? (Math.floor(s.t * 8) % 2 ? ART.wisp : ART.wisp2) : ART.soul;
+    // Souls flicker as they fly.
+    drawSprite(sprite(art, SOUL_PAL, "soul"), s.x * T, s.y * T + (big ? 5 : 3), 1, 0.75 + Math.sin(s.t * 20) * 0.2);
   }
 }
 
@@ -2117,8 +2260,24 @@ function drawMeter(x, y, w, h, frac, back, fill, shine) {
   ctx.fillRect(x, y, fw, 1);
 }
 
+// A resource counter: the number, plus a "+N" or "-N" that pops up when it changes.
+function drawCounter(key, x, color) {
+  const lift = S.pulse[key] > 0 ? -2 : 0;
+  const shown = String(Math.max(0, S.shown[key]));
+  drawText(shown, x, 5 + lift, S.pulse[key] > 0 ? "#ffffff" : color);
+  const gain = S.gain[key], loss = S.loss[key], gx = x + textWidth(shown) + 4;
+  if (gain.t > 0) {
+    ctx.globalAlpha = Math.min(1, gain.t * 2);
+    drawText(`+${gain.amount}`, gx, 5 - Math.round((1.4 - gain.t) * 2), "#9cff9c");
+  } else if (loss.t > 0) {
+    ctx.globalAlpha = Math.min(1, loss.t * 2);
+    drawText(`-${loss.amount}`, gx, 5 + Math.round((1 - loss.t) * 3), "#ff8a80");
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawHud() {
-  // Top strip: resources on the left, the hero in the middle, the boss on the right.
+  // Top strip: resources on the left, the heroes and the tower in the middle, the boss on the right.
   ctx.fillStyle = "rgba(8,4,14,0.8)";
   ctx.fillRect(0, 0, W * T, 16);
   ctx.fillStyle = "#2e2838";
@@ -2126,8 +2285,8 @@ function drawHud() {
   ctx.fillStyle = "rgba(0,0,0,0.3)";
   ctx.fillRect(0, 17, W * T, 1);
 
-  const pc = S.pulse.coins > 0 ? -2 : 0, ps = S.pulse.souls > 0 ? -1 : 0;
-  // The HUD coin spins briefly whenever gold arrives, and glints now and then.
+  // The coin spins while gold arrives and glints now and then; the soul flickers while souls arrive.
+  const pc = S.pulse.coins > 0 ? -2 : 0, ps = S.pulse.souls > 0 ? -2 : 0;
   const busy = S.coinFx.length > 0 || S.pulse.coins > 0;
   const icon = busy ? coinSprite(S.time * 14) : { spr: sprite(ART.coin, ICON_PAL, "coin"), face: 1 };
   drawSprite(icon.spr, 10, 12 + pc, icon.face);
@@ -2137,30 +2296,16 @@ function drawHud() {
     const g = Math.floor((S.time % 3) / 0.08);
     ctx.fillRect(8 + g, 7 + g, 1, 1);
   }
-  const shown = String(Math.max(0, S.shownCoins));
-  drawText(shown, 18, 5 + pc, S.pulse.coins > 0 ? "#ffffff" : "#ffd54f");
-  if (S.coinGain.t > 0) {
-    ctx.globalAlpha = Math.min(1, S.coinGain.t * 2);
-    drawText(`+${S.coinGain.amount}`, 18 + textWidth(shown) + 4, 5 - Math.round((1.4 - S.coinGain.t) * 2), "#9cff9c");
-    ctx.globalAlpha = 1;
-  } else if (S.coinLoss.t > 0) {
-    ctx.globalAlpha = Math.min(1, S.coinLoss.t * 2);
-    drawText(`-${S.coinLoss.amount}`, 18 + textWidth(shown) + 4, 5 + Math.round((1 - S.coinLoss.t) * 3), "#ff8a80");
-    ctx.globalAlpha = 1;
-  }
-  drawSprite(sprite(ART.soul, SOUL_PAL, "soul"), 74, 12 + ps);
-  drawText(S.souls, 82, 5 + ps, "#6fd3ff");
-  drawText(`WAVE ${S.wave}`, 102, 5, "#e6e0ec");
+  drawCounter("coins", 18, "#ffd54f");
+  const soulBusy = S.soulFx.length > 0;
+  drawSprite(sprite(ART.soul, SOUL_PAL, "soul"), 74, 12 + ps, soulBusy && Math.floor(S.time * 8) % 2 ? -1 : 1);
+  if (S.pulse.souls > 0) drawSprite(sprite(ART.soul, SOUL_PAL, "soul", true), 74, 12 + ps, 1, 0.6);
+  drawCounter("souls", 82, "#6fd3ff");
+  drawText(`WAVE ${S.wave}`, 112, 5, "#e6e0ec");
 
-  const h = S.hero, b = S.boss;
-  if (h) {
-    drawText(`${h.name} LV${h.lv}`, 236, 5, "#e6e0ec", { align: "right" });
-    drawMeter(242, 6, 100, 5, h.hp / h.maxHp, "#1e2a3a", "#64b5f6", "#bbdefb");
-  } else if (S.phase === "build") {
-    drawText("BUILD PHASE", 240, 5, "#9cff9c", { align: "center" });
-  }
-
+  const b = S.boss;
   if (inArena()) {
+    drawText(`HEROES ${S.heroes.length}`, 240, 5, "#e6e0ec", { align: "center" });
     // Souls-style boss bar along the bottom during the battle.
     const bw = 300, bx = (W * T - bw) / 2, by = H * T - 9;
     drawText("LORD OF THE TOWER", bx, by - 10, "#e6e0ec");
@@ -2169,6 +2314,24 @@ function drawHud() {
     else drawText("SLAM READY", bx + bw, by - 10, "#ffd54f", { align: "right" });
     return;
   }
+
+  if (S.phase === "build") drawText("BUILD", 172, 5, "#9cff9c");
+  else if (S.phase === "wave") drawText(`HEROES ${S.spawnQueue.length + S.heroes.length}`, 172, 5, "#e6e0ec");
+
+  // Tower meter: one slot per hero inside. When it fills, the boss battle begins.
+  const inside = S.towerHeroes.length, full = inside >= TOWER_LIMIT;
+  const danger = full || inside === TOWER_LIMIT - 1;
+  drawText("TOWER", 276, 5, danger && Math.floor(S.time * 4) % 2 ? "#ff5252" : "#ff8a80", { align: "right" });
+  for (let i = 0; i < TOWER_LIMIT; i++) {
+    const x = 281 + i * 9;
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 1, 4, 9, 9);
+    ctx.fillStyle = "#26202f";
+    ctx.fillRect(x, 5, 7, 7);
+    if (i < inside) drawSprite(sprite(ART.helm, { A: "#c9d1d6", a: "#8a959c" }, "helm"), x + 3.5, 11);
+  }
+  if (inside > TOWER_LIMIT) drawText(`+${inside - TOWER_LIMIT}`, 281 + TOWER_LIMIT * 9 + 2, 5, "#ff5252");
+
   drawText("BOSS", W * T - 93, 5, "#ff8a80", { align: "right" });
   drawMeter(W * T - 88, 6, 80, 5, b.hp / b.maxHp, "#3b1016", "#c62828", "#ef5350");
 }
@@ -2237,21 +2400,22 @@ function draw() {
     S.arrows.forEach(drawArrow);
     drawHover();
   }
-  for (const e of [S.boss, S.hero, ...(arena ? [] : S.minions)]) if (e) drawShadow(e);
+  for (const e of [S.boss, ...S.heroes, ...(arena ? [] : S.minions)]) drawShadow(e);
   if (!arena) S.minions.forEach(drawMinion);
   drawBoss(S.boss);
-  if (S.hero) drawHero(S.hero);
+  S.heroes.forEach(drawHero);
   S.waves.forEach(drawWave);
   drawParticles(false);
   drawLighting();
   drawParticles(true);
 
   if (!arena) for (const m of S.minions) if (m.hp < m.maxHp) drawBar(m, 10, "#e53935");
+  for (const h of S.heroes) drawBar(h, 12, "#64b5f6");
   drawFloats();
   ctx.restore();
 
   drawHud();
-  drawCoins();
+  drawLoot();
   drawBanner();
 
   // Fade to black when moving between the level and the tower top.
@@ -2309,12 +2473,12 @@ function updateToolbar() {
     b.classList.toggle("fresh", S.fresh.has(tool) && tool !== S.tool);
     if (TRAPS[tool]) {
       const kind = TRAPS[tool], cost = b.querySelector(".cost");
-      const text = locked ? `Kill ${kind.unlock - wins()} more` : `${kind.costs[0]} coins`;
+      const text = locked ? `Kill ${kind.unlock - S.kills} more` : `${kind.costs[0]} coins`;
       if (cost.textContent !== text) cost.textContent = text;
     }
   });
   const go = document.getElementById("go");
-  const label = { over: "Play again", build: "Start wave", wave: "Wave in progress" }[S.phase] || "Boss battle!";
+  const label = { over: "Play again", build: "Start wave", wave: "Wave in progress", intro: "Here they come..." }[S.phase] || "Boss battle!";
   if (go.textContent !== label) go.textContent = label;
   go.disabled = S.phase !== "over" && S.phase !== "build";
 }
