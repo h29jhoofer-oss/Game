@@ -253,6 +253,7 @@ let S;
 function newGame() {
   S = {
     coins: 20, souls: 3, wave: 1, heroLv: 1,
+    shownCoins: 20, coinFx: [], coinGain: { amount: 0, t: 0 }, coinLoss: { amount: 0, t: 0 },
     traps: [], minions: [], arrows: [], waves: [], hero: null, boss: makeBoss(),
     phase: "build", scene: "level", floats: [], particles: [], tool: "spike", time: 0,
     fade: 0, fadeIn: 0, intro: 0, returnT: 0,
@@ -439,6 +440,7 @@ function place({ x, y }) {
     const cost = kind.costs[lvl];
     if (S.coins < cost) { say(`Need ${cost} coins.`); return; }
     S.coins -= cost;
+    spendCoins(cost);
     if (trap) { trap.lvl++; say(`Upgraded to level ${trap.lvl}.`); }
     else { S.traps.push(newTrap(S.tool, x, y)); say(`${kind.name} placed.`); }
     burst(x + 0.5, y + 0.6, 8, ["#ffd54f", "#fff3c4"], 3, { glow: true });
@@ -557,6 +559,7 @@ function update(dt) {
   S.floats.forEach(f => { f.t -= dt; f.y -= dt * 0.7; });
   S.floats = S.floats.filter(f => f.t > 0);
   updateParticles(dt);
+  updateCoins(dt);
   S.traps.forEach(t => { t.cd -= dt; t.flash -= dt; });
   S.fadeIn = Math.max(0, S.fadeIn - dt);
   S.boss.flash -= dt;
@@ -922,6 +925,74 @@ function updateMinions(dt) {
   S.minions = S.minions.filter(m => m.hp > 0);
 }
 
+// ---------- coin pickups ----------
+// Coins burst out of a fallen hero, bounce on the ground, then stream into the HUD counter.
+// The counter only ticks up as each coin lands, so you see your gold arrive.
+const COIN_HUD = { x: 10 / T, y: 8 / T };
+
+function dropCoins(x, y, total) {
+  const n = Math.min(total, 16);
+  for (let i = 0; i < n; i++) {
+    const value = Math.floor(total / n) + (i < total % n ? 1 : 0);
+    const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.2;
+    const sp = 5 + Math.random() * 4;
+    S.coinFx.push({
+      x, y, vx: Math.cos(a) * sp * 0.7, vy: Math.sin(a) * sp, value,
+      state: "pop", t: 0.7 + i * 0.06 + Math.random() * 0.15, spin: Math.random() * 4,
+    });
+  }
+  burst(x, y, 10, ["#fff3c4", "#ffd54f"], 5, { glow: true });
+}
+
+function spendCoins(cost) {
+  S.shownCoins -= cost;
+  S.coinGain.t = 0;
+  S.coinLoss = { amount: (S.coinLoss.t > 0 ? S.coinLoss.amount : 0) + cost, t: 1 };
+}
+
+function updateCoins(dt) {
+  S.coinGain.t -= dt;
+  S.coinLoss.t -= dt;
+  for (const c of S.coinFx) {
+    c.spin += dt * (c.state === "fly" ? 16 : 9);
+    if (c.state === "pop") {
+      // Tossed out with gravity, bouncing off the floor.
+      c.t -= dt;
+      c.vy += 30 * dt;
+      c.x += c.vx * dt;
+      const ny = c.y + c.vy * dt;
+      if (c.vy > 0 && isSolid(Math.floor(c.x), Math.floor(ny + 0.2))) {
+        c.y = Math.floor(ny + 0.2) - 0.2;
+        c.vy = -c.vy * 0.45;
+        c.vx *= 0.7;
+        if (Math.abs(c.vy) > 2) dust(c.x, c.y + 0.2, 1);
+      } else c.y = ny;
+      if (Math.random() < dt * 3) particle({ x: c.x, y: c.y - 0.2, life: 0.25, color: "#ffffff", glow: true });
+      if (c.t <= 0) { c.state = "fly"; c.f = 0; c.sx = c.x; c.sy = c.y; }
+    } else {
+      // Arc up to the coin counter, speeding up as it goes.
+      c.f += dt / 0.55;
+      const k = Math.min(1, c.f), e = k * k;
+      const mx = (c.sx + COIN_HUD.x) / 2, my = Math.min(c.sy, COIN_HUD.y) - 2.5;
+      c.x = (1 - e) * (1 - e) * c.sx + 2 * (1 - e) * e * mx + e * e * COIN_HUD.x;
+      c.y = (1 - e) * (1 - e) * c.sy + 2 * (1 - e) * e * my + e * e * COIN_HUD.y;
+      if (Math.random() < dt * 40) particle({ x: c.x, y: c.y, life: 0.2, color: Math.random() < 0.5 ? "#ffd54f" : "#fff3c4", glow: true });
+      if (k >= 1) {
+        c.done = true;
+        S.shownCoins += c.value;
+        S.coinGain = { amount: (S.coinGain.t > 0 ? S.coinGain.amount : 0) + c.value, t: 1.4 };
+        S.pulse.coins = 0.15;
+        for (let i = 0; i < 4; i++) {
+          const a = i * Math.PI / 2 + Math.PI / 4;
+          particle({ x: COIN_HUD.x, y: COIN_HUD.y, vx: Math.cos(a) * 3, vy: Math.sin(a) * 3, life: 0.25, color: "#fff3c4", glow: true, hud: true });
+        }
+      }
+    }
+  }
+  S.coinFx = S.coinFx.filter(c => !c.done);
+  if (!S.coinFx.length) S.shownCoins = S.coins;
+}
+
 function heroDied(reason) {
   const lv = S.heroLv, h = S.hero;
   const coins = 6 + 2 * lv, souls = 1 + Math.floor(lv / 2);
@@ -929,13 +1000,10 @@ function heroDied(reason) {
   S.souls += souls;
   const hx = centerX(h), hy = Math.min(centerY(h), H - 1.5);
   burst(hx, hy, 24, h.lava ? ["#ffb300", "#ff6f00", "#fff59d"] : ["#d32f2f", gearFor(lv).main, gearFor(lv).shade], 6, { glow: !!h.lava });
-  for (let i = 0; i < Math.min(coins, 14); i++) {
-    particle({ x: hx + (Math.random() - 0.5), y: hy + (Math.random() - 0.5), life: 1.2, color: "#ffd54f", size: 2, glow: true,
-      home: { x: 1.0, y: 0.45, key: "coins" } });
-  }
+  dropCoins(hx, hy, coins);
   for (let i = 0; i < souls; i++) {
     particle({ x: hx + (Math.random() - 0.5), y: hy - 0.5, life: 1.3, color: "#6fd3ff", size: 2, glow: true,
-      home: { x: 3.4, y: 0.45, key: "souls" } });
+      home: { x: 74 / T, y: 0.45, key: "souls" } });
   }
   S.shake = 3;
   S.hero = null;
@@ -1218,6 +1286,11 @@ const ART = {
     "..dddddddddd..",
   ],
   coin: [".YYYY.", "YYWYYy", "YWYYYy", "YYYYYy", "YYYYyy", ".yyyy."],
+  coin2: [".YY.", "YWYy", "WYYy", "YYYy", "YYyy", ".yy."],
+  coin3: ["Yy", "Wy", "Yy", "Yy", "Yy", "yy"],
+  bigCoin: ["..YYYY..", ".YYWWYy.", "YYWYYYYy", "YWYYOYYy", "YYYYOYyy", "YYYYYyyy", ".yYYyyy.", "..yyyy.."],
+  bigCoin2: [".YYYy.", "YWWYyy", "YWYYyy", "YWYOyy", "YYYOyy", "YYYyyy", "YYyyyy", ".yyyy."],
+  bigCoin3: ["Yy", "Wy", "Yy", "Yy", "Yy", "Yy", "yy", "yy"],
   soul: ["...B..", "..BB..", ".BWBB.", "BBWWB.", "BWWWBB", "BBWWBB", ".BBBB."],
 };
 ART.boss = ART.bossHalf.map((r, y) => {
@@ -1250,7 +1323,7 @@ const TURRET_EYES = ["#ffb300", "#ff7043", "#ff1744"];
 const STONE_PAL = { S: "#6b6378", s: "#4a4456", K: "#1a1420", Y: "#ff5252" };
 const FROST_PALS = [{ C: "#81d4fa", c: "#e1f5fe", W: "#4fc3f7" }, { C: "#4fc3f7", c: "#ffffff", W: "#0288d1" }, { C: "#b388ff", c: "#ffffff", W: "#7c4dff" }];
 const LEVEL_SAW = [["#9aa3ad", "#636b75"], ["#dfe6ea", "#9aa7b0"], ["#ef5350", "#9a2a2a"]];
-const ICON_PAL = { Y: "#ffd54f", y: "#c79a1e", W: "#fff8e1" };
+const ICON_PAL = { Y: "#ffd54f", y: "#c79a1e", W: "#fff8e1", O: "#e0a82e" };
 const SOUL_PAL = { B: "#4fc3f7", W: "#e1f5fe" };
 
 const spriteCache = new Map();
@@ -1968,7 +2041,7 @@ function drawLighting() {
 
 function drawParticles(glowing) {
   for (const p of S.particles) {
-    if (p.glow !== glowing) continue;
+    if (p.glow !== glowing || p.hud) continue;
     ctx.globalAlpha = Math.min(1, p.life / p.max * 2);
     ctx.fillStyle = p.color;
     ctx.fillRect(Math.round(p.x * T), Math.round(p.y * T), p.size, p.size);
@@ -2009,6 +2082,29 @@ function drawHover() {
   if (label && canBuild(x, y)) drawText(label, x * T + 8, y * T - 10, ok ? "#ffffff" : "#ff8a80", { align: "center" });
 }
 
+function coinSprite(spin, white = false, big = false) {
+  const f = Math.floor(spin) % 4;
+  const art = big ? [ART.bigCoin, ART.bigCoin2, ART.bigCoin3, ART.bigCoin2][f] : [ART.coin, ART.coin2, ART.coin3, ART.coin2][f];
+  return { spr: sprite(art, ICON_PAL, "coin", white), face: f === 3 ? -1 : 1 };
+}
+
+function drawCoins() {
+  // Sparkles where coins land on the counter sit on top of the HUD.
+  for (const p of S.particles) {
+    if (!p.hud) continue;
+    ctx.globalAlpha = Math.min(1, p.life / p.max * 2);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(Math.round(p.x * T), Math.round(p.y * T), 1, 1);
+  }
+  ctx.globalAlpha = 1;
+  for (const c of S.coinFx) {
+    // Coins shrink to counter size as they reach the HUD.
+    const big = c.state === "pop" || c.f < 0.7;
+    const { spr, face } = coinSprite(c.spin, false, big);
+    drawSprite(spr, c.x * T, c.y * T + (big ? 4 : 3), face);
+  }
+}
+
 function drawMeter(x, y, w, h, frac, back, fill, shine) {
   ctx.fillStyle = OUTLINE;
   ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
@@ -2030,12 +2126,31 @@ function drawHud() {
   ctx.fillStyle = "rgba(0,0,0,0.3)";
   ctx.fillRect(0, 17, W * T, 1);
 
-  const pc = S.pulse.coins > 0 ? -1 : 0, ps = S.pulse.souls > 0 ? -1 : 0;
-  drawSprite(sprite(ART.coin, ICON_PAL, "coin"), 10, 12 + pc);
-  drawText(S.coins, 18, 5 + pc, "#ffd54f");
-  drawSprite(sprite(ART.soul, SOUL_PAL, "soul"), 48, 12 + ps);
-  drawText(S.souls, 56, 5 + ps, "#6fd3ff");
-  drawText(`WAVE ${S.wave}`, 80, 5, "#e6e0ec");
+  const pc = S.pulse.coins > 0 ? -2 : 0, ps = S.pulse.souls > 0 ? -1 : 0;
+  // The HUD coin spins briefly whenever gold arrives, and glints now and then.
+  const busy = S.coinFx.length > 0 || S.pulse.coins > 0;
+  const icon = busy ? coinSprite(S.time * 14) : { spr: sprite(ART.coin, ICON_PAL, "coin"), face: 1 };
+  drawSprite(icon.spr, 10, 12 + pc, icon.face);
+  if (S.pulse.coins > 0) drawSprite(coinSprite(S.time * 14, true).spr, 10, 12 + pc, 1, 0.6);
+  else if (!busy && S.time % 3 < 0.25) {
+    ctx.fillStyle = "#ffffff";
+    const g = Math.floor((S.time % 3) / 0.08);
+    ctx.fillRect(8 + g, 7 + g, 1, 1);
+  }
+  const shown = String(Math.max(0, S.shownCoins));
+  drawText(shown, 18, 5 + pc, S.pulse.coins > 0 ? "#ffffff" : "#ffd54f");
+  if (S.coinGain.t > 0) {
+    ctx.globalAlpha = Math.min(1, S.coinGain.t * 2);
+    drawText(`+${S.coinGain.amount}`, 18 + textWidth(shown) + 4, 5 - Math.round((1.4 - S.coinGain.t) * 2), "#9cff9c");
+    ctx.globalAlpha = 1;
+  } else if (S.coinLoss.t > 0) {
+    ctx.globalAlpha = Math.min(1, S.coinLoss.t * 2);
+    drawText(`-${S.coinLoss.amount}`, 18 + textWidth(shown) + 4, 5 + Math.round((1 - S.coinLoss.t) * 3), "#ff8a80");
+    ctx.globalAlpha = 1;
+  }
+  drawSprite(sprite(ART.soul, SOUL_PAL, "soul"), 74, 12 + ps);
+  drawText(S.souls, 82, 5 + ps, "#6fd3ff");
+  drawText(`WAVE ${S.wave}`, 102, 5, "#e6e0ec");
 
   const h = S.hero, b = S.boss;
   if (h) {
@@ -2136,6 +2251,7 @@ function draw() {
   ctx.restore();
 
   drawHud();
+  drawCoins();
   drawBanner();
 
   // Fade to black when moving between the level and the tower top.
