@@ -8,6 +8,10 @@ A reverse side-scroller, inspired by *Hostile Architect*: you are the boss waiti
 
 You are **Vorgath, the Hollow King**: a king who sold his soul so his tower would never fall, and who now feeds on the souls of the heroes the Order of the Dawn sends to end him. The game opens with a short prologue, and the full story is under *Lore: the Chronicle of Ashfall* on the game page.
 
+- **Modes:** the title screen offers two modes. Click one, press 1 or 2, or use the arrows and Enter.
+  - **Story:** the prologue, the 25-wave tale with the Marshal and the Voice, the bargains and the Thing Below, and the endings.
+  - **Sandbox:** no story, no dialogue, no Thing (no hunger, bargains or finale), and no last wave. From wave 30 on, the column stops growing (32 heroes plus up to 9 champions) but heroes keep levelling up with the wave number. Your best wave is saved in the browser and shown on the title and death screens.
+  - "Play again" returns to the title, so you can switch modes.
 - **The Thing Below (25 waves):** the story now runs 25 waves, alternating the Marshal and the Voice Below, the thing Vorgath bargained with.
   - **The Hunger:** every soul feeds it (dark souls and bargains most). As it grows: tremors (15), eyes opening in the lava (30), a heartbeat (45), tendrils that drag heroes near pits into the lava (60), and your own monsters too (75).
   - **Bargains:** after waves 4, 7, 10, 13, 16, 19 and 22 the Voice offers three deals (keys 1-3, Esc refuses): Burning Traps (+50% trap damage next wave for 5 souls), Flesh for Iron (sacrifice a monster for +100 max health), A Debt (2 dark souls now; in two waves it takes half your coins and a trap), Gold from the Deep (+60 coins, 3 extra heroes), Souls of the Drowned (+5 souls), A Gift of Darkness (a free dark power).
