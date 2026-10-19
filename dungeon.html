@@ -150,6 +150,8 @@
     <button data-tool="tar"><canvas width="16" height="16"></canvas><span>Tar pit<span class="cost c">7 coins</span></span></button>
     <button data-tool="tesla"><canvas width="16" height="16"></canvas><span>Tesla coil<span class="cost c">16 coins</span></span></button>
     <button data-tool="pendulum"><canvas width="16" height="16"></canvas><span>Pendulum<span class="cost c">15 coins</span></span></button>
+    <button data-tool="grinder"><canvas width="16" height="16"></canvas><span>Grinder<span class="cost c">14 coins</span></span></button>
+    <button data-tool="boulder"><canvas width="16" height="16"></canvas><span>Boulder chute<span class="cost c">18 coins</span></span></button>
     <button data-tool="skeleton"><canvas width="16" height="16"></canvas><span>Skeleton<span class="cost s">1 soul</span></span></button>
     <button data-tool="ogre"><canvas width="16" height="16"></canvas><span>Ogre<span class="cost s">3 souls</span></span></button>
     <button data-tool="imp"><canvas width="16" height="16"></canvas><span>Imp<span class="cost s">2 souls</span></span></button>
@@ -183,8 +185,10 @@
     <b>Wave 25 is the end:</b> the Thing breaks through the tower top, and you fight it with the Marshal and her knights beside you.
     Its hide shrugs off blows; strike its great eye while it is open, and cut down the tendrils it sends up. Beat it and you choose
     the ending, unless you took 5 or more bargains, or the Marshal died.<br>
-    Only one crusher fits in each column. More traps unlock with kills: <b>skyhooks</b> (8) fire harpoons that drag flying heroes out of the sky,
+    Only one crusher fits in each column. More traps unlock with kills: <b>grinders</b> (5) are 3 tiles of gears set in the floor that chew and slow anyone crossing,
+    <b>skyhooks</b> (8) fire harpoons that drag flying heroes out of the sky,
     <b>tar pits</b> (12) slow heroes and make fire hurt them more, <b>tesla coils</b> (20) shoot lightning that chains between heroes,
+    <b>boulder chutes</b> (18) are 2 by 2 hoppers that roll boulders back down the path at heroes, bounding over the pits,
     and <b>pendulums</b> (25) swing a blade under their mount. Any trap can also be <b>infused with a dark soul</b> (Infuse in its tab, or I):
     +75% damage, 25% faster, 20% more reach.
     At level 3 you can <b>specialize</b> it down one of two paths (press 1 or 2). Each makes the trap better at one thing and worse
@@ -329,7 +333,18 @@ const TRAPS = {
   tar:     { name: "Tar pit",      costs: [7, 10, 14],  needsGround: true, unlock: 12 },
   tesla:   { name: "Tesla coil",   costs: [16, 20, 26], dmg: 9, needsGround: true, unlock: 20 },
   pendulum: { name: "Pendulum",    costs: [15, 19, 25], dmg: 14, cd: 0.6, needsAir: true, unlock: 25 },
+  grinder: { name: "Grinder",      costs: [14, 18, 24], dmg: 3, cd: 0.35, needsGround: true, w: 3, unlock: 5 },
+  boulder: { name: "Boulder chute", costs: [18, 22, 28], dmg: 22, w: 2, h: 2, unlock: 18 },
 };
+// Most traps fill one tile; the grinder is 3 wide and the boulder chute 2 by 2.
+// A trap's own tile (x, y) is its bottom-left corner; the rest of it is to the right and above.
+const trapSize = type => ({ w: TRAPS[type].w || 1, h: TRAPS[type].h || 1 });
+function trapTiles(type, x, y) {
+  const { w, h } = trapSize(type), out = [];
+  for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) out.push([x + i, y - j]);
+  return out;
+}
+const trapAt = (x, y) => S.traps.find(t => trapTiles(t.type, t.x, t.y).some(([a, b]) => a === x && b === y));
 // A dark soul can be given to any trap too, at any level: harder hits, faster cycles, wider reach.
 const DARK_TRAP = { dmg: 1.75, cd: 0.75, reach: 1.2 };
 const unlocked = tool => { const k = TRAPS[tool] || MINIONS[tool]; return !k || S.kills >= (k.unlock || 0); };
@@ -403,6 +418,18 @@ const TRAP_PATHS = {
     { id: "twin", name: "Twin Blades", color: "#b388ff", cost: 30, mods: { dmg: 0.7 },
       pros: ["TWO BLADES"], cons: ["-30% DAMAGE"] },
   ],
+  grinder: [
+    { id: "meat", name: "Meat Grinder", color: "#ff5252", cost: 26, mods: { dmg: 1.8, slow: 0 },
+      pros: ["+80% DAMAGE"], cons: ["NO SLOW"] },
+    { id: "conveyor", name: "Conveyor", color: "#ffca28", cost: 26, mods: { dmg: 0.6 },
+      pros: ["DRAGS HEROES BACK"], cons: ["-40% DAMAGE"] },
+  ],
+  boulder: [
+    { id: "iron", name: "Wrecking Ball", color: "#90a4ae", cost: 34, mods: { dmg: 1.8, speed: 0.75 },
+      pros: ["+80% DAMAGE", "KNOCKS HEROES BACK"], cons: ["ROLLS SLOWER"] },
+    { id: "slide", name: "Rockslide", color: "#d7ccc8", cost: 34, mods: { dmg: 0.45 },
+      pros: ["3 BOULDERS AT ONCE"], cons: ["-55% DAMAGE"] },
+  ],
   frost: [
     { id: "blizzard", name: "Blizzard", color: "#e1f5fe", cost: 26, mods: { radius: 1.5, slow: 0.7 },
       pros: ["+50% RANGE"], cons: ["-30% SLOW"] },
@@ -434,6 +461,8 @@ function baseTrapNums(type, lvl, pathId) {
     case "tar": return { slow: Math.min(0.85, (0.25 + 0.1 * lvl) * m.slow), burn: pathId === "burning", fireBonus: pathId !== "glue" };
     case "tesla": return { dmg, cd: (2.4 - 0.3 * (lvl - 1)) * m.cd, range: 4 * m.range, chains: p && p.chains !== undefined ? p.chains : 2 };
     case "pendulum": return { dmg, cd: k.cd, speed: (1.8 + 0.25 * (lvl - 1)) * m.speed, blades: pathId === "twin" ? 2 : 1, big: pathId === "executioner" };
+    case "grinder": return { dmg, cd: k.cd * m.cd, slow: 0.25 * m.slow, push: pathId === "conveyor" };
+    case "boulder": return { dmg, cd: (5 - 0.6 * (lvl - 1)) * m.cd, speed: 5.5 * m.speed, rocks: pathId === "slide" ? 3 : 1, knock: pathId === "iron" };
     case "spike": case "saw": return { dmg, cd: k.cd * m.cd };
     case "turret": return { dmg, cd: (1.6 - 0.4 * (lvl - 1)) * m.cd };
     case "fire": return { dmg, period: firePeriod(lvl) * m.period, always: pathId === "ember", tall: pathId === "pillar" ? 3 : 2 };
@@ -456,7 +485,12 @@ function placeProblem(tool, x, y, existing) {
   if (!unlocked(tool)) return lockMessage(tool);
   if (existing && existing.type !== tool) return "There's already a different trap there.";
   if (existing) return null;
-  if (kind.needsGround && !isSolid(x, y + 1)) return `${kind.name} needs solid ground under it.`;
+  const tiles = trapTiles(tool, x, y), { w, h } = trapSize(tool);
+  if (tiles.length > 1) {
+    if (tiles.some(([a, b]) => !canBuild(a, b))) return `The ${kind.name.toLowerCase()} needs ${w} by ${h} tiles of open space.`;
+    if (tiles.some(([a, b]) => trapAt(a, b))) return "Another trap is in the way.";
+  }
+  if (kind.needsGround && tiles.some(([a, b]) => b === y && !isSolid(a, y + 1))) return w > 1 ? `${kind.name} needs solid ground under all ${w} tiles.` : `${kind.name} needs solid ground under it.`;
   if (kind.needsAir && isSolid(x, y + 1)) return "Crushers need open space below to drop into.";
   // One crusher per column: stacked crushers would make a wall nothing can get through.
   if (tool === "crusher" && S.traps.some(t => t.type === "crusher" && t.x === x)) return "There's already a crusher in this column. Only one crusher fits per column.";
@@ -1486,13 +1520,13 @@ Object.assign(HERO_KINDS, {
 // Dawn Seraphs fly over the whole path: only arrows, tesla lightning and skyhooks can reach them.
 // A skyhook drags one down, and then it walks (and dies) like anyone else.
 HERO_KINDS.seraph = { label: "Dawn Seraph", hp: 0.9, atk: 1.1, speed: 3.3, airSpeed: 3.9, w: 0.6, h: 0.9, coins: 2, cd: 0.8, flies: true,
-  immune: ["spike", "saw", "fire", "crusher", "mine", "frost", "tar", "pendulum", "fireball", "burn"] };
+  immune: ["spike", "saw", "fire", "crusher", "mine", "frost", "tar", "pendulum", "grinder", "boulder", "fireball", "burn"] };
 const SKY_Y = 4.2;
 HERO_KINDS.archer.ranged = true;
 // The Marshal fights like a Champion; "thing" covers the parts of the Thing Below in the finale.
 HERO_KINDS.marshal = Object.assign({}, HERO_KINDS.champion, { label: "Marshal" });
 HERO_KINDS.thing = { label: "thing", hp: 1, atk: 1, speed: 0, w: 1, h: 1, coins: 0, cd: 1, noDodge: true };
-const IMMUNE_NAMES = { pendulum: "pendulums", spike: "spikes", mine: "bombs", fire: "fire", fireball: "fireballs", burn: "burning", frost: "frost", crusher: "crushers", saw: "saw blades" };
+const IMMUNE_NAMES = { grinder: "grinders", boulder: "boulders", pendulum: "pendulums", spike: "spikes", mine: "bombs", fire: "fire", fireball: "fireballs", burn: "burning", frost: "frost", crusher: "crushers", saw: "saw blades" };
 const immuneTo = (h, src) => !!src && !(h.kind === "seraph" && !h.flying) && (HERO_KINDS[h.kind].immune || []).includes(src);
 // A trap passing harmlessly over an immune hero says so, now and then.
 function shrug(h) {
@@ -1580,7 +1614,7 @@ let S;
 function newGame(title = false) {
   S = {
     coins: 20, souls: 2, wave: 1, kills: 0, named: 0,
-    serpents: [], bolts: [], harpoons: [], lavaEyes: [], tendrils: [], hunger: 0, bargains: 0, bargain: null, allies: [], shown: { coins: 20, souls: 2, dark: 0 }, coinFx: [], soulFx: [], darkSouls: 0, powers: new Set(), risen: [], monsterMenu: null,
+    serpents: [], bolts: [], harpoons: [], boulders: [], lavaEyes: [], tendrils: [], hunger: 0, bargains: 0, bargain: null, allies: [], shown: { coins: 20, souls: 2, dark: 0 }, coinFx: [], soulFx: [], darkSouls: 0, powers: new Set(), risen: [], monsterMenu: null,
     gain: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
     loss: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
     traps: [], minions: [], arrows: [], waves: [], boss: makeBoss(),
@@ -2540,7 +2574,7 @@ function place({ x, y }) {
   const snPit = pitAt(x), sn = snPit && S.serpents.find(n => n.pit[0] === snPit[0]);
   if (sn && (y === H - 1 || S.tool === "serpent")) { openSerpentMenu(sn); Sound.play("click"); return; }
   if (S.tool === "serpent") { placeSerpent(x); return; }
-  const trap = S.traps.find(t => t.x === x && t.y === y);
+  const trap = trapAt(x, y);
   if (trap) { openTrapMenu(trap); Sound.play("click"); return; }
   const monster = S.minions.find(m => overlaps({ x: x + 0.1, y: y + 0.1, w: 0.8, h: 0.8 }, m));
   if (monster) { openMonsterMenu(monster); Sound.play("click"); return; }
@@ -2583,6 +2617,8 @@ function trapStatLines(type, lvl, pathId, dark = false) {
     case "tar": return [["SLOW", Math.round(n.slow * 100) + "%"], ["FIRE", n.burn ? "IGNITES" : n.fireBonus ? "+50% DMG" : "NO BONUS"]];
     case "tesla": return [["ZAP", n.chains ? `${n.dmg} X${n.chains + 1}` : n.dmg], ["EVERY", sec(n.cd)]];
     case "pendulum": return [["DAMAGE", n.blades > 1 ? `${n.dmg} X2` : n.dmg], ["SPEED", n.speed.toFixed(1)]];
+    case "grinder": return [["GRIND", n.dmg], ["EVERY", sec(n.cd)]];
+    case "boulder": return [["BOULDER", n.rocks > 1 ? `${n.dmg} X3` : n.dmg], ["EVERY", sec(n.cd)]];
     case "spike": case "saw": return [["DAMAGE", n.dmg], ["EVERY", sec(n.cd)]];
     case "turret": return [["ARROW", n.dmg], ["EVERY", sec(n.cd)]];
     case "fire": return [["BURN", n.dmg], ["ERUPTS", n.always ? "NONSTOP" : "EVERY " + sec(n.period)]];
@@ -2676,6 +2712,7 @@ function startWave() {
   S.spawnT = 0;
   for (const t of S.traps) Object.assign(t, { timer: 0, off: 0, v: 0, state: "up", cd: 0, fuse: 0, rearm: 0, pulse: 2, jam: 0 });
   S.arrows = [];
+  S.boulders = [];
   S.phase = "wave";
   S.loot = { kills: 0, coins: 0 };
   Sound.play("horn");
@@ -3513,6 +3550,7 @@ function update(dt) {
     S.traps = S.traps.filter(t => !t.dead);
     updateArrows(dt);
     updateHarpoons(dt);
+    updateBoulders(dt);
     S.bolts.forEach(b => (b.t -= dt));
     S.bolts = S.bolts.filter(b => b.t > 0);
     updateHeroArrows(dt);
@@ -3871,6 +3909,7 @@ function finishHeroMove(h, dt, arena) {
     h.tar = Math.max(0, (h.tar || 0) - dt);
     h.netted = Math.max(0, (h.netted || 0) - dt);
     if (h.netted > 0) h.chill = 0.7;
+    let belt = false;
     for (const t of S.traps) {
       if (t.type === "tar" && !(t.jam > 0) && overlaps({ x: t.x + 0.05, y: t.y + 0.6, w: 0.9, h: 0.4 }, h)) {
         // Wading through tar: slow, sticky, and (unless it's glue) ready to burn.
@@ -3880,11 +3919,18 @@ function finishHeroMove(h, dt, arena) {
         h.tarFire = n.fireBonus;
         if (n.burn && !immuneTo(h, "burn")) { h.bleed = Math.max(h.bleed || 0, 1.5); h.bleedDmg = Math.max(h.bleedDmg || 0, Math.round(t.lvl * 2 * (t.dark ? DARK_TRAP.dmg : 1))); }
       }
+      if (t.type === "grinder" && !(t.jam > 0) && !immuneTo(h, "grinder") && overlaps(grinderBox(t), h)) {
+        // The teeth bite at their feet; a conveyor carries them back the way they came.
+        const n = numsOf(t);
+        h.chill = Math.max(h.chill, n.slow);
+        if (n.push) belt = true;
+      }
       if (t.type === "frost" && !immuneTo(h, "frost") && Math.hypot(centerX(h) - t.x - 0.5, centerY(h) - t.y - 0.5) < numsOf(t).radius) {
         h.chill = Math.max(h.chill, numsOf(t).slow);
       }
     }
     h.vx *= 1 - h.chill;
+    if (belt) h.vx = h.vx > 0 ? Math.max(Math.min(h.vx, 0.5), h.vx - 1.8) : h.vx - 1.8;
     if (h.chill && Math.random() < dt * 20) {
       particle({ x: h.x + Math.random() * h.w, y: h.y + Math.random() * h.h, vy: 0.6, life: 0.5, color: Math.random() < 0.5 ? "#e1f5fe" : "#81d4fa", glow: true });
     }
@@ -4143,6 +4189,8 @@ function updateTraps(dt) {
     if (t.type === "tar") continue;
     if (t.type === "tesla") { updateTesla(t); continue; }
     if (t.type === "pendulum") { updatePendulum(t, dt); continue; }
+    if (t.type === "grinder") { updateGrinder(t); continue; }
+    if (t.type === "boulder") { updateChute(t, dt); continue; }
     if (t.type === "crusher") { updateCrusher(t, dt); continue; }
     if (t.type === "mine") { updateMine(t, dt); continue; }
     if (t.type === "frost") {
@@ -4234,6 +4282,108 @@ function updateSkyhook(t) {
   t.flash = 0.2;
   Sound.play("bow");
 }
+// The grinder chews anyone walking across its three tiles (and slows them; see finishHeroMove).
+const grinderBox = t => ({ x: t.x + 0.05, y: t.y + 0.55, w: trapSize("grinder").w - 0.1, h: 0.45 });
+function updateGrinder(t) {
+  if (t.cd > 0) return;
+  const n = numsOf(t), hit = heroesIn(grinderBox(t), "grinder");
+  for (const h of hit) {
+    damage(h, n.dmg, "#ffb74d");
+    burst(centerX(h), h.y + h.h, 3, ["#d32f2f", "#ffb300"], 3);
+  }
+  if (hit.length) { t.cd = n.cd; t.flash = 0.15; Sound.play("saw"); }
+}
+
+// The boulder chute lets a boulder go when heroes are on their way; it rolls back down the path at them.
+const BOULDER_LOOKS = {
+  stone: { main: "#8d8270", light: "#b8ab92", dark: "#5d5446" },
+  iron: { main: "#455a64", light: "#90a4ae", dark: "#1c262b", spikes: true },
+  slide: { main: "#a1887f", light: "#d7ccc8", dark: "#6d4c41" },
+};
+function updateChute(t, dt) {
+  t.gate = Math.max(0, (t.gate || 0) - dt);
+  if (t.cd > 0) return;
+  const n = numsOf(t), ox = t.x + 1, oy = t.y + 0.5;
+  const coming = S.heroes.some(h => !h.flying && centerX(h) < ox + 0.5 && ox - centerX(h) < 9 && Math.abs(centerY(h) - oy) < 5);
+  if (!coming) return;
+  const size = n.rocks > 1 ? 0.6 : 0.9;
+  for (let i = 0; i < n.rocks; i++) {
+    S.boulders.push({ x: t.x + 0.55, y: t.y + 0.95 - size, w: size, h: size, vx: 0, vy: 0, onGround: false, speed: n.speed * (1 + i * 0.08),
+      dmg: n.dmg, knock: n.knock, hits: new Set(), life: 9, spin: 0, wait: i * 0.35, stuck: 0, look: t.path || "stone", dark: t.dark });
+  }
+  t.cd = n.cd;
+  t.gate = 0.6;
+  t.flash = 0.2;
+  Sound.play("rumble");
+}
+function updateBoulders(dt) {
+  for (const b of S.boulders) {
+    if (b.wait > 0) { b.wait -= dt; continue; }
+    const px = b.x;
+    b.vx = -b.speed;
+    // At the edge of a pit it bounds over, so it can roll on down the path.
+    if (b.onGround && !isSolid(Math.floor(b.x - 0.05), Math.floor(b.y + b.h + 0.01))) { b.vy = -6.5; dust(centerX(b), b.y + b.h, 3); }
+    moveBody(b, dt);
+    b.spin -= (px - b.x) / (b.w / 2);
+    b.life -= dt;
+    // Up against a wall it can't climb: it shatters.
+    b.stuck = b.onGround && px - b.x < b.speed * dt * 0.3 ? b.stuck + dt : 0;
+    if (inLava(b)) {
+      b.dead = true;
+      burst(centerX(b), H - 1, 10, ["#ff6f00", "#ffd54f"], 4, { glow: true });
+      continue;
+    }
+    if (b.stuck > 0.15 || b.life <= 0 || b.x < 0) {
+      b.dead = true;
+      const look = BOULDER_LOOKS[b.look];
+      burst(centerX(b), centerY(b), 14, [look.main, look.light, look.dark], 5);
+      Sound.play("crush");
+      continue;
+    }
+    for (const h of S.heroes) {
+      if (b.hits.has(h) || h.evade > 0 || h.flying || !overlaps(b, h)) continue;
+      b.hits.add(h);
+      if (immuneTo(h, "boulder")) { shrug(h); continue; }
+      damage(h, b.dmg, "#d7ccc8", ["#8d6e63", "#d32f2f"]);
+      if (b.knock) knock(h, -6, -7);
+      S.shake = Math.max(S.shake, b.knock ? 2.5 : 1.5);
+      Sound.play("crush");
+    }
+  }
+  S.boulders = S.boulders.filter(b => !b.dead);
+}
+function drawBoulderBall(cx, cy, r, spin, look, alpha = 1) {
+  ctx.globalAlpha = alpha;
+  cx = Math.round(cx); cy = Math.round(cy);
+  if (look.spikes) {
+    for (let i = 0; i < 6; i++) {
+      const a = spin + i * Math.PI / 3;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(Math.round(cx + Math.cos(a) * (r + 1)) - 1, Math.round(cy + Math.sin(a) * (r + 1)) - 1, 3, 3);
+      ctx.fillStyle = "#cfd8dc";
+      ctx.fillRect(Math.round(cx + Math.cos(a) * (r + 1)), Math.round(cy + Math.sin(a) * (r + 1)), 1, 1);
+    }
+  }
+  pxDisc(ctx, cx, cy, r + 1, OUTLINE);
+  pxDisc(ctx, cx, cy, r, look.main);
+  pxDisc(ctx, cx - Math.round(r * 0.3), cy - Math.round(r * 0.3), Math.max(1, Math.round(r * 0.5)), look.light);
+  // Cracks and chips turn with the roll.
+  ctx.fillStyle = look.dark;
+  for (let i = 0; i < 3; i++) {
+    const a = spin + i * 2.1, d = r * 0.55;
+    ctx.fillRect(Math.round(cx + Math.cos(a) * d), Math.round(cy + Math.sin(a) * d), 2, 1);
+    ctx.fillRect(Math.round(cx + Math.cos(a) * d * 0.4), Math.round(cy + Math.sin(a) * d * 0.4), 1, 1);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawBoulders() {
+  for (const b of S.boulders) {
+    if (b.wait > 0) continue;
+    drawBoulderBall(centerX(b) * T, centerY(b) * T, Math.round(b.w * T / 2) - 1, b.spin, BOULDER_LOOKS[b.look]);
+    if (b.dark && Math.random() < 0.3) particle({ x: centerX(b), y: centerY(b), vy: -1, life: 0.4, color: "#d500f9", glow: true });
+  }
+}
+
 function updateHarpoons(dt) {
   for (const a of S.harpoons) {
     a.x += a.vx * dt;
@@ -6476,6 +6626,10 @@ function drawTrap(t, alpha = 1, preview = false) {
       ctx.fillStyle = look.orb[0];
       ctx.fillRect(X + 3 + Math.floor(Math.random() * 10), Y + Math.floor(Math.random() * 5), 1, 1);
     }
+  } else if (t.type === "grinder") {
+    drawGrinder(t, X, Y, alpha, preview);
+  } else if (t.type === "boulder") {
+    drawChute(t, X, Y, alpha, preview);
   } else if (t.type === "pendulum") {
     drawPendulum(t, X, Y, alpha, preview);
   } else if (t.type === "frost") {
@@ -6647,6 +6801,88 @@ function drawTarPit(t, X, Y, alpha) {
   ctx.globalAlpha = 1;
 }
 // The mount, the rod, and the swinging blade (or two).
+// Three gears set into the floor in an iron trough, teeth up. A conveyor runs a belt over smaller gears.
+function drawGrinder(t, X, Y, alpha, preview) {
+  const w = trapSize("grinder").w * T, belt = t.path === "conveyor", meat = t.path === "meat";
+  const look = meat ? { main: "#b0bec5", shade: "#7b2a2a", r: 7, teeth: 11 } : belt ? { main: "#ffca28", shade: "#8d6e1f", r: 4, teeth: 8 } : { main: "#9aa3ad", shade: "#5d566a", r: 7, teeth: 10 };
+  const spin = S.time * (t.flash > 0 ? 18 : 9) * (belt ? -1 : 1);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(X, Y, w, T - 3);
+  ctx.clip();
+  for (let i = 0; i < 3; i++) drawSaw(X + 8 + i * 16, Y + (belt ? 11 : 12), 1, spin * (i % 2 ? -1 : 1) + i * 0.7, alpha, look);
+  ctx.restore();
+  ctx.globalAlpha = alpha;
+  if (belt) {
+    // The belt, its yellow and black stripes running back towards the start.
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(X, Y + 6, w, 4);
+    const off = Math.floor((S.time * 12) % 6);
+    for (let x = 0; x < w; x++) {
+      ctx.fillStyle = (x + off) % 6 < 3 ? "#ffca28" : "#2e2a38";
+      ctx.fillRect(X + x, Y + 7, 1, 2);
+    }
+  }
+  // The trough's iron lip, bolted along its length.
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(X, Y + 12, w, 4);
+  ctx.fillStyle = t.dark ? "#4a148c" : "#3a3448";
+  ctx.fillRect(X + 1, Y + 13, w - 2, 2);
+  ctx.fillStyle = t.dark ? "#ea80fc" : "#6b6378";
+  ctx.fillRect(X + 1, Y + 13, w - 2, 1);
+  ctx.fillStyle = "#9aa3ad";
+  for (let x = 4; x < w; x += 8) ctx.fillRect(X + x, Y + 14, 1, 1);
+  if (meat) {
+    // Gore caught in the teeth.
+    ctx.fillStyle = "#d32f2f";
+    for (const i of [5, 13, 22, 30, 39, 44]) ctx.fillRect(X + i, Y + 11 + ((i * 7 + Math.floor(S.time * 4)) % 2), 1, 1);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// A stone hopper of boulders, two tiles tall, that tips one out of its mouth on the left.
+function drawChute(t, X, Y, alpha, preview) {
+  const look = BOULDER_LOOKS[t.path || "stone"], top = Y - T, small = t.path === "slide";
+  ctx.globalAlpha = alpha;
+  // Boulders heaped in the hopper's open top.
+  for (const [bx, by, r] of small ? [[9, 3, 4], [16, 2, 4], [23, 3, 4], [13, 6, 3]] : [[10, 4, 6], [21, 3, 6]]) {
+    drawBoulderBall(X + bx, top + by, r, bx, look, alpha);
+  }
+  ctx.globalAlpha = alpha;
+  // The hopper: wide at the top, narrowing down to the chute.
+  for (let yy = 0; yy < 20; yy++) {
+    const l = Math.round(1 + yy * 0.3), r = Math.round(31 - yy * 0.1);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(X + l, top + 6 + yy, r - l, 1);
+    ctx.fillStyle = t.dark ? (yy % 5 ? "#4a3a5e" : "#2e2340") : yy % 5 ? "#5d566a" : "#3a3448";
+    ctx.fillRect(X + l + 1, top + 6 + yy, r - l - 2, 1);
+  }
+  ctx.fillStyle = t.dark ? "#ea80fc" : "#8a8296";
+  ctx.fillRect(X + 2, top + 7, 28, 1);
+  // Bands of iron around it.
+  ctx.fillStyle = OUTLINE;
+  for (const yy of [11, 19]) ctx.fillRect(X + Math.round(1 + (yy - 6) * 0.3), top + yy, 30 - Math.round((yy - 6) * 0.4), 2);
+  // The chute: a ramp tipping down to the left, under a gate that lifts to let a boulder go.
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(X, Y + 10, 26, 5);
+  ctx.fillStyle = "#6d4c41";
+  ctx.fillRect(X + 1, Y + 11, 24, 3);
+  ctx.fillStyle = "#a1887f";
+  ctx.fillRect(X + 1, Y + 11, 24, 1);
+  const ready = preview || t.cd < 0.8;
+  if (ready) drawBoulderBall(X + 14, Y + 5, small ? 3 : 5, 0, look, alpha);
+  const lift = Math.round((t.gate || 0) / 0.6 * 9);
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(X + 3, Y + 1 - lift, 4, 10);
+  ctx.fillStyle = t.flash > 0 ? "#ffffff" : "#4a4458";
+  ctx.fillRect(X + 4, Y + 2 - lift, 2, 8);
+  ctx.fillStyle = "#9aa3ad";
+  ctx.fillRect(X + 4, Y + 3 - lift, 2, 1);
+  ctx.fillRect(X + 4, Y + 7 - lift, 2, 1);
+  ctx.globalAlpha = 1;
+}
+
 function drawPendulum(t, X, Y, alpha, preview) {
   const blades = preview ? [{ x: t.x + 0.5, y: t.y + 0.75, a: 0 }] : pendulumBlades(t);
   const px = X + 8, py = Y + 2, art = t.path === "executioner" ? ART.pendulumBig : ART.pendulumBlade;
@@ -7372,7 +7608,7 @@ function drawHover() {
     drawText(hoverSn.dark ? "DARK SERPENT" : "SERPENT - CLICK", (hoverPit[0] + hoverPit[1] + 1) / 2 * T, (H - 1) * T - 10, "#ea80fc", { align: "center" });
     return;
   }
-  const existing = S.traps.find(t => t.x === x && t.y === y);
+  const existing = trapAt(x, y);
   let ok = canBuild(x, y), label = "";
   if (existing) {
     // A placed trap: clicking opens its menu.
@@ -7406,13 +7642,15 @@ function drawHover() {
   }
   const c = existing ? "#ffd54f" : ok ? "#9cff9c" : "#ff5252";
   ctx.fillStyle = c;
-  // Corner brackets around the tile.
-  for (const [cx, cy, dx, dy] of [[0, 0, 1, 1], [15, 0, -1, 1], [0, 15, 1, -1], [15, 15, -1, -1]]) {
-    ctx.fillRect(x * T + cx, y * T + cy, 1, 1);
-    ctx.fillRect(x * T + cx + dx, y * T + cy, 1, 1);
-    ctx.fillRect(x * T + cx, y * T + cy + dy, 1, 1);
+  // Corner brackets around the tile, or the whole of a bigger trap.
+  const fp = existing || (TRAPS[S.tool] ? { type: S.tool, x, y } : null), size = fp ? trapSize(fp.type) : { w: 1, h: 1 };
+  const bx = (fp ? fp.x : x) * T, by = ((fp ? fp.y : y) - size.h + 1) * T, bw = size.w * T - 1, bh = size.h * T - 1;
+  for (const [cx, cy, dx, dy] of [[0, 0, 1, 1], [bw, 0, -1, 1], [0, bh, 1, -1], [bw, bh, -1, -1]]) {
+    ctx.fillRect(bx + cx, by + cy, 1, 1);
+    ctx.fillRect(bx + cx + dx, by + cy, 1, 1);
+    ctx.fillRect(bx + cx, by + cy + dy, 1, 1);
   }
-  if (label && canBuild(x, y)) drawText(label, x * T + 8, y * T - 10, existing ? "#ffd54f" : ok ? "#ffffff" : "#ff8a80", { align: "center" });
+  if (label && canBuild(x, y)) drawText(label, bx + bw / 2, by - 10, existing ? "#ffd54f" : ok ? "#ffffff" : "#ff8a80", { align: "center" });
 }
 
 function coinSprite(spin, white = false, big = false) {
@@ -7485,6 +7723,14 @@ function trapIconBox(x, y, w, h, t, path) {
   ctx.rect(x + 1, y + 1, w - 2, h - 2);
   ctx.clip();
   const fake = { type: t.type, lvl: 3, path, dark: t.dark, x: (x + w / 2 - 8) / T, y: (y + h - 17) / T, flash: 0, face: 1, off: 0, state: "up", fireOn: true, used: 0, cd: 0 };
+  const size = trapSize(t.type);
+  if (size.w > 1 || size.h > 1) {
+    // Big traps are drawn shrunk to fit the box.
+    const k = Math.min((w - 2) / (size.w * T), (h - 2) / (size.h * T));
+    ctx.translate(x + w / 2 - size.w * T * k / 2, y + h - 1 - size.h * T * k);
+    ctx.scale(k, k);
+    Object.assign(fake, { x: 0, y: size.h - 1 });
+  }
   drawTrap(fake, 1, true);
   ctx.restore();
 }
@@ -7965,6 +8211,7 @@ function draw() {
     S.arrows.forEach(drawArrow);
     drawBolts();
     drawHarpoons();
+    drawBoulders();
     S.heroArrows.forEach(drawArrow);
     drawHover();
   }
@@ -8223,6 +8470,12 @@ function drawIcons() {
       if (tool === "crusher") spr = sprite(ART.crusher, Object.assign({}, STONE_PAL, { Y: "#ffb300" }), "crusher#ffb300");
       if (tool === "mine") spr = sprite(ART.mine, { r: "#ff1744", M: "#5d566a", m: "#3a3448" }, "mine#ff17441");
       if (tool === "frost") spr = sprite(ART.frostCrystal, Object.assign({}, STONE_PAL, FROST_PALS[0]), "frost1");
+      if (TRAPS[tool] && TRAPS[tool].w) {
+        // Big traps shrink to fit the icon.
+        const { w, h } = trapSize(tool), k = 16 / (Math.max(w, h) * T);
+        ctxSwap(g, () => { g.save(); g.translate(0, 16 - h * T * k); g.scale(k, k); drawTrap({ type: tool, lvl: 1, x: 0, y: h - 1, flash: 0, cd: 0 }, 1, true); g.restore(); });
+        return;
+      }
       if (["skyhook", "tar", "pendulum"].includes(tool)) {
         ctxSwap(g, () => drawTrap({ type: tool, lvl: 1, x: 0, y: tool === "pendulum" ? -0.05 : 0, flash: 0, cd: 0 }, 1, true));
         return;
