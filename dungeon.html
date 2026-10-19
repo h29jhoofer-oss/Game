@@ -214,6 +214,10 @@
     <b>Phase two:</b> the first time Vorgath falls in a fight, he transforms into the Devourer, with a second health bar
     and new attacks on the same keys: Space claw swipe, <b>Q</b> Soul Breath, <b>S</b> Cataclysm (a quake and erupting spikes),
     <b>R</b> Devour (chains drag heroes into his jaws; the weak are eaten and heal him), <b>F</b> Wailing Souls (homing skulls).<br>
+    <b>Vorgath's level:</b> heroes he kills himself on the tower don't give you souls; their souls fly into him instead (champions are worth 3, colossi 5, dark souls double).
+    Enough of them level him up: +12% health in every form and +8% damage per level. His level and the souls to the next one show beside his health bar.<br>
+    <b>Desperate heroes:</b> if no hero reaches the tower for 3 waves in a row, the Order sends heroes with 4x health on the path (red health bars) until one gets in.
+    They're back to normal once they reach the tower top.<br>
     <b>Sandbox boss battles:</b> Vorgath has twice the health in every form, and a fifth attack on <b>E</b>: Iron Tempest (spin and keep cutting, you can still walk)
     in his first form and Feast of Blood (a crimson wave that heals him for every hero hit) as the Devourer. When the Devourer falls he rises a third time
     as <b>the Unmade</b>, who hovers, can jump, and has five attacks: <b>Q</b> Void Lance (a beam across the tower top; heroes can jump it),
@@ -535,7 +539,18 @@ const DARK_POWERS = [
 ];
 const MIGHT_HP = 150, MEND_HEAL = 150, NOVA_DMG = 30;
 const activePowers = () => DARK_POWERS.filter(p => !p.passive && S.powers.has(p.id));
-const bossMaxHp = form => (form === 3 ? P3_HP : form === 2 ? P2_HP : BOSS_HP) * (S && S.mode === "sandbox" ? SANDBOX_BOSS_HP : 1) + (S && S.powers && S.powers.has("might") ? MIGHT_HP : 0) + ((S && S.fleshHp) || 0);
+const bossMaxHp = form => Math.round((form === 3 ? P3_HP : form === 2 ? P2_HP : BOSS_HP) * (S && S.mode === "sandbox" ? SANDBOX_BOSS_HP : 1) * bossLvHp()) + (S && S.powers && S.powers.has("might") ? MIGHT_HP : 0) + ((S && S.fleshHp) || 0);
+// The Hollow King levels up on the souls of heroes he kills himself, up on the tower: each level is
+// +12% health in every form and +8% damage. Those souls feed him instead of going to your soul counter.
+const BOSS_LEVEL = { hp: 0.12, dmg: 0.08 };
+const bossXpNeed = lv => 3 + 2 * lv;
+const bossLvHp = () => 1 + BOSS_LEVEL.hp * (((S && S.bossLv) || 1) - 1);
+const bossLvDmg = () => 1 + BOSS_LEVEL.dmg * (((S && S.bossLv) || 1) - 1);
+// What a hero's soul is worth to him: champions and colossi more, dark souls double.
+const bossSoulValue = (h, dark) => ({ champion: 3, colossus: 5 }[h.kind] || 1) * (dark ? 2 : 1);
+// If no hero reaches the tower for this many waves in a row, the Order sends heroes with 4x health on the path
+// until one gets in.
+const DRY_WAVES = 3, SURGE_HP = 4;
 const BOSS_HP = 600, BOSS_DMG = 30, BOSS_SPEED = 4, SLAM_DMG = 26, WAVE_DMG = 12;
 // The Hollow King's special attacks. Cooldowns are in seconds, and shorter while he is enraged.
 const ABILITIES = [
@@ -1626,7 +1641,8 @@ function makeHero(lv, kind = "knight") {
   const k = HERO_KINDS[kind];
   const grow = kind === "champion" ? champScale(lv) : { hp: 1, atk: 1 };
   // Heroes are twice as tough on the path; they're halved again when they reach the tower top.
-  const d = diff(), hp = Math.round((40 + 20 * (lv - 1)) * k.hp * grow.hp * 2 * d.hp);
+  // pathMult: how much tougher they are on the path than on the tower (x4 more while the Order is desperate).
+  const d = diff(), pathMult = 2 * (S.surge && !inArena() ? SURGE_HP : 1), hp = Math.round((40 + 20 * (lv - 1)) * k.hp * grow.hp * pathMult * d.hp);
   const names = NAMES_BY_KIND[kind];
   return {
     kind, x: START.x + 0.2, y: START.y + 0.9 - k.h, w: k.w, h: k.h, vx: 0, vy: 0, onGround: false,
@@ -1638,7 +1654,7 @@ function makeHero(lv, kind = "knight") {
     name: names[S.named++ % names.length],
     // Mages: when they next heal, and who they've empowered (ampBy on the empowered hero).
     healCd: 1.5, ampCd: 1.2, ampTarget: null, ampBy: null,
-    flying: !!k.flies, ...(k.flies ? { y: k.sky || SKY_Y } : {}), under: false, burrowT: 0.6,
+    flying: !!k.flies, ...(k.flies ? { y: k.sky || SKY_Y } : {}), under: false, burrowT: 0.6, pathMult,
   };
 }
 
@@ -1719,7 +1735,7 @@ let S;
 function newGame(title = false) {
   S = {
     mode: gameMode, diff: gameDiff, titleStep: "mode", titlePick: gameMode === "sandbox" ? 1 : 0,
-    coins: 20, souls: 2, wave: 1, kills: 0, named: 0,
+    coins: 20, souls: 2, wave: 1, kills: 0, named: 0, bossLv: 1, bossXp: 0, dry: 0, surge: false, reached: 0,
     serpents: [], bolts: [], harpoons: [], boulders: [], heroBombs: [], lavaEyes: [], tendrils: [], hunger: 0, bargains: 0, bargain: null, allies: [], shown: { coins: 20, souls: 2, dark: 0 }, coinFx: [], soulFx: [], darkSouls: 0, powers: new Set(), risen: [], monsterMenu: null,
     gain: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
     loss: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
@@ -1871,6 +1887,8 @@ function damage(target, amount, color, colors) {
     amount = Math.max(1, Math.round(amount * 0.5));
     color = "#90caf9";
   }
+  // Every blow the Hollow King lands on the tower grows with his level.
+  if (inArena() && !target.isBoss && S.heroes.includes(target) && S.bossLv > 1) amount = Math.round(amount * bossLvDmg());
   target.hp -= amount;
   Sound.play(target.isBoss ? "bossHurt" : MINIONS[target.type] ? "minionHurt" : "hit");
   target.flash = 0.12;
@@ -2872,6 +2890,8 @@ function startWave() {
   const n = roster.length;
   const gap = { brute: 1.7, champion: 2.2, colossus: 3, wisp: 0.45 };
   S.spawnQueue = roster.map((kind, i) => ({ lv: S.wave, kind, delay: i === 0 ? 0.4 : gap[kind] || 1.3 }));
+  S.surge = S.dry >= DRY_WAVES;
+  S.reached = 0;
   S.spawnT = 0;
   for (const t of S.traps) Object.assign(t, { timer: 0, off: 0, v: 0, state: "up", cd: 0, fuse: 0, rearm: 0, pulse: 2, jam: 0 });
   S.arrows = [];
@@ -2880,7 +2900,8 @@ function startWave() {
   S.phase = "wave";
   S.loot = { kills: 0, coins: 0 };
   Sound.play("horn");
-  banner(`WAVE ${S.wave}`, sandbox() ? `${n} heroes - level ${S.wave} - ${diff().name.toLowerCase()}` : `${n} heroes - ${WAVE_LORE[Math.min(S.wave, WAVE_LORE.length) - 1]}`, "#e6e0ec");
+  if (S.surge) banner(`WAVE ${S.wave}`, `${n} desperate heroes - ${SURGE_HP}x health until one reaches the tower`, "#ff5252");
+  else banner(`WAVE ${S.wave}`, sandbox() ? `${n} heroes - level ${S.wave} - ${diff().name.toLowerCase()}` : `${n} heroes - ${WAVE_LORE[Math.min(S.wave, WAVE_LORE.length) - 1]}`, "#e6e0ec");
   if (S.wave === 1 || Math.random() < 0.5) setTimeout(() => speak(S.boss, pick(TAUNTS.wave)), 1200);
   const count = kind => roster.filter(k => k === kind).length;
   const parts = Object.keys(HERO_KINDS).filter(count).map(kind => `${count(kind)} ${HERO_KINDS[kind].label}${count(kind) > 1 ? "s" : ""}`);
@@ -2950,6 +2971,7 @@ function heroReachedTower(h) {
     burst(centerX(h), centerY(h), 10, ["#ea80fc", "#80cbc4"], 3, { glow: true });
     return;
   }
+  S.reached++;
   S.heroes = S.heroes.filter(o => o !== h);
   S.towerHeroes.push(h);
   const n = S.towerHeroes.length;
@@ -2993,6 +3015,11 @@ function endWave(sub) {
   S.phase = "build";
   S.wave++;
   queueBanner("WAVE CLEARED", sub, "#ffd54f");
+  // Waves with nobody getting into the tower make the Order desperate.
+  S.dry = S.reached > 0 ? 0 : S.dry + 1;
+  S.reached = 0;
+  if (S.dry === DRY_WAVES - 1) setTimeout(() => say(`No hero has reached your tower in ${S.dry} waves. One more, and the Order sends heroes with ${SURGE_HP}x health.`), 2600);
+  if (S.dry >= DRY_WAVES) queueBanner("THE ORDER IS DESPERATE", `No hero reached the tower in ${S.dry} waves: next wave's heroes have ${SURGE_HP}x health`, "#ff5252");
   Sound.play("cleared");
   tellStory(S.wave - 1);
   say(`Wave cleared! Build up, then start wave ${S.wave}.`);
@@ -3008,6 +3035,7 @@ function swingBox(b) {
 
 // Enough heroes are inside: fade out, then they climb to the top.
 function enterTower() {
+  S.dry = 0;
   S.phase = "enter";
   S.fade = 0;
   S.arrows = [];
@@ -3026,9 +3054,11 @@ function startBossFight() {
   S.towerHeroes = [];
   // Back to normal toughness for the boss battle, and everyone fights on foot.
   for (const h of S.heroes) {
-    h.maxHp = Math.max(1, Math.round(h.maxHp / 2));
-    h.hp = Math.max(1, Math.ceil(h.hp / 2));
-    if (h.ampExtra) h.ampExtra = Math.round(h.ampExtra / 2);
+    const m = h.pathMult || 2;
+    h.maxHp = Math.max(1, Math.round(h.maxHp / m));
+    h.hp = Math.max(1, Math.ceil(h.hp / m));
+    if (h.ampExtra) h.ampExtra = Math.round(h.ampExtra / m);
+    h.pathMult = 1;
     h.flying = false;
     h.under = false;
   }
@@ -5477,8 +5507,9 @@ function dropCoins(x, y, total) {
   Sound.play("coinDrop");
 }
 
-function dropSoul(x, y, dark = false) {
-  S.soulFx.push({ x, y, ox: x, state: "rise", t: 0, wob: Math.random() * 6, dark });
+// feed: when the boss killed this hero, the soul flies into him and is worth this much to his level.
+function dropSoul(x, y, dark = false, feed = 0) {
+  S.soulFx.push({ x, y, ox: x, state: "rise", t: 0, wob: Math.random() * 6, dark, feed });
   burst(x, y, dark ? 16 : 8, dark ? ["#ea80fc", "#4a148c", "#000000"] : ["#e1f5fe", "#6fd3ff"], 2, { glow: true, g: -6 });
   Sound.play(dark ? "darkSoul" : "soulRise");
 }
@@ -5556,9 +5587,10 @@ function updateLoot(dt) {
       // Glide to the soul counter, slow at first and then swooping in.
       s.f += dt / 0.8;
       const k = Math.min(1, s.f), e = k * k * (3 - 2 * k);
-      Object.assign(s, arc(s.sx, s.sy, s.dark ? LOOT_HUD.dark : LOOT_HUD.souls, e));
+      const to = s.feed ? { x: centerX(S.boss) - camX(), y: centerY(S.boss) } : s.dark ? LOOT_HUD.dark : LOOT_HUD.souls;
+      Object.assign(s, arc(s.sx, s.sy, to, e));
       s.x += Math.sin(s.t * 9 + s.wob) * 0.08 * (1 - k);
-      if (k >= 1) { s.done = true; collect(s.dark ? "dark" : "souls", 1, s.dark ? "#ea80fc" : "#e1f5fe"); }
+      if (k >= 1) { s.done = true; if (s.feed) gainBossSoul(s.feed); else collect(s.dark ? "dark" : "souls", 1, s.dark ? "#ea80fc" : "#e1f5fe"); }
     }
     if (Math.random() < dt * (s.dark ? 45 : 30)) {
       const cols = s.dark ? ["#d500f9", "#4a148c"] : ["#6fd3ff", "#b3e5fc"];
@@ -5567,8 +5599,31 @@ function updateLoot(dt) {
     }
   }
   S.soulFx = S.soulFx.filter(s => !s.done);
-  if (!S.soulFx.some(s => !s.dark)) S.shown.souls = S.souls;
-  if (!S.soulFx.some(s => s.dark)) S.shown.dark = S.darkSouls;
+  if (!S.soulFx.some(s => !s.dark && !s.feed)) S.shown.souls = S.souls;
+  if (!S.soulFx.some(s => s.dark && !s.feed)) S.shown.dark = S.darkSouls;
+}
+
+// A soul the Hollow King took himself: it sinks into him, and enough of them raise his level.
+function gainBossSoul(n) {
+  const b = S.boss;
+  S.bossXp += n;
+  burst(centerX(b), centerY(b), 10, ["#6fd3ff", "#e1f5fe", "#ffd54f"], 3, { glow: true });
+  float(centerX(b), b.y - 0.1, `+${n} SOUL${n > 1 ? "S" : ""}`, "#6fd3ff");
+  Sound.play("soul");
+  let up = false;
+  while (S.bossXp >= bossXpNeed(S.bossLv)) { S.bossXp -= bossXpNeed(S.bossLv); S.bossLv++; up = true; }
+  if (!up) return;
+  // Stronger at once: the extra health arrives full.
+  if (!b.transform) {
+    const before = b.maxHp;
+    b.maxHp = bossMaxHp(b.form);
+    if (b.hp > 0) b.hp = Math.min(b.maxHp, b.hp + b.maxHp - before);
+  }
+  queueBanner(`LEVEL ${S.bossLv}`, `Vorgath grows stronger: +${Math.round(BOSS_LEVEL.hp * 100)}% health, +${Math.round(BOSS_LEVEL.dmg * 100)}% damage`, "#ffd54f");
+  float(centerX(b), b.y - 0.6, "LEVEL UP!", "#ffd54f");
+  burst(centerX(b), centerY(b), 30, ["#ffd54f", "#fff59d", "#ffffff"], 6, { glow: true });
+  S.shake = Math.max(S.shake, 4);
+  Sound.play("unlock");
 }
 
 function heroDied(h) {
@@ -5594,9 +5649,10 @@ function heroDied(h) {
   if (h.kind === "mage") unamplify(h.ampTarget);
   if (h.ampBy && h.ampBy.ampTarget === h) h.ampBy.ampTarget = null;
   S.coins += coins;
-  // One soul per hero; now and then it's a dark one.
-  const dark = Math.random() < DARK_SOUL_CHANCE;
-  if (dark) S.darkSouls += 1;
+  // One soul per hero; now and then it's a dark one. Up on the tower it's his kill, and the soul feeds him instead.
+  const dark = Math.random() < DARK_SOUL_CHANCE, byBoss = inArena();
+  if (byBoss) { /* counted when it reaches him: see gainBossSoul */ }
+  else if (dark) S.darkSouls += 1;
   else S.souls += 1;
   addHunger(dark ? 2 : 0.5);
   S.kills++;
@@ -5611,8 +5667,8 @@ function heroDied(h) {
     if (!S.dialog.cur && Math.random() < 0.5) speak(S.boss, pick(TAUNTS.dragged));
   } else burst(hx, hy, 24, h.lava ? ["#ffb300", "#ff6f00", "#fff59d"] : ["#d32f2f", gear.main, gear.shade], 6, { glow: !!h.lava });
   dropCoins(hx, hy, coins);
-  dropSoul(hx, hy - 0.3, dark);
-  if (dark && !S.seenDark) {
+  dropSoul(hx, hy - 0.3, dark, byBoss ? bossSoulValue(h, dark) : 0);
+  if (dark && !S.seenDark && !byBoss) {
     S.seenDark = true;
     deferLine("B", "A DARK SOUL. BLACK AS MY OWN. IT WILL MAKE US TERRIBLE.");
     setTimeout(() => say("A dark soul! Spend dark souls on Dark Powers for the boss battle (below the toolbar), or click a monster and give it one."), 900);
@@ -8852,6 +8908,9 @@ function drawHud() {
       drawMeter(bx, by, bw, 4, b.hp / b.maxHp, "#3b1016", "#c62828", "#ef5350");
     }
     drawText(hpText, bx + bw, by - 10, "#8a8296", { align: "right" });
+    // His level, and the souls he still needs for the next one.
+    drawText(`LV ${S.bossLv}`, bx + bw / 2 + 30, by - 10, "#ffd54f");
+    drawMeter(bx, by + 5, bw, 1, S.bossXp / bossXpNeed(S.bossLv), "#2a2236", "#c9a227", "#ffd54f");
     drawAbilityBar(b);
     return;
   }
@@ -8873,7 +8932,8 @@ function drawHud() {
   }
   if (inside > TOWER_LIMIT) drawText(`+${inside - TOWER_LIMIT}`, 293 + TOWER_LIMIT * 9 + 2, 5, "#ff5252");
 
-  drawText(BOSS_NAME, W * T - 93, 5, "#ff8a80", { align: "right" });
+  drawText(`LV${S.bossLv}`, W * T - 93, 5, "#ffd54f", { align: "right" });
+  drawMeter(W * T - 88, 12, 80, 1, S.bossXp / bossXpNeed(S.bossLv), "#2a2236", "#c9a227", "#ffd54f");
   drawMeter(W * T - 88, 6, 80, 5, b.hp / b.maxHp, "#3b1016", "#c62828", "#ef5350");
 }
 
@@ -9001,7 +9061,7 @@ function draw() {
 
   if (!arena) for (const m of S.minions) if (m.hp < m.maxHp || m.dark) drawBar(m, m.type === "golem" ? 16 : 10, m.dark ? "#d500f9" : "#e53935");
   for (const a of S.allies) drawBar(a, a.kind === "marshal" ? 24 : 12, "#9cff9c");
-  for (const h of S.heroes) if (h.part !== "core" && !(h.warn > 0) && !h.under) drawBar(h, h.kind === "colossus" ? 32 : h.kind === "champion" ? 24 : h.kind === "wisp" ? 8 : 12, h.ampBy ? "#76ff03" : h.kind === "champion" ? "#ffd54f" : "#64b5f6");
+  for (const h of S.heroes) if (h.part !== "core" && !(h.warn > 0) && !h.under) drawBar(h, h.kind === "colossus" ? 32 : h.kind === "champion" ? 24 : h.kind === "wisp" ? 8 : 12, h.ampBy ? "#76ff03" : h.pathMult > 2 ? "#ff5252" : h.kind === "champion" ? "#ffd54f" : "#64b5f6");
   drawFloats();
   ctx.restore();
 

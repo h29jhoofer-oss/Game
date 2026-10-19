@@ -17,6 +17,11 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
     - *Nightmare:* 220% health, 170% damage, 15% faster, 4 extra heroes each wave, 30% less gold, and you start with 15.
     Each difficulty keeps its own best wave, saved in the browser and shown on its card and on the death screen.
   - "Play again" returns to the title, so you can switch modes.
+- **Boss level:** heroes Vorgath kills himself in the boss battle don't add to your soul counter. Their souls fly into him and level him up instead.
+  - Champions are worth 3 souls, colossi 5, and dark souls count double.
+  - Level n needs 3 + 2n souls. Each level gives +12% health in every form (filled at once if it happens mid-fight) and +8% damage on the tower.
+  - The level shows in the HUD next to his health, with a gold bar for the souls he needs for the next level.
+- **Desperate heroes:** if no hero reaches the tower in 3 waves in a row, the next waves' heroes have 4x health on the path, with red health bars, until one gets in. On the tower top they have their normal health. This works in both modes.
 - **Sandbox boss battles:** Vorgath has twice the health in every form (1200, then 1440, then 1800, before Unholy Might), a fifth attack on E in each form, and a third form.
   - Form 1 (E) **Iron Tempest:** he spins with the cleaver out for 1.4s, hitting everyone within 2.8 tiles every 0.2s. He can still walk while it spins.
   - Form 2 (E) **Feast of Blood:** after a short gathering, a crimson wave hits every hero within 6 tiles for 22, and heals him 14 for each one.
