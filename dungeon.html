@@ -6383,23 +6383,7 @@ const PATH_CRUSHERS = {
 const PATH_FROST = { blizzard: { C: "#e1f5fe", c: "#ffffff", W: "#b3e5fc" }, deepfreeze: { C: "#2962ff", c: "#82b1ff", W: "#0d47a1" } };
 const PATH_TURRETS = { ballista: { S: "#8d6e63", s: "#5d4037", eye: "#ffd54f" }, twin: { S: "#5e4b7a", s: "#3f3156", eye: "#b388ff" } };
 
-// An iron pole from the ground (or the lava) up to a trap hanging in the air.
-function drawPole(cx, top, tx, ty, alpha, colors = ["#4a4458", "#6b6378"]) {
-  let bot = ty;
-  while (bot < H - 1 && !isSolid(tx, bot + 1)) bot++;
-  const len = (bot + 1) * T - top;
-  if (len <= 0) return;
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = OUTLINE;
-  ctx.fillRect(cx - 2, top, 4, len);
-  ctx.fillStyle = colors[0];
-  ctx.fillRect(cx - 1, top, 2, len);
-  ctx.fillStyle = colors[1];
-  ctx.fillRect(cx - 1, top, 1, len);
-  ctx.globalAlpha = 1;
-}
-
-// preview: draw just the trap itself (no poles, chains or markers), for the cards in the trap tab.
+// preview: draw just the trap itself (no markers), for the cards in the trap tab.
 function drawTrap(t, alpha = 1, preview = false) {
   const X = t.x * T, Y = t.y * T, path = t.path;
   if (t.type === "spike") {
@@ -6419,12 +6403,10 @@ function drawTrap(t, alpha = 1, preview = false) {
     const look = PATH_SAWS[path];
     let sx = X + 8;
     if (path === "patrol") {
-      // A steel rail between two posts; the blade runs along it.
+      // A steel rail; the blade runs along it.
       const { l, r } = sawRail(t);
       if (!preview) {
         const x1 = X - l * T + 3, x2 = X + (r + 1) * T - 3;
-        drawPole(x1 + 1, Y + 9, t.x - l, t.y, alpha, ["#01579b", "#4fc3f7"]);
-        drawPole(x2 - 1, Y + 9, t.x + r, t.y, alpha, ["#01579b", "#4fc3f7"]);
         ctx.globalAlpha = alpha;
         ctx.fillStyle = OUTLINE;
         ctx.fillRect(x1 - 1, Y + 6, x2 - x1 + 2, 5);
@@ -6435,34 +6417,14 @@ function drawTrap(t, alpha = 1, preview = false) {
         ctx.globalAlpha = 1;
         sx += sawSlide(t) * T;
       }
-    } else if (!preview) drawPole(X + 8, Y + 8, t.x, t.y, alpha, path === "ripper" ? ["#5d2a1a", "#8d4a2f"] : undefined);
+    }
     drawSaw(sx, Y + 8, t.lvl, S.time * (t.flash > 0 ? 30 : path === "ripper" ? 9 : 14), alpha, look);
   } else if (t.type === "fire") {
     drawFireVent(t, X, Y, alpha, preview);
   } else if (t.type === "crusher") {
-    // A chain from the top of the screen holds the block; it drops and winches back up.
+    // The block drops and rises back up.
     const look = PATH_CRUSHERS[path];
     const by = Math.round(Y + (preview ? 0 : t.off || 0) * T);
-    if (!preview) {
-      ctx.globalAlpha = alpha;
-      if (path === "piston") {
-        // A brass piston rod instead of a chain.
-        ctx.fillStyle = OUTLINE;
-        ctx.fillRect(X + 5, 18, 6, by - 17);
-        ctx.fillStyle = "#c79a1e";
-        ctx.fillRect(X + 6, 18, 4, by - 17);
-        ctx.fillStyle = "#ffe082";
-        ctx.fillRect(X + 6, 18, 1, by - 17);
-      } else {
-        for (let y = 18; y < by + 1; y += 4) {
-          ctx.fillStyle = OUTLINE;
-          ctx.fillRect(X + 6, y, 4, 3);
-          ctx.fillStyle = path === "obsidian" ? (y % 8 ? "#5e35b1" : "#311b92") : y % 8 ? "#6b6378" : "#4a4458";
-          ctx.fillRect(X + 7, y, 2, 2);
-        }
-      }
-      ctx.globalAlpha = 1;
-    }
     const angry = t.state === "fall" || t.state === "down";
     const eye = angry ? "#ff1744" : look ? look.Y : ["#ffb300", "#ff7043", "#ff1744"][t.lvl - 1];
     const pal = Object.assign({}, STONE_PAL, look || {}, { Y: eye });
@@ -6541,22 +6503,6 @@ function drawTrap(t, alpha = 1, preview = false) {
       ctx.globalAlpha = 1;
     }
   } else {
-    // A carved stone pillar from the ground holds up the gargoyle.
-    let bot = t.y;
-    while (bot < H - 1 && !isSolid(t.x, bot + 1)) bot++;
-    const ph = (bot + 1) * T - (Y + 13);
-    if (ph > 0 && !preview) {
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = OUTLINE;
-      ctx.fillRect(X + 4, Y + 13, 8, ph);
-      ctx.fillStyle = "#4a4456";
-      ctx.fillRect(X + 5, Y + 13, 6, ph);
-      ctx.fillStyle = "#6b6378";
-      ctx.fillRect(X + 5, Y + 13, 1, ph);
-      ctx.fillStyle = "#2e2a38";
-      for (let yy = Y + 18; yy < Y + 13 + ph; yy += 8) ctx.fillRect(X + 5, yy, 6, 1);
-      ctx.globalAlpha = 1;
-    }
     const look = PATH_TURRETS[path];
     const eye = t.flash > 0 ? "#ffffff" : look ? look.eye : TURRET_EYES[t.lvl - 1];
     const spr = sprite(ART.turret, { S: look ? look.S : "#6b6378", s: look ? look.s : "#4a4456", Y: eye, k: "#3b0a0d" }, "turret" + (path || "") + eye);
