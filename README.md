@@ -17,6 +17,21 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
     - *Nightmare:* 220% health, 170% damage, 15% faster, 4 extra heroes each wave, 30% less gold, and you start with 15.
     Each difficulty keeps its own best wave, saved in the browser and shown on its card and on the death screen.
   - "Play again" returns to the title, so you can switch modes.
+- **Sandbox heroes:** eleven kinds that only march in sandbox mode, joining from wave 6.
+  - **Fliers** (only arrow turrets, tesla coils and skyhooks can reach them while airborne; they fight on foot in the tower):
+    - Lantern Wisps (8): tiny, very fast lights that come in packs of three.
+    - Gryphon Riders (11): knights on gryphons; tough and slow.
+    - Balloon Bombers (13): drop firepots on the traps below, jamming everything near where they land for 3s.
+    - Sky Priestesses (16): fly overhead healing the heroes around them.
+  - **Burrowers** (out of reach of every trap and monster while underground; they have to surface to jump pits and climb ledges):
+    - Tunnel Miners (7): dig 2.6s, then surface for 2s.
+    - Burrow Stalkers (14): underground for 6s at a time, and burst up under monsters to ambush them.
+  - **Ground heroes with special abilities:**
+    - Aegis Bearers (6): heroes inside the blue ring around one take half damage on the path.
+    - Exorcists (9): a holy pulse that damages and stuns your monsters nearby.
+    - Martyrs (12): when one dies, every hero near it heals 35% of their health.
+    - Illusionists (15): split into two illusions the first time they drop below 75% health. Illusions drop nothing and fade at the tower door.
+  - **Siege Colossus:** a giant twice the size of an Iron Knight with 9 times a knight's health, heavy blows and a slow, shaking stride. One comes at the back of every fifth wave from wave 10, with one more for every 20 waves after that.
 - **The Thing Below (25 waves):** the story now runs 25 waves, alternating the Marshal and the Voice Below, the thing Vorgath bargained with.
   - **The Hunger:** every soul feeds it (dark souls and bargains most). As it grows: tremors (15), eyes opening in the lava (30), a heartbeat (45), tendrils that drag heroes near pits into the lava (60), and your own monsters too (75).
   - **Bargains:** after waves 4, 7, 10, 13, 16, 19 and 22 the Voice offers three deals (keys 1-3, Esc refuses): Burning Traps (+50% trap damage next wave for 5 souls), Flesh for Iron (sacrifice a monster for +100 max health), A Debt (2 dark souls now; in two waves it takes half your coins and a trap), Gold from the Deep (+60 coins, 3 extra heroes), Souls of the Drowned (+5 souls), A Gift of Darkness (a free dark power).

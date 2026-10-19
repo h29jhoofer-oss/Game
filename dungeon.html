@@ -177,7 +177,7 @@
     <summary>How to play</summary>
     You are the boss, waiting at the top of your castle tower. Each wave, a group of heroes runs and jumps through the level to reach it.
     Heroes who make it through the door hide inside the tower. Once 5 are inside, they climb up and fight you all at once.<br>
-    <b>Modes:</b> <b>Story</b> is the 25-wave tale of the tower and what lies under it. <b>Sandbox</b> has no story and no last wave: the heroes keep coming, a level stronger each wave. Pick Easy, Normal, Hard or Nightmare for it; each keeps its own best wave.<br>
+    <b>Modes:</b> <b>Story</b> is the 25-wave tale of the tower and what lies under it. <b>Sandbox</b> has no story and no last wave: the heroes keep coming, a level stronger each wave, joined by eleven sandbox-only heroes (fliers, burrowers, a Siege Colossus every fifth wave from 10, and more). Pick Easy, Normal, Hard or Nightmare for it; each keeps its own best wave.<br>
     <b>Build:</b> pick a tool and click the level. Spikes go on the ground; saws and turrets go anywhere, even over the lava pits.
     Click a placed trap to open its tab on the right side of the screen: upgrade it (U) or sell it for half what you paid (X).
     <b>The Thing Below:</b> every soul the tower takes feeds something beneath it (dark souls and bargains most of all). As it
@@ -611,6 +611,17 @@ HERO_LINES.berserker = ["BLOOD AND ICE!", "I FEAR NO COLD!", "RAAAAGH!"];
 HERO_LINES.sapper = ["I'LL JAM EVERY GEAR YOU OWN.", "NICE TRAP. SHAME ABOUT IT.", "CLANK, AND IT'S DONE."];
 HERO_LINES.champion = ["KNEEL, HOLLOW KING.", "I HAVE SLAIN GREATER THINGS THAN YOU.", "FOLLOW ME TO THE TOWER!", "THE DAWN MARCHES WITH ME."];
 const DEBUT = {
+  aegis: { hero: "", boss: "", tip: "Aegis Bearers are here: heroes inside the blue ring around one take half damage. Kill the bearer first." },
+  miner: { hero: "", boss: "", tip: "Tunnel Miners are here: they dig under your traps, then come up for air. They must surface to jump pits." },
+  wisp: { hero: "", boss: "", tip: "Lantern Wisps are here: tiny, fast fliers in packs of three. Only turrets, tesla coils and skyhooks reach them." },
+  exorcist: { hero: "", boss: "", tip: "Exorcists are here: their holy light burns and stuns your monsters nearby." },
+  gryphon: { hero: "", boss: "", tip: "Gryphon Riders are here: tough, slow fliers. Only turrets, tesla coils and skyhooks reach them." },
+  martyr: { hero: "", boss: "", tip: "Martyrs are here: when one dies, it heals every hero near it. Kill them away from the others." },
+  bomber: { hero: "", boss: "", tip: "Balloon Bombers are here: they drop firepots that jam your traps. Shoot them down with turrets, tesla coils or skyhooks." },
+  stalker: { hero: "", boss: "", tip: "Burrow Stalkers are here: underground nearly the whole way, they burst up under your monsters. Catch them at the pits." },
+  illusionist: { hero: "", boss: "", tip: "Illusionists are here: hurt one and it splits into two illusions. Illusions drop nothing and vanish at the door." },
+  priestess: { hero: "", boss: "", tip: "Sky Priestesses are here: they fly overhead healing the heroes below. Only turrets, tesla coils and skyhooks reach them." },
+  colossus: { hero: "", boss: "", tip: "A Siege Colossus! Enormous, slow and incredibly tough. One comes every fifth wave." },
   seraph: { hero: "", boss: "",
     tip: "Dawn Seraphs are here: they fly over the whole path. Only arrow turrets, tesla coils and skyhooks can hit them, and a skyhook drags them down." },
   rogue: { hero: "SOFT FEET, BROTHERS. HIS SPIKES WON'T EVEN FEEL ME.", boss: "A THIEF IN MY HALLS. I WILL FIND YOU.",
@@ -788,7 +799,7 @@ function updateHunger(dt) {
       d.tendril = 16 + Math.random() * 8 - hu / 10;
       // It reaches for a hero near a pit, and once it is hungry enough, sometimes for your own monsters.
       const nearPit = e => [-1, 0, 1].some(o => tileAt(Math.floor(centerX(e)) + o, H - 1) === "L");
-      const heroes = S.heroes.filter(h => nearPit(h) && !h.flying && !h.serpentHeld && h.kind !== "champion");
+      const heroes = S.heroes.filter(h => nearPit(h) && !h.flying && !h.under && !h.serpentHeld && h.kind !== "champion");
       const mons = hu >= 75 ? S.minions.filter(nearPit) : [];
       const prey = mons.length && Math.random() < 0.35 ? pick(mons) : heroes.length ? pick(heroes) : null;
       if (prey) {
@@ -1526,12 +1537,33 @@ Object.assign(HERO_KINDS, {
 HERO_KINDS.seraph = { label: "Dawn Seraph", hp: 0.9, atk: 1.1, speed: 3.3, airSpeed: 3.9, w: 0.6, h: 0.9, coins: 2, cd: 0.8, flies: true,
   immune: ["spike", "saw", "fire", "crusher", "mine", "frost", "tar", "pendulum", "grinder", "boulder", "fireball", "burn"] };
 const SKY_Y = 4.2;
+// Heroes who only march in sandbox mode (see ROSTER). Fliers take the seraph's immunities while airborne;
+// sky is the height they glide at. Burrowers spend part of the path underground, out of reach of everything.
+const FLIER_IMMUNE = HERO_KINDS.seraph.immune;
+Object.assign(HERO_KINDS, {
+  gryphon: { label: "Gryphon Rider", hp: 2.0, atk: 1.4, speed: 2.6, airSpeed: 3.9, w: 0.9, h: 1.1, coins: 3, cd: 0.9, flies: true, sky: 3.5, noDodge: true, immune: FLIER_IMMUNE },
+  wisp: { label: "Lantern Wisp", hp: 0.25, atk: 0.4, speed: 5.2, airSpeed: 5, w: 0.4, h: 0.4, coins: 1, cd: 0.5, flies: true, sky: 4.8, immune: FLIER_IMMUNE },
+  bomber: { label: "Balloon Bomber", hp: 1.1, atk: 0.9, speed: 2.2, airSpeed: 3.9, w: 0.6, h: 0.9, coins: 3, cd: 0.9, flies: true, sky: 3.6, immune: FLIER_IMMUNE },
+  priestess: { label: "Sky Priestess", hp: 0.8, atk: 0.4, speed: 3.0, airSpeed: 3.9, w: 0.6, h: 0.9, coins: 3, cd: 1.0, flies: true, sky: 4.4, immune: FLIER_IMMUNE },
+  colossus: { label: "Siege Colossus", hp: 9, atk: 3, speed: 1.1, airSpeed: 4.8, jump: 1.15, w: 1.5, h: 2.2, coins: 10, cd: 1.8, noDodge: true, smart: -1, step: 0.7, heavy: true, scale: 2 },
+  miner: { label: "Tunnel Miner", hp: 1.1, atk: 0.9, speed: 3.2, airSpeed: 3.9, w: 0.6, h: 0.9, coins: 2, cd: 0.8, burrow: { under: 2.6, up: 2, speed: 0.8 } },
+  stalker: { label: "Burrow Stalker", hp: 0.8, atk: 1.3, speed: 3.4, airSpeed: 4.0, w: 0.6, h: 0.9, coins: 3, cd: 0.6, burrow: { under: 6, up: 1.2, speed: 0.6, erupt: true } },
+  aegis: { label: "Aegis Bearer", hp: 1.5, atk: 0.8, speed: 3.0, airSpeed: 3.9, w: 0.6, h: 0.9, coins: 3, cd: 0.9, noDodge: true },
+  exorcist: { label: "Exorcist", hp: 0.9, atk: 0.7, speed: 3.2, airSpeed: 3.9, w: 0.6, h: 0.9, coins: 2, cd: 1.0 },
+  martyr: { label: "Martyr", hp: 1.0, atk: 1.0, speed: 3.6, airSpeed: 3.9, w: 0.6, h: 0.9, coins: 2, cd: 0.8 },
+  illusionist: { label: "Illusionist", hp: 0.8, atk: 0.8, speed: 3.8, airSpeed: 4.0, w: 0.6, h: 0.9, coins: 3, cd: 0.7, dodge: 0.15 },
+});
+// Aegis bearers halve the damage heroes near them take; exorcists stun and burn your monsters; martyrs heal
+// everyone near them as they die; illusionists split into two illusions the first time they're badly hurt.
+const AEGIS_RADIUS = 2.4, EXORCIST = { radius: 3.2, cd: 4.5, stun: 1.2 }, MARTYR_RADIUS = 3.5, PRIESTESS = { radius: 3.6, cd: 3.5 };
 HERO_KINDS.archer.ranged = true;
 // The Marshal fights like a Champion; "thing" covers the parts of the Thing Below in the finale.
 HERO_KINDS.marshal = Object.assign({}, HERO_KINDS.champion, { label: "Marshal" });
 HERO_KINDS.thing = { label: "thing", hp: 1, atk: 1, speed: 0, w: 1, h: 1, coins: 0, cd: 1, noDodge: true };
 const IMMUNE_NAMES = { grinder: "grinders", boulder: "boulders", pendulum: "pendulums", spike: "spikes", mine: "bombs", fire: "fire", fireball: "fireballs", burn: "burning", frost: "frost", crusher: "crushers", saw: "saw blades" };
-const immuneTo = (h, src) => !!src && !(h.kind === "seraph" && !h.flying) && (HERO_KINDS[h.kind].immune || []).includes(src);
+const immuneTo = (h, src) => !!src && !(HERO_KINDS[h.kind].flies && !h.flying) && (HERO_KINDS[h.kind].immune || []).includes(src);
+// Can a trap or monster reach this hero at all? Not while they're dodging, or burrowed underground.
+const exposed = h => !(h.evade > 0) && !h.under;
 // A trap passing harmlessly over an immune hero says so, now and then.
 function shrug(h) {
   if ((h.immuneT || 0) > S.time) return;
@@ -1555,6 +1587,17 @@ const NAMES_BY_KIND = {
   berserker: ["Ulfgar", "Brynja", "Hrothgar", "Sigrun", "Torvald"],
   seraph: ["Seraph Aurel", "Seraph Liora", "Seraph Cassiel", "Seraph Mirren", "Seraph Ithiel"],
   sapper: ["Sapper Dunn", "Sapper Pike", "Sapper Hobb", "Sapper Wedge", "Sapper Rusk"],
+  gryphon: ["Sir Talon", "Dame Skyla", "Sir Corvane", "Dame Aquila", "Sir Hawke"],
+  wisp: ["Wisp", "Lantern Wisp", "Dawnmote", "Glimmer", "Wisp of the Dawn"],
+  bomber: ["Bombardier Fitch", "Bombardier Sully", "Bombardier Quill", "Bombardier Nash"],
+  priestess: ["Sister Aria", "Sister Celeste", "Sister Wren", "Mother Halcyon", "Sister Elowen"],
+  colossus: ["The Bastion", "The Iron Mountain", "The Unbroken", "The Siege-Father", "The Last Wall"],
+  miner: ["Digger Rourke", "Digger Mabb", "Digger Flint", "Digger Hale", "Digger Stoat"],
+  stalker: ["The Mole", "Gravetooth", "Underfoot", "Silt", "Burrow-Kin Vash"],
+  aegis: ["Shieldmaiden Ingrid", "Sir Barric", "Shieldmaiden Hel", "Sir Ward", "Sir Tarn"],
+  exorcist: ["Father Quintus", "Brother Absalom", "Father Ambrose", "Sister Prudence", "Brother Silas"],
+  martyr: ["Brother Mercy", "Sister Sorrow", "Brother Ashen", "Sister Penance", "Brother Vigil"],
+  illusionist: ["Mirelle the Many", "Twofold Tam", "Seren Mirrorglass", "Vashti Glamour", "Pell the Doubled"],
 };
 
 function makeHero(lv, kind = "knight") {
@@ -1573,7 +1616,7 @@ function makeHero(lv, kind = "knight") {
     name: names[S.named++ % names.length],
     // Mages: when they next heal, and who they've empowered (ampBy on the empowered hero).
     healCd: 1.5, ampCd: 1.2, ampTarget: null, ampBy: null,
-    flying: !!k.flies, ...(k.flies ? { y: SKY_Y } : {}),
+    flying: !!k.flies, ...(k.flies ? { y: k.sky || SKY_Y } : {}), under: false, burrowT: 0.6,
   };
 }
 
@@ -1591,17 +1634,31 @@ const ROSTER = [
   { kind: "berserker", from: 8, weight: 1, cap: 4 },
   { kind: "sapper", from: 9, weight: 0.8, cap: 5 },
   { kind: "seraph", from: 10, weight: 0.9, cap: 4 },
+  // Sandbox only. Lantern wisps come in packs of three; Siege Colossi are added on their own (see waveRoster).
+  { kind: "aegis", from: 6, weight: 0.7, cap: 5, sandbox: true },
+  { kind: "miner", from: 7, weight: 0.8, cap: 4, sandbox: true },
+  { kind: "wisp", from: 8, weight: 0.5, cap: 3, pack: 3, sandbox: true },
+  { kind: "exorcist", from: 9, weight: 0.7, cap: 5, sandbox: true },
+  { kind: "gryphon", from: 11, weight: 0.6, cap: 5, sandbox: true },
+  { kind: "martyr", from: 12, weight: 0.7, cap: 5, sandbox: true },
+  { kind: "bomber", from: 13, weight: 0.6, cap: 5, sandbox: true },
+  { kind: "stalker", from: 14, weight: 0.6, cap: 5, sandbox: true },
+  { kind: "illusionist", from: 15, weight: 0.6, cap: 5, sandbox: true },
+  { kind: "priestess", from: 16, weight: 0.5, cap: 6, sandbox: true },
 ];
+const COLOSSUS_EVERY = 5, COLOSSUS_FROM = 10;
 function waveRoster(w) {
   const n = heroesInWave(w), list = [];
   const has = kind => list.filter(k => k === kind).length;
   for (let i = 0; i < n; i++) {
-    const open = ROSTER.filter(r => w >= r.from && (!r.cap || has(r.kind) < Math.ceil(n / r.cap)));
+    const open = ROSTER.filter(r => (!r.sandbox || sandbox()) && w >= r.from && (!r.cap || has(r.kind) < Math.ceil(n / r.cap)));
     let roll = Math.random() * open.reduce((a, r) => a + r.weight, 0);
     const pickR = open.find(r => (roll -= r.weight) < 0) || open[0];
-    list.push(pickR.kind);
+    for (let j = 0; j < (pickR.pack || 1); j++) list.push(pickR.kind);
   }
-  ROSTER.forEach((r, i) => { if (w === r.from && i > 0 && !list.includes(r.kind)) list[Math.min(n - 1, i)] = r.kind; });
+  ROSTER.forEach((r, i) => { if ((!r.sandbox || sandbox()) && w === r.from && i > 0 && !list.includes(r.kind)) list[Math.min(n - 1, i)] = r.kind; });
+  // Every fifth wave in sandbox, a Siege Colossus (more of them later on) brings up the rear.
+  if (sandbox() && w >= COLOSSUS_FROM && w % COLOSSUS_EVERY === 0) for (let c = 0; c <= Math.floor((w - COLOSSUS_FROM) / 20); c++) list.push("colossus");
   // Champions march in the back half of the column, behind the heroes they lead.
   for (let c = 0; c < championsInWave(w); c++) list.splice(Math.floor(n * (0.5 + 0.4 * Math.random())), 0, "champion");
   return list;
@@ -1641,7 +1698,7 @@ function newGame(title = false) {
   S = {
     mode: gameMode, diff: gameDiff, titleStep: "mode", titlePick: gameMode === "sandbox" ? 1 : 0,
     coins: 20, souls: 2, wave: 1, kills: 0, named: 0,
-    serpents: [], bolts: [], harpoons: [], boulders: [], lavaEyes: [], tendrils: [], hunger: 0, bargains: 0, bargain: null, allies: [], shown: { coins: 20, souls: 2, dark: 0 }, coinFx: [], soulFx: [], darkSouls: 0, powers: new Set(), risen: [], monsterMenu: null,
+    serpents: [], bolts: [], harpoons: [], boulders: [], heroBombs: [], lavaEyes: [], tendrils: [], hunger: 0, bargains: 0, bargain: null, allies: [], shown: { coins: 20, souls: 2, dark: 0 }, coinFx: [], soulFx: [], darkSouls: 0, powers: new Set(), risen: [], monsterMenu: null,
     gain: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
     loss: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
     traps: [], minions: [], arrows: [], waves: [], boss: makeBoss(),
@@ -1787,6 +1844,11 @@ function damage(target, amount, color, colors) {
   if (target.invuln) return;
   // The Thing's hide shrugs off most blows; its open eye does not.
   if (target.armor) { amount = Math.max(1, Math.round(amount * (1 - target.armor))); color = "#8a8296"; }
+  // Under an aegis bearer's shield, heroes on the path take half damage.
+  if (target.kind && !target.part && !inArena() && S.heroes.some(o => o.kind === "aegis" && !o.under && Math.hypot(centerX(o) - centerX(target), centerY(o) - centerY(target)) < AEGIS_RADIUS)) {
+    amount = Math.max(1, Math.round(amount * 0.5));
+    color = "#90caf9";
+  }
   target.hp -= amount;
   Sound.play(target.isBoss ? "bossHurt" : MINIONS[target.type] ? "minionHurt" : "hit");
   target.flash = 0.12;
@@ -2784,19 +2846,20 @@ function startWave() {
   const roster = waveRoster(S.wave);
   if (S.extraHeroes && S.extraHeroes.wave === S.wave) for (let i = 0; i < S.extraHeroes.n; i++) roster.push(pick(["knight", "archer", "brute"]));
   const n = roster.length;
-  const gap = { brute: 1.7, champion: 2.2 };
+  const gap = { brute: 1.7, champion: 2.2, colossus: 3, wisp: 0.45 };
   S.spawnQueue = roster.map((kind, i) => ({ lv: S.wave, kind, delay: i === 0 ? 0.4 : gap[kind] || 1.3 }));
   S.spawnT = 0;
   for (const t of S.traps) Object.assign(t, { timer: 0, off: 0, v: 0, state: "up", cd: 0, fuse: 0, rearm: 0, pulse: 2, jam: 0 });
   S.arrows = [];
   S.boulders = [];
+  S.heroBombs = [];
   S.phase = "wave";
   S.loot = { kills: 0, coins: 0 };
   Sound.play("horn");
   banner(`WAVE ${S.wave}`, sandbox() ? `${n} heroes - level ${S.wave} - ${diff().name.toLowerCase()}` : `${n} heroes - ${WAVE_LORE[Math.min(S.wave, WAVE_LORE.length) - 1]}`, "#e6e0ec");
   if (S.wave === 1 || Math.random() < 0.5) setTimeout(() => speak(S.boss, pick(TAUNTS.wave)), 1200);
   const count = kind => roster.filter(k => k === kind).length;
-  const parts = ["champion", "knight", "archer", "brute", "mage", "rogue", "warden", "berserker", "sapper", "seraph"].filter(count).map(kind => `${count(kind)} ${HERO_KINDS[kind].label}${count(kind) > 1 ? "s" : ""}`);
+  const parts = Object.keys(HERO_KINDS).filter(count).map(kind => `${count(kind)} ${HERO_KINDS[kind].label}${count(kind) > 1 ? "s" : ""}`);
   say(`Lv ${S.wave} heroes storm your castle: ${parts.join(", ")}. If ${TOWER_LIMIT} get into the tower, they come for you.`);
 }
 
@@ -2812,6 +2875,13 @@ function spawnHeroes(dt) {
     S.shake = Math.max(S.shake, 3);
     Sound.play("horn");
     float(centerX(h), h.y - 0.4, "CHAMPION", "#ffd54f");
+  }
+  if (h.kind === "colossus") {
+    S.shake = Math.max(S.shake, 5);
+    Sound.play("horn");
+    Sound.play("quake");
+    float(centerX(h), h.y - 0.4, "SIEGE COLOSSUS", "#ff8a65");
+    banner("SIEGE COLOSSUS", `${h.name} is coming`, "#ff8a65");
   }
   if (!S.seenKinds.has(h.kind)) {
     // The first of a new kind introduces itself, and Vorgath answers.
@@ -2850,6 +2920,12 @@ function updateOpening(dt) {
 }
 
 function heroReachedTower(h) {
+  if (h.decoy) {
+    // An illusion at the door just fades away.
+    S.heroes = S.heroes.filter(o => o !== h);
+    burst(centerX(h), centerY(h), 10, ["#ea80fc", "#80cbc4"], 3, { glow: true });
+    return;
+  }
   S.heroes = S.heroes.filter(o => o !== h);
   S.towerHeroes.push(h);
   const n = S.towerHeroes.length;
@@ -2930,7 +3006,9 @@ function startBossFight() {
     h.hp = Math.max(1, Math.ceil(h.hp / 2));
     if (h.ampExtra) h.ampExtra = Math.round(h.ampExtra / 2);
     h.flying = false;
+    h.under = false;
   }
+  S.heroBombs = [];
   // They climb out of the hatch in a line.
   S.heroes.forEach((h, i) => {
     const slot = Math.min(i, 7) * 0.8;
@@ -3628,6 +3706,7 @@ function update(dt) {
     updateArrows(dt);
     updateHarpoons(dt);
     updateBoulders(dt);
+    updateHeroBombs(dt);
     S.bolts.forEach(b => (b.t -= dt));
     S.bolts = S.bolts.filter(b => b.t > 0);
     updateHeroArrows(dt);
@@ -3950,7 +4029,7 @@ function updateHero(h, dt) {
   if (HERO_KINDS[h.kind].ranged) { updateArcher(h, dt, arena); return; }
 
   // Fight a minion standing in the way (in the level), or the boss (on the tower).
-  const foe = arena ? null : S.minions.find(m =>
+  const foe = arena || h.under ? null : S.minions.find(m =>
     Math.abs(centerY(m) - centerY(h)) < 0.8 && m.x - (h.x + h.w) < 0.4 && m.x + m.w > h.x - 0.2);
   const atBoss = arena && h.x + h.w > b.x - 0.4 && h.x < b.x + b.w + 0.4 && Math.abs(centerY(b) - centerY(h)) < 1.5;
   const target = foe || (atBoss ? b : null);
@@ -3964,14 +4043,18 @@ function updateHero(h, dt) {
       h.cd = HERO_KINDS[h.kind].cd;
       h.atkAnim = 0.18;
       if (h.kind === "brute") S.shake = Math.max(S.shake, 2);
+      if (h.kind === "colossus") { S.shake = Math.max(S.shake, 4); Sound.play("stomp"); }
       if (h.kind === "champion") { S.shake = Math.max(S.shake, 3.5); Sound.play("stomp"); }
     }
   } else {
     const dir = arena ? Math.sign(centerX(b) - centerX(h)) || 1 : 1;
     h.vx = dir * h.speed;
     h.face = dir;
+    // A burrower has to come up to jump a pit or climb a ledge; underground it digs along more slowly.
+    if (h.under && h.onGround && shouldJump(h, dir)) surface(h, 0.8);
+    if (h.under) h.vx *= HERO_KINDS[h.kind].burrow.speed;
     // The opening's lone hero never looks where they're going.
-    if (!arena && !h.reckless && h.onGround && shouldJump(h, dir)) h.vy = -JUMP;
+    if (!arena && !h.reckless && h.onGround && shouldJump(h, dir)) h.vy = -JUMP * (HERO_KINDS[h.kind].jump || 1);
     // Iron Knights are slow on foot but throw their weight into a jump.
     if (!h.onGround && HERO_KINDS[h.kind].airSpeed) h.vx = dir * HERO_KINDS[h.kind].airSpeed * (h.ampBy ? AMP.speed : 1);
   }
@@ -3987,7 +4070,7 @@ function finishHeroMove(h, dt, arena) {
     h.netted = Math.max(0, (h.netted || 0) - dt);
     if (h.netted > 0) h.chill = 0.7;
     let belt = false;
-    for (const t of S.traps) {
+    for (const t of h.under ? [] : S.traps) {
       if (t.type === "tar" && !(t.jam > 0) && overlaps({ x: t.x + 0.05, y: t.y + 0.6, w: 0.9, h: 0.4 }, h)) {
         // Wading through tar: slow, sticky, and (unless it's glue) ready to burn.
         const n = numsOf(t);
@@ -4034,13 +4117,14 @@ function updateFlier(h, dt) {
   h.vx = h.speed * (h.netted > 0 ? 0.3 : 1);
   h.face = 1;
   h.x += h.vx * dt;
-  const ground = 9 - h.h, near = h.x > TOWER_X - 4;
-  const ty = near ? ground : SKY_Y + Math.sin(S.time * 2.5 + h.name.length) * 0.3;
+  const ground = 9 - h.h, near = h.x > TOWER_X - 4, sky = HERO_KINDS[h.kind].sky || SKY_Y;
+  const ty = near ? ground : sky + Math.sin(S.time * (h.kind === "wisp" ? 5 : 2.5) + h.name.length + h.x * 0.2) * (h.kind === "wisp" ? 0.5 : 0.3);
   h.y += (ty - h.y) * Math.min(1, dt * (near ? 4 : 2));
   h.onGround = false;
   h.vy = 0;
   h.flap = (h.flap || 0) + dt * 9;
-  if (Math.random() < dt * 4) particle({ x: centerX(h) + (Math.random() - 0.5) * 0.8, y: centerY(h), vy: 0.6, life: 0.5, color: Math.random() < 0.5 ? "#fff8e1" : "#ffd54f", glow: true });
+  const motes = { gryphon: ["#d7b98a", "#fff8e1"], bomber: ["#9e9e9e", "#cfd8dc"], priestess: ["#b3e5fc", "#ffffff"], wisp: ["#ffd54f", "#fff8e1"] }[h.kind] || ["#fff8e1", "#ffd54f"];
+  if (Math.random() < dt * (h.kind === "wisp" ? 14 : 4)) particle({ x: centerX(h) + (Math.random() - 0.5) * 0.8, y: centerY(h), vy: 0.6, life: 0.5, color: pick(motes), glow: h.kind !== "bomber" });
   if (h.x + h.w > TOWER_X - 0.3) heroReachedTower(h);
 }
 
@@ -4058,6 +4142,7 @@ function heroTraits(h, dt) {
     Sound.play("growl");
     if (!S.dialog.cur && Math.random() < 0.5) speak(h, pick(["RAAAAGH!", "YOU'LL PAY IN BLOOD!", "NOW I'M ANGRY!"]));
   }
+  if (!inArena()) sandboxTraits(h, dt);
   if (h.kind === "sapper" && !inArena()) {
     h.jamCd = (h.jamCd ?? 0) - dt;
     if (h.jamCd > 0) return;
@@ -4070,6 +4155,131 @@ function heroTraits(h, dt) {
     float(t.x + 0.5, t.y - 0.2, "JAMMED", "#ffd54f");
     burst(t.x + 0.5, t.y + 0.5, 10, ["#ffd54f", "#ffffff", "#8a8296"], 4, { glow: true });
     Sound.play("clang");
+  }
+}
+
+// The sandbox heroes' tricks, out on the path (none of them carry up into the tower fight).
+function sandboxTraits(h, dt) {
+  const k = HERO_KINDS[h.kind];
+  if (k.burrow) {
+    h.burrowT -= dt;
+    if (h.under) {
+      if (Math.random() < dt * 14) particle({ x: centerX(h) + (Math.random() - 0.5) * 0.6, y: h.y + h.h - 0.05, vx: -h.vx * 0.2 + (Math.random() - 0.5), vy: -2 - Math.random() * 2, g: 16, life: 0.4, color: Math.random() < 0.5 ? "#6d4c41" : "#3e2723" });
+      if (h.burrowT <= 0) surface(h, k.burrow.up);
+    } else if (h.burrowT <= 0 && h.onGround && !(h.knock > 0) && !(h.pinned > 0) && !h.flying) dig(h, k.burrow.under);
+  }
+  if (h.kind === "exorcist") {
+    h.pulseCd = (h.pulseCd ?? 2) - dt;
+    const r = EXORCIST.radius, near = S.minions.filter(m => Math.hypot(centerX(m) - centerX(h), centerY(m) - centerY(h)) < r);
+    if (h.pulseCd <= 0 && near.length) {
+      h.pulseCd = EXORCIST.cd;
+      h.atkAnim = 0.3;
+      for (const m of near) {
+        damage(m, Math.round(10 + 3 * h.lv), "#fff59d", ["#fff59d", "#ffffff"]);
+        m.stun = Math.max(m.stun || 0, EXORCIST.stun);
+      }
+      ring(centerX(h), centerY(h), r, ["#fff59d", "#ffffff"]);
+      float(centerX(h), h.y - 0.4, "BEGONE!", "#fff59d");
+      Sound.play("heal");
+    }
+  }
+  if (h.kind === "priestess") {
+    h.healCd = (h.healCd ?? 1.5) - dt;
+    if (h.healCd <= 0) {
+      const hurt = S.heroes.filter(o => o !== h && o.hp > 0 && o.hp < o.maxHp && !o.decoy && Math.hypot(centerX(o) - centerX(h), centerY(o) - centerY(h)) < PRIESTESS.radius);
+      if (hurt.length) {
+        h.healCd = PRIESTESS.cd;
+        for (const o of hurt) {
+          const amt = Math.min(5 + 2 * h.lv, o.maxHp - o.hp);
+          o.hp += amt;
+          float(centerX(o), o.y - 0.2, "+" + Math.round(amt), "#80d8ff");
+        }
+        ring(centerX(h), centerY(h), PRIESTESS.radius, ["#b3e5fc", "#ffffff"]);
+        Sound.play("heal");
+      } else h.healCd = 0.4;
+    }
+  }
+  if (h.kind === "bomber" && h.flying) {
+    // Drops a firepot on the trap below; it jams whatever it lands on.
+    h.bombCd = (h.bombCd ?? 0.5) - dt;
+    // Aim ahead: the firepot drifts on as it falls.
+    const below = S.traps.some(t => { const d = t.x + trapSize(t.type).w / 2 - centerX(h); return d > 0.3 && d < 1.3 && t.y > h.y; });
+    if (h.bombCd <= 0 && below) {
+      h.bombCd = 4;
+      S.heroBombs.push({ x: centerX(h), y: h.y + h.h, vx: h.vx * 0.6, vy: 0, dmg: h.atk * 2 });
+      Sound.play("bow");
+    }
+  }
+  if (h.kind === "illusionist" && !h.split && !h.decoy && h.hp > 0 && h.hp < h.maxHp * 0.75) {
+    h.split = true;
+    for (const side of [-1, 1]) {
+      const d = makeHero(h.lv, "illusionist");
+      Object.assign(d, { decoy: true, split: true, name: h.name, x: h.x + side * 0.35, y: h.y, vy: -5, maxHp: Math.round(h.maxHp * 0.3), hp: Math.round(h.maxHp * 0.3), spotted: h.spotted });
+      S.heroes.push(d);
+    }
+    float(centerX(h), h.y - 0.5, "ILLUSIONS!", "#ea80fc");
+    burst(centerX(h), centerY(h), 16, ["#ea80fc", "#80cbc4", "#ffffff"], 4, { glow: true });
+    Sound.play("empower");
+  }
+}
+// A ring of light spreading out from (x, y).
+function ring(x, y, r, colors) {
+  for (let i = 0; i < 20; i++) {
+    const a = i / 20 * Math.PI * 2;
+    particle({ x, y, vx: Math.cos(a) * r * 2.2, vy: Math.sin(a) * r * 1.2, life: 0.45, color: colors[i % 2], glow: true });
+  }
+}
+function dig(h, t) {
+  h.under = true;
+  h.burrowT = t;
+  burst(centerX(h), h.y + h.h, 10, ["#6d4c41", "#3e2723", "#8d6e63"], 4);
+  Sound.play("stomp");
+}
+function surface(h, t) {
+  h.under = false;
+  h.burrowT = t;
+  burst(centerX(h), h.y + h.h, 12, ["#6d4c41", "#3e2723", "#8d6e63"], 5);
+  if (!HERO_KINDS[h.kind].burrow.erupt) return;
+  // A stalker bursts up under whatever monster is standing over it.
+  for (const m of S.minions) {
+    if (Math.abs(centerX(m) - centerX(h)) > 1.6 || Math.abs(centerY(m) - centerY(h)) > 1.2) continue;
+    damage(m, h.atk * 2, "#ffffff", MINIONS[m.type].blood);
+    m.vy = -7;
+    float(centerX(m), m.y - 0.3, "AMBUSH", "#ffb300");
+  }
+  S.shake = Math.max(S.shake, 1.5);
+}
+// The bombers' firepots: they fall, then burst and jam the traps they hit.
+function updateHeroBombs(dt) {
+  for (const b of S.heroBombs) {
+    b.vy += GRAVITY * dt;
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    const tx = Math.floor(b.x), ty = Math.floor(b.y);
+    if (!(isSolid(tx, ty) || trapAt(tx, ty) || b.y > H)) continue;
+    b.dead = true;
+    for (const t of S.traps) {
+      if (!trapTiles(t.type, t.x, t.y).some(([x, y]) => Math.hypot(x + 0.5 - b.x, y + 0.5 - b.y) < 1.6)) continue;
+      t.jam = Math.max(t.jam || 0, 3);
+      t.fireOn = false;
+      float(t.x + 0.5, t.y - 0.2, "JAMMED", "#ffd54f");
+    }
+    for (const m of S.minions) if (Math.hypot(centerX(m) - b.x, centerY(m) - b.y) < 1.4) damage(m, Math.round(b.dmg), "#ffb74d", MINIONS[m.type].blood);
+    burst(b.x, b.y - 0.2, 16, ["#ff6f00", "#ffd54f", "#5d566a"], 5, { glow: true });
+    S.shake = Math.max(S.shake, 2);
+    Sound.play("boom");
+  }
+  S.heroBombs = S.heroBombs.filter(b => !b.dead);
+}
+function drawHeroBombs() {
+  for (const b of S.heroBombs) {
+    const x = Math.round(b.x * T), y = Math.round(b.y * T);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 2, y - 2, 5, 5);
+    ctx.fillStyle = "#3a3448";
+    ctx.fillRect(x - 1, y - 1, 3, 3);
+    ctx.fillStyle = Math.floor(S.time * 20) % 2 ? "#ffd54f" : "#ff6f00";
+    ctx.fillRect(x, y - 3, 1, 1);
   }
 }
 
@@ -4213,7 +4423,7 @@ function shouldJump(h, dir) {
   if (isSolid(fx, feet)) return true;          // wall ahead
   if (!isSolid(fx, feet + 1)) return true;     // pit ahead
 
-  for (const t of S.traps) {
+  for (const t of h.under ? [] : S.traps) {
     if (!["spike", "fire", "mine", "tar"].includes(t.type) || t.y !== feet) continue;
     const ahead = dir > 0 ? t.x - (h.x + h.w) : h.x - (t.x + 1);
     if (ahead < 0 || ahead > 0.6) continue;
@@ -4225,7 +4435,7 @@ function shouldJump(h, dir) {
 
 // Heroes inside a box; a trap type (src) leaves out the heroes immune to it.
 const heroesIn = (box, src) => S.heroes.filter(h => {
-  if (h.evade > 0 || !overlaps(box, h)) return false;
+  if (!exposed(h) || !overlaps(box, h)) return false;
   if (immuneTo(h, src)) { shrug(h); return false; }
   return true;
 });
@@ -4325,7 +4535,7 @@ function sawSlide(t) {
 function updateDeepFreeze(t, dt) {
   t.pulse = (t.pulse ?? 2) - dt;
   if (t.pulse > 0) return;
-  const r = numsOf(t).radius, caught = S.heroes.filter(h => h.evade <= 0 && !immuneTo(h, "frost") && Math.hypot(centerX(h) - t.x - 0.5, centerY(h) - t.y - 0.5) < r);
+  const r = numsOf(t).radius, caught = S.heroes.filter(h => exposed(h) && !immuneTo(h, "frost") && Math.hypot(centerX(h) - t.x - 0.5, centerY(h) - t.y - 0.5) < r);
   if (!caught.length) { t.pulse = 0.3; return; }
   t.pulse = 4;
   for (const h of caught) {
@@ -4346,7 +4556,7 @@ function updateDeepFreeze(t, dt) {
 function updateSkyhook(t) {
   if (t.cd > 0) return;
   const n = numsOf(t), ox = t.x + 0.5, oy = t.y + 0.3;
-  const inReach = h => h.evade <= 0 && centerY(h) <= oy + 0.6 && Math.hypot(centerX(h) - ox, centerY(h) - oy) < n.range;
+  const inReach = h => exposed(h) && centerY(h) <= oy + 0.6 && Math.hypot(centerX(h) - ox, centerY(h) - oy) < n.range;
   const pool = S.heroes.filter(inReach).sort((a, b) => (b.flying ? 1 : 0) - (a.flying ? 1 : 0) || Math.abs(centerX(a) - ox) - Math.abs(centerX(b) - ox));
   const h = pool[0];
   if (!h) return;
@@ -4418,7 +4628,7 @@ function updateBoulders(dt) {
       continue;
     }
     for (const h of S.heroes) {
-      if (b.hits.has(h) || h.evade > 0 || h.flying || !overlaps(b, h)) continue;
+      if (b.hits.has(h) || !exposed(h) || h.flying || !overlaps(b, h)) continue;
       b.hits.add(h);
       if (immuneTo(h, "boulder")) { shrug(h); continue; }
       damage(h, b.dmg, "#d7ccc8", ["#8d6e63", "#d32f2f"]);
@@ -4467,7 +4677,7 @@ function updateHarpoons(dt) {
     a.y += a.vy * dt;
     a.life -= dt;
     if (a.life <= 0 || isSolid(Math.floor(a.x), Math.floor(a.y))) { a.dead = true; continue; }
-    const h = S.heroes.find(o => !a.hits.has(o) && o.evade <= 0 && overlaps({ x: a.x - 0.2, y: a.y - 0.2, w: 0.4, h: 0.4 }, o));
+    const h = S.heroes.find(o => !a.hits.has(o) && exposed(o) && overlaps({ x: a.x - 0.2, y: a.y - 0.2, w: 0.4, h: 0.4 }, o));
     if (!h) continue;
     a.hits.add(h);
     damage(h, a.dmg, "#cfd8dc");
@@ -4502,7 +4712,7 @@ function drawHarpoons() {
 function updateTesla(t) {
   if (t.cd > 0) return;
   const n = numsOf(t), ox = t.x + 0.5, oy = t.y + 0.1;
-  const near = (x, y, r, skip) => S.heroes.filter(h => !skip.has(h) && h.evade <= 0 && Math.hypot(centerX(h) - x, centerY(h) - y) < r)
+  const near = (x, y, r, skip) => S.heroes.filter(h => !skip.has(h) && exposed(h) && Math.hypot(centerX(h) - x, centerY(h) - y) < r)
     .sort((a, b) => Math.hypot(centerX(a) - x, centerY(a) - y) - Math.hypot(centerX(b) - x, centerY(b) - y))[0];
   const hit = new Set();
   let cur = near(ox, oy, n.range, hit);
@@ -4626,7 +4836,7 @@ function obsidianShockwave(t) {
   const gx = t.x + 0.5, gy = t.y + t.off + 1, n = numsOf(t);
   for (const h of S.heroes) {
     const dx = Math.abs(centerX(h) - gx);
-    if (dx > 2.2 || dx < 0.45 || Math.abs(h.y + h.h - gy) > 0.6 || h.evade > 0 || immuneTo(h, "crusher")) continue;
+    if (dx > 2.2 || dx < 0.45 || Math.abs(h.y + h.h - gy) > 0.6 || !exposed(h) || immuneTo(h, "crusher")) continue;
     damage(h, Math.round(n.dmg * 0.4), "#b388ff", ["#b388ff", "#4a148c"]);
     h.vy = -7;
   }
@@ -4656,7 +4866,7 @@ function updateMine(t, dt) {
 function explodeMine(t, n) {
   const cx = t.x + 0.5, cy = t.y + 0.7, r = n.radius;
   for (const h of S.heroes) {
-    if (h.evade > 0 || Math.hypot(centerX(h) - cx, centerY(h) - cy) > r) continue;
+    if (!exposed(h) || Math.hypot(centerX(h) - cx, centerY(h) - cy) > r) continue;
     if (immuneTo(h, "mine")) { shrug(h); continue; }
     damage(h, n.dmg, "#ff5252", ["#ff6f00", "#ffd54f", "#5d566a"]);
     h.vy = -8;
@@ -4704,12 +4914,18 @@ function updateMinions(dt) {
     m.flash -= dt;
     m.vx = 0;
     m.lunge = (m.lunge || 0) - dt;
+    if (m.stun > 0) {
+      // Struck by an exorcist's holy light: reeling for a moment.
+      m.stun -= dt;
+      if (Math.random() < dt * 10) particle({ x: centerX(m) + (Math.random() - 0.5) * 0.4, y: m.y - 0.1, vy: -0.8, life: 0.4, color: "#fff59d", glow: true });
+      continue;
+    }
     if (m.dark && Math.random() < dt * 8) {
       particle({ x: m.x + Math.random() * m.w, y: m.y + m.h * Math.random(), vy: -1, life: 0.5, color: Math.random() < 0.5 ? "#d500f9" : "#4a148c", glow: true });
     }
     // Go after the closest hero.
     let h = null;
-    for (const o of S.heroes) if (!o.flying && (!h || Math.abs(centerX(o) - centerX(m)) < Math.abs(centerX(h) - centerX(m)))) h = o;
+    for (const o of S.heroes) if (!o.flying && !o.under && (!h || Math.abs(centerX(o) - centerX(m)) < Math.abs(centerX(h) - centerX(m)))) h = o;
     if (kind.fly) { updateWraith(m, kind, h, dt); continue; }
     if (h) {
       const dx = centerX(h) - centerX(m), sameRow = Math.abs(centerY(h) - centerY(m)) < 0.9;
@@ -4788,7 +5004,7 @@ function updateSerpents(dt) {
       n.hx = n.x; n.hy = lavaY + 0.2;
       if (Math.random() < dt * 3) particle({ x: n.x + (Math.random() - 0.5) * 0.8, y: lavaY - 0.1, vy: -1.5, life: 0.4, color: Math.random() < 0.5 ? "#ffd54f" : "#ff6f00", glow: true });
       if (n.cd > 0) continue;
-      const prey = S.heroes.find(h => !h.onGround && !h.flying && !h.serpentHeld && h.evade <= 0 && Math.abs(centerX(h) - n.x) < serpentStats(n).reach &&
+      const prey = S.heroes.find(h => !h.onGround && !h.flying && !h.serpentHeld && exposed(h) && Math.abs(centerX(h) - n.x) < serpentStats(n).reach &&
         centerX(h) > n.pit[0] - 0.2 && centerX(h) < n.pit[1] + 1.2 && h.y + h.h > lavaY - serpentStats(n).height);
       if (prey) { n.state = "strike"; n.t = 0; n.prey = prey; n.sx = n.x; Sound.play("serpent"); }
     } else if (n.state === "strike") {
@@ -4907,7 +5123,7 @@ function drawSerpent(n) {
 
 // One monster's melee strike. Golems smash everyone around them; dark monsters drink the blood they spill.
 function minionHit(m, kind, h) {
-  const targets = kind.smash ? S.heroes.filter(o => o.evade <= 0 && Math.abs(centerX(o) - centerX(m)) < kind.smash && Math.abs(centerY(o) - centerY(m)) < 1.2) : [h];
+  const targets = kind.smash ? S.heroes.filter(o => exposed(o) && Math.abs(centerX(o) - centerX(m)) < kind.smash && Math.abs(centerY(o) - centerY(m)) < 1.2) : [h];
   for (const o of targets) {
     damage(o, m.atk, m.dark ? "#ea80fc" : "#ffb74d");
     if (kind.smash) knock(o, (Math.sign(centerX(o) - centerX(m)) || 1) * 5, -5);
@@ -5092,6 +5308,23 @@ function updateLoot(dt) {
 
 function heroDied(h) {
   if (h.part) { partDied(h); return; }
+  if (h.decoy) {
+    // Only an illusion: it bursts into motes, and leaves nothing behind.
+    S.heroes = S.heroes.filter(o => o !== h);
+    burst(centerX(h), centerY(h), 14, ["#ea80fc", "#80cbc4", "#ffffff"], 4, { glow: true });
+    float(centerX(h), h.y - 0.3, "ILLUSION", "#ea80fc");
+    return;
+  }
+  if (h.kind === "martyr") {
+    // A martyr's last breath heals everyone around them.
+    for (const o of S.heroes) {
+      if (o === h || o.part || Math.hypot(centerX(o) - centerX(h), centerY(o) - centerY(h)) > MARTYR_RADIUS) continue;
+      const amt = Math.min(Math.round(o.maxHp * 0.35), o.maxHp - o.hp);
+      if (amt > 0) { o.hp += amt; float(centerX(o), o.y - 0.2, "+" + amt, "#fff59d"); }
+    }
+    ring(centerX(h), centerY(h), MARTYR_RADIUS, ["#fff59d", "#ffffff"]);
+    Sound.play("heal");
+  }
   const coins = heroCoins(h);
   if (h.kind === "mage") unamplify(h.ampTarget);
   if (h.ampBy && h.ampBy.ampTarget === h) h.ampBy.ampTarget = null;
@@ -6129,17 +6362,19 @@ function sprite(art, pal = {}, key = "", white = false) {
 }
 
 // Draw a sprite with its bottom-centre at (cx, bottom) in canvas pixels.
-function drawSprite(spr, cx, bottom, face = 1, alpha = 1) {
-  const x = Math.round(cx - spr.width / 2), y = Math.round(bottom - spr.height + 1);
+// scale draws it bigger (whole pixels only), for the Siege Colossus.
+function drawSprite(spr, cx, bottom, face = 1, alpha = 1, scale = 1) {
+  const w = spr.width * scale, h = spr.height * scale;
+  const x = Math.round(cx - w / 2), y = Math.round(bottom - h + scale);
   ctx.globalAlpha = alpha;
   if (face < 0) {
     ctx.save();
-    ctx.translate(x + spr.width, y);
+    ctx.translate(x + w, y);
     ctx.scale(-1, 1);
-    ctx.drawImage(spr, 0, 0);
+    ctx.drawImage(spr, 0, 0, w, h);
     ctx.restore();
   } else {
-    ctx.drawImage(spr, x, y);
+    ctx.drawImage(spr, x, y, w, h);
   }
   ctx.globalAlpha = 1;
 }
@@ -6169,8 +6404,64 @@ function runFrame(prefix, h, moving, rate = 9) {
 }
 const MARSHAL_PAL = Object.assign({}, CHAMPION_PAL, { A: "#fff8e1", a: "#c9a227", C: "#7f1d1d", c: "#4a0d0d", P: "#ffd54f", Y: "#ffffff" });
 const SERAPH_PAL = { A: "#fff8e1", a: "#c9a227", C: "#ffd54f", c: "#c79a1e", W: "#ffffff", h: "#ffd54f" };
+// The sandbox heroes, mostly the older kinds' bodies in new colours.
+const SANDBOX_PALS = {
+  aegis: { A: "#90caf9", a: "#1565c0", C: "#ffd54f", c: "#c79a1e", W: "#e3f2fd", h: "#ffd54f" },
+  martyr: { A: "#e53935", a: "#8e1b1b", C: "#ffffff", c: "#bdbdbd", W: "#fff59d", h: "#fff59d" },
+  exorcist: { T: "#eceff1", t: "#90a4ae", R: "#fafafa", r: "#b0bec5", g: "#ffd54f", O: "#c9a227", E: "#fff59d", G: "#ffffff", n: "#c9955a", s: "#8d5a3a" },
+  priestess: { T: "#e1f5fe", t: "#81d4fa", R: "#ffffff", r: "#b3e5fc", g: "#4fc3f7", O: "#ffd54f", E: "#80d8ff", G: "#ffffff", n: "#c9955a", s: "#8d5a3a" },
+  illusionist: { V: "#4a148c", v: "#2a0a50", k: "#0d0a14", E: "#ea80fc", A: "#00897b", a: "#00544a", W: "#b388ff", h: "#80cbc4", B: "#1a1420" },
+  stalker: { V: "#5d4037", v: "#3e2723", k: "#120c08", E: "#ffb300", A: "#6d4c41", a: "#3e2723", W: "#bcaaa4", h: "#8d6e63", B: "#2a1f18" },
+  miner: { M: "#fbc02d", m: "#a37a00", k: "#1a1420", O: "#8d6e63", P: "#6d4c41", A: "#795548", a: "#4e342e", B: "#2a1f18", h: "#fff59d" },
+  bomber: { M: "#c62828", m: "#7f1d1d", k: "#1a1420", O: "#8d6e63", P: "#3a3448", A: "#a1887f", a: "#6d4c41", B: "#3b2a20", h: "#ffd54f" },
+  colossus: { A: "#8d8270", a: "#5d5446", W: "#e0e0e0", k: "#120e18", D: "#3a3448", M: "#b0a48c", h: "#ffb300", B: "#2a1f18", m: "#5d4037" },
+  gryphon: { A: "#ffe082", a: "#c79a1e", C: "#c62828", c: "#7f1d1d", W: "#ffffff", h: "#ffd54f", Y: "#c8963e", y: "#8d6326", L: "#f5f0e6", O: "#ffb300" },
+  wisp: { W: "#fff8e1", Y: "#ffd54f", O: "#ffffff" },
+};
+// A gryphon with a knight on its back (the rider is the top of a knight), and a lantern wisp.
+const GRYPHON_BEAST = [
+  "................LLL...",
+  "...............LLkLOO.",
+  "..............LLLLLO..",
+  "...YYYYYYYYYYYLLLL....",
+  "..YYYYYYYYYYYYYLL.....",
+  ".YYyYYYYYYYYYYYY......",
+  "Y..yyYYYYYYYYYy.......",
+  "...yY..yY...yY.yY.....",
+  "...O...O....O...O.....",
+];
+function overlayArt(base, top, ox, oy) {
+  const rows = Math.max(base.length, top.length + oy), w = Math.max(base[0].length, top[0].length + ox);
+  const out = [];
+  for (let y = 0; y < rows; y++) {
+    let row = "";
+    for (let x = 0; x < w; x++) {
+      const b = (base[y - (rows - base.length)] || "")[x] || ".", t = (top[y - oy] || "")[x - ox] || ".";
+      row += b !== "." ? b : t;
+    }
+    out.push(row);
+  }
+  return out;
+}
+const GRYPHON_ART = overlayArt(GRYPHON_BEAST, HERO_TOP.slice(1, 10), 3, 0);
+const WISP_ART = ["..WW..", ".WYYW.", "WYOOYW", "WYOOYW", ".WYYW.", "..WW.."];
 function heroSprite(h, white = false) {
   const g = gearFor(h.lv), moving = Math.abs(h.vx) > 0.1;
+  const sp = SANDBOX_PALS[h.kind];
+  if (sp) {
+    const key = h.kind + (h.flying ? "F" : "");
+    if (h.kind === "gryphon") return sprite(GRYPHON_ART, sp, key, white);
+    if (h.kind === "wisp") return sprite(WISP_ART, sp, key, white);
+    if (h.kind === "aegis" || h.kind === "martyr") return sprite(runFrame("hero", h, moving), sp, key, white);
+    if (h.kind === "illusionist" || h.kind === "stalker") return sprite(runFrame("rogue", h, moving, 12), sp, key, white);
+    if (h.kind === "miner" || h.kind === "bomber") return sprite(runFrame("sapper", h, moving, 8), sp, key, white);
+    if (h.kind === "colossus") return sprite(h.onGround && moving && Math.floor(S.time * 3) % 2 ? ART.bruteStep : ART.brute, sp, key, white);
+    // Exorcists and priestesses wear robes like the mages.
+    let art = ART.mageStand;
+    if (!h.onGround || h.flying) art = ART.mageJump;
+    else if (moving && Math.floor(S.time * 8) % 2) art = ART.mageStride;
+    return sprite(art, sp, key, white);
+  }
   if (h.kind === "seraph") return sprite(h.flying ? ART.heroJump : runFrame("hero", h, moving), SERAPH_PAL, "seraph", white);
   if (h.kind === "marshal") {
     let art = ART.champion;
@@ -7246,14 +7537,20 @@ function drawBoss(b, shadow = false) {
 }
 
 // A seraph's wings: wide and beating in flight, folded once it's been dragged down.
+const WING_LOOKS = {
+  seraph: { front: ["#ffffff", "#ffd54f"], back: ["#cfd8dc", "#c9a227"], len: 19, y: 10 },
+  priestess: { front: ["#e1f5fe", "#80d8ff"], back: ["#b3e5fc", "#4fc3f7"], len: 15, y: 9 },
+  gryphon: { front: ["#c8963e", "#f5f0e6"], back: ["#8d6326", "#c8963e"], len: 22, y: 6 },
+};
 function drawWings(h, cx, bottom) {
-  const sx = Math.round(cx - h.face * 2), sy = Math.round(bottom - 10);
+  const look = WING_LOOKS[h.kind] || WING_LOOKS.seraph;
+  const sx = Math.round(cx - h.face * 2), sy = Math.round(bottom - look.y);
   const flap = h.flying ? Math.sin(h.flap || 0) : -1;
   // Every feather's pixels first, so the outlines can all go down before the white.
   const pts = [];
   for (const side of [-1, 1]) {
     for (let f = 0; f < 6; f++) {
-      const len = h.flying ? 19 - f * 2.2 : 7 - f * 0.8, ang = -Math.PI / 2 + side * (0.85 + f * 0.2) - flap * 0.55 * side;
+      const len = h.flying ? look.len - f * 2.2 : 7 - f * 0.8, ang = -Math.PI / 2 + side * (0.85 + f * 0.2) - flap * 0.55 * side;
       for (let i = 1; i <= len; i++) {
         pts.push({ x: Math.round(sx + Math.cos(ang) * i), y: Math.round(sy + Math.sin(ang) * i * 0.85 + i * 0.15), tip: i > len - 2, back: side === -h.face });
       }
@@ -7262,9 +7559,57 @@ function drawWings(h, cx, bottom) {
   ctx.fillStyle = OUTLINE;
   for (const q of pts) ctx.fillRect(q.x - 1, q.y - 1, 4, 4);
   for (const q of pts) {
-    ctx.fillStyle = q.back ? (q.tip ? "#c9a227" : "#cfd8dc") : q.tip ? "#ffd54f" : "#ffffff";
+    ctx.fillStyle = q.back ? look.back[q.tip ? 1 : 0] : look.front[q.tip ? 1 : 0];
     ctx.fillRect(q.x, q.y, 2, 2);
   }
+}
+
+// A burrowing hero underground: a mound of earth moving along the path.
+function drawBurrow(h, cx, bottom) {
+  const x = Math.round(cx), y = Math.round(bottom), bump = Math.floor(S.time * 10) % 2;
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(x - 6, y - 3 - bump, 13, 4 + bump);
+  ctx.fillRect(x - 4, y - 5 - bump, 9, 2);
+  ctx.fillStyle = "#6d4c41";
+  ctx.fillRect(x - 5, y - 2 - bump, 11, 2 + bump);
+  ctx.fillRect(x - 3, y - 4 - bump, 7, 2);
+  ctx.fillStyle = "#8d6e63";
+  ctx.fillRect(x - 2, y - 4 - bump, 3, 1);
+  // The miner's lamp shows through the dirt.
+  if (h.kind === "miner") { ctx.fillStyle = "#fff59d"; ctx.fillRect(x + h.face * 2, y - 3 - bump, 1, 1); }
+}
+// The aegis bearer's shield: a faint ring of blue light around them.
+function drawAegis(h) {
+  const cx = centerX(h) * T, cy = centerY(h) * T, r = AEGIS_RADIUS * T;
+  ctx.fillStyle = "#90caf9";
+  for (let i = 0; i < 56; i++) {
+    const a = i / 56 * Math.PI * 2 + S.time * 0.8;
+    ctx.globalAlpha = 0.55 + 0.3 * Math.sin(a * 3 + S.time * 4);
+    ctx.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r * 0.55), 2, 1);
+  }
+  ctx.globalAlpha = 1;
+}
+// A striped balloon over the bomber's basket.
+function drawBalloon(h, cx, bottom) {
+  const bx = Math.round(cx), by = Math.round(bottom - 26);
+  ctx.fillStyle = "#6d4c41";
+  for (const dx of [-4, 4]) for (let i = 0; i < 9; i++) ctx.fillRect(bx + Math.round(dx * (1 - i / 12)), by + 6 + i, 1, 1);
+  pxDisc(ctx, bx, by, 9, OUTLINE);
+  pxDisc(ctx, bx, by, 8, "#c62828");
+  ctx.fillStyle = "#fff8e1";
+  for (let dy = -7; dy <= 7; dy++) {
+    const w = Math.floor(Math.sqrt(64 - dy * dy));
+    ctx.fillRect(bx - Math.round(w * 0.35), by + dy, 2, 1);
+    ctx.fillRect(bx + Math.round(w * 0.35) - 1, by + dy, 2, 1);
+  }
+  pxDisc(ctx, bx - 3, by - 3, 2, "#ef9a9a");
+  // The basket under the bomber's feet.
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(bx - 5, bottom - 4, 11, 5);
+  ctx.fillStyle = "#a1887f";
+  ctx.fillRect(bx - 4, bottom - 3, 9, 3);
+  ctx.fillStyle = "#6d4c41";
+  for (let i = -4; i < 5; i += 2) ctx.fillRect(bx + i, bottom - 3, 1, 3);
 }
 
 function drawHero(h) {
@@ -7284,21 +7629,33 @@ function drawHero(h) {
     ctx.rect(0, 0, W * T, ARENA_FLOOR * T);
     ctx.clip();
   }
+  if (h.under) { drawBurrow(h, cx, bottom); return; }
+  const sc = HERO_KINDS[h.kind].scale || 1;
+  // Illusions shimmer, a little see-through.
+  const ghostA = h.decoy ? 0.55 + Math.sin(S.time * 9 + h.x) * 0.15 : 1;
+  if (h.kind === "aegis" && !inArena()) drawAegis(h);
+  if (h.kind === "bomber" && h.flying) drawBalloon(h, cx, bottom);
+  if (h.kind === "wisp") {
+    // A soft glow around the little light.
+    ctx.globalAlpha = 0.25 + Math.sin(S.time * 8 + h.x) * 0.1;
+    pxDisc(ctx, cx, bottom - 3, 5, "#ffd54f");
+    ctx.globalAlpha = 1;
+  }
   const amped = h.ampBy && !held;
   if (amped) {
     // Empowered by a mage: a pulsing green aura around the whole body.
     const glow = heroSprite(h, "#76ff03"), pulse = 0.45 + Math.sin(S.time * 6) * 0.2;
     for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-2, 0], [2, 0], [0, -2]]) {
-      drawSprite(glow, cx + ox, bottom + oy, h.face, Math.abs(ox) + Math.abs(oy) > 1 ? pulse * 0.4 : pulse);
+      drawSprite(glow, cx + ox, bottom + oy, h.face, Math.abs(ox) + Math.abs(oy) > 1 ? pulse * 0.4 : pulse, sc);
     }
     if (Math.random() < 0.25) particle({ x: h.x + Math.random() * h.w, y: h.y + h.h * Math.random(), vy: -1.2, life: 0.5, color: Math.random() < 0.5 ? "#ccff90" : "#76ff03", glow: true });
   }
-  if (h.kind === "seraph") drawWings(h, cx, bottom);
-  drawSprite(heroSprite(h), cx, bottom, h.face, h.evade > 0 ? 0.6 : 1);
-  if (amped) drawSprite(heroSprite(h, "#76ff03"), cx, bottom, h.face, 0.12 + Math.sin(S.time * 6) * 0.05);
-  if (h.flash > 0) drawSprite(heroSprite(h, true), cx, bottom, h.face, 0.85);
-  else if (h.frozen > 0) drawSprite(heroSprite(h, "#b3e5fc"), cx, bottom, h.face, 0.65);
-  else if (h.chill > 0 && !inArena()) drawSprite(heroSprite(h, true), cx, bottom, h.face, 0.3);
+  if (WING_LOOKS[h.kind]) drawWings(h, cx, bottom);
+  drawSprite(heroSprite(h), cx, bottom, h.face, (h.evade > 0 ? 0.6 : 1) * ghostA, sc);
+  if (amped) drawSprite(heroSprite(h, "#76ff03"), cx, bottom, h.face, 0.12 + Math.sin(S.time * 6) * 0.05, sc);
+  if (h.flash > 0) drawSprite(heroSprite(h, true), cx, bottom, h.face, 0.85, sc);
+  else if (h.frozen > 0) drawSprite(heroSprite(h, "#b3e5fc"), cx, bottom, h.face, 0.65, sc);
+  else if (h.chill > 0 && !inArena()) drawSprite(heroSprite(h, true), cx, bottom, h.face, 0.3, sc);
   if (held) {
     ctx.restore();
     // Bony hands wrapped around their legs.
@@ -7318,7 +7675,7 @@ function drawHero(h) {
   }
   // Sword (or mace) smear when attacking.
   if (h.atkAnim > 0 && !HERO_KINDS[h.kind].ranged) {
-    const huge = h.kind === "champion", big = huge || h.kind === "brute", r = huge ? 17 : big ? 12 : 9;
+    const huge = h.kind === "champion" || h.kind === "colossus", big = huge || h.kind === "brute", r = huge ? 17 : big ? 12 : 9;
     const ox = cx + h.face * (huge ? 7 : big ? 5 : 3), oy = bottom - (huge ? 14 : big ? 12 : 9);
     for (let a = -1.1; a <= 1.1; a += 0.12) {
       ctx.fillStyle = huge ? "#fff59d" : big ? "#ffe082" : "#ffffff";
@@ -8310,6 +8667,7 @@ function draw() {
     drawBolts();
     drawHarpoons();
     drawBoulders();
+    drawHeroBombs();
     S.heroArrows.forEach(drawArrow);
     drawHover();
   }
@@ -8335,7 +8693,7 @@ function draw() {
 
   if (!arena) for (const m of S.minions) if (m.hp < m.maxHp || m.dark) drawBar(m, m.type === "golem" ? 16 : 10, m.dark ? "#d500f9" : "#e53935");
   for (const a of S.allies) drawBar(a, a.kind === "marshal" ? 24 : 12, "#9cff9c");
-  for (const h of S.heroes) if (h.part !== "core" && !(h.warn > 0)) drawBar(h, h.kind === "champion" ? 24 : 12, h.ampBy ? "#76ff03" : h.kind === "champion" ? "#ffd54f" : "#64b5f6");
+  for (const h of S.heroes) if (h.part !== "core" && !(h.warn > 0) && !h.under) drawBar(h, h.kind === "colossus" ? 32 : h.kind === "champion" ? 24 : h.kind === "wisp" ? 8 : 12, h.ampBy ? "#76ff03" : h.kind === "champion" ? "#ffd54f" : "#64b5f6");
   drawFloats();
   ctx.restore();
 
