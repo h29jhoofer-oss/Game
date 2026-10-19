@@ -177,6 +177,12 @@
     Heroes who make it through the door hide inside the tower. Once 5 are inside, they climb up and fight you all at once.<br>
     <b>Build:</b> pick a tool and click the level. Spikes go on the ground; saws and turrets go anywhere, even over the lava pits.
     Click a placed trap to open its tab on the right side of the screen: upgrade it (U) or sell it for half what you paid (X).
+    <b>The Thing Below:</b> every soul the tower takes feeds something beneath it (dark souls and bargains most of all). As it
+    grows the ground shakes, eyes open in the lava, a heartbeat thuds, and tendrils drag the living (even your monsters) down.
+    After waves 4, 7, 10, 13, 16, 19 and 22 its Voice offers a bargain (1-3 to take one, Esc to refuse): power for a price.
+    <b>Wave 25 is the end:</b> the Thing breaks through the tower top, and you fight it with the Marshal and her knights beside you.
+    Its hide shrugs off blows; strike its great eye while it is open, and cut down the tendrils it sends up. Beat it and you choose
+    the ending, unless you took 5 or more bargains, or the Marshal died.<br>
     Only one crusher fits in each column. More traps unlock with kills: <b>spring traps</b> (8) fling heroes back the way they came,
     <b>tar pits</b> (12) slow heroes and make fire hurt them more, <b>tesla coils</b> (20) shoot lightning that chains between heroes,
     and <b>pendulums</b> (25) swing a blade under their mount. Any trap can also be <b>infused with a dark soul</b> (Infuse in its tab, or I):
@@ -238,6 +244,9 @@
     bargain, all jaws and hunger. Some in the Order whisper that it was never Vorgath at all, only the demon wearing him.<br>
     <b>Dark souls.</b> Most souls burn blue. A few, from heroes who died afraid or full of hate, burn black and violet. The tower
     treasures these above all: they feed dark powers, and they turn monsters and machines into something far worse.<br>
+    <b>The Thing Below.</b> Whatever Vorgath bargained with never left. It has lived beneath the tower for three hundred years,
+    tasting every soul he takes and growing fat on them. It whispers to him, and lately it offers deals. The Order's oldest
+    chronicles say that one day it will grow too large for its cage and come up to take the throne of Ashfall for itself.<br>
     <b>The Bone Serpent.</b> An ancient thing of fused spines that sleeps in the lava under the castle. Vorgath can wake it with
     dark souls. It has never been killed, because nothing that has fought it has survived.
   </details>
@@ -429,7 +438,12 @@ function baseTrapNums(type, lvl, pathId) {
   }
   return {};
 }
-const numsOf = t => trapNums(t.type, t.lvl, t.path, t.dark);
+const numsOf = t => {
+  const n = trapNums(t.type, t.lvl, t.path, t.dark);
+  // A Burning Traps bargain: every trap hits harder for one wave.
+  if (S.blazeWave === S.wave && n.dmg) return Object.assign({}, n, { dmg: Math.round(n.dmg * 1.5) });
+  return n;
+};
 
 // Why a trap can't go on a tile, or null if it can.
 function placeProblem(tool, x, y, existing) {
@@ -476,7 +490,7 @@ const DARK_POWERS = [
 ];
 const MIGHT_HP = 150, MEND_HEAL = 150, NOVA_DMG = 30;
 const activePowers = () => DARK_POWERS.filter(p => !p.passive && S.powers.has(p.id));
-const bossMaxHp = form => (form === 2 ? P2_HP : BOSS_HP) + (S && S.powers && S.powers.has("might") ? MIGHT_HP : 0);
+const bossMaxHp = form => (form === 2 ? P2_HP : BOSS_HP) + (S && S.powers && S.powers.has("might") ? MIGHT_HP : 0) + ((S && S.fleshHp) || 0);
 const BOSS_HP = 600, BOSS_DMG = 30, BOSS_SPEED = 4, SLAM_DMG = 26, WAVE_DMG = 12;
 // The Hollow King's special attacks. Cooldowns are in seconds, and shorter while he is enraged.
 const ABILITIES = [
@@ -523,7 +537,9 @@ const WAVE_LORE = [
   "PALADINS OF THE SUN ADVANCE", "THE DAWN'S CHAMPIONS ARRIVE", "THE ORDER SENDS ITS FINEST",
   "THE LAST LIGHT OF THE DAWN", "THE ORDER EMPTIES ITS CHAPELS", "ELOWEN'S OATH RIDES WITH THEM",
   "THE MARSHAL'S OWN GUARD", "THE DAWN WILL NOT BREAK", "EVERY CANDLE IN THE CITADEL BURNS",
-  "THE LAST OF ASHFALL'S BLOOD",
+  "THE LAST OF ASHFALL'S BLOOD", "THE BELLS OF THE CITADEL TOLL", "PILGRIMS WITH SWORDS", "THE VOW OF ASH",
+  "SONS AND DAUGHTERS OF THE DAWN", "THE GROUND SHAKES AS THEY MARCH", "THE RIVERS RUN BLACK", "THE ORDER'S LAST RESERVES",
+  "THE MARSHAL'S VANGUARD", "THE LAST CRUSADE", "THE DAWN BEFORE THE DARK", "THE CAGE IS CRACKING",
 ];
 const TAUNTS = {
   wave: ["COME, LITTLE KNIGHTS.", "MORE SOULS FOR MY TOWER.", "THE DAWN WILL NOT SAVE YOU.", "I HAVE WAITED CENTURIES. I CAN WAIT TONIGHT.",
@@ -578,6 +594,10 @@ const pick = list => list[Math.floor(Math.random() * list.length)];
 // Between waves, Seraphine Vane, High Marshal of the Order, talks with Vorgath. Bit by bit she tells
 // him what became of the daughter he lost the night he made his bargain, and who she really is.
 const MARSHAL = { name: "High Marshal Vane", kind: "marshal", lv: 9 };
+// The Voice Below: the thing the bargain was made with, which has been growing under the tower ever since.
+const VOICE = { name: "The Voice Below", kind: "voice", lv: 1 };
+const FINAL_WAVE = 25;
+// After each wave (by number cleared), an exchange between the Marshal (M), the Voice (V) and Vorgath (B).
 const STORY = {
   1: [["M", "HOLLOW KING! THOSE WERE ONLY SQUIRES. I AM SERAPHINE VANE, HIGH MARSHAL OF THE DAWN."],
       ["B", "VANE. I HAVE EATEN SIX MARSHALS. YOU WILL MAKE SEVEN."]],
@@ -586,31 +606,52 @@ const STORY = {
   3: [["M", "TELL ME, VORGATH. WHAT WAS WORTH YOUR SOUL? GOLD? A CROWN?"],
       ["B", "ASHFALL. THE GREY PLAGUE TOOK MY PEOPLE BY THE THOUSAND."],
       ["B", "SOMETHING IN THE DARK OFFERED A CURE. IT KEPT ITS WORD. IT ALWAYS DOES."]],
-  4: [["M", "THE OLD CHRONICLES SAY YOUR DAUGHTER FLED THE TOWER THE NIGHT YOU MADE YOUR BARGAIN."],
+  4: [["V", "LITTLE KING. YOU ARE HUNGRY. I CAN HELP."],
+      ["B", "...YOU. AFTER ALL THIS TIME."]],
+  5: [["M", "THE OLD CHRONICLES SAY YOUR DAUGHTER FLED THE TOWER THE NIGHT YOU MADE YOUR BARGAIN."],
       ["B", "...DO NOT SPEAK OF HER."]],
-  5: [["M", "ELOWEN. HER NAME WAS ELOWEN. SHE FOUNDED THE ORDER OF THE DAWN."],
+  6: [["V", "SHE LIES, LITTLE KING. YOU HAVE NO DAUGHTER. YOU HAVE ME."],
+      ["B", "BE SILENT. I DID NOT CALL YOU."]],
+  7: [["M", "ELOWEN. HER NAME WAS ELOWEN. SHE FOUNDED THE ORDER OF THE DAWN."],
       ["B", "LIES. MY ELOWEN WOULD NEVER RAISE A SWORD AGAINST HER FATHER."],
       ["M", "SHE DIDN'T. SHE RAISED AN ARMY."]],
-  6: [["M", "SHE CARVED ONE OATH INTO THE DAWNSTONE: FREE MY FATHER. WE STILL SWEAR IT."],
+  8: [["B", "THERE IS A VOICE BENEATH MY TOWER, CHILD. IT GROWS LOUDER."],
+      ["M", "THEN IT IS WAKING. THE CHRONICLES WARNED OF IT."]],
+  9: [["M", "SHE CARVED ONE OATH INTO THE DAWNSTONE: FREE MY FATHER. WE STILL SWEAR IT."],
       ["B", "FREE ME? I AM THE TOWER NOW. THERE IS NOTHING LEFT TO FREE."]],
-  7: [["M", "I CARRY ELOWEN'S BLOOD, HOLLOW KING. I AM OF YOUR LINE."],
-      ["B", "..."],
-      ["B", "THEN YOUR SOUL WILL TASTE OF HOME."]],
-  8: [["B", "WHY DO YOU KEEP SENDING THEM, CHILD? THEY ALL DIE."],
-      ["M", "BECAUSE EVERY SOUL YOU EAT IS ONE SHE SWORE TO SAVE. WE WILL NOT STOP."]],
-  9: [["M", "THE THING BELOW YOUR TOWER IS GROWING. YOU ARE NOT ITS KING, VORGATH. YOU ARE ITS CAGE."],
-      ["B", "BE SILENT."],
-      ["B", "...IT GROWS LOUDER EVERY CENTURY."]],
-  10: [["M", "NO MORE SQUIRES. NO MORE KNIGHTS. NEXT TIME, I COME MYSELF."],
-       ["B", "COME, THEN, LAST OF ASHFALL. LET US END OUR LINE TOGETHER."]],
+  10: [["V", "EVERY SOUL YOU TAKE, I TASTE FIRST. DID YOU NOT KNOW?"],
+       ["B", "...I KNEW."]],
+  11: [["M", "I CARRY ELOWEN'S BLOOD, HOLLOW KING. I AM OF YOUR LINE."],
+       ["B", "..."],
+       ["B", "THEN YOUR SOUL WILL TASTE OF HOME."]],
+  12: [["B", "WHY DO YOU KEEP SENDING THEM, CHILD? THEY ALL DIE."],
+       ["M", "BECAUSE EVERY SOUL YOU EAT IS ONE SHE SWORE TO SAVE. WE WILL NOT STOP."]],
+  13: [["M", "THE THING BELOW YOUR TOWER IS GROWING. YOU ARE NOT ITS KING, VORGATH. YOU ARE ITS CAGE."],
+       ["B", "BE SILENT."],
+       ["B", "...IT GROWS LOUDER EVERY CENTURY."]],
+  14: [["V", "CAGE? NO. HE IS MY CROWN, AND I WEAR HIM WELL."],
+       ["B", "I AM NO ONE'S CROWN."]],
+  15: [["M", "ANOTHER WAVE GONE. I WILL LIGHT A CANDLE FOR EACH OF THEM."],
+       ["B", "LIGHT A THOUSAND. MY TOWER WILL STILL BE DARK."]],
+  16: [["B", "SOMETIMES I DREAM OF THE GARDENS OF ASHFALL. THEN I WAKE HUNGRY."],
+       ["M", "THERE IS STILL A MAN IN THERE. ELOWEN KNEW IT."]],
+  17: [["M", "THE THING WHISPERS TO MY MAGES NOW. IT CALLS YOU ITS FAVOURITE TOY."],
+       ["B", "LET IT WHISPER. I AM THE ONE WITH THE CLEAVER."]],
+  18: [["M", "DO YOU EVEN REMEMBER HER FACE?"],
+       ["B", "...SHE HAD HER MOTHER'S EYES. NOW GO."]],
+  19: [["V", "SOON THE CAGE BREAKS. SOON I RISE. YOU WILL KNEEL TO ME, LITTLE KING."],
+       ["B", "I HAVE KNELT TO NO ONE IN THREE HUNDRED YEARS."]],
+  20: [["B", "YOUR ORDER BURNS BRIGHT, CHILD. BRIGHT THINGS BURN OUT."],
+       ["M", "THEN WE WILL BURN OUT AT YOUR DOOR."]],
+  21: [["M", "THE GROUND SHAKES ACROSS ALL OF ASHFALL. THE RIVERS RUN BLACK."],
+       ["B", "IT IS ALMOST AWAKE. WE ARE OUT OF TIME, CHILD."]],
+  22: [["M", "IF IT RISES, IT WILL NOT STOP AT YOUR TOWER."],
+       ["B", "...I KNOW. I HAVE HEARD IT DREAM."]],
+  23: [["M", "NO MORE SQUIRES. NO MORE KNIGHTS. NEXT TIME, I COME MYSELF."],
+       ["B", "COME, THEN, LAST OF ASHFALL. COME QUICKLY."]],
+  24: [["V", "ENOUGH WAITING. THE CAGE IS CRACKED. I AM COMING UP."],
+       ["B", "SERAPHINE. BRING YOUR SWORD. BRING EVERY SWORD YOU HAVE."]],
 };
-const STORY_LATER = [
-  [["M", "ANOTHER WAVE GONE. I WILL LIGHT A CANDLE FOR EACH OF THEM."], ["B", "LIGHT A THOUSAND. MY TOWER WILL STILL BE DARK."]],
-  [["B", "SOMETIMES I DREAM OF THE GARDENS OF ASHFALL. THEN I WAKE HUNGRY."], ["M", "THERE IS STILL A MAN IN THERE. ELOWEN KNEW IT."]],
-  [["M", "THE DEMON WHISPERS TO MY MAGES NOW. IT CALLS YOU ITS FAVOURITE TOY."], ["B", "LET IT WHISPER. I AM THE ONE WITH THE CLEAVER."]],
-  [["B", "YOUR ORDER BURNS BRIGHT, CHILD. BRIGHT THINGS BURN OUT."], ["M", "THEN WE WILL BURN OUT AT YOUR DOOR."]],
-  [["M", "DO YOU EVEN REMEMBER HER FACE?"], ["B", "...SHE HAD HER MOTHER'S EYES. NOW GO."]],
-];
 // What the first hero up the stairs says as the boss battle starts.
 const CHALLENGES = {
   champion: ["VORGATH! BY ELOWEN'S OATH, I END YOU!", "I HAVE COME A LONG WAY TO KILL YOU, OLD KING."],
@@ -622,13 +663,650 @@ const CHALLENGES = {
 };
 const MOURN = ["NO! {N}!", "THEY GOT {N}!", "KEEP MOVING! DON'T LOOK BACK!", "{N} IS DOWN!", "I'LL AVENGE YOU, {N}!"];
 
+// ---------- the thing below ----------
+// The Hunger grows with every soul the tower takes (dark souls and bargains feed it most). As it
+// rises, the level changes: tremors, eyes in the lava, a heartbeat, and tendrils that drag the living down.
+const HUNGER_TIERS = [
+  { at: 15, line: "...MORE." },
+  { at: 30, line: "I CAN TASTE THEM, LITTLE KING. CAN YOU?" },
+  { at: 45, line: "YOUR HEART STILL BEATS. HOW QUAINT." },
+  { at: 60, line: "SOON I WILL NOT NEED YOU TO FEED ME." },
+  { at: 75, line: "EVEN YOUR SERVANTS LOOK DELICIOUS." },
+  { at: 90, line: "THE CAGE IS CRACKING." },
+];
+function addHunger(n) {
+  const before = S.hunger || 0;
+  S.hunger = Math.min(100, before + n);
+  for (const tier of HUNGER_TIERS) if (before < tier.at && S.hunger >= tier.at) setTimeout(() => speak(VOICE, tier.line, true), 1200);
+}
+function updateHunger(dt) {
+  const hu = S.hunger || 0;
+  if (hu < 15 || S.phase !== "wave") return;
+  S.dread = S.dread || { quake: 6, eye: 4, beat: 1, tendril: 10 };
+  const d = S.dread;
+  d.quake -= dt;
+  if (d.quake <= 0) {
+    // The ground shudders; grit rains from the castle wall.
+    d.quake = 9 + Math.random() * 12 - hu / 10;
+    S.shake = Math.max(S.shake, 2 + hu / 25);
+    for (let i = 0; i < 25; i++) particle({ x: camX() + Math.random() * W, y: 6 + Math.random() * 0.5, vy: 1, g: 14, life: 0.8, color: Math.random() < 0.5 ? "#5d566a" : "#3a3448" });
+    Sound.play("rumble");
+  }
+  if (hu >= 30) {
+    d.eye -= dt;
+    if (d.eye <= 0) {
+      d.eye = 5 + Math.random() * 6;
+      const pits = [];
+      for (let x = 0; x < TOWER_X; x++) if (tileAt(x, H - 1) === "L" && tileAt(x + 1, H - 1) === "L") pits.push(x);
+      if (pits.length) S.lavaEyes.push({ x: pick(pits) + 1, t: 0, life: 3 + Math.random() * 2 });
+    }
+  }
+  if (hu >= 45) {
+    d.beat -= dt;
+    if (d.beat <= 0) { d.beat = 1.7 - hu / 200; Sound.play("deepbeat"); }
+  }
+  if (hu >= 60) {
+    d.tendril -= dt;
+    if (d.tendril <= 0) {
+      d.tendril = 16 + Math.random() * 8 - hu / 10;
+      // It reaches for a hero near a pit, and once it is hungry enough, sometimes for your own monsters.
+      const nearPit = e => [-1, 0, 1].some(o => tileAt(Math.floor(centerX(e)) + o, H - 1) === "L");
+      const heroes = S.heroes.filter(h => nearPit(h) && !h.serpentHeld && h.kind !== "champion");
+      const mons = hu >= 75 ? S.minions.filter(nearPit) : [];
+      const prey = mons.length && Math.random() < 0.35 ? pick(mons) : heroes.length ? pick(heroes) : null;
+      if (prey) {
+        S.tendrils.push({ prey, t: 0, x: centerX(prey), monster: !!S.minions.includes(prey) });
+        if (!S.minions.includes(prey)) prey.serpentHeld = true;
+        Sound.play("chain");
+      }
+    }
+  }
+}
+function updateTendrils(dt) {
+  for (const s of S.lavaEyes) s.t += dt;
+  S.lavaEyes = S.lavaEyes.filter(s => s.t < s.life);
+  for (const tn of S.tendrils) {
+    tn.t += dt;
+    const p = tn.prey, alive = tn.monster ? S.minions.includes(p) : S.heroes.includes(p);
+    if (!alive) { tn.done = true; continue; }
+    if (tn.t > 0.35) {
+      // Wrapped up and pulled down into the lava.
+      const k = Math.min(1, (tn.t - 0.35) / 0.9);
+      p.x += (tn.x - p.w / 2 - p.x) * Math.min(1, dt * 6);
+      p.y += ((H - 0.4) - p.y) * Math.min(1, dt * 2.5 * k + dt);
+      p.vx = 0; p.vy = 0;
+      if (k >= 1) {
+        p.hp = 0;
+        if (!tn.monster) { p.lava = true; p.eaten = false; p.tendril = true; }
+        burst(tn.x, H - 0.8, 18, ["#12001f", "#4a148c", "#ff6f00"], 5);
+        Sound.play("sizzle");
+        tn.done = true;
+        if (tn.monster) say("Something from below dragged one of your monsters into the lava.");
+      }
+    }
+  }
+  S.tendrils = S.tendrils.filter(tn => !tn.done);
+}
+function drawTendrils() {
+  const lavaY = (H - 1) * T + 4;
+  for (const e of S.lavaEyes) {
+    // A huge eye opening in the lava, looking up at the path.
+    const k = Math.min(1, e.t / 0.5, (e.life - e.t) / 0.5), x = Math.round(e.x * T), r = Math.round(6 * k);
+    if (r < 1) continue;
+    ctx.fillStyle = "#1a0505";
+    ctx.fillRect(x - 9, lavaY - 1, 18, 2 + r);
+    ctx.fillStyle = "#ffd54f";
+    ctx.fillRect(x - 7, lavaY, 14, Math.max(1, r - 1));
+    ctx.fillStyle = "#000";
+    ctx.fillRect(x - 1, lavaY - 1, 2, r + 1);
+  }
+  for (const tn of S.tendrils) {
+    const p = tn.prey, top = Math.min(p.y + p.h * 0.5, lavaY) , rise = Math.min(1, tn.t / 0.35);
+    const tipY = lavaY - (lavaY - top * T) * rise;
+    for (let y = lavaY; y > tipY; y -= 2) {
+      const wob = Math.round(Math.sin(y * 0.3 + S.time * 10) * 2);
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(Math.round(tn.x * T) - 3 + wob, Math.round(y) - 1, 6, 3);
+      ctx.fillStyle = y % 6 < 3 ? "#2a1740" : "#4a148c";
+      ctx.fillRect(Math.round(tn.x * T) - 2 + wob, Math.round(y), 4, 2);
+    }
+  }
+}
+
+// ---------- bargains ----------
+// After some waves, the Voice offers a deal. Every deal makes you stronger and feeds the Hunger.
+const BARGAIN_WAVES = [4, 7, 10, 13, 16, 19, 22];
+const DARK_ENDING_BARGAINS = 5;
+const BARGAINS = [
+  { id: "blaze", name: "BURNING TRAPS", lines: ["PAY 5 SOULS.", "ALL TRAPS DEAL +50%", "DAMAGE NEXT WAVE."], hunger: 8,
+    ok: () => S.souls >= 5, take: () => { S.souls -= 5; spend("souls", 5); S.blazeWave = S.wave; } },
+  { id: "flesh", name: "FLESH FOR IRON", lines: ["SACRIFICE A MONSTER.", "+100 MAX HEALTH,", "FOREVER."], hunger: 10,
+    ok: () => S.minions.length > 0, take: () => {
+      const m = pick(S.minions);
+      burst(centerX(m), centerY(m), 24, ["#12001f", "#4a148c", "#d32f2f"], 5);
+      m.hp = 0;
+      S.fleshHp = (S.fleshHp || 0) + 100;
+      S.boss.maxHp = bossMaxHp(S.boss.form);
+      S.boss.hp = S.boss.maxHp;
+    } },
+  { id: "debt", name: "A DEBT", lines: ["2 DARK SOULS NOW.", "IN TWO WAVES, I TAKE", "MY PAYMENT."], hunger: 12,
+    ok: () => !S.debtWave, take: () => { S.darkSouls += 2; S.shown.dark += 2; S.debtWave = S.wave + 2; } },
+  { id: "gold", name: "GOLD FROM THE DEEP", lines: ["+60 COINS.", "NEXT WAVE BRINGS", "3 MORE HEROES."], hunger: 6,
+    ok: () => true, take: () => { S.coins += 60; S.shown.coins += 60; S.extraHeroes = { wave: S.wave, n: 3 }; } },
+  { id: "drowned", name: "SOULS OF THE DROWNED", lines: ["+5 SOULS.", "THE DEAD OF THE LAVA", "ARE YOURS."], hunger: 6,
+    ok: () => true, take: () => { S.souls += 5; S.shown.souls += 5; } },
+  { id: "power", name: "A GIFT OF DARKNESS", lines: ["A FREE DARK POWER", "YOU DON'T OWN YET."], hunger: 14,
+    ok: () => DARK_POWERS.some(p => !S.powers.has(p.id)), take: () => {
+      const p = pick(DARK_POWERS.filter(q => !S.powers.has(q.id)));
+      S.powers.add(p.id);
+      if (p.id === "might") { S.boss.maxHp = bossMaxHp(S.boss.form); S.boss.hp = S.boss.maxHp; }
+      say(`The Voice gives you ${p.name}.`);
+    } },
+];
+function offerBargain() {
+  const open = BARGAINS.filter(b => b.ok());
+  const offers = [];
+  while (offers.length < 3 && open.length) offers.push(open.splice(Math.floor(Math.random() * open.length), 1)[0]);
+  S.bargain = { offers, at: S.time };
+  S.trapMenu = S.monsterMenu = S.serpentMenu = null;
+  Sound.play("wail");
+  say("The Voice Below offers a bargain. Pick one (1-3), or refuse (Esc). Every bargain feeds the Thing Below.");
+}
+function takeBargain(i) {
+  const b = S.bargain && S.bargain.offers[i];
+  if (!b || !b.ok()) { Sound.play("deny"); return; }
+  b.take();
+  S.bargains = (S.bargains || 0) + 1;
+  addHunger(b.hunger);
+  S.bargain = null;
+  Sound.play("infuse");
+  S.shake = Math.max(S.shake, 3);
+  speak(VOICE, pick(["DONE.", "A FAIR TRADE, LITTLE KING.", "I WILL REMEMBER THIS.", "YES..."]), true);
+  if (S.bargains === DARK_ENDING_BARGAINS) setTimeout(() => speak(VOICE, "YOU ARE MINE NOW. YOU WILL SEE.", true), 2500);
+}
+function refuseBargain() {
+  if (!S.bargain) return;
+  S.bargain = null;
+  speak(VOICE, pick(["YOU WILL COME TO ME. THEY ALL DO.", "PRIDE. HOW HUMAN OF YOU.", "THEN STARVE."]), true);
+}
+
+// ---------- the finale ----------
+// Wave 25: the Thing Below breaks through the tower top. Vorgath fights it, with the Marshal and her
+// last knights beside him. Its hide shrugs off blows; its great eye, when it opens, does not.
+const THING = { hp: 2700, armor: 0.8, x: 21.4, w: 4.6, h: 4.4, openFor: 4, closedFor: 5 };
+const partBase = () => ({ name: "The Thing Below", kind: "thing", lv: 25, onGround: true, evade: 0, dodge: 0, flash: 0, face: -1, trail: [], atkAnim: 0, cd: 0, vx: 0, vy: 0, spotted: new Map(), smart: 0 });
+function startFinale() {
+  S.finale = { stage: 1, t: 0 };
+  Object.assign(S, { scene: "arena", phase: "boss", fadeIn: FADE, waves: [], particles: [], heroArrows: [], towerHeroes: [], bargain: null });
+  S.trapMenu = S.monsterMenu = S.serpentMenu = null;
+  clearSpecials();
+  const b = S.boss;
+  resetForm(b);
+  Object.assign(b, { x: 9, y: ARENA_FLOOR - b.h, vx: 0, vy: 0, face: 1, windup: 0, swing: 0, slam: 0, cd: 0, hp: b.maxHp, enraged: false, roar: 0, action: null, cds: freshCds() });
+  const core = Object.assign(partBase(), { part: "core", x: THING.x, y: ARENA_FLOOR + 1, baseY: ARENA_FLOOR - THING.h + 0.35, w: THING.w, h: THING.h,
+    hp: THING.hp, maxHp: THING.hp, armor: THING.armor, open: false, eyeT: 0, biteCd: 6, tentCd: 2, spawnCd: 10, lunge: null, rise: 0 });
+  S.thing = core;
+  S.heroes = [core];
+  // The Marshal and her guard come up the stairs to fight beside him.
+  const ally = (kind, x, hp, atk, name) => {
+    const h = makeHero(12, kind === "marshal" ? "champion" : kind);
+    return Object.assign(h, { kind, x, y: ARENA_FLOOR - h.h, hp, maxHp: hp, atk, name, ally: true, cd: 1.5, walkTo: x + 2.5 });
+  };
+  S.allies = [ally("marshal", 1.6, 1100, 22, "High Marshal Vane"), ally("knight", 3.0, 260, 12, "Sir Aldric"), ally("brute", 0.5, 420, 15, "Iron Bram"), ally("archer", 4.0, 180, 10, "Ranger Wren")];
+  S.intro = 7;
+  S.shake = 10;
+  Sound.play("thingRoar");
+  banner("THE THING BELOW", "It has waited three hundred years", "#b388ff");
+  S.dialog = { queue: [], cur: null };
+  converse([["V", "ENOUGH. THE CAGE BREAKS."], ["M", "HOLLOW KING! WHATEVER YOU ARE, TONIGHT WE FIGHT THE SAME ENEMY."],
+    ["B", "THEN STAND WITH ME, CHILD OF ASHFALL."], ["V", "FOOLS. I WILL WEAR YOU BOTH."]], 300);
+  say("The Thing Below rises! Its hide shrugs off your blows: hit its great eye while it is open. Kill the tendrils that burst from the floor.");
+}
+
+// The living things it can hurt: Vorgath and his allies.
+const thingFoes = () => [S.boss, ...S.allies];
+function hitFoes(box, dmg, kick) {
+  let any = false;
+  for (const t of thingFoes()) {
+    if (!overlaps(box, t)) continue;
+    damage(t, t.isBoss ? dmg : Math.round(dmg * (t.kind === "marshal" ? 0.35 : 0.5)), "#b388ff", ["#4a148c", "#d32f2f"]);
+    if (t.isBoss) t.vy = Math.min(t.vy, -4);
+    else knock(t, kick, -5);
+    any = true;
+  }
+  return any;
+}
+
+function updatePart(p, dt) {
+  p.flash -= dt;
+  if (p.part === "core") updateCore(p, dt);
+  else if (p.part === "tentacle") updateTentacle(p, dt);
+  else updateSpawn(p, dt);
+}
+function updateCore(c, dt) {
+  const f = S.finale;
+  if (c.rise < 1) {
+    // Rising up out of the crack in the floor.
+    c.rise = Math.min(1, c.rise + dt / 4);
+    const e = 1 - Math.pow(1 - c.rise, 3);
+    c.y = ARENA_FLOOR + 1 + (c.baseY - ARENA_FLOOR - 1) * e;
+    S.shake = Math.max(S.shake, 3);
+    if (Math.random() < dt * 40) particle({ x: c.x + Math.random() * c.w, y: ARENA_FLOOR - 0.1, vx: (Math.random() - 0.5) * 6, vy: -3 - Math.random() * 4, g: 16, life: 0.7, color: Math.random() < 0.5 ? "#4a4458" : "#2b2535" });
+    return;
+  }
+  if (S.intro > 0) return;
+  const frac = c.hp / c.maxHp, stage = frac < 0.33 ? 3 : frac < 0.66 ? 2 : 1;
+  if (stage > f.stage) {
+    f.stage = stage;
+    S.shake = 9;
+    Sound.play("thingRoar");
+    converse([["V", stage === 2 ? "YOU HURT ME? YOU?" : "THEN I WILL DROWN ALL OF ASHFALL IN THE DARK!"]]);
+    if (stage === 3 && S.allies.some(a => a.kind === "marshal")) converse([["M", "IT'S WEAKENING! EVERYTHING YOU HAVE, GRANDFATHER!"]], 2500);
+  }
+  // The great eye opens for a few seconds at a time.
+  c.eyeT += dt;
+  const closedFor = stage === 3 ? 3.5 : THING.closedFor, openFor = THING.openFor + (stage === 3 ? 1 : 0);
+  if (!c.open && c.eyeT > closedFor) {
+    c.open = true;
+    c.eyeT = 0;
+    float(centerX(c), c.y + 0.2, "WEAK SPOT!", "#ffd54f");
+    Sound.play("roar2");
+  } else if (c.open && c.eyeT > openFor) { c.open = false; c.eyeT = 0; }
+  c.armor = c.open ? 0 : THING.armor;
+  // The maw lunges along the floor.
+  c.biteCd -= dt;
+  if (c.lunge) updateLunge(c, dt);
+  else if (c.biteCd <= 0) { c.lunge = { t: 0, hit: false }; c.biteCd = stage === 1 ? 7 : 5; Sound.play("growl"); }
+  // Tendrils burst up near Vorgath and his allies, more as it weakens.
+  c.tentCd -= dt;
+  if (c.tentCd <= 0 && S.heroes.filter(p => p.part === "tentacle").length < Math.min(3, stage + 1)) { c.tentCd = stage === 3 ? 2.5 : 4; spawnTentacle(); }
+  if (stage >= 2) {
+    c.spawnCd -= dt;
+    if (c.spawnCd <= 0) { c.spawnCd = stage === 3 ? 5 : 8; spawnSpawn(); }
+  }
+  if (Math.random() < dt * 4) particle({ x: c.x + Math.random() * c.w, y: c.y + Math.random() * c.h, vy: -0.8, life: 0.8, color: Math.random() < 0.5 ? "#4a148c" : "#12001f", glow: true });
+}
+function updateLunge(c, dt) {
+  const L = c.lunge;
+  L.t += dt;
+  if (L.t < 0.9) { c.x = THING.x + Math.sin(L.t * 50) * 0.06; return; }   // the warning: it shudders and its maw glows
+  if (L.t < 1.15) c.x = THING.x - 7 * (L.t - 0.9) / 0.25;
+  else if (L.t < 1.45) c.x = THING.x - 7;
+  else if (L.t < 2.1) c.x = THING.x - 7 * (1 - (L.t - 1.45) / 0.65);
+  else { c.x = THING.x; c.lunge = null; return; }
+  if (!L.hit && L.t < 1.45 && hitFoes({ x: c.x, y: c.y + 1.4, w: 2.4, h: c.h - 1.4 }, 85, -7)) { L.hit = true; S.shake = 7; Sound.play("chomp"); }
+}
+function spawnTentacle() {
+  const target = Math.random() < 0.65 || !S.allies.length ? S.boss : pick(S.allies);
+  const x = Math.max(1.5, Math.min(THING.x - 1.2, centerX(target) + (Math.random() - 0.5) * 2.5));
+  S.heroes.push(Object.assign(partBase(), { part: "tentacle", name: "Tendril", x: x - 0.4, y: ARENA_FLOOR - 3, w: 0.8, h: 3, hp: 130, maxHp: 130,
+    rise: 0, warn: 0.9, invuln: true, life: 9, whip: 0, cd: 1.6, dir: -1 }));
+}
+function updateTentacle(p, dt) {
+  if (p.warn > 0) {
+    // The floor cracks and bubbles where it is about to burst through.
+    p.warn -= dt;
+    if (Math.random() < dt * 25) particle({ x: p.x + Math.random() * p.w, y: ARENA_FLOOR - 0.05, vy: -1.5, g: 6, life: 0.4, color: Math.random() < 0.5 ? "#d500f9" : "#4a148c", glow: true });
+    if (p.warn <= 0) {
+      p.invuln = false;
+      hitFoes({ x: p.x - 0.2, y: p.y, w: p.w + 0.4, h: p.h }, 32, 0);
+      S.shake = Math.max(S.shake, 4);
+      Sound.play("spikes");
+    }
+    return;
+  }
+  p.rise = Math.min(1, p.rise + dt * 5);
+  p.life -= dt;
+  p.cd -= dt;
+  if (p.whip > 0) {
+    p.whip -= dt;
+    if (p.whip <= 0) {
+      const reach = 1.9;
+      hitFoes(p.dir < 0 ? { x: p.x - reach, y: p.y + 0.8, w: reach + p.w / 2, h: 2.2 } : { x: p.x + p.w / 2, y: p.y + 0.8, w: reach, h: 2.2 }, 32, p.dir * 5);
+      Sound.play("swing");
+    }
+  } else if (p.cd <= 0) {
+    // Rear back toward the nearest foe, then lash.
+    let t = null;
+    for (const o of thingFoes()) if (!t || Math.abs(centerX(o) - centerX(p)) < Math.abs(centerX(t) - centerX(p))) t = o;
+    p.dir = t && centerX(t) > centerX(p) ? 1 : -1;
+    p.whip = 0.45;
+    p.cd = 2.4;
+  }
+  if (p.life <= 0) { p.hp = 0; p.retracted = true; }
+}
+function spawnSpawn() {
+  S.heroes.push(Object.assign(partBase(), { part: "spawn", name: "Spawn", x: THING.x - 0.6, y: ARENA_FLOOR - 0.6, w: 0.7, h: 0.6, hp: 35, maxHp: 35, cd: 0.5, walk: 0 }));
+  burst(THING.x - 0.3, ARENA_FLOOR - 0.3, 10, ["#12001f", "#4a148c"], 3);
+}
+function updateSpawn(p, dt) {
+  let t = null;
+  for (const o of thingFoes()) if (!t || Math.abs(centerX(o) - centerX(p)) < Math.abs(centerX(t) - centerX(p))) t = o;
+  p.cd -= dt;
+  if (!t) return;
+  const dx = centerX(t) - centerX(p);
+  p.face = Math.sign(dx) || p.face;
+  if (Math.abs(dx) > (t.w + p.w) / 2) { p.x += p.face * 2.6 * dt; p.walk += dt; }
+  else if (p.cd <= 0) { damage(t, 12, "#b388ff"); p.cd = 0.8; p.atkAnim = 0.15; }
+  p.x = Math.max(0.6, Math.min(W - 1.5, p.x));
+}
+function partDied(p) {
+  S.heroes = S.heroes.filter(o => o !== p);
+  const core = p.part === "core";
+  burst(centerX(p), centerY(p), core ? 70 : 16, ["#12001f", "#4a148c", "#d500f9", "#ff1744"], core ? 10 : 4, { glow: true });
+  if (core) { thingDefeated(); return; }
+  if (p.part === "tentacle" && !p.retracted) { float(centerX(p), p.y + 0.5, "SEVERED", "#ea80fc"); Sound.play("slash"); }
+}
+
+// The Marshal and her knights: they fight whatever part of the Thing is closest.
+function updateAllies(dt) {
+  for (const a of S.allies) {
+    a.cd -= dt; a.flash -= dt; a.atkAnim -= dt;
+    if (a.knock > 0) { a.knock -= dt; moveBody(a, dt); continue; }
+    if (S.intro > 0) { a.vx = a.x < a.walkTo ? a.speed * 0.6 : 0; a.face = 1; moveBody(a, dt); continue; }
+    let t = null;
+    for (const p of S.heroes) if (p.part && !(p.warn > 0) && (p.part !== "core" || p.rise >= 1) && (!t || Math.abs(centerX(p) - centerX(a)) < Math.abs(centerX(t) - centerX(a)))) t = p;
+    a.vx = 0;
+    if (t) {
+      const gap = t.part === "core" ? t.x - (a.x + a.w) : Math.abs(centerX(t) - centerX(a)) - (a.w + t.w) / 2;
+      a.face = Math.sign(centerX(t) - centerX(a)) || 1;
+      if (gap <= (a.kind === "archer" ? 6 : 0.4)) {
+        if (a.cd <= 0) {
+          a.cd = a.kind === "archer" ? 1.1 : a.kind === "marshal" ? 0.9 : 1.0;
+          a.atkAnim = 0.2;
+          if (a.kind === "archer") S.heroArrows.push({ x: centerX(a) + a.face * 0.4, y: a.y + 0.4, vx: a.face * 10, dmg: a.atk, ally: true });
+          else damage(t, a.atk, "#ffd54f", ["#4a148c", "#12001f"]);
+        }
+      } else a.vx = a.face * a.speed;
+    }
+    moveBody(a, dt);
+    a.x = Math.max(0.6, Math.min(THING.x - a.w, a.x));
+  }
+  for (const a of S.allies) if (a.hp <= 0) allyDied(a);
+  S.allies = S.allies.filter(a => a.hp > 0);
+}
+function allyDied(a) {
+  burst(centerX(a), centerY(a), 24, ["#d32f2f", "#fff8e1", "#c9a227"], 6);
+  Sound.play("heroDie");
+  if (a.kind === "marshal") {
+    S.finale.marshalDead = true;
+    S.dialog = { queue: [], cur: null };
+    converse([["M", "GRANDFATHER... FINISH... IT..."], ["B", "SERAPHINE!"]]);
+  } else speak(a, pick(["FOR... THE DAWN...", "MARSHAL... I'M SORRY...", "KEEP... FIGHTING..."]), true);
+}
+
+// The Thing breaks. Then the last choice.
+function thingDefeated() {
+  S.phase = "ending";
+  S.finale.endT = 0;
+  for (const p of S.heroes) burst(centerX(p), centerY(p), 12, ["#12001f", "#4a148c"], 4);
+  S.heroes = [];
+  S.boss.action = null;
+  S.whiteFlash = 0.8;
+  S.shake = 14;
+  Sound.play("thingRoar");
+  S.dialog = { queue: [], cur: null };
+  converse([["V", "NO... NO! I AM ETERNAL! I AM THE DARK BENEATH ALL THINGS! I AM..."]]);
+  banner("THE THING BELOW", "is broken", "#ffd54f");
+}
+function updateEnding(dt) {
+  const f = S.finale;
+  f.endT += dt;
+  S.whiteFlash -= dt;
+  if (f.endT < 3.5) {
+    S.shake = Math.max(S.shake, 4);
+    if (Math.random() < dt * 40) particle({ x: THING.x + Math.random() * THING.w, y: ARENA_FLOOR - Math.random() * 4, vy: -2, life: 0.8, color: Math.random() < 0.5 ? "#d500f9" : "#12001f", glow: true });
+  }
+  if (f.endT > 5 && !S.choice && !f.chosen) {
+    const bound = (S.bargains || 0) >= DARK_ENDING_BARGAINS, alone = f.marshalDead || !S.allies.some(a => a.kind === "marshal");
+    S.choice = { lightOk: !bound && !alone, reason: bound ? `YOU TOOK ${S.bargains} BARGAINS. YOU BELONG TO IT.` : alone ? "SERAPHINE IS DEAD. NO ONE IS LEFT TO FREE YOU." : "" };
+    if (bound) converse([["V", "YOU ARE MINE, LITTLE KING. YOU ALWAYS WERE."]]);
+    else if (!alone) converse([["M", "IT'S OVER. LET ME KEEP HER OATH, GRANDFATHER. LET ME FREE YOU."]]);
+  }
+}
+const ENDINGS = {
+  dark: { title: "THE END", sub: "The new darkness of Ashfall", color: "#d500f9", lines: [
+    "VORGATH TEARS THE THING APART AND DRINKS IT DOWN, PIECE BY SCREAMING PIECE.",
+    "THEN HE TURNS TO THE LAST OF HIS BLOOD.",
+    "THE HOLLOW KING IS GONE. SOMETHING FAR WORSE NOW SITS ON THE THRONE OF ASHFALL.",
+    "THE DAWN NEVER COMES AGAIN."] },
+  light: { title: "THE END", sub: "Elowen's oath is kept", color: "#ffd54f", lines: [
+    "THE THING BELOW SCREAMS, FALLS BACK INTO THE DARK, AND IS SILENT.",
+    "SERAPHINE LAYS ELOWEN'S SWORD AGAINST THE BLACK IRON. 'I FREE YOU, GRANDFATHER.'",
+    "FOR THE FIRST TIME IN THREE HUNDRED YEARS, VORGATH CLOSES HIS EYES.",
+    "THE TOWER FALLS AT DAWN. NO ONE IS INSIDE IT."] },
+};
+function chooseEnding(kind) {
+  if (!S.choice || (kind === "light" && !S.choice.lightOk)) { Sound.play("deny"); return; }
+  const lines = ENDINGS[kind].lines.slice();
+  if (kind === "dark" && (S.finale.marshalDead || !S.allies.some(a => a.kind === "marshal"))) lines[1] = "THERE IS NO ONE LEFT TO STOP HIM.";
+  S.choice = null;
+  S.dialog = { queue: [], cur: null };
+  S.finale.chosen = kind;
+  S.phase = "epilogue";
+  S.epilogue = { kind, lines, line: 0, t: 0 };
+  Sound.play(kind === "dark" ? "infuse" : "bell");
+}
+const epilogueTyped = () => Math.floor(S.epilogue.t * 32) >= S.epilogue.lines[S.epilogue.line].length;
+function advanceEpilogue() {
+  const e = S.epilogue;
+  if (!e || S.phase !== "epilogue") return;
+  if (!epilogueTyped()) { e.t = 99; return; }
+  e.line++;
+  e.t = 0;
+  if (e.line < e.lines.length) return;
+  const end = ENDINGS[e.kind];
+  S.phase = "over";
+  S.won = e.kind;
+  banner(end.title, `${end.sub} - all ${FINAL_WAVE} waves survived`, end.color);
+  Sound.play(e.kind === "dark" ? "death" : "victory");
+  say(e.kind === "dark" ? "The dark ending. Play again to see the other." : "The light ending. Play again to see the other, if you dare.");
+}
+
+// ---------- finale drawing ----------
+let thingBody = null;
+// The Thing's bulk: a lumpy black-violet mass with bone spikes, drawn once and reused.
+function thingBodySprite() {
+  if (thingBody) return thingBody;
+  const w = Math.round(THING.w * T) + 8, h = Math.round(THING.h * T) + 10;
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const g = c.getContext("2d"), cx = w / 2, cy = h * 0.55, rx = w / 2 - 3, ry = h * 0.45;
+  const inside = (x, y) => {
+    const a = Math.atan2(y - cy, x - cx), lump = 1 + 0.08 * Math.sin(a * 7) + 0.05 * Math.sin(a * 13 + 1);
+    return Math.pow((x - cx) / rx, 2) + Math.pow((y - cy) / ry, 2) <= lump * lump;
+  };
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (inside(x, y)) {
+      const shade = (x - cx) / rx + (y - cy) / ry;
+      g.fillStyle = shade < -0.7 ? "#3d2357" : shade < 0.2 ? "#2a1740" : "#1a0d26";
+      if ((x * 7 + y * 13) % 23 === 0) g.fillStyle = "#4a2d6b";
+      g.fillRect(x, y, 1, 1);
+    } else if (inside(x - 1, y) || inside(x + 1, y) || inside(x, y - 1) || inside(x, y + 1)) {
+      g.fillStyle = OUTLINE;
+      g.fillRect(x, y, 1, 1);
+    }
+  }
+  // Bone spikes along its crown.
+  for (const [sx, sh] of [[0.2, 7], [0.32, 10], [0.45, 12], [0.58, 11], [0.7, 9], [0.82, 6]]) {
+    const x0 = Math.round(w * sx), y0 = Math.round(cy - ry * Math.sqrt(Math.max(0, 1 - Math.pow((x0 - cx) / rx, 2)))) + 2;
+    for (let i = 0; i < sh; i++) {
+      const half = Math.max(0, Math.round((sh - i) / 4));
+      g.fillStyle = OUTLINE;
+      g.fillRect(x0 - half - 1, y0 - i, half * 2 + 3, 1);
+      g.fillStyle = i < 2 ? "#a8987a" : "#e8dcc0";
+      g.fillRect(x0 - half, y0 - i, half * 2 + 1, 1);
+    }
+  }
+  return (thingBody = c);
+}
+function drawPart(p) {
+  if (p.part === "core") drawThing(p);
+  else if (p.part === "tentacle") drawTentacle(p);
+  else drawSpawnling(p);
+}
+function drawThing(c) {
+  const body = thingBodySprite(), floor = ARENA_FLOOR * T;
+  const x = Math.round(c.x * T) - 4, y = Math.round(c.y * T) - 8;
+  // The crack it came through.
+  ctx.fillStyle = "#12001f";
+  ctx.fillRect(Math.round((THING.x - 1.5) * T), floor, Math.round((THING.w + 3) * T), 3);
+  ctx.fillStyle = "#d500f9";
+  ctx.globalAlpha = 0.5 + Math.sin(S.time * 3) * 0.2;
+  ctx.fillRect(Math.round((THING.x - 1) * T), floor + 1, Math.round((THING.w + 2) * T), 1);
+  ctx.globalAlpha = 1;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, W * T, floor + 2);
+  ctx.clip();
+  const shake = c.lunge && c.lunge.t < 0.9 ? (Math.floor(S.time * 40) % 2 ? 1 : -1) : 0;
+  // A hit makes it flare up for a moment.
+  if (c.flash > 0) ctx.filter = "brightness(2.2)";
+  ctx.drawImage(body, x + shake, y);
+  ctx.filter = "none";
+  const bw = body.width, bh = body.height, cx = x + shake + bw / 2;
+  // The maw: a wide mouth full of teeth, gaping when it lunges.
+  const gape = c.lunge ? (c.lunge.t < 0.9 ? 6 + c.lunge.t * 6 : 12) : 4 + Math.sin(S.time * 2) * 1.5;
+  const my = y + Math.round(bh * 0.72), mw = Math.round(bw * 0.62);
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(Math.round(cx - mw / 2) - 1, my - 1, mw + 2, Math.round(gape) + 2);
+  ctx.fillStyle = c.lunge && c.lunge.t < 0.9 && Math.floor(S.time * 10) % 2 ? "#ff1744" : "#5d0f0f";
+  ctx.fillRect(Math.round(cx - mw / 2), my, mw, Math.round(gape));
+  ctx.fillStyle = "#b71c1c";
+  ctx.fillRect(Math.round(cx - mw / 2) + 3, my + Math.round(gape / 2), mw - 6, Math.max(1, Math.round(gape / 3)));
+  ctx.fillStyle = "#e8dcc0";
+  for (let tx = Math.round(cx - mw / 2) + 1; tx < cx + mw / 2 - 2; tx += 4) {
+    ctx.fillRect(tx, my, 2, 3); ctx.fillRect(tx + 1, my + 3, 1, 1);
+    ctx.fillRect(tx + 2, my + Math.round(gape) - 3, 2, 3); ctx.fillRect(tx + 2, my + Math.round(gape) - 4, 1, 1);
+  }
+  // Small eyes all over, blinking out of time.
+  for (const [ex, ey, i] of [[0.22, 0.42, 0], [0.78, 0.4, 1], [0.3, 0.6, 2], [0.7, 0.58, 3], [0.15, 0.62, 4], [0.86, 0.62, 5]]) {
+    if (Math.floor(S.time * 1.7 + i * 1.3) % 6 === 0) continue;
+    ctx.fillStyle = "#ff1744";
+    ctx.fillRect(x + shake + Math.round(bw * ex) - 1, y + Math.round(bh * ey), 3, 2);
+  }
+  // The great eye: a slit while it is shut, wide and burning when it opens.
+  const ex = Math.round(cx), ey = y + Math.round(bh * 0.42), open = c.open ? Math.min(1, c.eyeT * 4) : 0, er = 2 + Math.round(open * 8);
+  const look = Math.max(-5, Math.min(5, (centerX(S.boss) - c.x - c.w / 2) * 0.8));
+  // An almond-shaped eye: each row narrower toward the lids.
+  for (let dy = -er - 1; dy <= er + 1; dy++) {
+    const k = Math.max(0, 1 - Math.pow(dy / (er + 1), 2)), half = Math.round(14 * Math.sqrt(k));
+    if (!half) continue;
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(ex - half - 1, ey + dy, half * 2 + 2, 1);
+    if (Math.abs(dy) > er) continue;
+    ctx.fillStyle = open ? "#ffd54f" : "#4a2d6b";
+    ctx.fillRect(ex - half, ey + dy, half * 2, 1);
+    if (open) {
+      const iris = Math.round(6 * Math.sqrt(Math.max(0, 1 - Math.pow(dy / er, 2))));
+      ctx.fillStyle = "#ff3d00";
+      ctx.fillRect(ex + look - iris, ey + dy, iris * 2, 1);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(ex + look - 1, ey + dy, 2, 1);
+    }
+  }
+  if (!open) { ctx.fillStyle = "#ffd54f"; ctx.fillRect(ex - 11, ey, 22, 1); }
+  else if (Math.floor(S.time * 4) % 2) drawText("EYE OPEN", ex, y - 6, "#ffd54f", { align: "center" });
+  ctx.restore();
+}
+function drawTentacle(p) {
+  const floor = ARENA_FLOOR * T, bx = Math.round(centerX(p) * T);
+  if (p.warn > 0) {
+    // A glowing crack where it will burst through.
+    ctx.fillStyle = "#12001f";
+    ctx.fillRect(bx - 8, floor, 16, 2);
+    ctx.fillStyle = Math.floor(S.time * 12) % 2 ? "#d500f9" : "#ea80fc";
+    ctx.fillRect(bx - 6, floor, 12, 1);
+    return;
+  }
+  const len = p.h * T * p.rise, n = 14, bend = p.whip > 0 ? -p.dir * (p.whip / 0.45) * 10 : p.whip <= 0 && p.cd > 2.2 ? p.dir * 14 : 0;
+  for (let i = 0; i <= n; i++) {
+    const k = i / n, r = Math.max(1, Math.round(5 - k * 3.5));
+    const x = bx + Math.sin(S.time * 3 + i * 0.5 + p.x) * 2.5 * k + bend * k * k, y = floor - k * len;
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(Math.round(x) - r - 1, Math.round(y) - r - 1, r * 2 + 3, r * 2 + 3);
+    ctx.fillStyle = p.flash > 0 ? "#ffffff" : i % 2 ? "#2a1740" : "#3d2357";
+    ctx.fillRect(Math.round(x) - r, Math.round(y) - r, r * 2 + 1, r * 2 + 1);
+    if (i % 3 === 1 && r > 1) { ctx.fillStyle = "#b388ff"; ctx.fillRect(Math.round(x) + r - 1, Math.round(y), 1, 1); }
+  }
+}
+function drawSpawnling(p) {
+  const x = Math.round(centerX(p) * T), y = Math.round((p.y + p.h) * T), hop = Math.floor(p.walk * 8) % 2;
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(x - 6, y - 9 - hop, 12, 9);
+  ctx.fillStyle = p.flash > 0 ? "#ffffff" : "#1a0d26";
+  ctx.fillRect(x - 5, y - 8 - hop, 10, 7);
+  ctx.fillStyle = "#ff1744";
+  ctx.fillRect(x - 3 + p.face, y - 6 - hop, 2, 1);
+  ctx.fillRect(x + 1 + p.face, y - 6 - hop, 2, 1);
+  ctx.fillStyle = "#e8dcc0";
+  ctx.fillRect(x - 3, y - 3 - hop, 1, 1); ctx.fillRect(x, y - 3 - hop, 1, 1); ctx.fillRect(x + 2, y - 3 - hop, 1, 1);
+}
+
+// A centred panel with a title and a row of choices.
+function drawOverlayPanel(title, color, rows, footer) {
+  S.overlayRects = [];
+  const w = 330, rh = 30, h = 34 + rows.length * (rh + 3) + (footer ? 12 : 0), x = Math.round((W * T - w) / 2), y = 34;
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.fillRect(0, 0, W * T, H * T);
+  drawPanel(x, y, w, h, "rgba(8,2,14,0.96)");
+  drawText(title, x + w / 2, y + 7, color, { align: "center" });
+  rows.forEach((r, i) => {
+    const ry = y + 20 + i * (rh + 3), hot = r.enabled && mouseOver(x + 6, ry, w - 12, rh);
+    ctx.fillStyle = hot ? r.color : OUTLINE;
+    ctx.fillRect(x + 6, ry, w - 12, rh);
+    ctx.fillStyle = hot ? "#2a1238" : "#160a20";
+    ctx.fillRect(x + 7, ry + 1, w - 14, rh - 2);
+    ctx.fillStyle = r.enabled ? r.color : "#4a4258";
+    ctx.fillRect(x + 7, ry + 1, 2, rh - 2);
+    drawText(`${r.key}  ${r.name}`, x + 14, ry + 4, r.enabled ? r.color : "#6b5f75");
+    wrapText(r.text, 50).slice(0, 2).forEach((line, j) => drawText(line, x + 14, ry + 13 + j * 8, r.enabled ? "#c9c2d6" : "#6b5f75"));
+    if (r.enabled) S.overlayRects.push({ x: x + 6, y: ry, w: w - 12, h: rh, act: r.act });
+  });
+  if (footer) drawText(footer, x + w / 2, y + h - 12, "#8a8296", { align: "center" });
+}
+function drawBargain() {
+  const b = S.bargain;
+  if (!b) return;
+  const rows = b.offers.map((o, i) => ({ key: i + 1, name: o.name, text: o.lines.join(" "), color: "#d500f9", enabled: o.ok(), act: () => takeBargain(i) }));
+  rows.push({ key: "ESC", name: "REFUSE", text: "WALK AWAY. THE VOICE WILL NOT BE PLEASED.", color: "#8a8296", enabled: true, act: refuseBargain });
+  const taken = S.bargains || 0;
+  drawOverlayPanel("THE VOICE BELOW OFFERS A BARGAIN", "#b388ff", rows,
+    taken ? `BARGAINS TAKEN: ${taken}. TAKE ${DARK_ENDING_BARGAINS} AND YOU ARE ITS OWN.` : "EVERY BARGAIN FEEDS THE THING BELOW.");
+}
+function drawChoice() {
+  const c = S.choice;
+  if (!c) return;
+  drawOverlayPanel("THE THING BELOW IS BROKEN. WHAT NOW?", "#ffd54f", [
+    { key: 1, name: "DEVOUR IT ALL", text: "DRINK DOWN THE THING, AND EVERY SOUL IN ASHFALL WITH IT. BECOME WHAT LIES BENEATH.", color: "#d500f9", enabled: true, act: () => chooseEnding("dark") },
+    { key: 2, name: "LET HER FREE YOU", text: c.lightOk ? "LET SERAPHINE KEEP ELOWEN'S OATH. LAY DOWN THE CLEAVER, AND REST." : c.reason, color: "#ffd54f", enabled: c.lightOk, act: () => chooseEnding("light") },
+  ]);
+}
+function drawEpilogue() {
+  const e = S.epilogue, text = e.lines[e.line];
+  ctx.fillStyle = "rgba(0,0,0,0.85)";
+  ctx.fillRect(0, 0, W * T, H * T);
+  const shown = Math.floor(e.t * 32);
+  let left = shown;
+  wrapText(text, 62).forEach((line, i, all) => {
+    const part = line.slice(0, Math.max(0, left));
+    left -= line.length + 1;
+    drawText(part, Math.round((W * T - textWidth(line)) / 2), H * T / 2 - all.length * 6 + i * 12, e.kind === "dark" ? "#e1bee7" : "#fff3c4", { shadow: "#000" });
+  });
+  for (let i = 0; i < e.lines.length; i++) {
+    ctx.fillStyle = i === e.line ? (e.kind === "dark" ? "#d500f9" : "#ffd54f") : "#3a3448";
+    ctx.fillRect(W * T / 2 - e.lines.length * 4 + i * 8, H * T / 2 + 22, 4, 2);
+  }
+  if (Math.floor(S.time * 2) % 2 === 0) drawText("CLICK TO CONTINUE", W * T / 2, H * T - 16, "#6b5f75", { align: "center" });
+}
+
 // A scripted exchange: every line plays in turn, and other chatter waits until it's done.
 function converse(lines, delay = 0) {
   const game = S;
   const go = () => {
     if (S !== game) return;
     for (const [who, text] of lines) {
-      const speaker = who === "B" ? S.boss : who === "M" ? MARSHAL : who;
+      const speaker = who === "B" ? S.boss : who === "M" ? MARSHAL : who === "V" ? VOICE : who;
       const line = dialogLine(speaker, text);
       line.story = true;
       S.dialog.queue.push(line);
@@ -637,9 +1315,11 @@ function converse(lines, delay = 0) {
   if (delay) setTimeout(go, delay); else go();
 }
 function tellStory(wave) {
-  if ((S.storyTold || 0) >= wave) return;
+  if ((S.storyTold || 0) >= wave || !STORY[wave]) return;
   S.storyTold = wave;
-  converse(STORY[wave] || STORY_LATER[(wave - 11) % STORY_LATER.length], 1800);
+  converse(STORY[wave], 1800);
+  // The Voice offers a bargain once the talking is done.
+  if (BARGAIN_WAVES.includes(wave)) setTimeout(() => { if (S.phase === "build" && S.wave === wave + 1) offerBargain(); }, 1800 + STORY[wave].length * 3200);
 }
 
 const HERO_NAMES = ["Sir Aldric", "Sir Borin", "Dame Elara", "Sir Cedric", "Dame Isolde", "Sir Galen", "Sir Thorne",
@@ -663,6 +1343,9 @@ Object.assign(HERO_KINDS, {
   sapper: { label: "sapper", hp: 1.2, atk: 0.8, speed: 3.0, airSpeed: 3.9, w: 0.6, h: 0.9, coins: 2, cd: 0.9, immune: ["crusher", "saw", "pendulum"] },
 });
 HERO_KINDS.archer.ranged = true;
+// The Marshal fights like a Champion; "thing" covers the parts of the Thing Below in the finale.
+HERO_KINDS.marshal = Object.assign({}, HERO_KINDS.champion, { label: "Marshal" });
+HERO_KINDS.thing = { label: "thing", hp: 1, atk: 1, speed: 0, w: 1, h: 1, coins: 0, cd: 1, noDodge: true };
 const IMMUNE_NAMES = { spring: "springs", pendulum: "pendulums", spike: "spikes", mine: "bombs", fire: "fire", fireball: "fireballs", burn: "burning", frost: "frost", crusher: "crushers", saw: "saw blades" };
 const immuneTo = (h, src) => !!src && (HERO_KINDS[h.kind].immune || []).includes(src);
 // A trap passing harmlessly over an immune hero says so, now and then.
@@ -747,7 +1430,7 @@ let S;
 function newGame(title = false) {
   S = {
     coins: 20, souls: 2, wave: 1, kills: 0, named: 0,
-    serpents: [], bolts: [], shown: { coins: 20, souls: 2, dark: 0 }, coinFx: [], soulFx: [], darkSouls: 0, powers: new Set(), risen: [], monsterMenu: null,
+    serpents: [], bolts: [], lavaEyes: [], tendrils: [], hunger: 0, bargains: 0, bargain: null, allies: [], shown: { coins: 20, souls: 2, dark: 0 }, coinFx: [], soulFx: [], darkSouls: 0, powers: new Set(), risen: [], monsterMenu: null,
     gain: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
     loss: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
     traps: [], minions: [], arrows: [], waves: [], boss: makeBoss(),
@@ -860,6 +1543,8 @@ function dust(x, y, n) {
 
 function damage(target, amount, color, colors) {
   if (target.invuln) return;
+  // The Thing's hide shrugs off most blows; its open eye does not.
+  if (target.armor) { amount = Math.max(1, Math.round(amount * (1 - target.armor))); color = "#8a8296"; }
   target.hp -= amount;
   Sound.play(target.isBoss ? "bossHurt" : MINIONS[target.type] ? "minionHurt" : "hit");
   target.flash = 0.12;
@@ -998,6 +1683,9 @@ const Sound = (() => {
     upgrade: () => arp(523, [0, 4, 7, 12], { dur: 0.08, vol: 0.08, gap: 0.05 }),
     specialize: () => { arp(392, [0, 7, 12, 16, 19, 24], { dur: 0.12, vol: 0.08, gap: 0.06 }); tone(98, { to: 49, type: "sawtooth", dur: 0.5, vol: 0.12 }); },
     freeze: () => { noise({ dur: 0.35, vol: 0.18, filter: "highpass", freq: 3500, to: 1200 }); tone(1900, { to: 2600, type: "sine", dur: 0.3, vol: 0.05 }); },
+    rumble: () => { tone(38, { to: 28, type: "sine", dur: 1.4, vol: 0.35, attack: 0.2 }); noise({ dur: 1.3, vol: 0.12, freq: 160, attack: 0.3 }); },
+    deepbeat: () => { tone(48, { to: 34, type: "sine", dur: 0.2, vol: 0.18 }); tone(44, { to: 32, type: "sine", dur: 0.2, vol: 0.14, at: 0.25 }); },
+    thingRoar: () => { tone(45, { to: 25, type: "sawtooth", dur: 2.2, vol: 0.3, attack: 0.2 }); tone(47, { to: 26, type: "sawtooth", dur: 2.2, vol: 0.25, attack: 0.25 }); noise({ dur: 2, vol: 0.35, freq: 400, to: 90, attack: 0.3 }); },
     boing: () => { tone(180, { to: 720, type: "triangle", dur: 0.22, vol: 0.12 }); tone(360, { to: 1100, type: "sine", dur: 0.18, vol: 0.05, at: 0.03 }); },
     zap: () => { noise({ dur: 0.18, vol: 0.18, filter: "highpass", freq: 3000 }); tone(1600, { to: 300, type: "square", dur: 0.15, vol: 0.05 }); tone(110, { type: "sawtooth", dur: 0.12, vol: 0.06 }); },
     serpent: () => { tone(70, { to: 40, type: "sawtooth", dur: 0.6, vol: 0.18 }); noise({ dur: 0.5, vol: 0.2, freq: 500, to: 2500, attack: 0.1 }); },
@@ -1495,6 +2183,7 @@ const keys = {};
 let startedAt = 0;
 function wake() {
   Sound.unlock();
+  if (S.phase === "epilogue") { startedAt = performance.now(); advanceEpilogue(); return; }
   if (S.phase === "title") { startedAt = performance.now(); startPrologue(); }
   else if (S.phase === "prologue") { startedAt = performance.now(); advancePrologue(); }
 }
@@ -1507,6 +2196,16 @@ document.addEventListener("keydown", e => {
   keys[k] = true;
   if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
   if (k === " ") bossAttack();
+  if (S.bargain) {
+    if (["1", "2", "3"].includes(k)) takeBargain(+k - 1);
+    if (k === "escape") refuseBargain();
+    return;
+  }
+  if (S.choice) {
+    if (k === "1") chooseEnding("dark");
+    if (k === "2") chooseEnding("light");
+    return;
+  }
   if (S.trapMenu) {
     if (k === "u") upgradeTrap(S.trapMenu);
     if ((k === "1" || k === "2") && S.trapMenu.lvl >= 3 && !S.trapMenu.path) specializeTrap(S.trapMenu, TRAP_PATHS[S.trapMenu.type][+k - 1].id);
@@ -1589,6 +2288,11 @@ canvas.addEventListener("click", e => {
   // Ignore the click that dismissed the title screen.
   if (performance.now() - startedAt < 300) return;
   const p = screenFromEvent(e);
+  // A bargain or the final choice is on screen: only its buttons respond.
+  if (S.bargain || S.choice) {
+    for (const r of S.overlayRects || []) if (p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) { r.act(); return; }
+    return;
+  }
   // A button in the open trap or monster tab?
   if (S.trapMenu || S.monsterMenu || S.serpentMenu) {
     for (const r of S.menuRects || []) {
@@ -1801,7 +2505,12 @@ const heroesInWave = w => 2 + w;
 const heroCoins = h => (3 + h.lv) * HERO_KINDS[h.kind].coins;
 
 function startWave() {
-  const roster = waveRoster(S.wave), n = roster.length;
+  if (S.wave >= FINAL_WAVE) { startFinale(); return; }
+  if (S.bargain) refuseBargain();
+  if (S.debtWave && S.wave >= S.debtWave) payDebt();
+  const roster = waveRoster(S.wave);
+  if (S.extraHeroes && S.extraHeroes.wave === S.wave) for (let i = 0; i < S.extraHeroes.n; i++) roster.push(pick(["knight", "archer", "brute"]));
+  const n = roster.length;
   const gap = { brute: 1.7, champion: 2.2 };
   S.spawnQueue = roster.map((kind, i) => ({ lv: S.wave, kind, delay: i === 0 ? 0.4 : gap[kind] || 1.3 }));
   S.spawnT = 0;
@@ -1889,7 +2598,24 @@ function checkWaveEnd() {
   endWave(`${S.loot.kills} slain  ${S.towerHeroes.length}/${TOWER_LIMIT} in tower`);
 }
 
+// The Voice collects on its debt: half your gold, and one of your traps crumbles into the lava.
+function payDebt() {
+  S.debtWave = 0;
+  const lost = Math.floor(S.coins / 2);
+  S.coins -= lost;
+  spend("coins", lost);
+  if (S.traps.length) {
+    const t = pick(S.traps);
+    burst(t.x + 0.5, t.y + 0.5, 20, ["#12001f", "#4a148c", "#8a8296"], 4);
+    S.traps = S.traps.filter(o => o !== t);
+  }
+  S.shake = Math.max(S.shake, 5);
+  Sound.play("rumble");
+  speak(VOICE, "PAYMENT, LITTLE KING. I ALWAYS COLLECT.", true);
+}
+
 function endWave(sub) {
+  addHunger(1.5);
   S.phase = "build";
   S.wave++;
   queueBanner("WAVE CLEARED", sub, "#ffd54f");
@@ -2220,7 +2946,7 @@ function updateAction2(b, dt) {
     if (a.t < 0.4) return;
     if (!a.fired) {
       a.fired = true;
-      const prey = S.heroes.filter(h => !h.grabbed && !h.chained)
+      const prey = S.heroes.filter(h => !h.grabbed && !h.chained && h.part !== "core" && h.part !== "tentacle")
         .sort((p, q) => Math.abs(centerX(q) - centerX(b)) - Math.abs(centerX(p) - centerX(b))).slice(0, 3);
       for (const h of prey) { S.chains.push({ h, t: 0, state: "out" }); h.chained = true; }
       Sound.play("chain");
@@ -2408,7 +3134,7 @@ function updateTransform(b, dt) {
 
 // Throw a hero: they fly helplessly for a moment.
 function knock(h, vx, vy) {
-  if (h.grabbed) return;
+  if (h.grabbed || h.part) return;
   const heavy = HERO_KINDS[h.kind] && HERO_KINDS[h.kind].heavy ? 0.45 : 1;
   h.vx = vx * heavy;
   h.vy = vy * heavy;
@@ -2439,7 +3165,7 @@ function updatePools(dt) {
       // Bony hands claw up out of the blood and seize anyone standing in it.
       if (Math.random() < dt * 6) p.hands.push({ x: p.x + (Math.random() - 0.5) * 1.8 * p.r, t: 0, life: 0.9 + Math.random() * 0.6 });
       for (const h of S.heroes) {
-        if (h.grabbed || Math.abs(centerX(h) - p.x) > p.r || h.y + h.h < floor - 0.4) continue;
+        if (h.grabbed || h.part === "core" || Math.abs(centerX(h) - p.x) > p.r || h.y + h.h < floor - 0.4) continue;
         h.grabbed = p;
         h.vx = h.vy = 0;
         p.grabbed.add(h);
@@ -2579,6 +3305,12 @@ function update(dt) {
     if (S.fade >= FADE) startBossFight();
     return;
   }
+  if (S.phase === "ending") { updateEnding(dt); return; }
+  if (S.phase === "epilogue") {
+    S.epilogue.t += dt;
+    if (epilogueTyped() && S.epilogue.t > S.epilogue.lines[S.epilogue.line].length / 32 + 3) advanceEpilogue();
+    return;
+  }
   if (S.phase === "felled") {
     // The heroes are dead; the boss stands on the tower a moment before the scene fades back.
     updateBoss(dt);
@@ -2591,7 +3323,7 @@ function update(dt) {
 
   if (inArena()) {
     // Partway through the heroes' entrance, the Hollow King roars.
-    if (S.intro > 1.6 && S.intro - dt <= 1.6) bossRoar();
+    if (S.intro > 1.6 && S.intro - dt <= 1.6 && !S.finale) bossRoar();
     S.intro -= dt;
     updateRage(dt);
     updateBoss(dt);
@@ -2600,6 +3332,7 @@ function update(dt) {
     updateWaves(dt);
     updateSpecials(dt);
     updateRisen(dt);
+    if (S.finale) updateAllies(dt);
   } else {
     updateMinions(dt);
     if (S.phase === "intro") updateOpening(dt);
@@ -2608,6 +3341,8 @@ function update(dt) {
     for (const h of [...S.heroes]) updateHero(h, dt);
     updateTraps(dt);
     updateSerpents(dt);
+    updateHunger(dt);
+    updateTendrils(dt);
     S.traps = S.traps.filter(t => !t.dead);
     updateArrows(dt);
     S.bolts.forEach(b => (b.t -= dt));
@@ -2838,6 +3573,7 @@ function updateBoss(dt) {
 }
 
 function updateHero(h, dt) {
+  if (h.part) { updatePart(h, dt); return; }
   const b = S.boss;
   h.cd -= dt;
   h.flash -= dt;
@@ -3127,9 +3863,9 @@ function updateHeroArrows(dt) {
     a.x += a.vx * dt;
     if (isSolid(Math.floor(a.x), Math.floor(a.y)) || a.x < 0 || a.x > mapW()) { a.dead = true; continue; }
     const box = { x: a.x - 0.2, y: a.y - 0.05, w: 0.4, h: 0.1 };
-    const hit = inArena() ? (overlaps(box, S.boss) ? S.boss : null) : S.minions.find(m => overlaps(box, m));
+    const hit = a.ally ? S.heroes.find(p => p.part && !(p.warn > 0) && overlaps(box, p)) : inArena() ? (overlaps(box, S.boss) ? S.boss : null) : S.minions.find(m => overlaps(box, m));
     if (hit) {
-      damage(hit, a.dmg, "#ffffff", hit.isBoss ? ["#b71c1c", "#5d0f0f"] : MINIONS[hit.type].blood);
+      damage(hit, a.dmg, "#ffffff", hit.isBoss ? ["#b71c1c", "#5d0f0f"] : hit.part ? ["#4a148c", "#12001f"] : MINIONS[hit.type].blood);
       a.dead = true;
       if (a.magic) burst(a.x, a.y, 6, ["#ccff90", "#76ff03"], 3, { glow: true });
     } else if (a.magic && Math.random() < 0.5) {
@@ -3881,6 +4617,7 @@ function updateLoot(dt) {
 }
 
 function heroDied(h) {
+  if (h.part) { partDied(h); return; }
   const coins = heroCoins(h);
   if (h.kind === "mage") unamplify(h.ampTarget);
   if (h.ampBy && h.ampBy.ampTarget === h) h.ampBy.ampTarget = null;
@@ -3889,6 +4626,7 @@ function heroDied(h) {
   const dark = Math.random() < DARK_SOUL_CHANCE;
   if (dark) S.darkSouls += 1;
   else S.souls += 1;
+  addHunger(dark ? 2 : 0.5);
   S.kills++;
   S.loot.kills++;
   S.heroes = S.heroes.filter(o => o !== h);
@@ -3913,7 +4651,7 @@ function heroDied(h) {
   else if (inArena() && S.heroes.length && Math.random() < 0.6) speak(S.boss, pick(TAUNTS.kill));
   else if (Math.random() < 0.3) speak(h, pick(h.lava ? HERO_LINES.lava : HERO_LINES.die));
   heroDeathReactions(h);
-  say(h.eaten ? `${h.name} was swallowed by the Bone Serpent!` : h.lava ? `${h.name} fell into the lava!` : `${h.name} has fallen!`);
+  say(h.tendril ? `Something below dragged ${h.name} into the lava.` : h.eaten ? `${h.name} was swallowed by the Bone Serpent!` : h.lava ? `${h.name} fell into the lava!` : `${h.name} has fallen!`);
   for (const [tool, kind] of Object.entries(TRAPS)) {
     if (kind.unlock !== S.kills) continue;
     S.fresh.add(tool);
@@ -3961,7 +4699,7 @@ function bossDied() {
   const held = S.wave - 1;
   banner("YOU DIED", `The Hollow King has fallen - ${held} wave${held === 1 ? "" : "s"} survived`, "#c62828");
   speak(b, pick(TAUNTS.die));
-  converse([["M", (S.storyTold || 0) >= 7 ? "IT IS DONE. REST NOW... GRANDFATHER." : "THE TOWER HAS FALLEN. THE DAWN RISES OVER ASHFALL AGAIN."]], 2400);
+  converse([["M", (S.storyTold || 0) >= 11 ? "IT IS DONE. REST NOW... GRANDFATHER." : "THE TOWER HAS FALLEN. THE DAWN RISES OVER ASHFALL AGAIN."]], 2400);
   // Let his last words land before the death card fades in.
   S.banner.t = -1.6;
   Sound.play("death");
@@ -4951,8 +5689,16 @@ function runFrame(prefix, h, moving, rate = 9) {
   if (moving) return Math.floor(S.time * rate) % 2 ? ART[prefix + "Stride"] : ART[prefix + "Close"];
   return ART[prefix + "Stand"];
 }
+const MARSHAL_PAL = Object.assign({}, CHAMPION_PAL, { A: "#fff8e1", a: "#c9a227", C: "#7f1d1d", c: "#4a0d0d", P: "#ffd54f", Y: "#ffffff" });
 function heroSprite(h, white = false) {
   const g = gearFor(h.lv), moving = Math.abs(h.vx) > 0.1;
+  if (h.kind === "marshal") {
+    let art = ART.champion;
+    if (h.atkAnim > 0) art = ART.championAttack;
+    else if (!h.onGround) art = ART.championJump;
+    else if (moving && Math.floor(S.time * 5) % 2) art = ART.championStep;
+    return sprite(art, MARSHAL_PAL, "marshal", white);
+  }
   if (h.kind === "rogue") return sprite(runFrame("rogue", h, moving, 12), ROGUE_PAL, "rogue", white);
   if (h.kind === "berserker") return sprite(runFrame("berserker", h, moving, 10), h.rage ? BERSERKER_RAGE_PAL : BERSERKER_PAL, h.rage ? "berserkerRage" : "berserker", white);
   if (h.kind === "sapper") return sprite(runFrame("sapper", h, moving, 8), SAPPER_PAL, "sapper", white);
@@ -5884,7 +6630,7 @@ function drawDevourer(b) {
   const spr = sprite(art, DEVOURER_PAL, jaw ? "devourerRoar" : "devourer");
   const cx = centerX(b) * T, bottom = (b.y + b.h) * T, breathe = b.onGround && Math.floor(S.time * 1.5) % 2 ? 1 : 0;
   const top = Math.round(bottom - spr.height + 1);
-  if (S.phase === "over") { drawSprite(spr, cx, bottom, b.face, 0.35); return; }
+  if (S.phase === "over" && S.won !== "dark") { drawSprite(spr, cx, bottom, b.face, 0.35); return; }
   if (b.roar > 0) drawRoarRings(cx, top + 20, b.roar);
   drawSprite(spr, cx, bottom + breathe, b.face);
   if (b.flash > 0) drawSprite(sprite(art, DEVOURER_PAL, jaw ? "devourerRoar" : "devourer", true), cx, bottom + breathe, b.face, 0.6);
@@ -5956,7 +6702,7 @@ function drawBoss(b, shadow = false) {
     ctx.globalAlpha = 1;
   }
 
-  if (S.phase === "over") { drawSprite(spr, cx, bottom, b.face, 0.35); return; }
+  if (S.phase === "over" && S.won !== "dark") { drawSprite(spr, cx, bottom, b.face, 0.35); return; }
   // Roar: rings of force burst out from his head.
   if (b.roar > 0) drawRoarRings(cx, top + 14, b.roar);
   drawSprite(spr, cx, bottom + breathe, b.face);
@@ -5986,6 +6732,7 @@ function drawBoss(b, shadow = false) {
 }
 
 function drawHero(h) {
+  if (h.part) { drawPart(h); return; }
   for (const p of h.trail) {
     drawSprite(sprite(ART.heroJump, { A: "#6fd3ff", a: "#3d8fbf" }, "ghost"), (p.x + h.w / 2) * T, (p.y + h.h) * T, p.face, p.t * 1.6);
   }
@@ -6315,6 +7062,8 @@ function drawLighting() {
   for (const h of S.heroes) hole(centerX(h) * T, centerY(h) * T, h.ampBy || h.kind === "champion" ? 56 : 40, 0.7);
   for (const a of S.heroArrows) if (a.magic) hole(a.x * T, a.y * T, 24, 0.8);
   for (const p of S.pools) hole(p.x * T, ARENA_FLOOR * T, p.r * T * 2.2, 0.8);
+  if (S.thing && S.heroes.includes(S.thing)) hole(centerX(S.thing) * T, centerY(S.thing) * T, S.thing.open ? 90 : 60, 0.6);
+  for (const a of S.allies) hole(centerX(a) * T, centerY(a) * T, 36, 0.6);
   for (const m of S.meteors) hole(m.x * T, m.y * T, 40, 1);
   for (const sk of S.skulls) hole(sk.x * T, sk.y * T, 26, 0.8);
   if (S.boss.action && S.boss.action.type === "breath" && S.boss.action.started) {
@@ -6870,7 +7619,12 @@ function drawHud() {
 
   const b = S.boss;
   if (inArena()) {
-    drawText(`HEROES ${S.heroes.length}`, 240, 5, "#e6e0ec", { align: "center" });
+    if (S.finale && S.thing) {
+      // The Thing's health, and whether its eye is open.
+      const c = S.thing;
+      drawText("THE THING BELOW", 204, 5, "#b388ff");
+      drawMeter(300, 6, 170, 5, Math.max(0, c.hp) / c.maxHp, "#12001f", "#6a1b9a", "#d500f9");
+    } else drawText(`HEROES ${S.heroes.length}`, 240, 5, "#e6e0ec", { align: "center" });
     // Souls-style boss bar across the top of the screen, just under the resource strip.
     const bw = 300, bx = Math.round((W * T - bw) / 2), by = 32;
     const hpText = `${Math.max(0, Math.ceil(b.hp))}/${b.maxHp}`;
@@ -6982,6 +7736,7 @@ function draw() {
   if (!arena) {
     drawLava();
     S.serpents.forEach(n => { if (n.state === "lurk") drawSerpent(n); });
+    drawTendrils();
     S.traps.forEach(t => drawTrap(t));
     S.arrows.forEach(drawArrow);
     drawBolts();
@@ -6989,10 +7744,11 @@ function draw() {
     drawHover();
   }
   if (arena) { drawDecals(); drawPools(false); }
-  for (const e of [S.boss, ...S.heroes, ...(arena ? [] : S.minions)]) drawShadow(e);
+  for (const e of [S.boss, ...S.heroes.filter(h => !h.part), ...S.allies, ...(arena ? [] : S.minions)]) drawShadow(e);
   if (!arena) S.minions.forEach(m => drawMinion(m));
   drawBoss(S.boss);
   S.heroes.forEach(drawHero);
+  S.allies.forEach(drawHero);
   if (!arena) S.serpents.forEach(n => { if (n.state !== "lurk") drawSerpent(n); });
   S.waves.forEach(drawWave);
   if (arena) { drawRisen(); S.heroArrows.forEach(drawArrow); drawPools(true); drawSpecials(); }
@@ -7008,7 +7764,8 @@ function draw() {
   drawStorm();
 
   if (!arena) for (const m of S.minions) if (m.hp < m.maxHp || m.dark) drawBar(m, m.type === "golem" ? 16 : 10, m.dark ? "#d500f9" : "#e53935");
-  for (const h of S.heroes) drawBar(h, h.kind === "champion" ? 24 : 12, h.ampBy ? "#76ff03" : h.kind === "champion" ? "#ffd54f" : "#64b5f6");
+  for (const a of S.allies) drawBar(a, a.kind === "marshal" ? 24 : 12, "#9cff9c");
+  for (const h of S.heroes) if (h.part !== "core" && !(h.warn > 0)) drawBar(h, h.kind === "champion" ? 24 : 12, h.ampBy ? "#76ff03" : h.kind === "champion" ? "#ffd54f" : "#64b5f6");
   drawFloats();
   ctx.restore();
 
@@ -7020,6 +7777,9 @@ function draw() {
   drawBanner();
   drawDialog();
   drawTrapMenu();
+  drawBargain();
+  drawChoice();
+  if (S.phase === "epilogue") drawEpilogue();
 
   if (S.novaFlash > 0) {
     ctx.globalAlpha = Math.min(1, S.novaFlash / 0.5) * 0.45;
@@ -7097,7 +7857,7 @@ function wrapText(text, max) {
 
 function drawPortrait(c, x, y, w, h, talking) {
   // Backdrop: a deep red glow for the Hollow King, cold blue for the heroes.
-  const bands = c.boss ? ["#1a0408", "#2a0810", "#3b0c16", "#4a1018"] : ["#0c1220", "#111a2e", "#16233c", "#1b2b48"];
+  const bands = c.boss ? ["#1a0408", "#2a0810", "#3b0c16", "#4a1018"] : c.kind === "voice" ? ["#000000", "#05010a", "#0a0214", "#12001f"] : ["#0c1220", "#111a2e", "#16233c", "#1b2b48"];
   bands.forEach((col, i) => { ctx.fillStyle = col; ctx.fillRect(x, y + Math.round(i * h / 4), w, Math.ceil(h / 4)); });
   ctx.save();
   ctx.beginPath();
@@ -7120,6 +7880,18 @@ function drawPortrait(c, x, y, w, h, talking) {
     }
   } else {
     const g = gearFor(c.lv);
+    if (c.kind === "voice") {
+      // Nothing but eyes in the dark.
+      for (const [ex, ey, r] of [[0.5, 0.45, 6], [0.22, 0.25, 3], [0.8, 0.3, 3], [0.3, 0.75, 2], [0.72, 0.72, 2]]) {
+        const cx = x + Math.round(w * ex), cy = y + Math.round(h * ey), open = Math.floor(S.time * 1.3 + ex * 7) % 5 ? r : 0;
+        ctx.fillStyle = "#ffd54f";
+        ctx.fillRect(cx - r * 2, cy - Math.ceil(open / 2), r * 4, Math.max(1, open));
+        ctx.fillStyle = "#000";
+        ctx.fillRect(cx - 1, cy - Math.ceil(open / 2), 2, Math.max(1, open));
+      }
+      ctx.restore();
+      return;
+    }
     const spr = c.kind === "marshal" ? sprite(ART.championFace, Object.assign({}, CHAMPION_PAL, { A: "#fff8e1", a: "#c9a227", C: "#7f1d1d", c: "#4a0d0d", P: "#ffd54f", Y: "#ffffff" }), "marshalFace")
       : c.kind === "champion" ? sprite(ART.championFace, CHAMPION_PAL, "championFace")
       : c.kind === "mage" ? sprite(ART.mageFace, MAGE_PAL, "mageFace")
@@ -7158,7 +7930,7 @@ function drawDialog() {
   ctx.fillRect(px + pw, py, 1, ph);
 
   // Name tab sitting on the top edge of the box.
-  const nameColor = c.boss ? "#ff5252" : "#ffd54f";
+  const nameColor = c.boss ? "#ff5252" : c.kind === "voice" ? "#b388ff" : "#ffd54f";
   const label = c.boss ? `${c.name}, ${c.title}` : c.name;
   const tw = textWidth(label) + 12, tx = px + pw + 8, ty = by - 7;
   drawPanel(tx, ty, tw, 13, "rgba(16,12,26,1)");
@@ -7342,7 +8114,7 @@ function updateToolbar() {
     if (cost.textContent !== text) cost.textContent = text;
   });
   const go = document.getElementById("go");
-  const label = { over: "Play again", build: "Start wave", wave: "Wave in progress", intro: "Here they come...", title: "Click to begin", prologue: "Skip" }[S.phase] || "Boss battle!";
+  const label = { over: "Play again", build: S.wave >= FINAL_WAVE ? "Face the Thing Below" : "Start wave", wave: "Wave in progress", intro: "Here they come...", title: "Click to begin", prologue: "Skip" }[S.phase] || "Boss battle!";
   if (go.textContent !== label) go.textContent = label;
   go.disabled = !["over", "build", "title", "prologue"].includes(S.phase);
 }
@@ -7354,8 +8126,8 @@ function frame(now) {
   last = now;
   update(dt);
   update(dt);
-  const fightMusic = S.boss.transform ? null : S.boss.form === 2 ? "boss2" : "boss";
-  Sound.music({ title: null, prologue: null, over: null, boss: fightMusic, felled: fightMusic }[S.phase] ?? "level");
+  const fightMusic = S.boss.transform ? null : S.boss.form === 2 || S.finale ? "boss2" : "boss";
+  Sound.music({ title: null, prologue: null, over: null, ending: null, epilogue: null, boss: fightMusic, felled: fightMusic }[S.phase] ?? "level");
   draw();
   present();
   updateToolbar();
