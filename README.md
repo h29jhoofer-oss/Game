@@ -17,6 +17,16 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
     - *Nightmare:* 220% health, 170% damage, 15% faster, 4 extra heroes each wave, 30% less gold, and you start with 15.
     Each difficulty keeps its own best wave, saved in the browser and shown on its card and on the death screen.
   - "Play again" returns to the title, so you can switch modes.
+- **Sandbox boss battles:** Vorgath has twice the health in every form (1200, then 1440, then 1800, before Unholy Might), a fifth attack on E in each form, and a third form.
+  - Form 1 (E) **Iron Tempest:** he spins with the cleaver out for 1.4s, hitting everyone within 2.8 tiles every 0.2s. He can still walk while it spins.
+  - Form 2 (E) **Feast of Blood:** after a short gathering, a crimson wave hits every hero within 6 tiles for 22, and heals him 14 for each one.
+  - Form 3, **the Unmade**, rises when the Devourer falls: black and gold, hovering, with circling shards. He is faster, can jump, and his claws hit for 48.
+    - Q **Void Lance:** a warning line, then a beam across the tower top at chest height (60 damage, knockback). Jumping over it dodges it.
+    - S **Eclipse:** a black sun drops on every hero's spot after a warning ring (40 each).
+    - R **Soul Harvest:** drags every hero towards him for 1.2s, then hits those close for 30 and heals 20 for each.
+    - F **Doom Pillars:** columns of black fire burst up one after another on both sides (35 each, and they throw heroes up).
+    - E **Void Step:** vanishes (untouchable for a moment) and reappears behind the hero furthest away, with a 30-damage blast.
+  - In story mode, the boss battle is unchanged.
 - **Sandbox heroes:** eleven kinds that only march in sandbox mode, joining from wave 6.
   - **Fliers** (only arrow turrets, tesla coils and skyhooks can reach them while airborne; they fight on foot in the tower):
     - Lantern Wisps (8): tiny, very fast lights that come in packs of three.

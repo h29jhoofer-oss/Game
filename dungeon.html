@@ -214,6 +214,11 @@
     <b>Phase two:</b> the first time Vorgath falls in a fight, he transforms into the Devourer, with a second health bar
     and new attacks on the same keys: Space claw swipe, <b>Q</b> Soul Breath, <b>S</b> Cataclysm (a quake and erupting spikes),
     <b>R</b> Devour (chains drag heroes into his jaws; the weak are eaten and heal him), <b>F</b> Wailing Souls (homing skulls).<br>
+    <b>Sandbox boss battles:</b> Vorgath has twice the health in every form, and a fifth attack on <b>E</b>: Iron Tempest (spin and keep cutting, you can still walk)
+    in his first form and Feast of Blood (a crimson wave that heals him for every hero hit) as the Devourer. When the Devourer falls he rises a third time
+    as <b>the Unmade</b>, who hovers, can jump, and has five attacks: <b>Q</b> Void Lance (a beam across the tower top; heroes can jump it),
+    <b>S</b> Eclipse (a black sun drops on every hero), <b>R</b> Soul Harvest (drags every hero in, then tears at them and heals him),
+    <b>F</b> Doom Pillars (columns of black fire run out on both sides) and <b>E</b> Void Step (vanish and reappear behind the furthest hero with a blast).<br>
     <b>Heroes:</b> knights charge in with swords. From wave 2, <b>archers</b> join: fast and fragile, they stop to shoot
     your minions and keep their distance on the tower. From wave 3, <b>Iron Knights</b> march in: slow and very tough,
     with a tower shield that blocks most arrow damage from the front. Crushers, fire and bombs work best on them.<br>
@@ -530,7 +535,7 @@ const DARK_POWERS = [
 ];
 const MIGHT_HP = 150, MEND_HEAL = 150, NOVA_DMG = 30;
 const activePowers = () => DARK_POWERS.filter(p => !p.passive && S.powers.has(p.id));
-const bossMaxHp = form => (form === 2 ? P2_HP : BOSS_HP) + (S && S.powers && S.powers.has("might") ? MIGHT_HP : 0) + ((S && S.fleshHp) || 0);
+const bossMaxHp = form => (form === 3 ? P3_HP : form === 2 ? P2_HP : BOSS_HP) * (S && S.mode === "sandbox" ? SANDBOX_BOSS_HP : 1) + (S && S.powers && S.powers.has("might") ? MIGHT_HP : 0) + ((S && S.fleshHp) || 0);
 const BOSS_HP = 600, BOSS_DMG = 30, BOSS_SPEED = 4, SLAM_DMG = 26, WAVE_DMG = 12;
 // The Hollow King's special attacks. Cooldowns are in seconds, and shorter while he is enraged.
 const ABILITIES = [
@@ -549,8 +554,25 @@ const ABILITIES2 = [
   { id: "souls", key: "F", name: "WAILING SOULS", cd: 12 },
 ];
 const CLAW_DMG = 40, BREATH_TICK = 6, QUAKE_DMG = 20, SPIKE_DMG = 14, DEVOUR_DMG = 28, DEVOUR_HEAL = 30, SKULL_DMG = 10;
-const abilitiesFor = b => b.form === 2 ? ABILITIES2 : ABILITIES;
-const freshCds = () => Object.fromEntries([...ABILITIES, ...ABILITIES2, ...DARK_POWERS].map(a => [a.id, 0]));
+// Sandbox: the Hollow King has twice the health in every form, a fifth attack (E) in each, and a third form,
+// the Unmade, that rises when the Devourer falls.
+const SANDBOX_BOSS_HP = 2;
+const P3_HP = 900, P3_SPEED = 3.4, P3_CLAW_DMG = 48;
+const ABILITY_E1 = { id: "whirl", key: "E", name: "IRON TEMPEST", cd: 9 };
+const ABILITY_E2 = { id: "feast", key: "E", name: "FEAST OF BLOOD", cd: 14 };
+const ABILITIES3 = [
+  { id: "lance", key: "Q", name: "VOID LANCE", cd: 6 },
+  { id: "eclipse", key: "S", name: "ECLIPSE", cd: 8 },
+  { id: "harvest", key: "R", name: "SOUL HARVEST", cd: 12 },
+  { id: "pillars", key: "F", name: "DOOM PILLARS", cd: 10 },
+  { id: "voidstep", key: "E", name: "VOID STEP", cd: 7 },
+];
+const WHIRL = { tick: 9, every: 0.2, reach: 2.8, dur: 1.4 }, FEAST = { dmg: 22, heal: 14, radius: 6 }, LANCE_DMG = 60, ECLIPSE_DMG = 40,
+  HARVEST = { dmg: 30, heal: 20, radius: 3.2, pull: 4 }, PILLAR_DMG = 35, VOIDSTEP_DMG = 30;
+const abilitiesFor = b => b.form === 3 ? ABILITIES3
+  : [...(b.form === 2 ? ABILITIES2 : ABILITIES), ...(S && S.mode === "sandbox" ? [b.form === 2 ? ABILITY_E2 : ABILITY_E1] : [])];
+const allAbilities = () => [...ABILITIES, ...ABILITIES2, ABILITY_E1, ABILITY_E2, ...ABILITIES3, ...DARK_POWERS];
+const freshCds = () => Object.fromEntries(allAbilities().map(a => [a.id, 0]));
 const GEAR = [
   { name: "Rags",         main: "#8d7b68", shade: "#5e5044" },
   { name: "Leather",      main: "#a0612d", shade: "#6b3f1d" },
@@ -1708,7 +1730,7 @@ function newGame(title = false) {
     fade: 0, fadeIn: 0, intro: 0, returnT: 0,
     shake: 0, banner: null, bannerQueue: [], pulse: { coins: 0, souls: 0, dark: 0 }, fresh: new Set(),
     camX: LEVEL_W - W, camGoal: null, trapMenu: null,
-    dialog: { queue: [], cur: null }, heroArrows: [], pools: [], meteors: [], hell: null, ghosts: [], decals: [], rings: [], slashes: [], spikes: [], chains: [], skulls: [], whiteFlash: 0, seenKinds: new Set(["knight"]), lightning: { next: 3 + Math.random() * 4, flash: 0, bolt: null }, prologue: null, heartbeat: 0,
+    dialog: { queue: [], cur: null }, heroArrows: [], pools: [], meteors: [], hell: null, ghosts: [], decals: [], rings: [], slashes: [], spikes: [], chains: [], skulls: [], voidFx: [], whiteFlash: 0, seenKinds: new Set(["knight"]), lightning: { next: 3 + Math.random() * 4, flash: 0, bolt: null }, prologue: null, heartbeat: 0,
   };
   if (title) { say("Choose a mode: Story (the 25-wave tale) or Sandbox (endless waves)."); return; }
   startOpening();
@@ -2554,7 +2576,9 @@ document.addEventListener("keydown", e => {
     if (power) useDarkPower(power.id);
   }
   if (k === "q") useSlot(0);
-  if (k === "s" || k === "arrowdown" || k === "e") useSlot(1);
+  // E is the fifth attack when there is one (sandbox); otherwise it doubles for S.
+  if (k === "s" || k === "arrowdown" || (k === "e" && abilitiesFor(S.boss).length < 5)) useSlot(1);
+  if (k === "e" && abilitiesFor(S.boss).length >= 5) useSlot(4);
   if (k === "r") useSlot(2);
   if (k === "f") useSlot(3);
 });
@@ -2975,7 +2999,7 @@ function endWave(sub) {
 }
 
 function swingBox(b) {
-  const reach = b.form === 2 ? 2.4 : b.bigSwing ? 3.2 : 2.1;
+  const reach = b.form >= 2 ? 2.4 : b.bigSwing ? 3.2 : 2.1;
   return {
     x: b.face > 0 ? b.x + b.w / 2 : b.x + b.w / 2 - reach - b.w / 2,
     y: b.y - 0.2, w: reach + b.w / 2, h: b.h + 0.2,
@@ -3052,8 +3076,8 @@ function resetForm(b) {
 function bossAttack() {
   const b = S.boss;
   if (!canFight() || b.cd > 0 || bossBusy(b)) return;
-  b.windup = b.form === 2 ? 0.3 : 0.25;
-  b.cd = b.form === 2 ? 0.8 : b.enraged ? 0.55 : 0.75;
+  b.windup = b.form >= 2 ? 0.3 : 0.25;
+  b.cd = b.form === 3 ? 0.6 : b.form === 2 ? 0.8 : b.enraged ? 0.55 : 0.75;
   // Stronger heroes sometimes see the swing coming and leap away.
   for (const h of S.heroes) {
     if (h.evade <= 0 && !h.grabbed && Math.abs(centerX(h) - centerX(b)) < 3 && Math.random() < h.dodge) {
@@ -3066,8 +3090,8 @@ function bossAttack() {
 }
 
 // ---------- special attacks ----------
-const abilityCd = (b, id) => [...ABILITIES, ...ABILITIES2, ...DARK_POWERS].find(a => a.id === id).cd * (b.enraged ? 0.7 : 1) * (S.powers.has("might") ? 0.8 : 1);
-const useSlot = i => useAbility(abilitiesFor(S.boss)[i].id);
+const abilityCd = (b, id) => allAbilities().find(a => a.id === id).cd * (b.enraged ? 0.7 : 1) * (S.powers.has("might") ? 0.8 : 1);
+const useSlot = i => { const a = abilitiesFor(S.boss)[i]; if (a) useAbility(a.id); };
 const bossBusy = b => b.windup > 0 || b.slam > 0 || !!b.action;
 
 function useAbility(id) {
@@ -3101,6 +3125,9 @@ function useAbility(id) {
     b.action = { type: "grasp", t: 0 };
     Sound.play("graspCast");
     if (!S.dialog.cur && Math.random() < 0.6) speak(b, pick(TAUNTS.grasp));
+  } else if (["whirl", "feast", "lance", "eclipse", "harvest", "pillars", "voidstep"].includes(id)) {
+    b.action = { type: id, t: 0, ticks: new Map() };
+    Sound.play({ whirl: "slashCharge", feast: "graspCast", lance: "breathCharge", eclipse: "hellCast", harvest: "chainCast", pillars: "quakeJump", voidstep: "wail" }[id]);
   } else if (id === "hellfire") {
     b.action = { type: "hellfire", t: 0 };
     Sound.play("hellCast");
@@ -3199,7 +3226,7 @@ function drawRisen() {
 function clearSpecials() {
   for (const h of S.heroes) { h.grabbed = null; h.sink = 0; h.doomed = false; }
   for (const h of S.heroes) h.chained = false;
-  Object.assign(S, { pools: [], meteors: [], hell: null, ghosts: [], decals: [], rings: [], slashes: [], spikes: [], chains: [], skulls: [], risen: [] });
+  Object.assign(S, { pools: [], meteors: [], hell: null, ghosts: [], decals: [], rings: [], slashes: [], spikes: [], chains: [], skulls: [], risen: [], voidFx: [] });
   if (S.boss) S.boss.action = null;
 }
 
@@ -3249,6 +3276,25 @@ function updateAction(b, dt) {
       particle({ x: centerX(b) + Math.cos(ang) * 1.4, y: b.y + 0.4 + Math.sin(ang) * 1, vx: -Math.cos(ang) * 2, vy: -Math.sin(ang) * 2, life: 0.4, color: Math.random() < 0.5 ? "#7a1420" : "#3b1048", glow: true });
     }
     if (a.t >= 0.6) { castGrasp(b); b.action = null; }
+  } else if (a.type === "whirl") {
+    // The Iron Tempest: he spins with the cleaver held out, cutting everyone close again and again.
+    a.next = (a.next ?? 0) - dt;
+    if (a.next <= 0) {
+      a.next = WHIRL.every;
+      Sound.play("swing");
+      for (const h of S.heroes) {
+        const dx = centerX(h) - centerX(b);
+        if (h.evade > 0 || Math.abs(dx) > WHIRL.reach || Math.abs(centerY(h) - centerY(b)) > 2) continue;
+        damage(h, WHIRL.tick, "#ff5252");
+        knock(h, (Math.sign(dx) || 1) * 3, -3);
+      }
+    }
+    if (Math.random() < dt * 40) {
+      const ang = Math.random() * Math.PI * 2;
+      particle({ x: centerX(b) + Math.cos(ang) * 2.3, y: centerY(b) + Math.sin(ang) * 1.2, vx: -Math.sin(ang) * 6, vy: Math.cos(ang) * 3, life: 0.2, color: Math.random() < 0.5 ? "#ffffff" : "#ff1744", glow: true });
+    }
+    S.shake = Math.max(S.shake, 1.2);
+    if (a.t > WHIRL.dur) b.action = null;
   } else if (a.type === "hellfire") {
     // Cleaver to the sky; the heavens catch fire.
     b.vx = 0;
@@ -3293,6 +3339,31 @@ function updateAction2(b, dt) {
       a.ticks.set(h, a.t);
       damage(h, BREATH_TICK, "#ce93d8", ["#b388ff", "#ff1744"]);
     }
+  } else if (a.type === "feast") {
+    // Blood drawn in from all around, then a crimson wave that bleeds every hero and feeds him.
+    b.vx = 0;
+    if (a.t < 0.6) {
+      if (Math.random() < dt * 50) {
+        const ang = Math.random() * Math.PI * 2, r = 4 + Math.random() * 2;
+        particle({ x: centerX(b) + Math.cos(ang) * r, y: centerY(b) + Math.sin(ang) * r * 0.5, vx: -Math.cos(ang) * r * 2, vy: -Math.sin(ang) * r, life: 0.45, color: Math.random() < 0.5 ? "#c62828" : "#ff1744", glow: true });
+      }
+      return;
+    }
+    if (!a.fired) {
+      a.fired = true;
+      let fed = 0;
+      for (const h of S.heroes) {
+        if (h.evade > 0 || Math.hypot(centerX(h) - centerX(b), centerY(h) - centerY(b)) > FEAST.radius) continue;
+        damage(h, FEAST.dmg, "#ff1744", ["#c62828", "#5d0f0f"]);
+        fed++;
+      }
+      const heal = Math.min(fed * FEAST.heal, b.maxHp - b.hp);
+      if (heal > 0) { b.hp += heal; float(centerX(b), b.y - 0.3, "+" + heal, "#ff8a80"); }
+      S.voidFx.push({ type: "wave", x: centerX(b), y: centerY(b), t: 0, r: FEAST.radius, colors: ["#ff1744", "#c62828"] });
+      S.shake = Math.max(S.shake, 5);
+      Sound.play("chomp");
+    }
+    if (a.t > 1.0) b.action = null;
   } else if (a.type === "quake") {
     // Leap into the air and come down hard enough to split the floor.
     if (!b.onGround) { a.left = true; b.vx = b.face * 2; }
@@ -3324,6 +3395,190 @@ function updateAction2(b, dt) {
       Sound.play("wailShot");
     }
     if (a.fired >= 8) b.action = null;
+  }
+}
+
+// Runs every frame of one of the Unmade's attacks.
+function updateAction3(b, dt) {
+  const a = b.action;
+  a.t += dt;
+  const cx = centerX(b), cy = centerY(b);
+  if (a.type === "lance") {
+    // A line of light marks where the beam will go; then the void pours through it.
+    b.vx = 0;
+    // Chest height for a hero on the floor: jumping over it is the way out.
+    const by = b.y + b.h - 0.8;
+    if (a.t < 0.55) {
+      if (!a.warned) { a.warned = true; S.voidFx.push({ type: "lanceWarn", x: cx, y: by, dir: b.face, t: 0, life: 0.55 }); }
+      return;
+    }
+    if (!a.fired) {
+      a.fired = true;
+      S.voidFx.push({ type: "lance", x: cx, y: by, dir: b.face, t: 0, life: 0.4 });
+      S.shake = Math.max(S.shake, 6);
+      Sound.play("breath");
+      for (const h of S.heroes) {
+        if (h.evade > 0 || (centerX(h) - cx) * b.face < 0 || Math.abs(centerY(h) - by) > 1.1) continue;
+        damage(h, LANCE_DMG, "#80d8ff", ["#00e5ff", "#ffffff"]);
+        knock(h, b.face * 8, -4);
+      }
+    }
+    if (a.t > 0.9) b.action = null;
+  } else if (a.type === "eclipse") {
+    // A black sun gathers over every hero, then drops.
+    b.vx = 0;
+    if (!a.fired) {
+      a.fired = true;
+      for (const h of S.heroes.slice(0, 8)) S.voidFx.push({ type: "orb", x: centerX(h), t: 0, life: 0.95 });
+    }
+    if (a.t > 0.4) b.action = null;
+  } else if (a.type === "harvest") {
+    // Every hero is dragged in towards him, then torn at; each one hit feeds him.
+    b.vx = 0;
+    if (a.t < 1.2) {
+      for (const h of S.heroes) {
+        if (h.evade > 0 || h.grabbed) continue;
+        const dx = cx - centerX(h);
+        if (Math.abs(dx) > 1.2) h.x += Math.sign(dx) * HARVEST.pull * dt;
+        if (Math.random() < dt * 8) particle({ x: centerX(h), y: centerY(h), vx: Math.sign(dx) * 6, vy: (cy - centerY(h)) * 2, life: 0.3, color: Math.random() < 0.5 ? "#80d8ff" : "#ffffff", glow: true });
+      }
+      return;
+    }
+    if (!a.fired) {
+      a.fired = true;
+      let fed = 0;
+      for (const h of S.heroes) {
+        if (h.evade > 0 || Math.abs(centerX(h) - cx) > HARVEST.radius) continue;
+        damage(h, HARVEST.dmg, "#80d8ff", ["#00e5ff", "#1a237e"]);
+        knock(h, (Math.sign(centerX(h) - cx) || 1) * 5, -6);
+        fed++;
+      }
+      const heal = Math.min(fed * HARVEST.heal, b.maxHp - b.hp);
+      if (heal > 0) { b.hp += heal; float(cx, b.y - 0.3, "+" + heal, "#80d8ff"); }
+      S.voidFx.push({ type: "wave", x: cx, y: cy, t: 0, r: HARVEST.radius, colors: ["#18ffff", "#1a237e"] });
+      S.shake = Math.max(S.shake, 6);
+      Sound.play("chomp");
+    }
+    if (a.t > 1.5) b.action = null;
+  } else if (a.type === "pillars") {
+    // Columns of black fire burst up one after another, running out from him on both sides.
+    b.vx = 0;
+    if (!a.fired) {
+      a.fired = true;
+      for (const dir of [-1, 1]) for (let i = 1; i <= 10; i++) {
+        const x = cx + dir * i * 1.4;
+        if (x > 1 && x < W - 1) S.voidFx.push({ type: "pillar", x, t: -i * 0.12, life: 0.85 });
+      }
+      S.shake = Math.max(S.shake, 4);
+      Sound.play("quake");
+    }
+    if (a.t > 0.4) b.action = null;
+  } else if (a.type === "voidstep") {
+    // He folds into nothing and opens again behind the furthest hero.
+    b.vx = 0;
+    b.invuln = a.t < 0.45;
+    if (a.t >= 0.25 && !a.fired) {
+      a.fired = true;
+      const prey = [...S.heroes].sort((p, q) => Math.abs(centerX(q) - cx) - Math.abs(centerX(p) - cx))[0];
+      if (prey) {
+        const side = Math.sign(centerX(prey) - cx) || 1, nx = centerX(prey) + side * 1.8;
+        burst(cx, cy, 20, ["#1a237e", "#00e5ff", "#000000"], 5, { glow: true });
+        b.x = Math.max(1.05, Math.min(W - 1.05 - b.w, nx - b.w / 2));
+        b.face = Math.sign(centerX(prey) - centerX(b)) || -side;
+      }
+      const nx2 = centerX(b), ny2 = centerY(b);
+      burst(nx2, ny2, 24, ["#00e5ff", "#ffffff", "#1a237e"], 6, { glow: true });
+      S.voidFx.push({ type: "wave", x: nx2, y: ny2, t: 0, r: 2.5, colors: ["#18ffff", "#ffffff"] });
+      for (const h of S.heroes) {
+        if (h.evade > 0 || Math.hypot(centerX(h) - nx2, centerY(h) - ny2) > 2.5) continue;
+        damage(h, VOIDSTEP_DMG, "#80d8ff");
+        knock(h, (Math.sign(centerX(h) - nx2) || 1) * 6, -5);
+      }
+      S.shake = Math.max(S.shake, 5);
+      Sound.play("transformBoom");
+    }
+    if (a.t > 0.5) { b.invuln = false; b.action = null; }
+  }
+}
+
+// The Unmade's (and the Feast's) lingering effects: beams, falling suns, pillars and shockwaves.
+function updateVoidFx(dt) {
+  for (const f of S.voidFx) {
+    const before = f.t;
+    f.t += dt;
+    if (f.type === "orb" && before < f.life && f.t >= f.life) {
+      burst(f.x, ARENA_FLOOR - 0.3, 20, ["#000000", "#1a237e", "#00e5ff"], 6, { glow: true });
+      S.shake = Math.max(S.shake, 4);
+      Sound.play("meteorBoom");
+      for (const h of S.heroes) if (h.evade <= 0 && Math.abs(centerX(h) - f.x) < 1.3 && h.y + h.h > ARENA_FLOOR - 2.5) damage(h, ECLIPSE_DMG, "#80d8ff");
+    }
+    if (f.type === "pillar" && before < 0.35 && f.t >= 0.35) {
+      burst(f.x, ARENA_FLOOR - 0.2, 10, ["#000000", "#00e5ff", "#ffffff"], 5, { glow: true });
+      for (const h of S.heroes) if (h.evade <= 0 && Math.abs(centerX(h) - f.x) < 0.7 && h.y + h.h > ARENA_FLOOR - 2) { damage(h, PILLAR_DMG, "#80d8ff"); knock(h, 0, -9); }
+    }
+  }
+  S.voidFx = S.voidFx.filter(f => f.t < (f.life ?? 0.5));
+}
+function drawVoidFx() {
+  const fy = ARENA_FLOOR * T;
+  for (const f of S.voidFx) {
+    if (f.type === "lanceWarn" || f.type === "lance") {
+      const x0 = Math.round(f.x * T), x1 = f.dir > 0 ? W * T : 0, y = Math.round(f.y * T);
+      const half = f.type === "lance" ? Math.round(14 * (1 - f.t / f.life)) + 2 : 0;
+      for (let x = Math.min(x0, x1); x < Math.max(x0, x1); x += f.type === "lance" ? 1 : 3) {
+        if (f.type === "lanceWarn") {
+          ctx.fillStyle = Math.floor(S.time * 16) % 2 ? "#80d8ff" : "#ffffff";
+          ctx.globalAlpha = 0.5 + f.t;
+          ctx.fillRect(x, y, 2, 1);
+          continue;
+        }
+        for (let k = -half; k <= half; k++) {
+          const edge = Math.abs(k) / half;
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = edge < 0.35 ? "#ffffff" : edge < 0.7 ? "#18ffff" : Math.random() < 0.5 ? "#1a237e" : "#00e5ff";
+          if (edge < 0.7 || Math.random() < 0.6) ctx.fillRect(x, y + k, 1, 1);
+        }
+      }
+      ctx.globalAlpha = 1;
+    } else if (f.type === "orb") {
+      // A warning ring on the floor, and the black sun dropping onto it.
+      const k = f.t / f.life, x = Math.round(f.x * T), r = 10;
+      ctx.fillStyle = "#18ffff";
+      ctx.globalAlpha = 0.4 + 0.5 * k;
+      for (let i = -r; i <= r; i += 2) ctx.fillRect(x + i, fy - 1, 1, 1);
+      ctx.globalAlpha = 1;
+      const oy = Math.round(k * k * (fy - 14) + 6);
+      pxDisc(ctx, x, oy, 7, "#18ffff");
+      pxDisc(ctx, x, oy, 6, "#000000");
+      pxDisc(ctx, x - 2, oy - 2, 1, "#1a237e");
+    } else if (f.type === "pillar") {
+      if (f.t < 0) continue;
+      const x = Math.round(f.x * T);
+      if (f.t < 0.35) {
+        // A crack of light where it will burst up.
+        ctx.fillStyle = Math.floor(S.time * 20) % 2 ? "#18ffff" : "#ffffff";
+        ctx.fillRect(x - 3, fy - 1, 7, 1);
+        continue;
+      }
+      const k = Math.min(1, (f.t - 0.35) / 0.1), fade = 1 - Math.max(0, (f.t - 0.5) / 0.35), hgt = Math.round(46 * k);
+      ctx.globalAlpha = Math.max(0, fade);
+      ctx.fillStyle = "#1a237e";
+      ctx.fillRect(x - 5, fy - hgt, 11, hgt);
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(x - 3, fy - hgt, 7, hgt);
+      ctx.fillStyle = "#18ffff";
+      ctx.fillRect(x - 1, fy - hgt, 3, hgt);
+      ctx.globalAlpha = 1;
+    } else if (f.type === "wave") {
+      const r = f.r * T * Math.min(1, f.t / 0.3);
+      ctx.globalAlpha = Math.max(0, 1 - f.t / 0.5);
+      for (let i = 0; i < 64; i++) {
+        const ang = i / 64 * Math.PI * 2;
+        ctx.fillStyle = f.colors[i % 2];
+        ctx.fillRect(Math.round(f.x * T + Math.cos(ang) * r), Math.round(f.y * T + Math.sin(ang) * r * 0.55), 2, 2);
+      }
+      ctx.globalAlpha = 1;
+    }
   }
 }
 
@@ -3433,7 +3688,7 @@ function updateSkulls(dt) {
 // ---------- the transformation ----------
 function startTransform(b) {
   clearSpecials();
-  b.transform = { t: 0 };
+  b.transform = { t: 0, to: b.form + 1 };
   b.invuln = true;
   b.hp = 0;
   Object.assign(b, { action: null, windup: 0, slam: 0, swing: 0, vx: 0 });
@@ -3465,7 +3720,12 @@ function updateTransform(b, dt) {
     burst(centerX(b), centerY(b), 40, ["#2b2535", "#4d4560", "#7a1420", "#c9a227", "#ff1744"], 9);
     burst(centerX(b), centerY(b), 30, ["#ffffff", "#ffeb3b", "#ff3d00"], 7, { glow: true });
     const cx = centerX(b);
-    Object.assign(b, { form: 2, w: 3.4, h: 3.75, maxHp: bossMaxHp(2), enraged: true, vy: 0 });
+    if (tr.to === 3) {
+      // The Devourer's hide splits and the void inside it pours out.
+      S.whiteFlash = 0.8;
+      burst(centerX(b), centerY(b), 40, ["#00e5ff", "#18ffff", "#1a237e", "#ffffff"], 9, { glow: true });
+    }
+    Object.assign(b, { form: tr.to, w: 3.4, h: 3.75, maxHp: bossMaxHp(tr.to), enraged: true, vy: 0 });
     b.x = Math.max(1.05, Math.min(W - 1.05 - b.w, cx - b.w / 2));
     b.y = ARENA_FLOOR - b.h - 2.5;
   }
@@ -3477,7 +3737,8 @@ function updateTransform(b, dt) {
   if (cross(2.4)) {
     b.roar = 1.1;
     Sound.play("roar2");
-    banner(BOSS_NAME, "THE DEVOURER UNBOUND", "#b388ff");
+    if (tr.to === 3) banner(BOSS_NAME, "THE UNMADE", "#80d8ff");
+    else banner(BOSS_NAME, "THE DEVOURER UNBOUND", "#b388ff");
     speak(b, "NOW WITNESS WHAT I TRULY AM.");
   }
   if (cross(3.0) && S.heroes.length) speak(pick(S.heroes), pick(["IT'S... GROWING!", "WHAT HAVE WE DONE...", "HOLD! HOLD THE LINE!"]), true);
@@ -3487,7 +3748,7 @@ function updateTransform(b, dt) {
     b.transform = null;
     b.invuln = false;
     b.hp = b.maxHp;
-    for (const a of ABILITIES2) b.cds[a.id] = 1.5;
+    for (const a of abilitiesFor(b)) b.cds[a.id] = 1.5;
   }
 }
 
@@ -3600,6 +3861,7 @@ function updateSpecials(dt) {
   updateSpikes(dt);
   updateChains(dt);
   updateSkulls(dt);
+  updateVoidFx(dt);
   S.whiteFlash -= dt;
   S.novaFlash = (S.novaFlash || 0) - dt;
   for (const list of [S.ghosts, S.slashes, S.rings]) for (const g of list) g.t -= dt;
@@ -3714,7 +3976,8 @@ function update(dt) {
 
   for (const h of [...S.heroes]) if (h.hp <= 0) heroDied(h);
   if (S.boss.hp <= 0 && !S.boss.invuln) {
-    if (S.boss.form !== 2 && inArena()) startTransform(S.boss);
+    // His first life gives way to the Devourer; in sandbox the Devourer gives way to the Unmade.
+    if ((S.boss.form === 1 || (S.boss.form === 2 && sandbox())) && inArena()) startTransform(S.boss);
     else { bossDied(); return; }
   }
   if (S.phase === "wave") checkWaveEnd();
@@ -3733,7 +3996,7 @@ function update(dt) {
 const TYPE_SPEED = 40, LINE_HOLD = 1.5, DIALOG_FADE = 0.15;
 function dialogLine(who, text) {
   return who.isBoss
-    ? { boss: true, name: BOSS_NAME, title: who.form === 2 ? "THE DEVOURER" : BOSS_TITLE, text, rage: !!who.enraged, form: who.form }
+    ? { boss: true, name: BOSS_NAME, title: who.form === 3 ? "THE UNMADE" : who.form === 2 ? "THE DEVOURER" : BOSS_TITLE, text, rage: !!who.enraged, form: who.form }
     : { boss: false, name: who.name.toUpperCase(), lv: who.lv, kind: who.kind, text };
 }
 function speak(who, text, force = false) {
@@ -3910,15 +4173,16 @@ function updateBoss(dt) {
   b.swing -= dt;
   for (const id in b.cds) b.cds[id] -= dt;
   let dir = 0;
-  if (b.slam <= 0 && !b.action) {
+  // He can still walk while the Iron Tempest spins.
+  if (b.slam <= 0 && (!b.action || b.action.type === "whirl")) {
     if (keys.a || keys.arrowleft) dir--;
     if (keys.d || keys.arrowright) dir++;
     // The Devourer is far too heavy to jump.
     if ((keys.w || keys.arrowup) && b.onGround && b.form !== 2) { b.vy = -10; Sound.play("jump"); }
   }
-  b.vx = dir * (b.form === 2 ? P2_SPEED : BOSS_SPEED);
+  b.vx = dir * (b.form === 3 ? P3_SPEED : b.form === 2 ? P2_SPEED : BOSS_SPEED) * (b.action && b.action.type === "whirl" ? 0.7 : 1);
   if (dir) b.face = dir;
-  if (b.action) (b.form === 2 ? updateAction2 : updateAction)(b, dt);
+  if (b.action) (b.form === 3 ? updateAction3 : b.form === 2 ? updateAction2 : updateAction)(b, dt);
   moveBody(b, dt);
 
   // Cleaver angle: resting forward, raised back on windup, straight up for a slam, sweeping down on the swing.
@@ -3927,7 +4191,8 @@ function updateBoss(dt) {
   const target = act && act.type !== "slash" ? -0.15
     : act && act.type === "slash" ? (act.t < 0.22 ? -0.9 : 2.4)
     : b.slam > 0 || b.roar > 0 ? -0.1 : b.windup > 0 ? -0.5 : b.swing > 0 ? 2.3 : 1.2;
-  b.arm += (target - b.arm) * Math.min(1, dt * (b.swing > 0 ? 40 : b.windup > 0 || b.slam > 0 ? 18 : 8));
+  if (act && act.type === "whirl") b.arm = act.t * 26;
+  else b.arm += (target - b.arm) * Math.min(1, dt * (b.swing > 0 ? 40 : b.windup > 0 || b.slam > 0 ? 18 : 8));
 
   if (b.slam > 0) {
     b.slam -= dt;
@@ -3939,14 +4204,14 @@ function updateBoss(dt) {
     if (b.windup <= 0) {
       b.swing = 0.15;
       b.bigSwing = false;
-      Sound.play(b.form === 2 ? "claw" : "swing");
+      Sound.play(b.form >= 2 ? "claw" : "swing");
       // One swing cleaves through every hero in reach; the Devourer's claws reach further and throw them.
       for (const h of S.heroes) {
         if (h.evade <= 0 && overlaps(swingBox(b), h)) {
-          damage(h, b.form === 2 ? CLAW_DMG : BOSS_DMG, "#ff5252");
+          damage(h, b.form === 3 ? P3_CLAW_DMG : b.form === 2 ? CLAW_DMG : BOSS_DMG, "#ff5252");
           Sound.play("bossHit");
           h.vx = 0;
-          if (b.form === 2) knock(h, b.face * 6, -5);
+          if (b.form >= 2) knock(h, b.face * 6, -5);
           S.shake = 4;
         }
       }
@@ -6027,6 +6292,13 @@ const ART = {
     "aAAAAAAAAAAAAAAAAa",
   ],
   boneHand: [".H.H.H.", ".H.H.H.", "HH.H.H.", "HHHHHH.", "HHHHHHH", ".HHHHH.", "..HhH..", "..HhH..", "..HhH..", "..HhH..", "..HhH.."],
+  iconWhirl: ["....WWWW....", "..WW....WW..", ".W........W.", ".W..RRRR..W.", "W..R....R..W", "W..R.MM.R..W", "W..R.MM.R..W", "W..R....R..W", ".W..RRRR..W.", ".W........W.", "..WW....WW..", "....WWWW...."],
+  iconFeast: [".....R......", ".....RR.....", "....RRRR....", "....RRRR....", "...RRRRRR...", "...RRWRRR...", "..RRRWRRRR..", "..RRRRRRRR..", "..RRRRRRRR..", "...RRRRRR...", "....rrrr....", "............"],
+  iconLance: ["............", "............", "C...........", "CC..........", "CCCCCCCCCCWW", "WWWWWWWWWWWW", "WWWWWWWWWWWW", "CCCCCCCCCCWW", "CC..........", "C...........", "............", "............"],
+  iconEclipse: ["....CCCC....", "..CC....CC..", ".C..KKKK..C.", ".C.KKKKKK.C.", "C.KKKKKKKK.C", "C.KKKKKKKK.C", "C.KKKKKKKK.C", "C.KKKKKKKK.C", ".C.KKKKKK.C.", ".C..KKKK..C.", "..CC....CC..", "....CCCC...."],
+  iconHarvest: ["W....WW....W", ".W...WW...W.", "..W..WW..W..", "...W.CC.W...", "....CCCC....", "WWWCCCCCCWWW", "WWWCCCCCCWWW", "....CCCC....", "...W.CC.W...", "..W..WW..W..", ".W...WW...W.", "W....WW....W"],
+  iconPillars: ["..C...C...C.", "..C...C...C.", ".CWC.CWC.CWC", ".CWC.CWC.CWC", ".CWC.CWC.CWC", ".CWC.CWC.CWC", ".CWC.CWC.CWC", ".CWC.CWC.CWC", ".CWC.CWC.CWC", "CCWCCCWCCCWC", "KKKKKKKKKKKK", "KKKKKKKKKKKK"],
+  iconVoidstep: ["....CCCC....", "...C....C...", "..C..WW..C..", ".C..W..W..C.", ".C.W....W.C.", ".C.W....W.C.", ".C.W....W.C.", ".C.W....W.C.", ".C..W..W..C.", "..C..WW..C..", "...C....C...", "....CCCC...."],
   iconSlash: [
     "..........WW",
     "........WWR.",
@@ -6305,6 +6577,9 @@ const BOSS_SHADOW_PAL = Object.fromEntries(Object.keys(BOSS_PAL).map(k => [k, "E
 const DEVOURER_PAL = { A: "#2b2535", a: "#1a1622", L: "#4d4560", H: "#e8dcc0", h: "#a8987a", K: "#08060c", E: "#ff1744", Y: "#ffeb3b", e: "#ffffff",
   F: "#ff3d00", R: "#7a1420", r: "#4a0c14", P: "#c62828", C: "#4a0c18", c: "#2a0610", G: "#c9a227" };
 const SKULL_PAL = { H: "#e1d5ff", K: "#311b92" };
+// The Unmade: the Devourer's shape poured full of night, with burning cyan eyes and gold horns.
+const UNMADE_PAL = { A: "#0d0b1a", a: "#05040c", L: "#26304d", H: "#ffe082", h: "#c9a227", K: "#000000", E: "#18ffff", Y: "#ffffff", e: "#ffffff",
+  F: "#00e5ff", R: "#1a237e", r: "#0d1440", P: "#3949ab", C: "#0d1440", c: "#05040c", G: "#ffd54f" };
 const BOSS_GHOST_PAL = Object.fromEntries(Object.keys(BOSS_PAL).map(k => [k, "#ff1744"]));
 const ICON_PALS = {
   mend: { P: "#d500f9", W: "#ffffff" },
@@ -6319,6 +6594,13 @@ const ICON_PALS = {
   quake: { H: "#9a92b0", D: "#6b6378", d: "#3a3448", M: "#14101c" },
   devour: { C: "#b388ff" },
   souls: { H: "#d1c4e9", K: "#311b92", b: "#7c4dff" },
+  whirl: { W: "#ffffff", R: "#ff1744", M: "#4a4458" },
+  feast: { R: "#c62828", r: "#5d0f0f", W: "#ff8a80" },
+  lance: { C: "#00e5ff", W: "#ffffff" },
+  eclipse: { C: "#18ffff", K: "#000000" },
+  harvest: { C: "#00e5ff", W: "#ffffff" },
+  pillars: { C: "#18ffff", W: "#ffffff", K: "#1a237e" },
+  voidstep: { C: "#00e5ff", W: "#ffffff" },
 };
 const CLEAVER_PAL = { M: "#4a4458", m: "#2b2535", W: "#c9c2d6", R: "#ff1744", B: "#3a2a20", G: "#c9a227", A: "#2b2535", L: "#4d4560", a: "#1a1622" };
 const SPIKE_PALS = [
@@ -7407,7 +7689,7 @@ function drawMinion(m, preview = null) {
 
 // Where the Hollow King's eyes are, in canvas pixels.
 function bossEyes(b) {
-  if (b.form === 2) {
+  if (b.form >= 2) {
     const left = Math.round(centerX(b) * T - 33), top = Math.round((b.y + b.h) * T - 61);
     return [{ x: left + 27, y: top + 17 }, { x: left + 38, y: top + 17 }];
   }
@@ -7429,16 +7711,39 @@ function drawRoarRings(cx, cy, roar) {
 }
 
 function drawDevourer(b) {
-  const act = b.action;
-  const jaw = b.roar > 0 || (act && ((act.type === "breath" && act.t > 0.25) || act.type === "devour" || (act.type === "souls" && act.t < 0.7)));
-  const art = jaw ? ART.devourerRoar : ART.devourer;
-  const spr = sprite(art, DEVOURER_PAL, jaw ? "devourerRoar" : "devourer");
-  const cx = centerX(b) * T, bottom = (b.y + b.h) * T, breathe = b.onGround && Math.floor(S.time * 1.5) % 2 ? 1 : 0;
+  const act = b.action, unmade = b.form === 3;
+  const jaw = b.roar > 0 || (act && ((act.type === "breath" && act.t > 0.25) || act.type === "devour" || (act.type === "souls" && act.t < 0.7) || act.type === "feast" || act.type === "harvest" || act.type === "lance"));
+  const art = jaw ? ART.devourerRoar : ART.devourer, pal = unmade ? UNMADE_PAL : DEVOURER_PAL, key = (unmade ? "unmade" : "devourer") + (jaw ? "Roar" : "");
+  const spr = sprite(art, pal, key);
+  // The Unmade hovers a little off the floor.
+  const hover = unmade ? Math.round(-3 + Math.sin(S.time * 2.5) * 2) : 0;
+  const cx = centerX(b) * T, bottom = (b.y + b.h) * T + hover, breathe = b.onGround && !unmade && Math.floor(S.time * 1.5) % 2 ? 1 : 0;
   const top = Math.round(bottom - spr.height + 1);
   if (S.phase === "over" && S.won !== "dark") { drawSprite(spr, cx, bottom, b.face, 0.35); return; }
   if (b.roar > 0) drawRoarRings(cx, top + 20, b.roar);
-  drawSprite(spr, cx, bottom + breathe, b.face);
-  if (b.flash > 0) drawSprite(sprite(art, DEVOURER_PAL, jaw ? "devourerRoar" : "devourer", true), cx, bottom + breathe, b.face, 0.6);
+  // Folding into the void for a Void Step.
+  const fade = act && act.type === "voidstep" ? Math.abs(act.t - 0.25) / 0.25 : 1;
+  if (unmade) {
+    // A crown of gold light over the horns, and shards of night circling.
+    ctx.fillStyle = "#ffd54f";
+    for (let i = 0; i < 24; i++) {
+      const ang = i / 24 * Math.PI * 2;
+      ctx.globalAlpha = 0.5 + 0.4 * Math.sin(S.time * 4 + i) ;
+      ctx.fillRect(Math.round(cx + Math.cos(ang) * 16), Math.round(top - 4 + Math.sin(ang) * 4), 1, 1);
+    }
+    for (let i = 0; i < 6; i++) {
+      const ang = S.time * 1.6 + i / 6 * Math.PI * 2, sx = Math.round(cx + Math.cos(ang) * 40), sy = Math.round(top + 34 + Math.sin(ang) * 16);
+      ctx.globalAlpha = fade;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(sx - 1, sy - 2, 3, 5);
+      ctx.fillStyle = Math.sin(ang) > 0 ? "#18ffff" : "#1a237e";
+      ctx.fillRect(sx, sy - 1, 1, 3);
+    }
+    ctx.globalAlpha = 1;
+  }
+  drawSprite(spr, cx, bottom + breathe, b.face, fade);
+  if (b.flash > 0) drawSprite(sprite(art, pal, key, true), cx, bottom + breathe, b.face, 0.6 * fade);
+  if (b.transform) drawSprite(sprite(art, pal, key, "#80d8ff"), cx, bottom + breathe, b.face, Math.min(1, b.transform.t / 1.6) * 0.8);
   // Claws: raised and glowing on the windup, three raking arcs on the swipe.
   const sx = cx + b.face * 18, sy = top + 32;
   if (b.windup > 0) {
@@ -7482,7 +7787,7 @@ function drawDevourer(b) {
 }
 
 function drawBoss(b, shadow = false) {
-  if (b.form === 2) { drawDevourer(b); return; }
+  if (b.form >= 2) { drawDevourer(b); return; }
   const pal = shadow ? BOSS_SHADOW_PAL : b.enraged ? BOSS_RAGE_PAL : BOSS_PAL;
   const spr = sprite(ART.boss, pal, shadow ? "bossShadow" : b.enraged ? "bossRage" : "boss");
   const cx = centerX(b) * T, bottom = (b.y + b.h) * T;
@@ -8536,7 +8841,10 @@ function drawHud() {
     // Souls-style boss bar across the top of the screen, just under the resource strip.
     const bw = 300, bx = Math.round((W * T - bw) / 2), by = 32;
     const hpText = `${Math.max(0, Math.ceil(b.hp))}/${b.maxHp}`;
-    if (b.form === 2) {
+    if (b.form === 3) {
+      drawText(`${BOSS_NAME}, THE UNMADE`, bx, by - 10, "#80d8ff");
+      drawMeter(bx, by, bw, 4, b.hp / b.maxHp, "#05081a", "#1e88e5", "#18ffff");
+    } else if (b.form === 2) {
       drawText(`${BOSS_NAME}, THE DEVOURER`, bx, by - 10, "#e1bee7");
       drawMeter(bx, by, bw, 4, b.hp / b.maxHp, "#24082e", "#8e24aa", "#e040fb");
     } else {
@@ -8679,7 +8987,7 @@ function draw() {
   S.allies.forEach(drawHero);
   if (!arena) S.serpents.forEach(n => { if (n.state !== "lurk") drawSerpent(n); });
   S.waves.forEach(drawWave);
-  if (arena) { drawRisen(); S.heroArrows.forEach(drawArrow); drawPools(true); drawSpecials(); }
+  if (arena) { drawRisen(); S.heroArrows.forEach(drawArrow); drawPools(true); drawSpecials(); drawVoidFx(); }
   drawParticles(false);
   drawLighting();
   drawParticles(true);
@@ -9062,7 +9370,7 @@ function frame(now) {
   last = now;
   update(dt);
   update(dt);
-  const fightMusic = S.boss.transform ? null : S.boss.form === 2 || S.finale ? "boss2" : "boss";
+  const fightMusic = S.boss.transform ? null : S.boss.form >= 2 || S.finale ? "boss2" : "boss";
   Sound.music({ title: null, prologue: null, over: null, ending: null, epilogue: null, boss: fightMusic, felled: fightMusic }[S.phase] ?? "level");
   draw();
   present();
