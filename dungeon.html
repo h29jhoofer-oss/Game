@@ -177,7 +177,7 @@
     <summary>How to play</summary>
     You are the boss, waiting at the top of your castle tower. Each wave, a group of heroes runs and jumps through the level to reach it.
     Heroes who make it through the door hide inside the tower. Once 5 are inside, they climb up and fight you all at once.<br>
-    <b>Modes:</b> <b>Story</b> is the 25-wave tale of the tower and what lies under it. <b>Sandbox</b> has no story and no last wave: the heroes keep coming, a level stronger each wave, and your best is saved.<br>
+    <b>Modes:</b> <b>Story</b> is the 25-wave tale of the tower and what lies under it. <b>Sandbox</b> has no story and no last wave: the heroes keep coming, a level stronger each wave. Pick Easy, Normal, Hard or Nightmare for it; each keeps its own best wave.<br>
     <b>Build:</b> pick a tool and click the level. Spikes go on the ground; saws and turrets go anywhere, even over the lava pits.
     Click a placed trap to open its tab on the right side of the screen: upgrade it (U) or sell it for half what you paid (X).
     <b>The Thing Below:</b> every soul the tower takes feeds something beneath it (dark souls and bargains most of all). As it
@@ -1561,11 +1561,11 @@ function makeHero(lv, kind = "knight") {
   const k = HERO_KINDS[kind];
   const grow = kind === "champion" ? champScale(lv) : { hp: 1, atk: 1 };
   // Heroes are twice as tough on the path; they're halved again when they reach the tower top.
-  const hp = Math.round((40 + 20 * (lv - 1)) * k.hp * grow.hp * 2);
+  const d = diff(), hp = Math.round((40 + 20 * (lv - 1)) * k.hp * grow.hp * 2 * d.hp);
   const names = NAMES_BY_KIND[kind];
   return {
     kind, x: START.x + 0.2, y: START.y + 0.9 - k.h, w: k.w, h: k.h, vx: 0, vy: 0, onGround: false,
-    lv, hp, maxHp: hp, atk: Math.max(1, Math.round((5 + 3 * (lv - 1)) * k.atk * grow.atk)), speed: k.speed,
+    lv, hp, maxHp: hp, atk: Math.max(1, Math.round((5 + 3 * (lv - 1)) * k.atk * grow.atk * d.atk)), speed: k.speed * d.speed,
     // Chance to dodge a boss swing, and to spot and jump a trap.
     dodge: k.noDodge ? 0 : Math.min(0.12 * (lv - 1) + (k.dodge || 0), 0.65),
     smart: Math.max(0, Math.min(0.15 * (lv - 1) * (1 + (k.smart || 0)) + (k.smart > 0 ? k.smart : 0), 0.8)),
@@ -1617,18 +1617,29 @@ function makeBoss() {
 // Story mode is the 25 waves of the lore, ending under the castle. Sandbox has no story, no Thing and no last wave.
 let gameMode = "story";
 const sandbox = () => S.mode === "sandbox";
-const BEST_KEY = "dungeonBoss.sandboxBest";
-function sandboxBest() {
-  try { return +localStorage.getItem(BEST_KEY) || 0; } catch (e) { return 0; }
+// Sandbox difficulty scales the heroes' health, damage and speed, the gold they drop, the gold you start with,
+// and how many extra heroes march in each wave. Story mode always plays as Normal.
+const DIFFICULTIES = [
+  { id: "easy", name: "EASY", color: "#9cff9c", hp: 0.6, atk: 0.6, speed: 0.9, coins: 1.3, start: 40, extra: 0, lines: ["WEAK, SLOW", "HEROES.", "MORE GOLD."] },
+  { id: "normal", name: "NORMAL", color: "#ffd54f", hp: 1, atk: 1, speed: 1, coins: 1, start: 20, extra: 0, lines: ["HEROES AS IN", "STORY MODE."] },
+  { id: "hard", name: "HARD", color: "#ff8a65", hp: 1.5, atk: 1.3, speed: 1.05, coins: 0.85, start: 20, extra: 2, lines: ["TOUGHER HEROES,", "AND MORE", "OF THEM."] },
+  { id: "nightmare", name: "NIGHTMARE", color: "#ff1744", hp: 2.2, atk: 1.7, speed: 1.15, coins: 0.7, start: 15, extra: 4, lines: ["FAST, BRUTAL", "HEROES.", "LITTLE GOLD."] },
+];
+let gameDiff = 1;
+const diff = () => DIFFICULTIES[S && S.mode === "sandbox" ? S.diff : 1];
+// Each difficulty keeps its own best wave (Normal uses the key from before there were difficulties).
+const bestKey = i => "dungeonBoss.sandboxBest" + (i === 1 ? "" : "." + DIFFICULTIES[i].id);
+function sandboxBest(i) {
+  try { return +localStorage.getItem(bestKey(i)) || 0; } catch (e) { return 0; }
 }
-function saveSandboxBest(w) {
-  try { if (w > sandboxBest()) localStorage.setItem(BEST_KEY, String(w)); } catch (e) { /* no storage: the record just isn't kept */ }
+function saveSandboxBest(i, w) {
+  try { if (w > sandboxBest(i)) localStorage.setItem(bestKey(i), String(w)); } catch (e) { /* no storage: the record just isn't kept */ }
 }
 
 let S;
 function newGame(title = false) {
   S = {
-    mode: gameMode, titlePick: gameMode === "sandbox" ? 1 : 0,
+    mode: gameMode, diff: gameDiff, titleStep: "mode", titlePick: gameMode === "sandbox" ? 1 : 0,
     coins: 20, souls: 2, wave: 1, kills: 0, named: 0,
     serpents: [], bolts: [], harpoons: [], boulders: [], lavaEyes: [], tendrils: [], hunger: 0, bargains: 0, bargain: null, allies: [], shown: { coins: 20, souls: 2, dark: 0 }, coinFx: [], soulFx: [], darkSouls: 0, powers: new Set(), risen: [], monsterMenu: null,
     gain: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
@@ -1651,13 +1662,30 @@ const MODE_CARDS = [
   { mode: "story", name: "STORY", color: "#ff5252", lines: ["25 WAVES OF THE TALE.", "SOMETHING WAITS", "UNDER THE CASTLE."] },
   { mode: "sandbox", name: "SANDBOX", color: "#9cff9c", lines: ["ENDLESS WAVES, NO STORY.", "HEROES GROW STRONGER", "EVERY WAVE."] },
 ].map((c, i) => Object.assign(c, { x: W * T / 2 - 184 + i * 192, y: H * T / 2 + 6, w: 176, h: 50 }));
-const cardAt = p => !p ? -1 : MODE_CARDS.findIndex(c => p.x >= c.x && p.x < c.x + c.w && p.y >= c.y && p.y < c.y + c.h);
+// Choosing Sandbox brings up a second row of cards, one per difficulty.
+const DIFF_CARDS = DIFFICULTIES.map((d, i) => ({ name: d.name, color: d.color, lines: d.lines, x: W * T / 2 - 230 + i * 116, y: H * T / 2 + 6, w: 108, h: 50 }));
+const titleCards = () => S.titleStep === "difficulty" ? DIFF_CARDS : MODE_CARDS;
+const cardAt = p => !p ? -1 : titleCards().findIndex(c => p.x >= c.x && p.x < c.x + c.w && p.y >= c.y && p.y < c.y + c.h);
+function pickTitleCard(i) {
+  if (S.titleStep === "difficulty") chooseDifficulty(i);
+  else chooseMode(MODE_CARDS[i].mode);
+}
 function chooseMode(mode) {
+  Sound.play("click");
+  if (mode === "sandbox") { S.titleStep = "difficulty"; S.titlePick = gameDiff; return; }
   startedAt = performance.now();
   gameMode = S.mode = mode;
+  startPrologue();
+}
+function chooseDifficulty(i) {
+  startedAt = performance.now();
+  gameMode = S.mode = "sandbox";
+  gameDiff = S.diff = i;
+  const d = DIFFICULTIES[i];
+  S.coins = S.shown.coins = d.start;
   Sound.play("click");
-  if (mode === "story") startPrologue();
-  else { startOpening(); banner("SANDBOX", "Endless waves - how long can the Hollow King hold?", "#9cff9c"); }
+  startOpening();
+  banner(`SANDBOX - ${d.name}`, "Endless waves - how long can the Hollow King hold?", d.color);
 }
 
 // The story so far, typed out line by line before the opening. A click or key skips ahead.
@@ -2399,15 +2427,19 @@ function wake(e) {
   Sound.unlock();
   if (S.phase === "epilogue") { startedAt = performance.now(); advanceEpilogue(); return; }
   if (S.phase === "title") {
-    // Pick a mode: click a card, or arrows to move between them and Enter or Space to start; 1 and 2 pick directly.
+    // Pick a mode (then, for sandbox, a difficulty): click a card, or arrows to move between them and Enter
+    // or Space to choose; number keys pick directly, and Escape goes back from the difficulties.
+    const n = titleCards().length;
     if (e && e.key) {
       const k = e.key.toLowerCase();
-      if (["arrowleft", "arrowright", "a", "d", "tab"].includes(k)) { S.titlePick = 1 - S.titlePick; Sound.play("click"); e.preventDefault(); }
-      else if (k === "1" || k === "2") chooseMode(MODE_CARDS[+k - 1].mode);
-      else if (k === "enter" || k === " ") chooseMode(MODE_CARDS[S.titlePick].mode);
+      if (["arrowleft", "a"].includes(k)) { S.titlePick = (S.titlePick + n - 1) % n; Sound.play("click"); }
+      else if (["arrowright", "d", "tab"].includes(k)) { S.titlePick = (S.titlePick + 1) % n; Sound.play("click"); e.preventDefault(); }
+      else if (k >= "1" && k <= String(n)) pickTitleCard(+k - 1);
+      else if (k === "enter" || k === " ") pickTitleCard(S.titlePick);
+      else if ((k === "escape" || k === "backspace") && S.titleStep === "difficulty") { S.titleStep = "mode"; S.titlePick = 1; Sound.play("click"); }
     } else if (e && e.target === canvas) {
       const i = cardAt(screenFromEvent(e));
-      if (i >= 0) chooseMode(MODE_CARDS[i].mode);
+      if (i >= 0) pickTitleCard(i);
     }
   }
   else if (S.phase === "prologue") { startedAt = performance.now(); advancePrologue(); }
@@ -2579,7 +2611,7 @@ document.querySelectorAll("[data-tool]").forEach(b => {
 });
 document.getElementById("go").addEventListener("click", () => {
   if (S.phase === "over") newGame(true);
-  else if (S.phase === "title") chooseMode(MODE_CARDS[S.titlePick].mode);
+  else if (S.phase === "title") pickTitleCard(S.titlePick);
   else if (S.phase === "build") startWave();
 });
 
@@ -2741,8 +2773,8 @@ function newTrap(type, x, y) {
 // the tower; once TOWER_LIMIT are inside, they all climb up together and the boss battle begins.
 const TOWER_LIMIT = 5;
 // Past wave 30 (only reachable in sandbox) the column stops getting longer; the heroes just keep levelling up.
-const heroesInWave = w => 2 + Math.min(w, 30);
-const heroCoins = h => (3 + h.lv) * HERO_KINDS[h.kind].coins;
+const heroesInWave = w => 2 + Math.min(w, 30) + diff().extra;
+const heroCoins = h => Math.max(1, Math.round((3 + h.lv) * HERO_KINDS[h.kind].coins * diff().coins));
 
 function startWave() {
   S.dialog = { queue: [], cur: null };
@@ -2761,7 +2793,7 @@ function startWave() {
   S.phase = "wave";
   S.loot = { kills: 0, coins: 0 };
   Sound.play("horn");
-  banner(`WAVE ${S.wave}`, sandbox() ? `${n} heroes - level ${S.wave}` : `${n} heroes - ${WAVE_LORE[Math.min(S.wave, WAVE_LORE.length) - 1]}`, "#e6e0ec");
+  banner(`WAVE ${S.wave}`, sandbox() ? `${n} heroes - level ${S.wave} - ${diff().name.toLowerCase()}` : `${n} heroes - ${WAVE_LORE[Math.min(S.wave, WAVE_LORE.length) - 1]}`, "#e6e0ec");
   if (S.wave === 1 || Math.random() < 0.5) setTimeout(() => speak(S.boss, pick(TAUNTS.wave)), 1200);
   const count = kind => roster.filter(k => k === kind).length;
   const parts = ["champion", "knight", "archer", "brute", "mage", "rogue", "warden", "berserker", "sapper", "seraph"].filter(count).map(kind => `${count(kind)} ${HERO_KINDS[kind].label}${count(kind) > 1 ? "s" : ""}`);
@@ -5140,9 +5172,9 @@ function bossDied() {
   S.phase = "over";
   const held = S.wave - 1;
   if (sandbox()) {
-    const best = sandboxBest();
-    saveSandboxBest(held);
-    banner("YOU DIED", `${held} wave${held === 1 ? "" : "s"} survived - ${held > best ? "a new best!" : `best: ${best}`}`, "#c62828");
+    const best = sandboxBest(S.diff), name = DIFFICULTIES[S.diff].name.toLowerCase();
+    saveSandboxBest(S.diff, held);
+    banner("YOU DIED", `${held} wave${held === 1 ? "" : "s"} survived on ${name} - ${held > best ? "a new best!" : `best: ${best}`}`, "#c62828");
   } else banner("YOU DIED", `The Hollow King has fallen - ${held} wave${held === 1 ? "" : "s"} survived`, "#c62828");
   speak(b, pick(TAUNTS.die));
   converse([["M", (S.storyTold || 0) >= 11 ? "IT IS DONE. REST NOW... GRANDFATHER." : "THE TOWER HAS FALLEN. THE DAWN RISES OVER ASHFALL AGAIN."]], 2400);
@@ -8205,21 +8237,24 @@ function drawBanner() {
     softBand(mid - 4, 42, 0.8);
     softBand(mid + 33, 34, 0.7);
     drawText(BOSS_TITLE, cx, mid - 40, "#ff5252", { align: "center", scale: 3, shadow: "#000" });
-    drawText("YOU ARE VORGATH. THE ORDER OF THE DAWN IS COMING FOR YOUR TOWER.", cx, mid - 13, "#e6e0ec", { align: "center" });
+    const diffs = S.titleStep === "difficulty";
+    drawText(diffs ? "SANDBOX: CHOOSE A DIFFICULTY" : "YOU ARE VORGATH. THE ORDER OF THE DAWN IS COMING FOR YOUR TOWER.", cx, mid - 13, diffs ? "#9cff9c" : "#e6e0ec", { align: "center" });
     const hovered = cardAt(mouse);
     if (hovered >= 0) S.titlePick = hovered;
-    MODE_CARDS.forEach((c, i) => {
+    titleCards().forEach((c, i) => {
       const on = S.titlePick === i;
       ctx.fillStyle = on ? c.color : "#3a3448";
       ctx.fillRect(c.x - 1, c.y - 1, c.w + 2, c.h + 2);
       ctx.fillStyle = on ? "#1c1626" : "#120e1a";
       ctx.fillRect(c.x, c.y, c.w, c.h);
-      drawText(`${i + 1}  ${c.name}`, c.x + c.w / 2, c.y + 5, on ? c.color : "#8a8296", { align: "center", scale: 2 });
+      const head = `${i + 1}  ${c.name}`, big = textWidth(head, 2) <= c.w - 6;
+      drawText(head, c.x + c.w / 2, c.y + (big ? 5 : 8), on ? c.color : "#8a8296", { align: "center", scale: big ? 2 : 1 });
       c.lines.forEach((l, j) => drawText(l, c.x + c.w / 2, c.y + 22 + j * 8, on ? "#e6e0ec" : "#6b6378", { align: "center" }));
+      const best = diffs ? sandboxBest(i) : 0;
+      if (best) drawText(`BEST: WAVE ${best}`, c.x + c.w / 2, c.y + c.h + 5, c.color, { align: "center" });
     });
-    const best = sandboxBest();
-    if (best) drawText(`SANDBOX BEST: ${best} WAVE${best === 1 ? "" : "S"}`, MODE_CARDS[1].x + MODE_CARDS[1].w / 2, MODE_CARDS[1].y + MODE_CARDS[1].h + 5, "#9cff9c", { align: "center" });
-    if (Math.floor(S.time * 2) % 2 === 0) drawText("CLICK A MODE, OR USE THE ARROWS AND ENTER", cx, mid + (best ? 74 : 66), "#ffd54f", { align: "center" });
+    const hint = diffs ? "CLICK ONE, OR USE THE ARROWS AND ENTER. ESC GOES BACK" : "CLICK A MODE, OR USE THE ARROWS AND ENTER";
+    if (Math.floor(S.time * 2) % 2 === 0) drawText(hint, cx, mid + 74, "#ffd54f", { align: "center" });
     return;
   }
   const bn = S.banner;
@@ -8657,7 +8692,7 @@ function updateToolbar() {
     if (cost.textContent !== text) cost.textContent = text;
   });
   const go = document.getElementById("go");
-  const label = { over: "Play again", build: S.wave >= FINAL_WAVE && !sandbox() ? "Face the Thing Below" : "Start wave", wave: "Wave in progress", intro: "Here they come...", title: "Start " + MODE_CARDS[S.titlePick].name.toLowerCase(), prologue: "Skip" }[S.phase] || "Boss battle!";
+  const label = { over: "Play again", build: S.wave >= FINAL_WAVE && !sandbox() ? "Face the Thing Below" : "Start wave", wave: "Wave in progress", intro: "Here they come...", title: "Start " + titleCards()[S.titlePick].name.toLowerCase(), prologue: "Skip" }[S.phase] || "Boss battle!";
   if (go.textContent !== label) go.textContent = label;
   go.disabled = !["over", "build", "title", "prologue"].includes(S.phase);
 }

@@ -10,7 +10,12 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
 
 - **Modes:** the title screen offers two modes. Click one, press 1 or 2, or use the arrows and Enter.
   - **Story:** the prologue, the 25-wave tale with the Marshal and the Voice, the bargains and the Thing Below, and the endings.
-  - **Sandbox:** no story, no dialogue, no Thing (no hunger, bargains or finale), and no last wave. From wave 30 on, the column stops growing (32 heroes plus up to 9 champions) but heroes keep levelling up with the wave number. Your best wave is saved in the browser and shown on the title and death screens.
+  - **Sandbox:** no story, no dialogue, no Thing (no hunger, bargains or finale), and no last wave. From wave 30 on, the column stops growing (32 heroes plus up to 9 champions) but heroes keep levelling up with the wave number. Choosing Sandbox brings up four difficulties (click one, press 1-4, or use the arrows and Enter; Escape goes back):
+    - *Easy:* heroes have 60% health and damage and are 10% slower; 30% more gold, and you start with 40.
+    - *Normal:* the heroes as in story mode; you start with 20 gold.
+    - *Hard:* 150% health, 130% damage, 5% faster, 2 extra heroes each wave, 15% less gold.
+    - *Nightmare:* 220% health, 170% damage, 15% faster, 4 extra heroes each wave, 30% less gold, and you start with 15.
+    Each difficulty keeps its own best wave, saved in the browser and shown on its card and on the death screen.
   - "Play again" returns to the title, so you can switch modes.
 - **The Thing Below (25 waves):** the story now runs 25 waves, alternating the Marshal and the Voice Below, the thing Vorgath bargained with.
   - **The Hunger:** every soul feeds it (dark souls and bargains most). As it grows: tremors (15), eyes opening in the lava (30), a heartbeat (45), tendrils that drag heroes near pits into the lava (60), and your own monsters too (75).
