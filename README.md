@@ -6,7 +6,9 @@ Open `index.html` in a browser to pick a game. No install needed.
 ## Dungeon Boss (`dungeon.html`)
 A reverse side-scroller, inspired by *Hostile Architect*: you are the boss waiting on top of your castle tower, and waves of heroes run and jump through the level to reach it.
 
-You are **Vorgath, the Hollow King**: a king who sold his soul so his tower would never fall, and who now feeds on the souls of the heroes the Order of the Dawn sends to end him. The game opens with a short prologue, and the full story is under *Lore* on the game page.
+You are **Vorgath, the Hollow King**: a king who sold his soul so his tower would never fall, and who now feeds on the souls of the heroes the Order of the Dawn sends to end him. The game opens with a short prologue, and the full story is under *Lore: the Chronicle of Ashfall* on the game page.
+
+- **Story:** after each wave, Seraphine Vane, High Marshal of the Order, speaks with Vorgath. Over ten waves she reveals what became of Elowen, the daughter he lost the night he made his bargain, and who the Marshal really is; later waves bring more exchanges. Heroes call Vorgath out when a boss battle starts, mourn fallen comrades, react when a Champion or healer falls, and the last hero standing has words with him too.
 
 - **Opening:** a lone hero charges in and falls into the lava, the ground rumbles, and the first wave comes running.
 - **Heroes:** sword knights; archers from wave 2 (fast, fragile, shoot from range and keep their distance); Iron Knights from wave 3 (slow, very tough, and their tower shields block most arrow damage from the front). Champions from wave 4, one more every three waves: hero bosses that are huge, slow and hard-hitting, with far more health, and they grow stronger every wave. Mages from wave 5: weak bolts, but they heal nearby heroes and empower one ally (glowing green) with more speed, damage and health until the mage dies.
@@ -15,7 +17,8 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
 - **The path** to the tower is twice as wide as the screen. Scroll with A / D, the arrow keys, the mouse wheel, the screen edges, or by clicking the mini-map under the HUD.
 - **Build:** spend coins on spikes, saw blades and arrow turrets, and souls on monsters. You can build during waves too.
 - **Monsters:** skeletons and ogres from the start; then, as your kill count grows, imps (4 kills: spit fireballs), wraiths (8: fly over pits and walls, drain life), hellhounds (12: fast, pounce, set heroes burning) and bone golems (20: huge tanks that smash every hero around them). Click a monster to see its stats.
-- **Bone Serpent:** costs 2 dark souls; click over a lava pit to put one in it (one per pit). It can't be killed. It swims slowly along its pit toward heroes and, about every 7 seconds, lunges up to snatch a hero jumping over the pit and drag them into the lava. Champions are too big to swallow and take a bite worth half their health instead.
+- **Bone Serpent:** click its lava to open its tab; a dark soul makes it strike every 4 seconds instead of 7, reach further and higher, swim faster and bite Champions harder, and turns its pit violet.
+- **Bone Serpent (placing):** costs 2 dark souls; click over a lava pit to put one in it (one per pit). It can't be killed. It swims slowly along its pit toward heroes and, about every 7 seconds, lunges up to snatch a hero jumping over the pit and drag them into the lava. Champions are too big to swallow and take a bite worth half their health instead.
 - **Dark souls:** 1 hero in 4 drops a dark soul instead of a normal soul. Spend them in two ways:
   - **Dark powers** (panel under the toolbar), bought once and kept: *Dark Mending* (key 1, heal 150), *Doom Nova* (key 2, 30 damage to every hero and a 1.5s stun), *Raise the Fallen* (key 3, three dark skeletons fight for 12s) and the passive *Unholy Might* (+150 max health in both forms, abilities recharge 20% faster).
   - **Dark infusion:** click a monster and give it a dark soul (or press I): it turns black and violet with a glowing aura, gets 2.5x health, double damage and 20% more speed, and drains life with every hit.

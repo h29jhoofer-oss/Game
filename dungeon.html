@@ -190,7 +190,7 @@
     <b>wraiths</b> (fly over pits and walls and drain life), <b>hellhounds</b> (fast, pounce and set heroes burning) and
     <b>bone golems</b> (huge, and smash every hero around them).
     The <b>Bone Serpent</b> costs 2 dark souls and lives in a lava pit (one per pit): it can't be killed, swims slowly,
-    and every 7 seconds or so it lunges up and swallows a hero jumping over its pit. Champions are too big to swallow, so it bites them hard instead.<br>
+    and every 7 seconds or so it lunges up and swallows a hero jumping over its pit. Click its lava to feed it a dark soul. Champions are too big to swallow, so it bites them hard instead.<br>
     <b>Dark souls:</b> one hero in four drops a purple dark soul instead of a normal one. Spend them on <b>Dark powers</b>
     (below the toolbar) that you keep for every boss battle: Dark Mending (1), Doom Nova (2), Raise the Fallen (3) and
     the passive Unholy Might. Or click one of your monsters and infuse it with a dark soul (I): it turns black and violet,
@@ -218,15 +218,28 @@
     <a href="index.html">&larr; back to menu</a>
   </details>
   <details>
-    <summary>Lore</summary>
-    <b>Vorgath, the Hollow King.</b> Three hundred years ago, the kingdom of Ashfall was dying. Its king, Vorgath, climbed the
-    highest tower of his castle and made a bargain with something that answered from the dark: his soul, in return for a
-    tower that would never fall.<br>
-    The tower still stands. Vorgath does too, after a fashion: a suit of black iron with nothing inside but hunger,
-    and two red eyes that never close. He is bound to the tower, and the tower feeds on souls.<br>
-    <b>The Order of the Dawn</b> has sworn to end him. Every year more of their squires, knights and paladins march on
-    the tower. Every year the lava drinks some, the traps take others, and those who reach the top meet the Hollow King
-    and his greatcleaver. Not one has come back down. Their souls are what keep him standing.
+    <summary>Lore: the Chronicle of Ashfall</summary>
+    <b>Ashfall and the Grey Plague.</b> Three hundred years ago, Ashfall was the richest kingdom in the north. Then the Grey Plague
+    came up the river, and in one winter it took half the realm. Its king, Vorgath, watched his people die by the thousand.<br>
+    <b>The Bargain.</b> On the longest night, Vorgath climbed the highest tower of his castle and called into the dark beneath it.
+    Something answered. It offered a cure for the plague and a tower that would never fall, and it asked for his soul. He said yes.
+    The plague ended by morning.<br>
+    <b>The Hollow King.</b> The tower still stands. Vorgath does too, after a fashion: a suit of black iron with nothing inside but
+    hunger, and two red eyes that never close. He is bound to the tower, and the tower feeds on souls.<br>
+    <b>Elowen.</b> The king's only daughter fled the tower that same night, carrying nothing but her father's sword. Years later
+    she founded a holy order and carved one oath into the Dawnstone: <i>free my father</i>. Her descendants have led the Order ever since.<br>
+    <b>The Order of the Dawn.</b> Every year more of their squires, knights and paladins march on the tower: archers of the
+    Ranger Lodge, Iron Knights sworn to the Iron Vow, mages of the Light, rogues, Flame Wardens forged in the Citadel's furnaces,
+    berserkers from the frozen north, sappers who hate machines, and the great Champions who lead them all.
+    The lava drinks some. The traps take others. Those who reach the top meet the Hollow King.<br>
+    <b>Seraphine Vane.</b> The current High Marshal of the Order, and the last of Elowen's line. She speaks to the Hollow King between
+    waves. She knows something he has forgotten: they share the same blood.<br>
+    <b>The Devourer.</b> When Vorgath's iron body breaks, the thing that has been growing inside it tears free: the true form of the
+    bargain, all jaws and hunger. Some in the Order whisper that it was never Vorgath at all, only the demon wearing him.<br>
+    <b>Dark souls.</b> Most souls burn blue. A few, from heroes who died afraid or full of hate, burn black and violet. The tower
+    treasures these above all: they feed dark powers, and they turn monsters and machines into something far worse.<br>
+    <b>The Bone Serpent.</b> An ancient thing of fused spines that sleeps in the lava under the castle. Vorgath can wake it with
+    dark souls. It has never been killed, because nothing that has fought it has survived.
   </details>
 </div>
 
@@ -451,6 +464,9 @@ const DARK_SOUL_CHANCE = 0.25;
 // The Bone Serpent lives in a lava pit and can't be killed. Every so often it lunges up and
 // swallows a hero jumping over its pit. It's bought with dark souls, one per pit.
 const SERPENT = { cost: 2, cd: 7, swim: 0.7, reach: 1.4, height: 4.2, champBite: 0.5 };
+// Fed a dark soul, the serpent grows into something worse: it strikes far more often, further and higher.
+const DARK_SERPENT = { cd: 4, swim: 1.2, reach: 2.2, height: 5.6, champBite: 0.75 };
+const serpentStats = n => n.dark ? DARK_SERPENT : SERPENT;
 // Dark powers: bought once with dark souls, then used in every boss battle (keys 1-3).
 const DARK_POWERS = [
   { id: "mend", key: "1", name: "DARK MENDING", cost: 1, cd: 25, desc: "Heal 150 health in a burst of shadow." },
@@ -496,18 +512,22 @@ const gearFor = lv => GEAR[Math.min(lv - 1, GEAR.length - 1)];
 // bound to the tower and fed by the souls of the heroes the Order of the Dawn sends to end him.
 const BOSS_NAME = "VORGATH", BOSS_TITLE = "THE HOLLOW KING";
 const PROLOGUE = [
-  "LONG AGO, KING VORGATH SOLD HIS SOUL TO A DEMON.",
-  "IN RETURN, HIS TOWER WOULD NEVER FALL.",
+  "THREE HUNDRED YEARS AGO, THE GREY PLAGUE CAME TO ASHFALL.",
+  "KING VORGATH CLIMBED HIS TOWER AND SOLD HIS SOUL TO THE DARK BELOW.",
+  "THE PLAGUE ENDED. HIS DAUGHTER FLED. HIS TOWER WOULD NEVER FALL.",
   "NOW HE IS THE HOLLOW KING, AND HE FEEDS ON THE SOULS OF HEROES.",
   "TONIGHT, THE ORDER OF THE DAWN MARCHES ON HIS TOWER.",
 ];
 const WAVE_LORE = [
   "THE ORDER SENDS ITS SQUIRES", "KNIGHTS OF THE DAWN APPROACH", "THE SILVER VOW RIDES TO WAR",
   "PALADINS OF THE SUN ADVANCE", "THE DAWN'S CHAMPIONS ARRIVE", "THE ORDER SENDS ITS FINEST",
-  "THE LAST LIGHT OF THE DAWN",
+  "THE LAST LIGHT OF THE DAWN", "THE ORDER EMPTIES ITS CHAPELS", "ELOWEN'S OATH RIDES WITH THEM",
+  "THE MARSHAL'S OWN GUARD", "THE DAWN WILL NOT BREAK", "EVERY CANDLE IN THE CITADEL BURNS",
+  "THE LAST OF ASHFALL'S BLOOD",
 ];
 const TAUNTS = {
-  wave: ["COME, LITTLE KNIGHTS.", "MORE SOULS FOR MY TOWER.", "THE DAWN WILL NOT SAVE YOU.", "I HAVE WAITED CENTURIES. I CAN WAIT TONIGHT."],
+  wave: ["COME, LITTLE KNIGHTS.", "MORE SOULS FOR MY TOWER.", "THE DAWN WILL NOT SAVE YOU.", "I HAVE WAITED CENTURIES. I CAN WAIT TONIGHT.",
+    "ASHFALL WAS MINE. IT IS MINE STILL.", "THE THING BENEATH MY FEET IS HUNGRY. FEED IT.", "EVERY STONE OF THIS TOWER REMEMBERS A SCREAM."],
   full: ["YES... CLIMB TO ME.", "COME UP. ALL OF YOU."],
   fool: ["HAHAHA... FOOL."],
   roar: ["YOUR SOULS ARE MINE.", "KNEEL BEFORE THE HOLLOW KING.", "NONE LEAVE THIS TOWER."],
@@ -520,8 +540,9 @@ const TAUNTS = {
   die: ["THE TOWER... FALLS..."],
 };
 const HERO_LINES = {
-  charge: ["FOR THE DAWN!", "DOWN WITH THE HOLLOW KING!", "FOR GLORY!", "THE TOWER WILL FALL!", "STAY TOGETHER!"],
-  die: ["AVENGE... ME...", "THE DAWN... FADES...", "NOOO!", "FORGIVE ME..."],
+  charge: ["FOR THE DAWN!", "DOWN WITH THE HOLLOW KING!", "FOR GLORY!", "THE TOWER WILL FALL!", "STAY TOGETHER!",
+    "FOR ELOWEN!", "REMEMBER THE OATH!", "THE MARSHAL IS WATCHING. MAKE HER PROUD!", "DON'T LOOK AT THE LAVA. LOOK AT THE TOWER."],
+  die: ["AVENGE... ME...", "THE DAWN... FADES...", "NOOO!", "FORGIVE ME...", "TELL THE MARSHAL... I TRIED...", "ELOWEN... I'M SORRY..."],
   lava: ["IT BURNS!", "AAARGH!"],
   fear: ["WHAT IS THAT...", "GODS PRESERVE US!", "HOLD THE LINE!"],
 };
@@ -552,6 +573,74 @@ const DEBUT = {
     tip: "Mages are here: weak bolts, but they heal nearby heroes and empower one ally (glowing green) with speed, strength and health. Kill the mage and the blessing fades." },
 };
 const pick = list => list[Math.floor(Math.random() * list.length)];
+
+// ---------- the story ----------
+// Between waves, Seraphine Vane, High Marshal of the Order, talks with Vorgath. Bit by bit she tells
+// him what became of the daughter he lost the night he made his bargain, and who she really is.
+const MARSHAL = { name: "High Marshal Vane", kind: "marshal", lv: 9 };
+const STORY = {
+  1: [["M", "HOLLOW KING! THOSE WERE ONLY SQUIRES. I AM SERAPHINE VANE, HIGH MARSHAL OF THE DAWN."],
+      ["B", "VANE. I HAVE EATEN SIX MARSHALS. YOU WILL MAKE SEVEN."]],
+  2: [["M", "THREE HUNDRED YEARS YOUR TOWER HAS STOOD. TONIGHT IT FALLS."],
+      ["B", "EVERY MARSHAL MAKES THAT PROMISE. I KEEP THEIR SKULLS ON MY STAIRS."]],
+  3: [["M", "TELL ME, VORGATH. WHAT WAS WORTH YOUR SOUL? GOLD? A CROWN?"],
+      ["B", "ASHFALL. THE GREY PLAGUE TOOK MY PEOPLE BY THE THOUSAND."],
+      ["B", "SOMETHING IN THE DARK OFFERED A CURE. IT KEPT ITS WORD. IT ALWAYS DOES."]],
+  4: [["M", "THE OLD CHRONICLES SAY YOUR DAUGHTER FLED THE TOWER THE NIGHT YOU MADE YOUR BARGAIN."],
+      ["B", "...DO NOT SPEAK OF HER."]],
+  5: [["M", "ELOWEN. HER NAME WAS ELOWEN. SHE FOUNDED THE ORDER OF THE DAWN."],
+      ["B", "LIES. MY ELOWEN WOULD NEVER RAISE A SWORD AGAINST HER FATHER."],
+      ["M", "SHE DIDN'T. SHE RAISED AN ARMY."]],
+  6: [["M", "SHE CARVED ONE OATH INTO THE DAWNSTONE: FREE MY FATHER. WE STILL SWEAR IT."],
+      ["B", "FREE ME? I AM THE TOWER NOW. THERE IS NOTHING LEFT TO FREE."]],
+  7: [["M", "I CARRY ELOWEN'S BLOOD, HOLLOW KING. I AM OF YOUR LINE."],
+      ["B", "..."],
+      ["B", "THEN YOUR SOUL WILL TASTE OF HOME."]],
+  8: [["B", "WHY DO YOU KEEP SENDING THEM, CHILD? THEY ALL DIE."],
+      ["M", "BECAUSE EVERY SOUL YOU EAT IS ONE SHE SWORE TO SAVE. WE WILL NOT STOP."]],
+  9: [["M", "THE THING BELOW YOUR TOWER IS GROWING. YOU ARE NOT ITS KING, VORGATH. YOU ARE ITS CAGE."],
+      ["B", "BE SILENT."],
+      ["B", "...IT GROWS LOUDER EVERY CENTURY."]],
+  10: [["M", "NO MORE SQUIRES. NO MORE KNIGHTS. NEXT TIME, I COME MYSELF."],
+       ["B", "COME, THEN, LAST OF ASHFALL. LET US END OUR LINE TOGETHER."]],
+};
+const STORY_LATER = [
+  [["M", "ANOTHER WAVE GONE. I WILL LIGHT A CANDLE FOR EACH OF THEM."], ["B", "LIGHT A THOUSAND. MY TOWER WILL STILL BE DARK."]],
+  [["B", "SOMETIMES I DREAM OF THE GARDENS OF ASHFALL. THEN I WAKE HUNGRY."], ["M", "THERE IS STILL A MAN IN THERE. ELOWEN KNEW IT."]],
+  [["M", "THE DEMON WHISPERS TO MY MAGES NOW. IT CALLS YOU ITS FAVOURITE TOY."], ["B", "LET IT WHISPER. I AM THE ONE WITH THE CLEAVER."]],
+  [["B", "YOUR ORDER BURNS BRIGHT, CHILD. BRIGHT THINGS BURN OUT."], ["M", "THEN WE WILL BURN OUT AT YOUR DOOR."]],
+  [["M", "DO YOU EVEN REMEMBER HER FACE?"], ["B", "...SHE HAD HER MOTHER'S EYES. NOW GO."]],
+];
+// What the first hero up the stairs says as the boss battle starts.
+const CHALLENGES = {
+  champion: ["VORGATH! BY ELOWEN'S OATH, I END YOU!", "I HAVE COME A LONG WAY TO KILL YOU, OLD KING."],
+  mage: ["I'LL KEEP YOU ALL STANDING. GO!", "THE LIGHT IS WITH US. STRIKE TOGETHER!"],
+  rogue: ["I'LL TAKE HIS BACK. YOU TAKE HIS FRONT.", "BIG ONE. BIG ONES FALL HARD."],
+  berserker: ["FINALLY! A FIGHT WORTH SINGING OF!", "COME, IRON MAN! LET'S SEE WHAT BLEEDS!"],
+  any: ["THERE HE IS... THE HOLLOW KING.", "FORM UP! FOR THE DAWN!", "GODS... HE'S BIGGER THAN THE STORIES SAID.", "THIS IS IT. NO ONE TURNS BACK.",
+    "FOR THE MARSHAL! FOR ELOWEN!"],
+};
+const MOURN = ["NO! {N}!", "THEY GOT {N}!", "KEEP MOVING! DON'T LOOK BACK!", "{N} IS DOWN!", "I'LL AVENGE YOU, {N}!"];
+
+// A scripted exchange: every line plays in turn, and other chatter waits until it's done.
+function converse(lines, delay = 0) {
+  const game = S;
+  const go = () => {
+    if (S !== game) return;
+    for (const [who, text] of lines) {
+      const speaker = who === "B" ? S.boss : who === "M" ? MARSHAL : who;
+      const line = dialogLine(speaker, text);
+      line.story = true;
+      S.dialog.queue.push(line);
+    }
+  };
+  if (delay) setTimeout(go, delay); else go();
+}
+function tellStory(wave) {
+  if ((S.storyTold || 0) >= wave) return;
+  S.storyTold = wave;
+  converse(STORY[wave] || STORY_LATER[(wave - 11) % STORY_LATER.length], 1800);
+}
 
 const HERO_NAMES = ["Sir Aldric", "Sir Borin", "Dame Elara", "Sir Cedric", "Dame Isolde", "Sir Galen", "Sir Thorne",
   "Dame Wren", "Sir Roland", "Sir Percival", "Dame Maren", "Sir Edmund"];
@@ -1429,6 +1518,10 @@ document.addEventListener("keydown", e => {
     if (k === "i") infuseMonster(S.monsterMenu);
     if (k === "escape") S.monsterMenu = null;
   }
+  if (S.serpentMenu) {
+    if (k === "i") infuseSerpent(S.serpentMenu);
+    if (k === "escape") S.serpentMenu = null;
+  }
   // Dark powers in the boss battle.
   if (inArena() && ["1", "2", "3"].includes(k)) {
     const power = DARK_POWERS.find(p => p.key === k);
@@ -1481,7 +1574,7 @@ function updateCamera(dt) {
     if (keys.a || keys.arrowleft) pan--;
     if (keys.d || keys.arrowright) pan++;
     if (mouse && mouse.y > 26 && mouse.x < 10) pan--;
-    if (mouse && mouse.y > 26 && mouse.x > W * T - 10 && !S.trapMenu && !S.monsterMenu) pan++;
+    if (mouse && mouse.y > 26 && mouse.x > W * T - 10 && !S.trapMenu && !S.monsterMenu && !S.serpentMenu) pan++;
   }
   if (pan) { S.camX += pan * 18 * dt; S.camGoal = null; }
   else if (S.camGoal != null) {
@@ -1497,7 +1590,7 @@ canvas.addEventListener("click", e => {
   if (performance.now() - startedAt < 300) return;
   const p = screenFromEvent(e);
   // A button in the open trap or monster tab?
-  if (S.trapMenu || S.monsterMenu) {
+  if (S.trapMenu || S.monsterMenu || S.serpentMenu) {
     for (const r of S.menuRects || []) {
       if (p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) { r.act(); return; }
     }
@@ -1512,9 +1605,10 @@ canvas.addEventListener("click", e => {
   }
   const tile = tileAtScreen(p);
   const onTrap = S.traps.some(t => t.x === tile.x && t.y === tile.y)
-    || S.minions.some(m => overlaps({ x: tile.x + 0.1, y: tile.y + 0.1, w: 0.8, h: 0.8 }, m));
+    || S.minions.some(m => overlaps({ x: tile.x + 0.1, y: tile.y + 0.1, w: 0.8, h: 0.8 }, m))
+    || (tile.y === H - 1 && S.serpents.some(n => pitAt(tile.x) && n.pit[0] === pitAt(tile.x)[0]));
   // Clicking away from the open tab just closes it.
-  if ((S.trapMenu || S.monsterMenu) && !onTrap) { S.trapMenu = null; S.monsterMenu = null; return; }
+  if ((S.trapMenu || S.monsterMenu || S.serpentMenu) && !onTrap) { S.trapMenu = null; S.monsterMenu = null; S.serpentMenu = null; return; }
   place(tile);
 });
 
@@ -1580,6 +1674,8 @@ fitCanvas();
 function place({ x, y }) {
   if (["over", "title", "prologue"].includes(S.phase)) return;
   if (inArena()) { say("You can't build during the boss battle."); Sound.play("deny"); return; }
+  const snPit = pitAt(x), sn = snPit && S.serpents.find(n => n.pit[0] === snPit[0]);
+  if (sn && (y === H - 1 || S.tool === "serpent")) { openSerpentMenu(sn); Sound.play("click"); return; }
   if (S.tool === "serpent") { placeSerpent(x); return; }
   const trap = S.traps.find(t => t.x === x && t.y === y);
   if (trap) { openTrapMenu(trap); Sound.play("click"); return; }
@@ -1777,6 +1873,7 @@ function heroReachedTower(h) {
   S.doorFlash = 0.5;
   Sound.play("door");
   if (n === TOWER_LIMIT) { Sound.play("bell"); speak(S.boss, pick(TAUNTS.full)); }
+  else if (Math.random() < 0.3) speak(h, pick(["I'M INSIDE! KEEP PUSHING!", "THE DOOR'S OPEN! THIS WAY!", "IN! HOLD THE STAIRS FOR THE OTHERS!"]));
   S.shake = Math.max(S.shake, 1.5);
   dust(TOWER_X - 0.2, ARENA_FLOOR, 8);
   float(TOWER_X + 0.5, 7.3, `${n}/${TOWER_LIMIT}`, n >= TOWER_LIMIT ? "#ff5252" : "#ff8a80");
@@ -1797,6 +1894,7 @@ function endWave(sub) {
   S.wave++;
   queueBanner("WAVE CLEARED", sub, "#ffd54f");
   Sound.play("cleared");
+  tellStory(S.wave - 1);
   say(`Wave cleared! Build up, then start wave ${S.wave}.`);
 }
 
@@ -1838,6 +1936,12 @@ function startBossFight() {
   clearSpecials();
   S.intro = 3.0;
   Sound.play("bossIntro");
+  // The first one up the stairs calls him out.
+  const leader = S.heroes.find(h => h.kind === "champion") || S.heroes[0];
+  if (leader) {
+    const lines = CHALLENGES[leader.kind] || CHALLENGES.any;
+    setTimeout(() => { if (S.heroes.includes(leader)) speak(leader, pick(Math.random() < 0.6 ? lines : CHALLENGES.any), true); }, 300);
+  }
   say(`${S.heroes.length} heroes reached the top of the tower. Boss battle! A / D move, W jumps, Space swings, S slams the ground.`);
 }
 
@@ -2293,11 +2397,11 @@ function updateTransform(b, dt) {
   }
   if (cross(3.0) && S.heroes.length) speak(pick(S.heroes), pick(["IT'S... GROWING!", "WHAT HAVE WE DONE...", "HOLD! HOLD THE LINE!"]), true);
   // His new life fills up.
-  if (tr.t >= 2.4) b.hp = Math.round(P2_HP * Math.min(1, (tr.t - 2.4) / 1.0));
+  if (tr.t >= 2.4) b.hp = Math.round(b.maxHp * Math.min(1, (tr.t - 2.4) / 1.0));
   if (tr.t >= 3.8) {
     b.transform = null;
     b.invuln = false;
-    b.hp = P2_HP;
+    b.hp = b.maxHp;
     for (const a of ABILITIES2) b.cds[a.id] = 1.5;
   }
 }
@@ -2530,11 +2634,19 @@ function update(dt) {
 // One line at a time in a box along the bottom, with the speaker's portrait. Lines queue up;
 // heroes' battle cries are dropped when the box is busy so it never falls far behind.
 const TYPE_SPEED = 40, LINE_HOLD = 1.5, DIALOG_FADE = 0.15;
-function speak(who, text, force = false) {
-  const d = S.dialog, busy = d.cur || d.queue.length;
-  const line = who.isBoss
+function dialogLine(who, text) {
+  return who.isBoss
     ? { boss: true, name: BOSS_NAME, title: who.form === 2 ? "THE DEVOURER" : BOSS_TITLE, text, rage: !!who.enraged, form: who.form }
     : { boss: false, name: who.name.toUpperCase(), lv: who.lv, kind: who.kind, text };
+}
+function speak(who, text, force = false) {
+  const d = S.dialog, busy = d.cur || d.queue.length;
+  const line = dialogLine(who, text);
+  // A story exchange is playing: only the Hollow King may add a line, at the end.
+  if ((d.cur && d.cur.story) || d.queue.some(l => l.story)) {
+    if (line.boss && d.queue.length < 6) d.queue.push(line);
+    return;
+  }
   if (!line.boss && busy && !force) return;
   if (d.queue.length >= 2) d.queue.shift();
   d.queue.push(line);
@@ -3445,7 +3557,7 @@ function placeSerpent(x) {
   S.shake = Math.max(S.shake, 4);
   Sound.play("serpent");
   speak(S.boss, "RISE, OLD WORM. THE PIT IS YOURS. FEAST.");
-  say("A Bone Serpent coils beneath the lava. It snatches heroes who jump over its pit, then rests a while.");
+  say("A Bone Serpent coils beneath the lava. It snatches heroes who jump over its pit, then rests a while. Click its lava to see it, or to feed it a dark soul.");
 }
 
 // Each serpent swims slowly toward heroes coming its way, then lunges at one in the air above.
@@ -3462,12 +3574,12 @@ function updateSerpents(dt) {
         .sort((a, b) => Math.abs(centerX(a) - n.x) - Math.abs(centerX(b) - n.x))[0];
       const goal = near ? Math.max(lo, Math.min(hi, centerX(near))) : (n.dir > 0 ? hi : lo);
       if (!near && Math.abs(goal - n.x) < 0.1) n.dir *= -1;
-      n.x += Math.sign(goal - n.x) * Math.min(Math.abs(goal - n.x), SERPENT.swim * dt);
+      n.x += Math.sign(goal - n.x) * Math.min(Math.abs(goal - n.x), serpentStats(n).swim * dt);
       n.hx = n.x; n.hy = lavaY + 0.2;
       if (Math.random() < dt * 3) particle({ x: n.x + (Math.random() - 0.5) * 0.8, y: lavaY - 0.1, vy: -1.5, life: 0.4, color: Math.random() < 0.5 ? "#ffd54f" : "#ff6f00", glow: true });
       if (n.cd > 0) continue;
-      const prey = S.heroes.find(h => !h.onGround && !h.serpentHeld && h.evade <= 0 && Math.abs(centerX(h) - n.x) < SERPENT.reach &&
-        centerX(h) > n.pit[0] - 0.2 && centerX(h) < n.pit[1] + 1.2 && h.y + h.h > lavaY - SERPENT.height);
+      const prey = S.heroes.find(h => !h.onGround && !h.serpentHeld && h.evade <= 0 && Math.abs(centerX(h) - n.x) < serpentStats(n).reach &&
+        centerX(h) > n.pit[0] - 0.2 && centerX(h) < n.pit[1] + 1.2 && h.y + h.h > lavaY - serpentStats(n).height);
       if (prey) { n.state = "strike"; n.t = 0; n.prey = prey; n.sx = n.x; Sound.play("serpent"); }
     } else if (n.state === "strike") {
       // Burst up out of the lava, homing in on the jumper.
@@ -3484,7 +3596,7 @@ function updateSerpents(dt) {
         burst(n.hx, n.hy, 14, ["#d32f2f", "#e8dcc0"], 5);
         if (h.kind === "champion") {
           // Too big to swallow: a savage bite, and the champion is flung away.
-          damage(h, Math.round(h.maxHp * SERPENT.champBite), "#ff5252");
+          damage(h, Math.round(h.maxHp * serpentStats(n).champBite), "#ff5252");
           h.vy = -9;
           float(centerX(h), h.y - 0.6, "BITTEN", "#ff8a80");
           n.state = "sink"; n.t = 0;
@@ -3516,7 +3628,7 @@ function updateSerpents(dt) {
       // Slowly sink back under, then rest before it can strike again.
       n.hy += (lavaY + 0.3 - n.hy) * Math.min(1, dt * 1.6);
       n.hx += (n.x - n.hx) * Math.min(1, dt * 1.6);
-      if (n.t > 1.4) { n.state = "lurk"; n.cd = SERPENT.cd; n.prey = null; }
+      if (n.t > 1.4) { n.state = "lurk"; n.cd = serpentStats(n).cd; n.prey = null; }
     }
   }
 }
@@ -3524,6 +3636,21 @@ function updateSerpents(dt) {
 // The serpent's spine: vertebrae curving up out of the lava to a horned skull.
 function drawSerpent(n) {
   const lavaY = (H - 1) * T + 4, hx = n.hx * T, hy = Math.min(n.hy * T, lavaY + 6);
+  if (n.dark && n.state === "lurk") {
+    // Its pit turns a churning violet.
+    ctx.globalAlpha = 0.3 + Math.sin(S.time * 2 + n.x) * 0.08;
+    ctx.fillStyle = "#6a1b9a";
+    ctx.fillRect(n.pit[0] * T, (H - 1) * T, (n.pit[1] - n.pit[0] + 1) * T, T);
+    ctx.globalAlpha = 1;
+  }
+  if (S.serpentMenu === n && n.state === "lurk") {
+    // Selected: blinking corners around its pit.
+    const x0 = n.pit[0] * T, x1 = (n.pit[1] + 1) * T - 1, y0 = (H - 1) * T, y1 = H * T - 1;
+    ctx.fillStyle = Math.floor(S.time * 4) % 2 ? "#ea80fc" : "#ffffff";
+    for (const [cx, cy, dx, dy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) {
+      ctx.fillRect(cx, cy, 1, 1); ctx.fillRect(cx + dx, cy, 1, 1); ctx.fillRect(cx, cy + dy, 1, 1);
+    }
+  }
   const out = n.state !== "lurk";
   const bx = (n.state === "lurk" ? n.x : n.sx ?? n.x) * T;
   if (out) {
@@ -3535,7 +3662,7 @@ function drawSerpent(n) {
       const r = 3 - Math.floor(k * 1.5);
       ctx.fillStyle = OUTLINE;
       ctx.fillRect(Math.round(x) - r - 1, Math.round(y) - r - 1, r * 2 + 3, r * 2 + 3);
-      ctx.fillStyle = i % 2 ? "#e8dcc0" : "#c9bd9f";
+      ctx.fillStyle = n.dark ? (i % 2 ? "#7e57c2" : "#4a2d6b") : i % 2 ? "#e8dcc0" : "#c9bd9f";
       ctx.fillRect(Math.round(x) - r, Math.round(y) - r, r * 2 + 1, r * 2 + 1);
       ctx.fillStyle = "#8d8270";
       ctx.fillRect(Math.round(x) - r - 2, Math.round(y), 1, 1);
@@ -3547,14 +3674,15 @@ function drawSerpent(n) {
       const x = Math.round(n.x * T + i * 5 + Math.sin(S.time * 2 + i) * 1), y = lavaY + 1 + Math.round(Math.sin(S.time * 3 + i * 1.3) * 1.5);
       ctx.fillStyle = OUTLINE;
       ctx.fillRect(x - 2, y - 2, 5, 4);
-      ctx.fillStyle = "#c9bd9f";
+      ctx.fillStyle = n.dark ? "#7e57c2" : "#c9bd9f";
       ctx.fillRect(x - 1, y - 1, 3, 2);
     }
   }
   const face = out ? (n.prey && centerX(n.prey) < n.sx ? -1 : 1) : n.dir;
   const art = n.jaw > 0.3 ? ART.serpentOpen : ART.serpentHead;
   const ready = n.cd <= 0 && n.state === "lurk";
-  const pal = { H: "#e8dcc0", h: "#a8987a", K: "#1a1420", E: ready ? "#ff1744" : "#7a1420", R: "#c62828" };
+  const pal = n.dark ? { H: "#7e57c2", h: "#4a2d6b", K: "#12001f", E: ready ? "#ea80fc" : "#6a1b9a", R: "#d500f9" }
+    : { H: "#e8dcc0", h: "#a8987a", K: "#1a1420", E: ready ? "#ff1744" : "#7a1420", R: "#c62828" };
   // While lurking only the horns and eyes show above the lava.
   const headY = out ? hy + 5 : lavaY + 5;
   if (!out) {
@@ -3563,7 +3691,7 @@ function drawSerpent(n) {
     ctx.rect(0, 0, mapW() * T, lavaY);
     ctx.clip();
   }
-  drawSprite(sprite(art, pal, "serpent" + (n.jaw > 0.3) + pal.E), (out ? hx : n.x * T + n.dir * 12), headY, face);
+  drawSprite(sprite(art, pal, "serpent" + (n.jaw > 0.3) + pal.E + (n.dark ? "d" : "")), (out ? hx : n.x * T + n.dir * 12), headY, face);
   if (!out) ctx.restore();
 }
 
@@ -3602,6 +3730,23 @@ function updateWraith(m, kind, h, dt) {
   m.walk += dt;
   m.vx = 0.1;
   if (Math.random() < dt * 6) particle({ x: centerX(m) + (Math.random() - 0.5) * 0.4, y: m.y + m.h, vy: 0.4, life: 0.4, color: "#80deea", glow: true });
+}
+
+// Feed a Bone Serpent a dark soul.
+function infuseSerpent(n) {
+  if (!canManageTraps() || n.dark || !S.serpents.includes(n)) return;
+  if (S.darkSouls < 1) { say("You need a dark soul. Heroes drop one 1 time in 4."); Sound.play("deny"); return; }
+  S.darkSouls--;
+  spend("dark", 1);
+  n.dark = true;
+  n.cd = Math.min(n.cd, DARK_SERPENT.cd);
+  const mid = (n.pit[0] + n.pit[1] + 1) / 2;
+  burst(mid, H - 0.8, 34, ["#d500f9", "#4a148c", "#ea80fc", "#000000"], 6, { glow: true });
+  S.shake = Math.max(S.shake, 4);
+  Sound.play("infuse");
+  Sound.play("serpent");
+  speak(S.boss, "DRINK, OLD WORM. GROW HUNGRY.");
+  say("The Bone Serpent drinks the dark soul: it strikes every 4 seconds, reaches further and higher, and swims faster.");
 }
 
 // Give a monster a dark soul.
@@ -3767,6 +3912,7 @@ function heroDied(h) {
   if (h.reckless) setTimeout(() => { speak(S.boss, pick(TAUNTS.fool)); Sound.play("laugh"); }, 600);
   else if (inArena() && S.heroes.length && Math.random() < 0.6) speak(S.boss, pick(TAUNTS.kill));
   else if (Math.random() < 0.3) speak(h, pick(h.lava ? HERO_LINES.lava : HERO_LINES.die));
+  heroDeathReactions(h);
   say(h.eaten ? `${h.name} was swallowed by the Bone Serpent!` : h.lava ? `${h.name} fell into the lava!` : `${h.name} has fallen!`);
   for (const [tool, kind] of Object.entries(TRAPS)) {
     if (kind.unlock !== S.kills) continue;
@@ -3784,6 +3930,27 @@ function heroDied(h) {
   }
 }
 
+// The others react to a death: champions and healers are missed most; the last hero standing knows it.
+function heroDeathReactions(h) {
+  const near = S.heroes.filter(o => Math.abs(centerX(o) - centerX(h)) < 5);
+  if (h.kind === "champion") {
+    converse([["B", pick(["YOUR CHAMPION KNEELS AT LAST.", "WHO WILL LEAD THEM NOW?", "THE DAWN'S FINEST. DELICIOUS."])]], 500);
+    if (near.length) setTimeout(() => { if (S.heroes.includes(near[0])) speak(near[0], pick(["THE CHAMPION HAS FALLEN!", "NO... NOT OUR CHAMPION.", "WHO LEADS US NOW?!"]), true); }, 2600);
+    return;
+  }
+  if (h.kind === "mage" && near.length) { speak(near[0], pick(["THE HEALER'S DOWN!", "WHO WILL HEAL US NOW?!", "OUR HEALER... GONE."]), true); return; }
+  if (inArena() && S.heroes.length === 1) {
+    const last = S.heroes[0];
+    converse([[last, pick(["ALONE... THEN I DIE AS A KNIGHT.", "IT'S JUST YOU AND ME, MONSTER.", "MARSHAL... I'LL HOLD HIM AS LONG AS I CAN."])],
+      ["B", pick(["AS THEY ALL DO.", "COME. LET ME END YOUR FEAR.", "YOU WILL NOT BE REMEMBERED."])]], 700);
+    return;
+  }
+  if (near.length && Math.random() < 0.28) {
+    const o = pick(near);
+    setTimeout(() => { if (S.heroes.includes(o)) speak(o, pick(MOURN).replace("{N}", h.name.toUpperCase().split(" ").pop())); }, 500);
+  }
+}
+
 function bossDied() {
   const b = S.boss;
   burst(centerX(b), centerY(b), 40, ["#b71c1c", "#5d0f0f", "#ffeb3b"], 7);
@@ -3794,6 +3961,7 @@ function bossDied() {
   const held = S.wave - 1;
   banner("YOU DIED", `The Hollow King has fallen - ${held} wave${held === 1 ? "" : "s"} survived`, "#c62828");
   speak(b, pick(TAUNTS.die));
+  converse([["M", (S.storyTold || 0) >= 7 ? "IT IS DONE. REST NOW... GRANDFATHER." : "THE TOWER HAS FALLEN. THE DAWN RISES OVER ASHFALL AGAIN."]], 2400);
   // Let his last words land before the death card fades in.
   S.banner.t = -1.6;
   Sound.play("death");
@@ -6181,7 +6349,10 @@ function drawLighting() {
   for (const p of S.pools) glow(p.x * T, ARENA_FLOOR * T, p.r * T * 1.4, "rgba(200,20,30,0.3)");
   for (const m of S.meteors) glow(m.x * T, m.y * T, 14, "rgba(255,110,20,0.5)");
   for (const sk of S.skulls) glow(sk.x * T, sk.y * T, 10, "rgba(150,100,255,0.45)");
-  if (!inArena()) for (const n of S.serpents) if (n.cd <= 0) glow(n.x * T, (H - 1) * T + 4, 14, "rgba(255,23,68,0.25)");
+  if (!inArena()) for (const n of S.serpents) {
+    if (n.cd <= 0) glow(n.x * T, (H - 1) * T + 4, 14, n.dark ? "rgba(213,0,249,0.3)" : "rgba(255,23,68,0.25)");
+    if (n.dark) glow((n.pit[0] + n.pit[1] + 1) / 2 * T, (H - 1) * T + 6, 26, "rgba(170,0,255,0.18)");
+  }
   for (const h of S.heroes) if (h.ampBy) glow(centerX(h) * T, centerY(h) * T, 18, "rgba(118,255,3,0.22)");
   for (const a of S.heroArrows) if (a.magic) glow(a.x * T, a.y * T, 8, "rgba(118,255,3,0.5)");
   if (!inArena()) {
@@ -6216,10 +6387,18 @@ function drawParticles(glowing) {
 }
 
 function drawHover() {
-  if (!mouse || mouse.y < 26 || S.trapMenu || S.monsterMenu) return;
+  if (!mouse || mouse.y < 26 || S.trapMenu || S.monsterMenu || S.serpentMenu) return;
   const hover = tileAtScreen(mouse);
   if (S.phase === "over" || inArena() || hover.x < 0 || hover.x >= mapW() || hover.y < 0 || hover.y >= H) return;
   const { x, y } = hover;
+  const hoverPit = y === H - 1 && pitAt(x), hoverSn = hoverPit && S.serpents.find(n => n.pit[0] === hoverPit[0]);
+  if (hoverSn) {
+    // The lava of a serpent's pit: clicking opens its tab.
+    ctx.fillStyle = "#ea80fc";
+    ctx.fillRect(hoverPit[0] * T, (H - 1) * T, (hoverPit[1] - hoverPit[0] + 1) * T, 1);
+    drawText(hoverSn.dark ? "DARK SERPENT" : "SERPENT - CLICK", (hoverPit[0] + hoverPit[1] + 1) / 2 * T, (H - 1) * T - 10, "#ea80fc", { align: "center" });
+    return;
+  }
   const existing = S.traps.find(t => t.x === x && t.y === y);
   let ok = canBuild(x, y), label = "";
   if (existing) {
@@ -6312,8 +6491,9 @@ function drawAbilityBar(b) {
 // stats, Upgrade and Sell, and at level 3 the two paths it can be specialized down.
 const TAB = { w: 164, y: 27, h: 163 };
 function openTrapMenu(t) {
-  if (!S.trapMenu && !S.monsterMenu) S.tabOpenAt = S.time;
+  if (!S.trapMenu && !S.monsterMenu && !S.serpentMenu) S.tabOpenAt = S.time;
   S.monsterMenu = null;
+  S.serpentMenu = null;
   S.trapMenu = t;
   // Keep the trap in view, clear of the tab.
   const free = W - TAB.w / T - 1, sx = t.x - camX();
@@ -6360,8 +6540,9 @@ function pathCard(x, y, w, h, t, p, { chosen = false } = {}) {
 }
 
 function openMonsterMenu(m) {
-  if (!S.trapMenu && !S.monsterMenu) S.tabOpenAt = S.time;
+  if (!S.trapMenu && !S.monsterMenu && !S.serpentMenu) S.tabOpenAt = S.time;
   S.trapMenu = null;
+  S.serpentMenu = null;
   S.monsterMenu = m;
 }
 
@@ -6421,10 +6602,72 @@ function drawMonsterMenu() {
   }
 }
 
+function openSerpentMenu(n) {
+  if (!S.trapMenu && !S.monsterMenu && !S.serpentMenu) S.tabOpenAt = S.time;
+  S.trapMenu = null;
+  S.monsterMenu = null;
+  S.serpentMenu = n;
+}
+
+// The Bone Serpent's tab: what it does, whether it's ready, and the option to feed it a dark soul.
+function drawSerpentMenu() {
+  const n = S.serpentMenu, st = serpentStats(n);
+  const k = Math.min(1, (S.time - (S.tabOpenAt ?? -9)) / 0.2), e = 1 - Math.pow(1 - k, 3);
+  const w = TAB.w, h = TAB.h, y = TAB.y, x = Math.round(W * T - w - 3 + (1 - e) * (w + 6));
+  S.menuPanel = { x, y, w, h };
+  drawPanel(x, y, w, h);
+  const x0 = x + 8, right = x + w - 8, color = n.dark ? "#ea80fc" : "#e8dcc0";
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(x0, y + 6, 26, 26);
+  ctx.fillStyle = n.dark ? "#1a0826" : "#2a0d08";
+  ctx.fillRect(x0 + 1, y + 7, 24, 24);
+  const pal = n.dark ? { H: "#7e57c2", h: "#4a2d6b", K: "#12001f", E: "#ea80fc", R: "#d500f9" } : { H: "#e8dcc0", h: "#a8987a", K: "#1a1420", E: "#ff1744", R: "#c62828" };
+  drawSprite(sprite(ART.serpentOpen, pal, "serpentTab" + (n.dark ? "d" : "")), x0 + 13, y + 26, 1);
+  drawText("BONE SERPENT", x0 + 32, y + 9, color);
+  drawText(n.dark ? "DARK" : "UNKILLABLE", x0 + 32, y + 20, n.dark ? "#d500f9" : "#8a8296");
+  const cx = x + w - 13, cy = y + 4;
+  drawText("X", cx + 2, cy + 2, mouseOver(cx, cy, 10, 10) ? "#ffffff" : "#8a8296");
+  S.menuRects.push({ x: cx, y: cy, w: 10, h: 10, act: () => { S.serpentMenu = null; } });
+  ctx.fillStyle = "#3a3448";
+  ctx.fillRect(x0, y + 36, w - 16, 1);
+  const status = n.state !== "lurk" ? "FEEDING" : n.cd > 0 ? `RESTING ${Math.ceil(n.cd)}S` : "READY";
+  [["STRIKES EVERY", `${st.cd}S`], ["REACH", `${st.reach} TILES`], ["NOW", status]].forEach(([label, val], i) => {
+    drawText(label, x0, y + 40 + i * 9, "#8a8296");
+    drawText(val, right, y + 40 + i * 9, i === 2 && status === "READY" ? "#ff5252" : color, { align: "right" });
+  });
+  ["SWALLOWS HEROES WHO", "JUMP OVER ITS PIT.", "CHAMPIONS GET BITTEN."].forEach((line, i) => drawText(line, x0, y + 70 + i * 9, "#c9c2d6"));
+  ctx.fillStyle = "#3a3448";
+  ctx.fillRect(x0, y + 98, w - 16, 1);
+  if (n.dark) {
+    drawText("FILLED WITH A", x0, y + 104, "#d500f9");
+    drawText("DARK SOUL.", x0, y + 113, "#d500f9");
+    drawText("ITS PIT RUNS VIOLET.", x0, y + 126, "#8a8296");
+    return;
+  }
+  drawText("DARK INFUSION", x0, y + 102, "#ea80fc");
+  [`STRIKES EVERY ${DARK_SERPENT.cd}S`, "REACHES FAR AND HIGH", "SWIMS FASTER"].forEach((line, i) => {
+    drawArrowMark(x0, y + 112 + i * 8, true, "#ea80fc");
+    drawText(line, x0 + 7, y + 112 + i * 8, "#e1bee7");
+  });
+  const ok = S.darkSouls > 0, bx = x0, by = y + h - 18, bw = w - 16, hot = ok && mouseOver(bx, by, bw, 13);
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(bx, by, bw, 13);
+  ctx.fillStyle = hot ? "#3a1a4a" : "#241e2e";
+  ctx.fillRect(bx + 1, by + 1, bw - 2, 11);
+  ctx.fillStyle = ok ? "#d500f9" : "#4a4258";
+  ctx.fillRect(bx + 1, by + 1, bw - 2, 1);
+  drawText(ok ? "INFUSE  1 DARK SOUL" : "NO DARK SOULS", bx + bw / 2, by + 3, ok ? "#ea80fc" : "#6b5f75", { align: "center" });
+  if (ok) S.menuRects.push({ x: bx, y: by, w: bw, h: 13, act: () => infuseSerpent(n) });
+}
+
 function drawTrapMenu() {
   const t = S.trapMenu;
   S.menuRects = [];
   S.menuPanel = null;
+  if (S.serpentMenu) {
+    if (!S.serpents.includes(S.serpentMenu) || !canManageTraps()) S.serpentMenu = null;
+    else { drawSerpentMenu(); return; }
+  }
   if (S.monsterMenu) {
     if (!S.minions.includes(S.monsterMenu) || !canManageTraps()) S.monsterMenu = null;
     else { drawMonsterMenu(); return; }
@@ -6877,7 +7120,8 @@ function drawPortrait(c, x, y, w, h, talking) {
     }
   } else {
     const g = gearFor(c.lv);
-    const spr = c.kind === "champion" ? sprite(ART.championFace, CHAMPION_PAL, "championFace")
+    const spr = c.kind === "marshal" ? sprite(ART.championFace, Object.assign({}, CHAMPION_PAL, { A: "#fff8e1", a: "#c9a227", C: "#7f1d1d", c: "#4a0d0d", P: "#ffd54f", Y: "#ffffff" }), "marshalFace")
+      : c.kind === "champion" ? sprite(ART.championFace, CHAMPION_PAL, "championFace")
       : c.kind === "mage" ? sprite(ART.mageFace, MAGE_PAL, "mageFace")
       : c.kind === "brute" ? sprite(ART.bruteFace, BRUTE_PAL, "bruteFace")
       : c.kind === "archer" ? sprite(ART.archerFace, Object.assign({ A: g.main, a: g.shade }, ARCHER_PAL), "archerFace" + g.name)
