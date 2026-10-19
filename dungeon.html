@@ -219,6 +219,8 @@
     more health and a heavy greatsword. Champions grow tougher every wave. From wave 5, <b>mages</b> join: their bolts are
     weak, but they heal hurt heroes around them and empower one ally, who glows green and gains speed, strength and
     health. Kill the mage and the blessing fades.<br>
+    Dialogue waits for you: press <b>Space</b> (or Enter, or click the box) to continue. In the middle of a boss fight, where Space
+    swings your cleaver, lines move on by themselves; Enter still skips them.<br>
     Press M to mute the music and N to mute sound effects.<br>
     Each wave brings one more hero than the last, and they're stronger, better geared, and better at spotting traps and dodging.<br>
     <a href="index.html">&larr; back to menu</a>
@@ -1319,7 +1321,7 @@ function tellStory(wave) {
   S.storyTold = wave;
   converse(STORY[wave], 1800);
   // The Voice offers a bargain once the talking is done.
-  if (BARGAIN_WAVES.includes(wave)) setTimeout(() => { if (S.phase === "build" && S.wave === wave + 1) offerBargain(); }, 1800 + STORY[wave].length * 3200);
+  if (BARGAIN_WAVES.includes(wave)) setTimeout(() => { S.pendingBargain = wave + 1; }, 1900);
 }
 
 const HERO_NAMES = ["Sir Aldric", "Sir Borin", "Dame Elara", "Sir Cedric", "Dame Isolde", "Sir Galen", "Sir Thorne",
@@ -2195,7 +2197,13 @@ document.addEventListener("keydown", e => {
   if (k === "n" && !e.repeat) toggleSound("sfx");
   keys[k] = true;
   if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
-  if (k === " ") bossAttack();
+  if (k === " " || k === "enter") {
+    // Space moves the dialogue along (it only swings the cleaver mid-fight); Enter always does.
+    const talking = S.dialog.cur && (k === "enter" || dialogWaits());
+    if (talking) advanceDialog();
+    else if (k === " ") bossAttack();
+    if (talking || k === " ") e.preventDefault();
+  }
   if (S.bargain) {
     if (["1", "2", "3"].includes(k)) takeBargain(+k - 1);
     if (k === "escape") refuseBargain();
@@ -2288,6 +2296,9 @@ canvas.addEventListener("click", e => {
   // Ignore the click that dismissed the title screen.
   if (performance.now() - startedAt < 300) return;
   const p = screenFromEvent(e);
+  // A click on the dialogue box moves it along.
+  const dr = S.dialogRect;
+  if (S.dialog.cur && dr && p.x >= dr.x && p.x < dr.x + dr.w && p.y >= dr.y - 8 && p.y < dr.y + dr.h) { advanceDialog(); return; }
   // A bargain or the final choice is on screen: only its buttons respond.
   if (S.bargain || S.choice) {
     for (const r of S.overlayRects || []) if (p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) { r.act(); return; }
@@ -3388,6 +3399,11 @@ function speak(who, text, force = false) {
 }
 function updateDialog(dt) {
   const d = S.dialog;
+  // The Voice's bargain comes once its words have been read.
+  if (S.pendingBargain && !d.cur && !d.queue.length) {
+    if (S.phase === "build" && S.wave === S.pendingBargain) offerBargain();
+    S.pendingBargain = 0;
+  }
   if (!d.cur && d.queue.length) {
     d.cur = Object.assign(d.queue.shift(), { t: 0 });
     if (d.cur.boss) Sound.play("growl");
@@ -3402,8 +3418,21 @@ function updateDialog(dt) {
     Sound.play(c.boss ? "voiceBoss" : "voiceHero");
   }
   const done = c.text.length / TYPE_SPEED + LINE_HOLD;
-  // Hurry along when another line is waiting.
-  if (c.t > done - (d.queue.length ? LINE_HOLD * 0.5 : 0) + DIALOG_FADE) d.cur = null;
+  // Outside the thick of battle a line stays up until Space (or Enter, or a click) moves it on.
+  if (dialogWaits() && !c.closing) { c.t = Math.min(c.t, done); return; }
+  // In the fight, lines clear on their own; hurry along when another is waiting.
+  if (c.t > done - (d.queue.length && !c.closing ? LINE_HOLD * 0.5 : 0) + DIALOG_FADE) d.cur = null;
+}
+// Space is the cleaver in the boss battle, so only there do lines move on by themselves.
+const dialogWaits = () => !(inArena() && canFight());
+// Finish typing the line, or if it's done, let it fade and bring on the next.
+function advanceDialog() {
+  const c = S.dialog.cur;
+  if (!c) return false;
+  const typedAt = c.text.length / TYPE_SPEED;
+  if (c.t < typedAt) c.t = typedAt;
+  else { c.closing = true; c.t = Math.max(c.t, typedAt + LINE_HOLD); }
+  return true;
 }
 // 0..1: how visible the dialogue box is right now.
 function dialogAlpha() {
@@ -7914,6 +7943,7 @@ function drawDialog() {
   const slide = Math.round((1 - a) * 6);
   // On the tower top the box stops short of the action bar so your cooldowns stay in view.
   const bx = 8, bw = W * T - 16 - (inArena() ? abilityBarSlots() * 28 + 4 : 0), bh = 38, by = H * T - bh - 3 + slide;
+  S.dialogRect = { x: bx, y: by, w: bw, h: bh };
   ctx.globalAlpha = a;
   drawPanel(bx, by, bw, bh);
 
@@ -7945,6 +7975,7 @@ function drawDialog() {
     drawText(part, px + pw + 10, by + 13 + i * 11, c.boss ? "#ffd6d6" : "#e6e0ec");
   });
   // A blinking arrow once the line is done.
+  if (typed >= c.text.length && dialogWaits()) drawText("SPACE", bx + bw - 16, by + bh - 11, "#6b5f75", { align: "right" });
   if (typed >= c.text.length && Math.floor(S.time * 3) % 2 === 0) {
     const ax = bx + bw - 12, ay = by + bh - 10;
     ctx.fillStyle = nameColor;
