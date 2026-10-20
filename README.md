@@ -10,24 +10,35 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
 
 - **Ascent (play as the hero):** the third card on the title screen. You are one hero climbing the Hollow King's traps.
   - **Pick a hero:**
-    - Knight: 240 health, a sword, E Shield Charge (rams and stuns monsters), hold S to block arrows and fireballs.
-    - Archer: 170 health, arrows that also break traps from range, E Volley (three arrows).
-    - Mage: 160 health, magic bolts, E Mend (heals 35%).
-    - Rogue: 170 health, fast, double jump, immune to spikes and bombs, E Shadow Dash (an untouchable dash).
-  - **Controls:** A / D move, W jump, Space attack, E ability. R or "Try again" restarts the level (or the fight) after a death.
-  - **Three floors, climbing up:** every floor is a tall shaft inside the castle tower, played like a platformer. The camera follows you up, and you jump from ledge to ledge to the gold-framed door at the top.
-    - Wooden ledges can be jumped up through and landed on. Stone blocks are solid. Lava waits at the bottom.
-    - A jump pressed just before landing, or just after running off an edge, still counts.
-    - The floors are the Lower Halls (36 rows, level 1 traps), the Burning Stair (44 rows, level 2 traps, lava under the floor) and the Crown of the Tower (52 rows, level 3 traps).
-    - Each floor is drawn as a text map in `CLIMB_MAPS`, with a letter for each trap. Every ledge-to-ledge hop has been checked with the game's own physics.
-    - No monsters or serpents, just traps: spikes, saws (some on rails), arrow turrets, fire vents, crushers, bombs, pendulums, tesla coils, skyhooks, frost totems and tar.
-    - In Ascent the crushers slam on their own rhythm instead of waiting for someone underneath.
-    - You can smash traps with your weapon, and arrows and bolts break them too.
+    - Knight: a sword, E Shield Charge (rams and stuns), hold S to block arrows and fireballs.
+    - Archer: arrows, which also break traps and pull levers from range, E Volley (three arrows).
+    - Mage: magic bolts, E Mend (restores a heart, every 15s).
+    - Rogue: fast, double jump, immune to spikes and bombs, E Shadow Dash (can't be hit during it).
+  - **Three hearts:** shown as pixel hearts in the top bar.
+    - Any hit from anything costs one heart, then you blink and can't be hit for 1.3s (a little longer in the boss fight).
+    - Falling into lava costs a heart and puts you back on the last safe ground.
+    - Potions and Mend give a heart back. Lose all three and you retry the floor (R).
+  - **Controls:** A / D move, W jump, Space attack, E ability. R or "Try again" restarts after a death.
+  - **The tower's machinery (puzzles):**
+    - **Levers:** strike one (or shoot it) to open the gold gates for good. A blue timed lever opens the blue gates for only 10 seconds, so you race through.
+    - **Pressure plates:** they hold their gates open while something sits on them, like a wooden crate you push. You can stand on crates too, and a crate lost in lava reappears where it started.
+    - **Cracked walls:** take two hits to smash.
+    - **Crumbling planks:** they shake and fall half a second after you land, and come back 3s later.
+    - **Keys:** a floor with a key has a padlocked door until you find it.
+  - **Floor 1, the Lower Halls:** strike the lever to open the grate, smash the cracked wall, take the key from behind it, then climb to the padlocked door.
+  - **Floor 2, the Burning Stair:** push the crate onto the plate to open the grate, cross the lava pool on crumbling planks, then push a crate off a high ledge onto the plate below to lift the gate in front of the door.
+  - **Floor 3, the Crown of the Tower:** race the timed gate, put both crates on both plates, then get the key from behind a cracked wall past crushers and crumbling planks.
+  - Every floor was checked with the game's own physics: once each puzzle is solved, the door can be reached by every hero.
+  - **Climbing:** each floor is a tall shaft inside the castle, played like a platformer. The camera follows you up.
+    - Wooden ledges can be jumped up through. Stone, closed gates and cracked walls are solid. A jump pressed just before landing, or just after leaving an edge, still counts.
+    - Traps, no monsters. In Ascent the crushers slam on their own rhythm.
+    - The floors are text maps in `CLIMB_MAPS`. The comment above them lists every letter.
   - **The boss:** reach the forest tower and you fight **Nyxara, the Lich Queen**, a new boss. She is a floating crowned lich in violet robes, with a staff.
     - She keeps her distance and throws homing skulls, which you can strike or shoot down.
     - Her spells: Grasp of the Grave, Starfall, a Death Ray you can jump, and Repulse if you get close.
     - Below half health she turns red and adds Eclipse, Bone Pyres, Wailing Dead and Phase Shift.
-    - A potion falls onto the tower top every 20 seconds.
+    - She has 500 health. Repulse now winds up for a moment before it bursts, so you can back off.
+    - A potion falls onto the tower top every 12 seconds.
 - **Modes:** the title screen offers two modes. Click one, press 1 or 2, or use the arrows and Enter.
   - **Story:** the prologue, the 25-wave tale with the Marshal and the Voice, the bargains and the Thing Below, and the endings.
   - **Sandbox:** no story, no dialogue, no Thing (no hunger, bargains or finale), and no last wave. From wave 30 on, the column stops growing (32 heroes plus up to 9 champions) but heroes keep levelling up with the wave number. Choosing Sandbox brings up four difficulties (click one, press 1-4, or use the arrows and Enter; Escape goes back):
