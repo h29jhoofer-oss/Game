@@ -98,6 +98,8 @@
   #tools button.toggle { font-size: 7px; padding: 6px 8px; }
   button.toggle.off { color: var(--dim); }
   button:disabled { opacity: 0.45; cursor: default; transform: none; }
+  /* Playing the hero: no traps or monsters to buy. */
+  body.ascent #tools [data-tool], body.ascent #darkPanel, body.ascent #trapPanel { display: none; }
   #msg { min-height: 1.6em; font-size: 10px; line-height: 1.6; text-align: center; color: #cfc6da; max-width: 960px; }
   details { font-size: 9px; line-height: 2; color: var(--dim); max-width: 960px; }
   #trapPanel { width: min(960px, 100%); }
@@ -177,6 +179,9 @@
     <summary>How to play</summary>
     You are the boss, waiting at the top of your castle tower. Each wave, a group of heroes runs and jumps through the level to reach it.
     Heroes who make it through the door hide inside the tower. Once 5 are inside, they climb up and fight you all at once.<br>
+    <b>Ascent</b> turns it around: you play a single hero (knight, archer, mage or rogue) climbing three levels of traps and monsters
+    (the castle, the ice tower and the forest), then fight Nyxara, the Lich Queen, at the top. A / D move, W jumps, Space attacks (and smashes traps),
+    E uses your hero's ability, and the knight holds S to block. Red potions heal you; R retries after a death.<br>
     <b>Modes:</b> <b>Story</b> is the 25-wave tale of the tower and what lies under it. <b>Sandbox</b> has no story and no last wave: the heroes keep coming, a level stronger each wave, joined by eleven sandbox-only heroes (fliers, burrowers, a Siege Colossus every fifth wave from 10, and more). Pick Easy, Normal, Hard or Nightmare for it; each keeps its own best wave. Then pick a map: the <b>Castle</b>; the <b>Ice Tower</b>, with slippery ice patches (heroes skid, and sometimes slip straight into a pit),
     pits of ice spikes, Ice Serpents and Vorgath as the Frost King; or the <b>Forest</b>, with a great tree for a tower, pools of deep water,
     Great Vipers and Vorgath as the Thorn King.<br>
@@ -801,7 +806,7 @@ const HUNGER_TIERS = [
   { at: 90, line: "THE CAGE IS CRACKING." },
 ];
 function addHunger(n) {
-  if (sandbox()) return;
+  if (S.mode !== "story") return;
   const before = S.hunger || 0;
   S.hunger = Math.min(100, before + n);
   for (const tier of HUNGER_TIERS) if (before < tier.at && S.hunger >= tier.at) deferLine("V", tier.line);
@@ -1536,12 +1541,12 @@ function converse(lines, delay = 0) {
 }
 // A line from the Voice or Vorgath during a wave is saved for the next break between waves.
 function deferLine(who, text) {
-  if (sandbox()) return;
+  if (S.mode !== "story") return;
   if (S.phase === "build") converse([[who, text]]);
   else (S.deferred = S.deferred || []).push([who, text]);
 }
 function tellStory(wave) {
-  if (sandbox()) return;
+  if (S.mode !== "story") return;
   const later = S.deferred || [];
   S.deferred = [];
   if ((S.storyTold || 0) >= wave || !STORY[wave]) { if (later.length) converse(later, 1800); return; }
@@ -1913,7 +1918,7 @@ function saveSandboxBest(i, w) {
 let S;
 function newGame(title = false) {
   S = {
-    mode: gameMode, diff: gameDiff, theme: gameMode === "sandbox" ? gameTheme : "castle", titleStep: "mode", titlePick: gameMode === "sandbox" ? 1 : 0,
+    mode: gameMode, diff: gameDiff, theme: gameMode === "sandbox" ? gameTheme : "castle", titleStep: "mode", titlePick: ["story", "sandbox", "ascent"].indexOf(gameMode),
     coins: 20, souls: 2, wave: 1, kills: 0, named: 0, bossLv: 1, bossXp: 0, dry: 0, surge: false, reached: 0,
     serpents: [], bolts: [], harpoons: [], boulders: [], heroBombs: [], lavaEyes: [], tendrils: [], hunger: 0, bargains: 0, bargain: null, allies: [], shown: { coins: 20, souls: 2, dark: 0 }, coinFx: [], soulFx: [], darkSouls: 0, powers: new Set(), risen: [], monsterMenu: null,
     gain: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
@@ -1934,22 +1939,26 @@ function newGame(title = false) {
 // The title screen's two mode cards, in screen pixels.
 const MODE_CARDS = [
   { mode: "story", name: "STORY", color: "#ff5252", lines: ["25 WAVES OF THE TALE.", "SOMETHING WAITS", "UNDER THE CASTLE."] },
-  { mode: "sandbox", name: "SANDBOX", color: "#9cff9c", lines: ["ENDLESS WAVES, NO STORY.", "HEROES GROW STRONGER", "EVERY WAVE."] },
-].map((c, i) => Object.assign(c, { x: W * T / 2 - 184 + i * 192, y: H * T / 2 + 6, w: 176, h: 50 }));
+  { mode: "sandbox", name: "SANDBOX", color: "#9cff9c", lines: ["ENDLESS WAVES,", "NO STORY. HEROES GET", "STRONGER EVERY WAVE."] },
+  { mode: "ascent", name: "ASCENT", color: "#ffd54f", lines: ["BE THE HERO: CLIMB", "THREE LEVELS AND SLAY", "THE LICH QUEEN."] },
+].map((c, i) => Object.assign(c, { x: W * T / 2 - 225 + i * 152, y: H * T / 2 + 6, w: 144, h: 50 }));
 // Choosing Sandbox brings up a second row of cards, one per difficulty.
 const DIFF_CARDS = DIFFICULTIES.map((d, i) => ({ name: d.name, color: d.color, lines: d.lines, x: W * T / 2 - 230 + i * 116, y: H * T / 2 + 6, w: 108, h: 50 }));
 // ...and then a third, one per map.
 const MAP_CARDS = THEME_IDS.map((id, i) => ({ id, name: THEMES[id].name, color: THEMES[id].color, lines: THEMES[id].lines, x: W * T / 2 - 228 + i * 156, y: H * T / 2 + 6, w: 144, h: 50 }));
-const titleCards = () => S.titleStep === "map" ? MAP_CARDS : S.titleStep === "difficulty" ? DIFF_CARDS : MODE_CARDS;
+const CLASS_CARDS = () => CLASS_IDS.map((id, i) => ({ id, name: CLASSES[id].name, color: CLASSES[id].color, lines: CLASSES[id].lines, x: W * T / 2 - 230 + i * 116, y: H * T / 2 + 6, w: 108, h: 50 }));
+const titleCards = () => S.titleStep === "class" ? CLASS_CARDS() : S.titleStep === "map" ? MAP_CARDS : S.titleStep === "difficulty" ? DIFF_CARDS : MODE_CARDS;
 const cardAt = p => !p ? -1 : titleCards().findIndex(c => p.x >= c.x && p.x < c.x + c.w && p.y >= c.y && p.y < c.y + c.h);
 function pickTitleCard(i) {
-  if (S.titleStep === "map") chooseMap(i);
+  if (S.titleStep === "class") startAscent(CLASS_IDS[i]);
+  else if (S.titleStep === "map") chooseMap(i);
   else if (S.titleStep === "difficulty") chooseDifficulty(i);
   else chooseMode(MODE_CARDS[i].mode);
 }
 function chooseMode(mode) {
   Sound.play("click");
   if (mode === "sandbox") { S.titleStep = "difficulty"; S.titlePick = gameDiff; return; }
+  if (mode === "ascent") { S.titleStep = "class"; S.titlePick = Math.max(0, CLASS_IDS.indexOf(gameClass)); return; }
   startedAt = performance.now();
   gameMode = S.mode = mode;
   S.theme = "castle";
@@ -2079,6 +2088,9 @@ function damage(target, amount, color, colors) {
   if (target.invuln) return;
   // The Thing's hide shrugs off most blows; its open eye does not.
   if (target.armor) { amount = Math.max(1, Math.round(amount * (1 - target.armor))); color = "#8a8296"; }
+  if (target.player && !inArena()) amount = Math.max(1, Math.round(amount * ASCENT.trapDmg));
+  // In Ascent, the Lich Queen's attacks are tuned for one hero, not a whole party.
+  if (target.player && inArena() && S.boss.lich) amount = Math.max(1, Math.round(amount * LICH.dmgTaken));
   // Under an aegis bearer's shield, heroes on the path take half damage.
   if (target.kind && !target.part && !inArena() && S.heroes.some(o => o.kind === "aegis" && !o.under && Math.hypot(centerX(o) - centerX(target), centerY(o) - centerY(target)) < AEGIS_RADIUS)) {
     amount = Math.max(1, Math.round(amount * 0.5));
@@ -2735,6 +2747,7 @@ function wake(e) {
       else if (["arrowright", "d", "tab"].includes(k)) { S.titlePick = (S.titlePick + 1) % n; Sound.play("click"); e.preventDefault(); }
       else if (k >= "1" && k <= String(n)) pickTitleCard(+k - 1);
       else if (k === "enter" || k === " ") pickTitleCard(S.titlePick);
+      else if ((k === "escape" || k === "backspace") && S.titleStep === "class") { S.titleStep = "mode"; S.titlePick = 2; Sound.play("click"); }
       else if ((k === "escape" || k === "backspace") && S.titleStep === "map") { S.titleStep = "difficulty"; S.titlePick = S.diff; Sound.play("click"); }
       else if ((k === "escape" || k === "backspace") && S.titleStep === "difficulty") { S.titleStep = "mode"; S.titlePick = 1; Sound.play("click"); }
     } else if (e && e.target === canvas) {
@@ -2754,6 +2767,8 @@ document.addEventListener("keydown", e => {
   if (titled) return;
   keys[k] = true;
   if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+  // Playing the hero: movement and attacks are read in updatePlayer; R retries after a death.
+  if (S.mode === "ascent") { if (k === "r" && S.phase === "over" && !S.asc.won) retryAscent(); return; }
   if (k === " " || k === "enter") {
     // Space moves the dialogue along (it only swings the cleaver mid-fight); Enter always does.
     const talking = S.dialog.cur && (k === "enter" || dialogWaits());
@@ -2833,6 +2848,12 @@ canvas.addEventListener("wheel", e => {
 
 // The view follows the arrow keys / A and D, the mouse at the screen edges, and clicks on the mini-map.
 function updateCamera(dt) {
+  if (S.mode === "ascent") {
+    // The camera follows the hero.
+    const p = S.heroes.find(h => h.player);
+    if (p && !inArena()) S.camX += (Math.max(0, Math.min(LEVEL_W - W, centerX(p) - W * 0.38)) - S.camX) * Math.min(1, dt * 6);
+    return;
+  }
   if (inArena()) return;
   const max = LEVEL_W - W;
   let pan = 0;
@@ -2912,6 +2933,11 @@ document.querySelectorAll("[data-tool]").forEach(b => {
   });
 });
 document.getElementById("go").addEventListener("click", () => {
+  if (S.mode === "ascent" && S.phase !== "title") {
+    if (S.phase === "over" && S.asc.won) newGame(true);
+    else retryAscent();
+    return;
+  }
   if (S.phase === "over") newGame(true);
   else if (S.phase === "title") pickTitleCard(S.titlePick);
   else if (S.phase === "build") startWave();
@@ -2947,6 +2973,7 @@ if (document.fonts) document.fonts.ready.then(fitCanvas);
 fitCanvas();
 
 function place({ x, y }) {
+  if (S.mode === "ascent") return;
   if (["over", "title", "prologue"].includes(S.phase)) return;
   if (inArena()) { say("You can't build during the boss battle."); Sound.play("deny"); return; }
   const snPit = pitAt(x), sn = snPit && S.serpents.find(n => n.pit[0] === snPit[0]);
@@ -3163,6 +3190,7 @@ function updateOpening(dt) {
 }
 
 function heroReachedTower(h) {
+  if (h.player) { if (S.phase === "wave") levelCleared(); return; }
   if (h.decoy) {
     // An illusion at the door just fades away.
     S.heroes = S.heroes.filter(o => o !== h);
@@ -3187,6 +3215,7 @@ function heroReachedTower(h) {
 
 // The level is empty: either the tower is full and the fight starts, or you get to build.
 function checkWaveEnd() {
+  if (S.mode === "ascent") return;
   if (S.spawnQueue.length || S.heroes.length) return;
   if (S.towerHeroes.length >= TOWER_LIMIT) { enterTower(); return; }
   endWave(`${S.loot.kills} slain  ${S.towerHeroes.length}/${TOWER_LIMIT} in tower`);
@@ -4031,7 +4060,8 @@ function updatePools(dt) {
       // The weak are dragged down to hell; the strong tear free.
       let dragged = 0;
       for (const h of p.grabbed) {
-        if (h.hp <= h.maxHp * 0.5) { h.doomed = true; dragged++; }
+        // (A player-controlled hero always tears free: being dragged to hell isn't something you can dodge.)
+        if (h.hp <= h.maxHp * 0.5 && !h.player) { h.doomed = true; dragged++; }
         else { h.grabbed = null; knock(h, Math.sign(centerX(h) - p.x) * 3, -7); float(centerX(h), h.y - 0.3, "BROKE FREE", "#e6e0ec"); }
       }
       if (dragged) Sound.play("drag");
@@ -4124,6 +4154,11 @@ function slamImpact(b) {
 // ---------- update ----------
 function update(dt) {
   S.time += dt;
+  if (S.asc && S.asc.next) {
+    // A pause between levels (or before the tower) in Ascent.
+    S.asc.next.t -= dt;
+    if (S.asc.next.t <= 0) { const fn = S.asc.next.fn; S.asc.next = null; fn(); return; }
+  }
   S.shake = Math.max(0, S.shake - dt * 12);
   if (S.banner) S.banner.t += dt;
   S.pulse.coins -= dt;
@@ -4203,7 +4238,8 @@ function update(dt) {
   }
 
   for (const h of [...S.heroes]) if (h.hp <= 0) heroDied(h);
-  if (S.boss.hp <= 0 && !S.boss.invuln) {
+  if (S.mode === "ascent" && S.boss.lich && S.boss.hp <= 0 && inArena()) { lichDied(); return; }
+  if (S.boss.hp <= 0 && !S.boss.invuln && !S.boss.lich) {
     // His first life gives way to the Devourer; in sandbox the Devourer gives way to the Unmade.
     if ((S.boss.form === 1 || (S.boss.form === 2 && sandbox())) && inArena()) startTransform(S.boss);
     else { bossDied(); return; }
@@ -4306,7 +4342,8 @@ function bossRoar() {
   S.shake = 7;
   Sound.play("roar");
   burst(centerX(b), b.y + 0.5, 24, ["#ff1744", "#7a1420", "#ffeb3b"], 7, { glow: true });
-  banner(BOSS_NAME, bossTitle(), "#ff1744");
+  if (b.lich) banner(LICH.name, LICH.title, "#69f0ae");
+  else banner(BOSS_NAME, bossTitle(), "#ff1744");
   speak(b, pick(TAUNTS.roar));
   // The heroes flinch.
   for (const h of S.heroes) { float(centerX(h), h.y - 0.2, "!", "#ffeb3b"); h.vx = 0; }
@@ -4405,6 +4442,7 @@ function updateParticles(dt) {
 
 function updateBoss(dt) {
   const b = S.boss;
+  if (b.lich) { updateLich(b, dt); return; }
   if (b.transform) { b.roar = (b.roar || 0) - dt; updateTransform(b, dt); return; }
   b.cd -= dt;
   b.swing -= dt;
@@ -4458,6 +4496,7 @@ function updateBoss(dt) {
 
 function updateHero(h, dt) {
   if (h.part) { updatePart(h, dt); return; }
+  if (h.player) { updatePlayer(h, dt); return; }
   const b = S.boss;
   h.cd -= dt;
   h.flash -= dt;
@@ -4912,6 +4951,11 @@ function updateHeroArrows(dt) {
     a.x += a.vx * dt;
     if (isSolid(Math.floor(a.x), Math.floor(a.y)) || a.x < 0 || a.x > mapW()) { a.dead = true; continue; }
     const box = { x: a.x - 0.2, y: a.y - 0.05, w: 0.4, h: 0.1 };
+    // A hero's arrows (in Ascent) can break traps too, and shoot down the Lich Queen's skulls.
+    const sk = S.mode === "ascent" && inArena() && S.skulls.find(o => o.life > 0 && Math.hypot(o.x - a.x, o.y - a.y) < 0.5);
+    if (sk) { sk.life = 0; a.dead = true; burst(sk.x, sk.y, 6, ["#e1d5ff", "#b388ff"], 2, { glow: true }); continue; }
+    const trap = S.mode === "ascent" && !inArena() && trapAt(Math.floor(a.x), Math.floor(a.y));
+    if (trap) { hitTrap(trap, a.dmg); a.dead = true; continue; }
     const hit = a.ally ? S.heroes.find(p => p.part && !(p.warn > 0) && overlaps(box, p)) : inArena() ? (overlaps(box, S.boss) ? S.boss : null) : S.minions.find(m => overlaps(box, m));
     if (hit) {
       damage(hit, a.dmg, "#ffffff", hit.isBoss ? ["#b71c1c", "#5d0f0f"] : hit.part ? ["#4a148c", "#12001f"] : MINIONS[hit.type].blood);
@@ -5405,7 +5449,7 @@ function updateArrows(dt) {
     // Ballista bolts carry on through every hero in the row.
     if (a.hits) a.hits.add(h);
     else a.dead = true;
-    if (h.kind === "brute" && Math.sign(a.vx) === -h.face) {
+    if ((h.kind === "brute" || (h.player && h.blocking)) && Math.sign(a.vx) === -h.face) {
       // Caught on the tower shield: a clang, sparks, and only a scratch.
       damage(h, Math.max(1, Math.round(a.dmg * 0.25)), "#cfd8dc", ["#ffffff", "#cfd8dc"]);
       float(centerX(h), h.y - 0.5, "BLOCK", "#cfd8dc");
@@ -5529,10 +5573,12 @@ function updateSerpents(dt) {
         Sound.play("chomp");
         S.shake = Math.max(S.shake, 4);
         burst(n.hx, n.hy, 14, ["#d32f2f", "#e8dcc0"], 5);
-        if (h.kind === "champion") {
-          // Too big to swallow: a savage bite, and the champion is flung away.
-          damage(h, Math.round(h.maxHp * serpentStats(n).champBite), "#ff5252");
-          h.vy = -9;
+        if (h.kind === "champion" || h.player) {
+          // Too big to swallow (or too lucky): a savage bite, and the hero is flung away.
+          damage(h, Math.round(h.maxHp * (h.player ? 0.2 : serpentStats(n).champBite)), "#ff5252");
+          // A player is flung on across the pit rather than straight back into it.
+          if (h.player) knock(h, 5, -11);
+          else h.vy = -9;
           float(centerX(h), h.y - 0.6, "BITTEN", "#ff8a80");
           n.state = "sink"; n.t = 0;
         } else {
@@ -5843,6 +5889,7 @@ function gainBossSoul(n) {
 
 function heroDied(h) {
   if (h.part) { partDied(h); return; }
+  if (h.player) { playerDied(h); return; }
   if (h.decoy) {
     // Only an illusion: it bursts into motes, and leaves nothing behind.
     S.heroes = S.heroes.filter(o => o !== h);
@@ -8080,6 +8127,10 @@ function drawMinionRaw(m, preview = null) {
 
 // Where the Hollow King's eyes are, in canvas pixels.
 function bossEyes(b) {
+  if (b.lich) {
+    const left = Math.round(centerX(b) * T - LICH_W / 2), top = Math.round((b.y + b.h) * T - LICH_H + 1 + lichBob(b));
+    return [{ x: left + 12, y: top + 8 }, { x: left + 18, y: top + 8 }];
+  }
   if (b.form >= 2) {
     const left = Math.round(centerX(b) * T - 33), top = Math.round((b.y + b.h) * T - 61);
     return [{ x: left + 27, y: top + 17 }, { x: left + 38, y: top + 17 }];
@@ -8178,6 +8229,7 @@ function drawDevourer(b) {
 }
 
 function drawBoss(b, shadow = false) {
+  if (b.lich) { drawLich(b, shadow); return; }
   if (b.form >= 2) { drawDevourer(b); return; }
   const pal = shadow ? BOSS_SHADOW_PAL : bossPal(b.enraged ? "rage" : "boss"), tkey = S.theme || "";
   const spr = sprite(ART.boss, pal, shadow ? "bossShadow" : (b.enraged ? "bossRage" : "boss") + tkey);
@@ -8763,6 +8815,7 @@ function drawParticles(glowing) {
 }
 
 function drawHover() {
+  if (S.mode === "ascent") return;
   if (!mouse || mouse.y < 26 || S.trapMenu || S.monsterMenu || S.serpentMenu) return;
   const hover = tileAtScreen(mouse);
   if (S.phase === "over" || inArena() || hover.x < 0 || hover.x >= mapW() || hover.y < 0 || hover.y >= H) return;
@@ -9224,6 +9277,7 @@ function drawCounter(key, x, color) {
 }
 
 function drawHud() {
+  if (S.mode === "ascent" && S.phase !== "title") { drawAscentHud(); return; }
   // Top strip: resources on the left, the heroes and the tower in the middle, the boss on the right.
   ctx.fillStyle = "rgba(8,4,14,0.8)";
   ctx.fillRect(0, 0, W * T, 16);
@@ -9330,8 +9384,8 @@ function drawBanner() {
     softBand(mid - 4, 42, 0.8);
     softBand(mid + 33, 34, 0.7);
     drawText(BOSS_TITLE, cx, mid - 40, "#ff5252", { align: "center", scale: 3, shadow: "#000" });
-    const diffs = S.titleStep === "difficulty", maps = S.titleStep === "map";
-    drawText(maps ? `SANDBOX (${DIFFICULTIES[S.diff].name}): CHOOSE A MAP` : diffs ? "SANDBOX: CHOOSE A DIFFICULTY" : "YOU ARE VORGATH. THE ORDER OF THE DAWN IS COMING FOR YOUR TOWER.", cx, mid - 13, diffs || maps ? "#9cff9c" : "#e6e0ec", { align: "center" });
+    const diffs = S.titleStep === "difficulty", maps = S.titleStep === "map", classes = S.titleStep === "class";
+    drawText(classes ? "ASCENT: CHOOSE YOUR HERO" : maps ? `SANDBOX (${DIFFICULTIES[S.diff].name}): CHOOSE A MAP` : diffs ? "SANDBOX: CHOOSE A DIFFICULTY" : "YOU ARE VORGATH. THE ORDER OF THE DAWN IS COMING FOR YOUR TOWER.", cx, mid - 13, classes ? "#ffd54f" : diffs || maps ? "#9cff9c" : "#e6e0ec", { align: "center" });
     const hovered = cardAt(mouse);
     if (hovered >= 0) S.titlePick = hovered;
     titleCards().forEach((c, i) => {
@@ -9346,7 +9400,7 @@ function drawBanner() {
       const best = diffs ? sandboxBest(i) : 0;
       if (best) drawText(`BEST: WAVE ${best}`, c.x + c.w / 2, c.y + c.h + 5, c.color, { align: "center" });
     });
-    const hint = diffs || maps ? "CLICK ONE, OR USE THE ARROWS AND ENTER. ESC GOES BACK" : "CLICK A MODE, OR USE THE ARROWS AND ENTER";
+    const hint = diffs || maps || classes ? "CLICK ONE, OR USE THE ARROWS AND ENTER. ESC GOES BACK" : "CLICK A MODE, OR USE THE ARROWS AND ENTER";
     if (Math.floor(S.time * 2) % 2 === 0) drawText(hint, cx, mid + 74, "#ffd54f", { align: "center" });
     return;
   }
@@ -9360,7 +9414,7 @@ function drawBanner() {
     ctx.globalAlpha = a;
     drawText(bn.text, cx, mid - 18, bn.color, { align: "center", scale: 4, shadow: "#000" });
     drawText(bn.sub, cx, mid + 16, "#e6e0ec", { align: "center" });
-    drawText("PRESS PLAY AGAIN", cx, mid + 27, "#8a8296", { align: "center" });
+    drawText(S.mode === "ascent" && !S.asc.won ? "PRESS R OR TRY AGAIN" : "PRESS PLAY AGAIN", cx, mid + 27, "#8a8296", { align: "center" });
     ctx.globalAlpha = 1;
     return;
   }
@@ -9403,6 +9457,7 @@ function draw() {
     drawBolts();
     drawHarpoons();
     drawKit(false, drawBoulders);
+    if (S.mode === "ascent") drawPotions();
     drawHeroBombs();
     S.heroArrows.forEach(drawArrow);
     drawHover();
@@ -9415,6 +9470,7 @@ function draw() {
   S.allies.forEach(drawHero);
   if (!arena) S.serpents.forEach(n => { if (n.state !== "lurk") drawSerpent(n); });
   themedFx(() => S.waves.forEach(drawWave));
+  if (arena && S.mode === "ascent") drawPotions();
   if (arena) { drawRisen(); S.heroArrows.forEach(drawArrow); themedFx(() => { drawPools(true); drawSpecials(); drawVoidFx(); }); }
   // On the tower top nearly every spark is one of his attacks, so they take the map's colours too.
   if (arena) themedFx(() => drawParticles(false)); else drawParticles(false);
@@ -9795,6 +9851,13 @@ function updateToolbar() {
     if (cost.textContent !== text) cost.textContent = text;
   });
   const go = document.getElementById("go");
+  document.body.classList.toggle("ascent", S.mode === "ascent" && S.phase !== "title");
+  if (S.mode === "ascent" && S.phase !== "title") {
+    const lbl = S.phase === "over" ? (S.asc.won ? "Play again" : "Try again") : inArena() ? "Restart fight" : "Restart level";
+    if (go.textContent !== lbl) go.textContent = lbl;
+    go.disabled = false;
+    return;
+  }
   const label = { over: "Play again", build: S.wave >= FINAL_WAVE && !sandbox() ? "Face the Thing Below" : "Start wave", wave: "Wave in progress", intro: "Here they come...", title: "Start " + titleCards()[S.titlePick].name.toLowerCase(), prologue: "Skip" }[S.phase] || "Boss battle!";
   if (go.textContent !== label) go.textContent = label;
   go.disabled = !["over", "build", "title", "prologue"].includes(S.phase);
@@ -9813,6 +9876,452 @@ function frame(now) {
   present();
   updateToolbar();
   requestAnimationFrame(frame);
+}
+
+
+// ---------- Ascent: play as a hero ----------
+// You pick a hero and climb three levels of the Hollow King's own traps and monsters (castle, ice, forest),
+// then face the Lich Queen at the top of the tower. Traps and monsters work exactly as they do on heroes
+// in the other modes; you can also smash traps with your weapon.
+const CLASSES = {
+  knight: { name: "KNIGHT", color: "#90caf9", hp: 240, speed: 4.0, atk: 16, cd: 0.42, reach: 1.4,
+    lines: ["SWORD AND SHIELD.", "E: SHIELD CHARGE", "HOLD S: BLOCK"], ability: { name: "SHIELD CHARGE", cd: 4 } },
+  archer: { name: "ARCHER", color: "#9cff9c", hp: 170, speed: 4.4, atk: 12, cd: 0.42, ranged: true,
+    lines: ["SHOOTS ARROWS,", "BREAKS TRAPS FROM", "AFAR. E: VOLLEY"], ability: { name: "VOLLEY", cd: 3 } },
+  mage: { name: "MAGE", color: "#ccff90", hp: 160, speed: 3.9, atk: 15, cd: 0.6, ranged: true, magic: true,
+    lines: ["MAGIC BOLTS.", "E: MEND HEALS", "YOU 35%."], ability: { name: "MEND", cd: 10 } },
+  rogue: { name: "ROGUE", color: "#b39ddb", hp: 170, speed: 5.0, atk: 9, cd: 0.2, reach: 1.1,
+    lines: ["FAST, JUMPS TWICE", "SAFE ON SPIKES.", "E: SHADOW DASH"], ability: { name: "SHADOW DASH", cd: 2.5 } },
+};
+const CLASS_IDS = ["knight", "archer", "mage", "rogue"];
+let gameClass = "knight";
+// Traps hit a lone hero a little softer than the heroes of a whole wave; a trap takes this much to smash.
+const ASCENT = { trapDmg: 0.75, potion: 0.4, trapHp: lvl => 20 + 15 * lvl, jump: 13.5, airSpeed: 4.8 };
+// Each level: [trap, x, y, level, path], [monster, x, y], the pits a serpent lurks in, and healing potions.
+const LEVELS = [
+  { name: "THE CASTLE GATE", theme: "castle", sub: "Climb to the tower. Smash traps, or jump them.", mon: 1,
+    traps: [["spike", 6, 8, 1], ["spike", 7, 8, 1], ["turret", 11, 8, 1], ["saw", 17, 8, 1], ["fire", 22, 8, 1], ["crusher", 25, 5, 1],
+      ["mine", 30, 8, 1], ["spike", 40, 6, 1], ["turret", 49, 8, 1], ["saw", 52, 8, 1]],
+    monsters: [["skeleton", 10, 8], ["skeleton", 24, 8], ["ogre", 32, 8], ["imp", 41, 6], ["skeleton", 48, 8]],
+    serpents: [13], potions: [[23, 8], [42, 6]] },
+  { name: "THE FROZEN SPIRE", theme: "ice", sub: "Mind the ice: it's easy to slip into the spikes.", mon: 1.5,
+    traps: [["frost", 7, 8, 2], ["spike", 10, 8, 2], ["turret", 15, 8, 2], ["tesla", 18, 8, 2], ["pendulum", 22, 4, 2], ["grinder", 23, 8, 2],
+      ["tar", 29, 8, 2], ["crusher", 32, 5, 2], ["saw", 35, 6, 2], ["mine", 38, 7, 2], ["fire", 43, 7, 2], ["skyhook", 47, 8, 2], ["boulder", 50, 6, 2]],
+    monsters: [["wraith", 11, 6], ["imp", 24, 8], ["hound", 33, 8], ["skeleton", 40, 6], ["ogre", 48, 8]],
+    serpents: [13, 35], potions: [[21, 8], [43, 7], [50, 7]] },
+  { name: "THE THORNWOOD", theme: "forest", sub: "The last climb. The tower waits at the end.", mon: 1.7,
+    traps: [["spike", 2, 8, 2, "barbed"], ["saw", 7, 7, 2, "ripper"], ["turret", 10, 8, 2, "twin"], ["fire", 16, 8, 2, "pillar"], ["crusher", 18, 5, 2, "obsidian"],
+      ["grinder", 21, 8, 2, "meat"], ["pendulum", 25, 3, 2, "twin"], ["tesla", 26, 8, 2, "storm"], ["tar", 29, 8, 2, "burning"], ["mine", 33, 8, 2, "keg"],
+      ["frost", 38, 7, 2], ["boulder", 43, 5, 2, "iron"], ["skyhook", 48, 8, 2, "net"], ["spike", 51, 8, 2, "impaler"], ["turret", 52, 8, 2, "ballista"]],
+    monsters: [["golem", 11, 8], ["hound", 17, 8], ["imp", 26, 8], ["wraith", 31, 5], ["ogre", 40, 6], ["hound", 49, 8]],
+    serpents: [13, 27, 35, 46], potions: [[22, 8], [32, 8], [42, 6]] },
+];
+// The Lich Queen, waiting at the top of the tower.
+const LICH = { name: "NYXARA", title: "THE LICH QUEEN", hp: 900, speed: 2.0, hover: 0.5, dmgTaken: 0.3, skullCd: 3.4, potionEvery: 20 };
+const LICH_ATTACKS = {
+  grasp: { cd: 9, name: "GRASP OF THE GRAVE" }, hellfire: { cd: 14, name: "STARFALL" }, lance: { cd: 7, name: "DEATH RAY" },
+  repulse: { cd: 7, name: "REPULSE" }, eclipse: { cd: 9, name: "ECLIPSE", rage: true }, pillars: { cd: 10, name: "BONE PYRES", rage: true },
+  souls: { cd: 12, name: "WAILING DEAD", rage: true }, voidstep: { cd: 8, name: "PHASE SHIFT", rage: true },
+};
+const LICH_ART = [
+  "..........G..G..G..G..........",
+  "..........GG.GG.GG.GG.........",
+  "..........GGGGGGGGGGG.........",
+  ".........VgGGGEGGGGgV.........",
+  "........VVVBBBBBBBBVVV........",
+  ".......VVVBBBBBBBBBBVVV.......",
+  ".......VVBBKKBBBBKKBBVV.......",
+  ".......VVBKEEKBBKEEKBVV.......",
+  ".......VVBBKKBBBBKKBBVV.......",
+  ".......VVVBBBBKKBBBBVVV.......",
+  "........VVVBbBBBBbBVVV........",
+  "........VVVVBKBKBKBVVVV.......",
+  ".......VVVVVVbbbbbVVVVVV......",
+  "......VVVVPVVVVVVVVVPVVVV.....",
+  ".....VVVVPPVVVVVVVVVPPVVVV....",
+  "....VVVVVPVVVVQQVVVVVPVVVVV...",
+  "...VVVVVVPVVVQqqQVVVVPVVVVVV..",
+  "...VVVVVVPVVVQqqQVVVVPVVVVVV..",
+  "..VVVVVVVPVVVVQQVVVVVPVVVVVVV.",
+  "..VVVVVLVPVVVVVVVVVVVPVLVVVVV.",
+  "..VVVVLVVPVVVVVVVVVVVPVVLVVVV.",
+  "..vVVVLVVPVVVVVVVVVVVPVVLVVVv.",
+  "..vVVVVVVPVVVVVVVVVVVPVVVVVVv.",
+  "...vVVVVVPVVVVVVVVVVVPVVVVVv..",
+  "...vVVVVVPPVVVVVVVVVPPVVVVVv..",
+  "...vvVVVVVPVVVVVVVVVPVVVVVvv..",
+  "....vVVVVVPVVVVVVVVVPVVVVVv...",
+  "....vVVVVVPVVVVVVVVVPVVVVVv...",
+  "....vvVVVVPVVVVVVVVVPVVVVvv...",
+  ".....vVVVVPVVVVVVVVVPVVVVv....",
+  ".....vVVVVPVVVVVVVVVPVVVVv....",
+  "....vvVVVVPVVVVVVVVVPVVVVvv...",
+  "....vVVVVVPVVVVVVVVVPVVVVVv...",
+  "...vvVVVVVPVVVVVVVVVPVVVVVvv..",
+  "...vVVVVVVPVVVVVVVVVPVVVVVVv..",
+  "..vvVVVVVVPVVVVVVVVVPVVVVVVvv.",
+  "..vVvVVvVVPVVvVVvVVVPVvVVvVvv.",
+  "..v.vV.vV.P.Vv.Vv.V.P.vV.v.v..",
+  "..v..v..v.....v..v......v..v..",
+];
+const LICH_PAL = { V: "#2a1838", v: "#180c22", P: "#5a2d82", L: "#8e5ab8", B: "#d8d0c0", b: "#9a907e", K: "#0a0612", G: "#c9a227", g: "#7d6314", E: "#69f0ae", Q: "#69f0ae", q: "#e8fff2" };
+const LICH_RAGE_PAL = Object.assign({}, LICH_PAL, { E: "#ff1744", Q: "#ff1744", q: "#ffcdd2", P: "#8e1b3a", L: "#c2185b" });
+const LICH_SHADOW_PAL = Object.fromEntries(Object.keys(LICH_PAL).map(k => [k, "EQq".includes(k) ? LICH_PAL[k] : "#050308"]));
+const LICH_W = LICH_ART[0].length + 2, LICH_H = LICH_ART.length + 2;
+const lichBob = b => Math.round(Math.sin(S.time * 2 + (b.x || 0)) * 2);
+const POTION_ART = ["..cc..", "..WW..", ".RRRR.", "RRWRRR", "RRRRRR", ".RRRR."];
+const POTION_PAL = { c: "#8d6e63", W: "#ffffff", R: "#e53935" };
+
+function makeLich() {
+  return { lich: true, isBoss: true, x: 21, y: ARENA_FLOOR - 3 - LICH.hover, w: 2, h: 3, vx: 0, vy: 0, onGround: true, hp: LICH.hp, maxHp: LICH.hp,
+    cd: 0, windup: 0, swing: 0, slam: 0, face: -1, flash: 0, arm: 0, roar: 0, action: null, cds: freshCds(), form: 1,
+    lcd: Object.fromEntries(Object.keys(LICH_ATTACKS).map(k => [k, 2 + Math.random() * 3])), castCd: 2.5, skullT: 2 };
+}
+function makePlayer(cls) {
+  const c = CLASSES[cls], h = makeHero(1, cls);
+  Object.assign(h, { player: true, name: c.name, hp: c.hp, maxHp: c.hp, atk: c.atk, speed: c.speed, dodge: 0, pathMult: 1, abilityCd: 0, face: 1 });
+  return h;
+}
+function makeMinion(type, x, y, mult) {
+  const k = MINIONS[type], hp = Math.round(k.hp * mult);
+  return { type, x: x + (1 - k.w) / 2, y: y + 1 - k.h - 0.02, w: k.w, h: k.h, vx: 0, vy: 0, onGround: false, hp, maxHp: hp,
+    atk: Math.round(k.atk * (1 + (mult - 1) * 0.6)), speed: k.speed, cd: 0, face: -1, flash: 0, walk: 0, homeX: x + 0.5 - k.w / 2, homeY: y + 1 - k.h, dark: false };
+}
+
+// Fresh state for the next part of the climb (newGame without the opening).
+function ascentState(theme) {
+  newGame(true);
+  Object.assign(S, { mode: "ascent", theme, opening: null, spawnQueue: [], kills: 99 });
+  startedAt = performance.now();
+}
+function startAscent(cls) {
+  gameMode = "ascent";
+  gameClass = cls;
+  Sound.play("click");
+  S.ascentStart = performance.now();
+  ascentStartedAt = performance.now();
+  startAscentLevel(0);
+}
+let ascentStartedAt = 0;
+function startAscentLevel(i) {
+  const L = LEVELS[i];
+  ascentState(L.theme);
+  S.asc = { level: i, won: false, inBoss: false, next: null, startT: S.time };
+  S.phase = "wave";
+  S.boss = makeLich();
+  Object.assign(S.boss, { x: PERCH.x, y: TOWER_TOP - S.boss.h - LICH.hover });
+  for (const [type, x, y, lvl, path] of L.traps) { const t = newTrap(type, x, y); t.lvl = lvl; if (path) t.path = path; S.traps.push(t); }
+  for (const [type, x, y] of L.monsters) S.minions.push(makeMinion(type, x, y, L.mon));
+  for (const px of L.serpents) {
+    const pit = pitAt(px);
+    if (!pit) continue;
+    const mid = (pit[0] + pit[1] + 1) / 2;
+    S.serpents.push({ pit, x: mid, state: "lurk", t: 0, cd: 2 + Math.random() * 2, prey: null, hx: mid, hy: H - 0.6, jaw: 0, dir: 1, dark: i === 2 && px === 35 });
+  }
+  S.potions = L.potions.map(([x, y]) => ({ x, y }));
+  S.heroes = [makePlayer(gameClass)];
+  S.camX = 0;
+  S.camGoal = null;
+  nameSerpent();
+  banner(`LEVEL ${i + 1}: ${L.name}`, L.sub, THEMES[L.theme].color);
+  say(`Level ${i + 1} of 3. A / D move, W jumps, Space attacks (and smashes traps), E uses ${CLASSES[gameClass].ability.name}.`);
+}
+function retryAscent() {
+  if (!S.asc) return;
+  Sound.play("click");
+  if (S.asc.inBoss) startLichFight();
+  else startAscentLevel(S.asc.level);
+}
+function levelCleared() {
+  const i = S.asc.level;
+  S.phase = "cleared";
+  Sound.play("cleared");
+  if (i < LEVELS.length - 1) {
+    banner("LEVEL CLEARED", `Next: ${LEVELS[i + 1].name}`, "#ffd54f");
+    S.asc.next = { t: 2.6, fn: () => startAscentLevel(i + 1) };
+  } else {
+    banner("THE TOWER", "Something waits at the top...", "#69f0ae");
+    Sound.play("door");
+    S.asc.next = { t: 2.6, fn: startLichFight };
+  }
+}
+function startLichFight() {
+  ascentState(LEVELS[LEVELS.length - 1].theme);
+  S.asc = { level: LEVELS.length - 1, won: false, inBoss: true, next: null, startT: S.time };
+  S.scene = "arena";
+  S.phase = "boss";
+  S.intro = 2.2;
+  S.fadeIn = FADE;
+  const p = makePlayer(gameClass);
+  Object.assign(p, { x: 2.2, y: ARENA_FLOOR - p.h });
+  S.heroes = [p];
+  S.boss = makeLich();
+  clearSpecials();
+  Sound.play("bossIntro");
+  say(`The Lich Queen! A / D move, W jumps, Space attacks, E uses ${CLASSES[gameClass].ability.name}. Jump her Death Ray.`);
+}
+function playerDied(h) {
+  S.heroes = S.heroes.filter(o => o !== h);
+  burst(centerX(h), Math.min(centerY(h), H - 1.5), 26, h.lava ? theme().death : ["#d32f2f", "#8e1b1b", "#ffffff"], 6, { glow: !!h.lava });
+  Sound.play(h.lava ? "sizzle" : "heroDie");
+  S.shake = Math.max(S.shake, 4);
+  if (inArena()) clearSpecials();
+  S.phase = "over";
+  banner("YOU DIED", h.lava ? `You ${theme().deathText.replace("was ", "were ")}` : inArena() ? "The Lich Queen claims another soul" : "The tower claims another hero", "#c62828");
+}
+function lichDied() {
+  const b = S.boss, secs = Math.round((performance.now() - ascentStartedAt) / 1000);
+  clearSpecials();
+  burst(centerX(b), centerY(b), 50, ["#69f0ae", "#2a1838", "#c9a227", "#ffffff"], 8, { glow: true });
+  S.shake = 8;
+  Sound.play("victory");
+  S.phase = "over";
+  S.asc.won = true;
+  banner("VICTORY", `The Lich Queen is destroyed. The climb took ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`, "#ffd54f");
+}
+
+// The hero you control.
+function updatePlayer(h, dt) {
+  const c = CLASSES[h.kind], arena = inArena();
+  h.cd -= dt;
+  h.flash -= dt;
+  h.atkAnim -= dt;
+  h.abilityCd -= dt;
+  h.evade = Math.max(0, (h.evade || 0) - dt);
+  h.trail = h.trail.filter(p => (p.t -= dt) > 0);
+  if (h.bleed > 0) {
+    h.bleed -= dt;
+    h.bleedTick = (h.bleedTick || 0) - dt;
+    if (h.bleedTick <= 0) { h.bleedTick = 0.5; damage(h, h.bleedDmg, "#ff5252"); }
+  }
+  if (S.phase !== "wave" && S.phase !== "boss") { h.vx = 0; moveBody(h, dt); return; }
+  if (arena && S.intro > 0) { h.vx = h.x < 3.5 ? 2 : 0; h.face = 1; moveBody(h, dt); return; }
+  if (h.grabbed) { h.vx = 0; h.vy = 0; return; }
+  if (h.knock > 0 || h.pinned > 0) {
+    h.knock -= dt;
+    h.pinned = Math.max(0, (h.pinned || 0) - dt);
+    h.frozen = Math.max(0, (h.frozen || 0) - dt);
+    if (h.pinned > 0) h.vx = 0;
+    moveBody(h, dt);
+    if (!arena && inLava(h)) { h.hp = 0; h.lava = true; }
+    return;
+  }
+  if (h.rush > 0) {
+    // Shield charge or shadow dash.
+    h.rush -= dt;
+    h.vx = h.face * (h.kind === "rogue" ? 14 : 11);
+    if (Math.random() < dt * 40) h.trail.push({ x: h.x, y: h.y, face: h.face, t: 0.2 });
+    if (h.kind === "knight") chargeHits(h);
+  } else {
+    const dir = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
+    h.blocking = h.kind === "knight" && !!(keys.s || keys.arrowdown) && h.onGround;
+    // A little extra speed in the air, so a hero who jumps at the edge clears a pit.
+    h.vx = dir * (h.onGround ? c.speed : Math.max(c.speed, ASCENT.airSpeed)) * (h.blocking ? 0.35 : 1);
+    if (dir && !h.blocking) h.face = dir;
+  }
+  const jump = !!(keys.w || keys.arrowup || keys.k);
+  if (jump && !h.jumpHeld) {
+    if (h.onGround) { h.vy = -ASCENT.jump; Sound.play("jump"); }
+    else if (h.kind === "rogue" && !h.doubled) { h.vy = -ASCENT.jump * 0.85; h.doubled = true; burst(centerX(h), h.y + h.h, 6, ["#b39ddb", "#ffffff"], 2, { glow: true }); }
+  }
+  h.jumpHeld = jump;
+  if (h.onGround) h.doubled = false;
+  if ((keys[" "] || keys.j) && h.cd <= 0 && !h.blocking && !(h.rush > 0)) playerAttack(h);
+  const ab = !!(keys.e || keys.l);
+  if (ab && !h.abHeld && h.abilityCd <= 0) playerAbility(h);
+  h.abHeld = ab;
+  pickPotions(h);
+  if (arena) { moveBody(h, dt); return; }
+  finishHeroMove(h, dt, false);
+}
+function playerAttack(h) {
+  const c = CLASSES[h.kind];
+  h.cd = c.cd;
+  h.atkAnim = 0.18;
+  if (c.ranged) {
+    S.heroArrows.push({ x: centerX(h) + h.face * 0.5, y: h.y + (c.magic ? 0.25 : 0.4), vx: h.face * (c.magic ? 8 : 11), dmg: c.atk, magic: !!c.magic });
+    Sound.play(c.magic ? "bolt" : "bow");
+    return;
+  }
+  const box = { x: h.face > 0 ? h.x + h.w - 0.1 : h.x - c.reach + 0.1, y: h.y - 0.3, w: c.reach, h: h.h + 0.5 };
+  meleeHit(box, c.atk);
+  Sound.play("swing");
+}
+// A blow lands on every monster, trap (or the Lich Queen) inside the box.
+function meleeHit(box, dmg, hits) {
+  for (const m of S.minions) {
+    if (!overlaps(box, m) || (hits && hits.has(m))) continue;
+    if (hits) { hits.add(m); m.stun = Math.max(m.stun || 0, 1); m.vy = -5; }
+    damage(m, dmg, "#ffffff", MINIONS[m.type].blood);
+  }
+  const b = S.boss;
+  // Her homing skulls can be struck out of the air.
+  if (inArena()) for (const sk of S.skulls) if (sk.life > 0 && overlaps(box, { x: sk.x - 0.3, y: sk.y - 0.3, w: 0.6, h: 0.6 })) { sk.life = 0; float(sk.x, sk.y - 0.3, "SHATTERED", "#e1d5ff"); }
+  if (inArena() && b && overlaps(box, b) && !(hits && hits.has(b))) {
+    if (hits) hits.add(b);
+    damage(b, dmg, "#ffffff", ["#b71c1c", "#5d0f0f"]);
+  }
+  if (inArena()) return;
+  for (const t of [...S.traps]) {
+    if (hits && hits.has(t)) continue;
+    if (!trapTiles(t.type, t.x, t.y).some(([x, y]) => overlaps(box, { x, y, w: 1, h: 1 }))) continue;
+    if (hits) hits.add(t);
+    hitTrap(t, dmg);
+  }
+}
+function chargeHits(h) {
+  meleeHit({ x: h.face > 0 ? h.x + h.w - 0.2 : h.x - 0.4, y: h.y - 0.2, w: 0.6, h: h.h + 0.3 }, 20, h.hits);
+}
+function playerAbility(h) {
+  const c = CLASSES[h.kind];
+  h.abilityCd = c.ability.cd;
+  S.asc.flash = { text: c.ability.name, t: 1.2 };
+  if (h.kind === "knight") { h.rush = 0.3; h.hits = new Set(); Sound.play("slash"); }
+  else if (h.kind === "rogue") { h.rush = 0.22; h.evade = 0.4; Sound.play("dodge"); }
+  else if (h.kind === "archer") {
+    for (const dy of [-0.3, 0, 0.3]) S.heroArrows.push({ x: centerX(h) + h.face * 0.5, y: h.y + 0.4 + dy, vx: h.face * 11, dmg: c.atk });
+    Sound.play("bow");
+  } else {
+    const amt = Math.min(Math.round(h.maxHp * 0.35), h.maxHp - h.hp);
+    h.hp += amt;
+    float(centerX(h), h.y - 0.3, "+" + amt, "#76ff03");
+    ring(centerX(h), centerY(h), 1.6, ["#ccff90", "#76ff03"]);
+    Sound.play("heal");
+  }
+}
+function hitTrap(t, dmg) {
+  t.hp = t.hp ?? ASCENT.trapHp(t.lvl);
+  t.hp -= dmg;
+  t.flash = 0.12;
+  float(t.x + 0.5, t.y, "-" + Math.round(dmg), "#cfd8dc");
+  Sound.play("clang");
+  if (t.hp > 0) return;
+  S.traps = S.traps.filter(o => o !== t);
+  burst(t.x + trapSize(t.type).w / 2, t.y + 0.5, 16, ["#8a8296", "#c9c2d6", "#ffd54f"], 5);
+  float(t.x + 0.5, t.y - 0.4, "SMASHED", "#ffd54f");
+}
+function pickPotions(h) {
+  for (const p of S.potions || []) {
+    if (p.taken || !overlaps({ x: p.x + 0.25, y: p.y + 0.3, w: 0.5, h: 0.7 }, h)) continue;
+    p.taken = true;
+    const amt = Math.min(Math.round(h.maxHp * ASCENT.potion), h.maxHp - h.hp);
+    h.hp += amt;
+    float(centerX(h), h.y - 0.3, "+" + amt, "#76ff03");
+    burst(p.x + 0.5, p.y + 0.6, 10, ["#e53935", "#ffffff"], 3, { glow: true, g: -4 });
+    Sound.play("heal");
+  }
+}
+function drawPotions() {
+  const spr = sprite(POTION_ART, POTION_PAL, "potion");
+  for (const p of S.potions || []) if (!p.taken) drawSprite(spr, p.x * T + 8, p.y * T + T - 2 + Math.round(Math.sin(S.time * 3 + p.x) * 1.5), 1);
+}
+
+// The Lich Queen floats, keeps her distance, throws homing skulls, and casts something nasty every couple of seconds.
+// Below half health she's enraged: new spells, shorter waits.
+function updateLich(b, dt) {
+  b.flash -= dt;
+  b.roar = (b.roar || 0) - dt;
+  b.castCd -= dt;
+  b.skullT -= dt;
+  for (const k in b.lcd) b.lcd[k] -= dt;
+  const p = S.heroes.find(h => h.player);
+  if (!inArena() || S.intro > 0 || !p) return;
+  // Now and then a healing potion falls onto the tower top.
+  S.asc.potionT = (S.asc.potionT ?? LICH.potionEvery) - dt;
+  if (S.asc.potionT <= 0 && !(S.potions || []).some(o => !o.taken)) {
+    S.asc.potionT = LICH.potionEvery;
+    S.potions = [{ x: 2 + Math.floor(Math.random() * (W - 4)), y: ARENA_FLOOR - 1 }];
+    float(S.potions[0].x + 0.5, ARENA_FLOOR - 1.4, "POTION", "#e53935");
+  }
+  if (b.action) {
+    const t = b.action.type;
+    (["souls"].includes(t) ? updateAction2 : ["lance", "eclipse", "pillars", "voidstep"].includes(t) ? updateAction3 : updateAction)(b, dt);
+  } else {
+    const dx = centerX(p) - centerX(b), dist = Math.abs(dx);
+    b.face = Math.sign(dx) || b.face;
+    const want = dist < 3.2 ? -Math.sign(dx) : dist > 8 ? Math.sign(dx) : 0;
+    b.vx = want * LICH.speed * (b.enraged ? 1.3 : 1);
+    b.x = Math.max(1.1, Math.min(W - 1.1 - b.w, b.x + b.vx * dt));
+    if (b.skullT <= 0) {
+      b.skullT = LICH.skullCd * (b.enraged ? 0.7 : 1);
+      S.skulls.push({ x: centerX(b) + b.face, y: b.y + 0.8, vx: b.face * 4, vy: -2, life: 3.5, target: p });
+      Sound.play("wailShot");
+    }
+    if (b.castCd <= 0) lichCast(b, p, dist);
+  }
+  b.y = ARENA_FLOOR - b.h - LICH.hover;
+}
+function lichCast(b, p, dist) {
+  const ready = Object.keys(LICH_ATTACKS).filter(id => b.lcd[id] <= 0 && (!LICH_ATTACKS[id].rage || b.enraged) && (id !== "repulse" || dist < 3.2));
+  if (!ready.length) return;
+  const id = ready.includes("repulse") ? "repulse" : pick(ready);
+  b.lcd[id] = LICH_ATTACKS[id].cd * (b.enraged ? 0.8 : 1);
+  b.castCd = b.enraged ? 1.4 : 2.2;
+  b.cast = 0.6;
+  b.flashName = { text: LICH_ATTACKS[id].name, t: 1.4 };
+  if (id === "repulse") {
+    // A burst of grave-cold that throws you back.
+    S.voidFx.push({ type: "wave", x: centerX(b), y: centerY(b), t: 0, r: 3.2, colors: ["#69f0ae", "#ffffff"] });
+    if (dist < 3.4 && p.evade <= 0) { damage(p, 12, "#69f0ae"); knock(p, (Math.sign(centerX(p) - centerX(b)) || 1) * 8, -6); }
+    Sound.play("transformBoom");
+    return;
+  }
+  b.face = Math.sign(centerX(p) - centerX(b)) || b.face;
+  b.action = id === "souls" ? { type: "souls", t: 0, fired: 0, next: 0 } : { type: id, t: 0, ticks: new Map() };
+  Sound.play({ grasp: "graspCast", hellfire: "hellCast", lance: "breathCharge", eclipse: "hellCast", pillars: "quakeJump", souls: "wail", voidstep: "wail" }[id]);
+}
+function drawLich(b, shadow) {
+  const pal = shadow ? LICH_SHADOW_PAL : b.enraged ? LICH_RAGE_PAL : LICH_PAL, key = "lich" + (shadow ? "S" : b.enraged ? "R" : "");
+  const spr = sprite(LICH_ART, pal, key);
+  const cx = centerX(b) * T, bottom = (b.y + b.h) * T + lichBob(b), top = bottom - spr.height + 1;
+  const act = b.action, fade = act && act.type === "voidstep" ? Math.abs(act.t - 0.25) / 0.25 : 1;
+  const won = S.phase === "over" && S.asc && S.asc.won;
+  // Her staff, the orb blazing while she casts.
+  const casting = (b.cast || 0) > 0 || !!act;
+  b.cast = (b.cast || 0) - 1 / 60;
+  const sx = Math.round(cx + b.face * 15), st = top + (casting ? 2 : 6);
+  ctx.globalAlpha = (won ? 0.35 : 1) * fade;
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(sx - 1, st, 3, bottom - st - 2);
+  ctx.fillStyle = "#4e342e";
+  ctx.fillRect(sx, st + 1, 1, bottom - st - 4);
+  const orb = pal.Q;
+  pxDisc(ctx, sx, st - 2, casting ? 5 : 4, OUTLINE);
+  pxDisc(ctx, sx, st - 2, casting ? 4 : 3, orb);
+  pxDisc(ctx, sx - 1, st - 3, 1, pal.q);
+  if (casting && !shadow && Math.random() < 0.5) particle({ x: sx / T + (Math.random() - 0.5) * 0.4, y: (st - 2) / T, vy: -1.5, life: 0.4, color: orb, glow: true });
+  ctx.globalAlpha = 1;
+  drawSprite(spr, cx, bottom, b.face, (won ? 0.35 : 1) * fade);
+  if (b.flash > 0 && !shadow) drawSprite(sprite(LICH_ART, LICH_PAL, "lich", true), cx, bottom, b.face, 0.7 * fade);
+  // Wisps trailing off the hem as she floats.
+  if (!shadow && !won && Math.random() < 0.4) particle({ x: b.x + Math.random() * b.w, y: b.y + b.h + 0.2, vy: 0.5, vx: (Math.random() - 0.5) * 0.4, life: 0.5, color: b.enraged ? "#c2185b" : "#5a2d82", glow: true });
+}
+
+function drawAscentHud() {
+  ctx.fillStyle = "rgba(8,4,14,0.8)";
+  ctx.fillRect(0, 0, W * T, 16);
+  ctx.fillStyle = "#2e2838";
+  ctx.fillRect(0, 16, W * T, 1);
+  const c = CLASSES[gameClass], p = S.heroes.find(h => h.player);
+  drawText(c.name, 6, 5, c.color);
+  drawMeter(52, 6, 90, 5, p ? Math.max(0, p.hp) / p.maxHp : 0, "#3b1016", "#2e7d32", "#76ff03");
+  drawText(p ? `${Math.max(0, Math.ceil(p.hp))}/${p.maxHp}` : "0", 148, 5, "#e6e0ec");
+  const L = LEVELS[S.asc.level];
+  drawText(S.asc.inBoss ? "THE TOWER TOP" : `${S.asc.level + 1}/3 ${L.name}`, 258, 5, THEMES[L.theme].color, { align: "center" });
+  const cdLeft = p ? Math.max(0, p.abilityCd) : 0;
+  drawText(`E ${c.ability.name} ${cdLeft > 0 ? cdLeft.toFixed(1) + "S" : "READY"}`, W * T - 6, 5, cdLeft > 0 ? "#8a8296" : "#ffd54f", { align: "right" });
+  const b = S.boss;
+  if (inArena() && b && b.lich) {
+    const bw = 300, bx = Math.round((W * T - bw) / 2), by = 32;
+    drawText(`${LICH.name}, ${LICH.title}`, bx, by - 10, b.enraged ? "#ff8a80" : "#b9f6ca");
+    drawText(`${Math.max(0, Math.ceil(b.hp))}/${b.maxHp}`, bx + bw, by - 10, "#8a8296", { align: "right" });
+    drawMeter(bx, by, bw, 4, Math.max(0, b.hp) / b.maxHp, "#12001f", "#5a2d82", b.enraged ? "#ff1744" : "#69f0ae");
+    const f = b.flashName;
+    if (f && f.t > 0) { f.t -= 1 / 60; drawText(f.text, W * T / 2, by + 8, "#b9f6ca", { align: "center" }); }
+  }
+  const f = S.asc.flash;
+  if (f && f.t > 0) { f.t -= 1 / 60; drawText(f.text, W * T - 6, H * T - 12, "#ffd54f", { align: "right" }); }
+  if (S.time - S.asc.startT < 7 && S.phase !== "over") drawText("A/D MOVE   W JUMP   SPACE ATTACK   E ABILITY" + (gameClass === "knight" ? "   S BLOCK" : ""), W * T / 2, H * T - 12, "#e6e0ec", { align: "center" });
 }
 
 newGame(true);

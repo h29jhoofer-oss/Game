@@ -8,6 +8,23 @@ A reverse side-scroller, inspired by *Hostile Architect*: you are the boss waiti
 
 You are **Vorgath, the Hollow King**: a king who sold his soul so his tower would never fall, and who now feeds on the souls of the heroes the Order of the Dawn sends to end him. The game opens with a short prologue, and the full story is under *Lore: the Chronicle of Ashfall* on the game page.
 
+- **Ascent (play as the hero):** the third card on the title screen. You are one hero climbing the Hollow King's traps.
+  - **Pick a hero:**
+    - Knight: 240 health, a sword, E Shield Charge (rams and stuns monsters), hold S to block arrows and fireballs.
+    - Archer: 170 health, arrows that also break traps from range, E Volley (three arrows).
+    - Mage: 160 health, magic bolts, E Mend (heals 35%).
+    - Rogue: 170 health, fast, double jump, immune to spikes and bombs, E Shadow Dash (an untouchable dash).
+  - **Controls:** A / D move, W jump, Space attack, E ability. R or "Try again" restarts the level (or the fight) after a death.
+  - **Three levels:** the Castle Gate (castle, level 1 traps), the Frozen Spire (ice map, level 2 traps, slippery ice), and the Thornwood (forest, level 2 traps with their upgrades).
+    - Each level has its own set of traps, monsters, serpents and red healing potions.
+    - Every trap and monster behaves exactly as it does against the AI heroes.
+    - You can smash traps with your weapon, and arrows and bolts break them too.
+    - Serpents bite for 20% of your health and fling you on across the pit instead of swallowing you.
+  - **The boss:** reach the forest tower and you fight **Nyxara, the Lich Queen**, a new boss. She is a floating crowned lich in violet robes, with a staff.
+    - She keeps her distance and throws homing skulls, which you can strike or shoot down.
+    - Her spells: Grasp of the Grave, Starfall, a Death Ray you can jump, and Repulse if you get close.
+    - Below half health she turns red and adds Eclipse, Bone Pyres, Wailing Dead and Phase Shift.
+    - A potion falls onto the tower top every 20 seconds.
 - **Modes:** the title screen offers two modes. Click one, press 1 or 2, or use the arrows and Enter.
   - **Story:** the prologue, the 25-wave tale with the Marshal and the Voice, the bargains and the Thing Below, and the endings.
   - **Sandbox:** no story, no dialogue, no Thing (no hunger, bargains or finale), and no last wave. From wave 30 on, the column stops growing (32 heroes plus up to 9 champions) but heroes keep levelling up with the wave number. Choosing Sandbox brings up four difficulties (click one, press 1-4, or use the arrows and Enter; Escape goes back):
