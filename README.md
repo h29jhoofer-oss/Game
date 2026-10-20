@@ -39,6 +39,11 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
     - Below half health she turns red and adds Eclipse, Bone Pyres, Wailing Dead and Phase Shift.
     - She has 500 health. Repulse now winds up for a moment before it bursts, so you can back off.
     - A potion falls onto the tower top every 12 seconds.
+    - **Boss specials:** on the tower top each hero has two more specials (Q and R, on cooldowns) and a Fury strike (F). Damage you deal her fills the Fury meter (140 damage fills it); the Fury strike's own damage doesn't refill it. The bottom bar shows the cooldowns and the meter.
+      - *Knight:* Skyfall Slam (leap and crash down, a shockwave for 30 that shatters skulls), Valor (5s of double damage), Holy Judgment (a pillar of light for 90).
+      - *Archer:* Arrow Rain (8 arrows fall around her), Piercing Shot (a heavy bolt for 36 that goes through skulls), Hail of Arrows (20 arrows follow her).
+      - *Mage:* Fireball (32, bursts and breaks skulls), Frost Nova (shatters skulls and freezes her for 3s if she's close), Meteor (95).
+      - *Rogue:* Shadow Step (appear behind her and stab for 28), Smoke Bomb (2.2s where nothing can hit you), Thousand Cuts (ten strikes from all sides, untouchable while it lasts).
 - **Modes:** the title screen offers two modes. Click one, press 1 or 2, or use the arrows and Enter.
   - **Story:** the prologue, the 25-wave tale with the Marshal and the Voice, the bargains and the Thing Below, and the endings.
   - **Sandbox:** no story, no dialogue, no Thing (no hunger, bargains or finale), and no last wave. From wave 30 on, the column stops growing (32 heroes plus up to 9 champions) but heroes keep levelling up with the wave number. Choosing Sandbox brings up four difficulties (click one, press 1-4, or use the arrows and Enter; Escape goes back):

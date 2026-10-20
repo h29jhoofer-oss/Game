@@ -184,7 +184,7 @@
     costs one and puts you back on safe ground. Potions and the mage's Mend give a heart back. The tower fights back with machinery:
     strike levers to open gates (a blue lever only opens its gate for 10 seconds), push crates onto pressure plates to hold gates open,
     smash cracked walls, keep moving on crumbling planks, and find the key: a padlocked door won't open without it. A / D move, W jumps
-    (up through the wooden ledges), Space attacks, E uses your hero's ability, and the knight holds S to block. R retries after a death.<br>
+    (up through the wooden ledges), Space attacks, E uses your hero's ability, and the knight holds S to block. R retries after a death. Against the Lich Queen every hero also has two specials on Q and R, and a Fury strike on F that charges as you damage her.<br>
     <b>Modes:</b> <b>Story</b> is the 25-wave tale of the tower and what lies under it. <b>Sandbox</b> has no story and no last wave: the heroes keep coming, a level stronger each wave, joined by eleven sandbox-only heroes (fliers, burrowers, a Siege Colossus every fifth wave from 10, and more). Pick Easy, Normal, Hard or Nightmare for it; each keeps its own best wave. Then pick a map: the <b>Castle</b>; the <b>Ice Tower</b>, with slippery ice patches (heroes skid, and sometimes slip straight into a pit),
     pits of ice spikes, Ice Serpents and Vorgath as the Frost King; or the <b>Forest</b>, with a great tree for a tower, pools of deep water,
     Great Vipers and Vorgath as the Thorn King.<br>
@@ -2116,6 +2116,7 @@ function damage(target, amount, color, colors) {
   // Every blow the Hollow King lands on the tower grows with his level.
   if (inArena() && !target.isBoss && S.heroes.includes(target) && S.bossLv > 1) amount = Math.round(amount * bossLvDmg());
   target.hp -= amount;
+  if (target.lich && S.asc && !S.asc.noFury) S.asc.fury = Math.min(FURY, (S.asc.fury || 0) + amount);
   Sound.play(target.isBoss ? "bossHurt" : MINIONS[target.type] ? "minionHurt" : "hit");
   target.flash = 0.12;
   // Rapid hits on the same target add up in one number instead of a pile of them.
@@ -4967,24 +4968,38 @@ function updateArcher(h, dt, arena) {
 function updateHeroArrows(dt) {
   for (const a of S.heroArrows) {
     a.x += a.vx * dt;
-    if (isSolid(Math.floor(a.x), Math.floor(a.y)) || a.x < 0 || a.x > mapW()) { a.dead = true; continue; }
+    a.y += (a.vy || 0) * dt;
+    if (isSolid(Math.floor(a.x), Math.floor(a.y)) || a.x < 0 || a.x > mapW()) { a.dead = true; if (a.blast) fireballBlast(a); continue; }
     const box = { x: a.x - 0.2, y: a.y - 0.05, w: 0.4, h: 0.1 };
     // A hero's arrows (in Ascent) can break traps too, and shoot down the Lich Queen's skulls.
     const sk = S.mode === "ascent" && inArena() && S.skulls.find(o => o.life > 0 && Math.hypot(o.x - a.x, o.y - a.y) < 0.5);
-    if (sk) { sk.life = 0; a.dead = true; burst(sk.x, sk.y, 6, ["#e1d5ff", "#b388ff"], 2, { glow: true }); continue; }
+    if (sk) { sk.life = 0; burst(sk.x, sk.y, 6, ["#e1d5ff", "#b388ff"], 2, { glow: true }); if (!a.pierce) { a.dead = true; if (a.blast) fireballBlast(a); } continue; }
     if (S.climb && !inArena() && strikeMachinery({ x: a.x - 0.15, y: a.y - 0.15, w: 0.3, h: 0.3 })) { a.dead = true; continue; }
     const trap = S.mode === "ascent" && !inArena() && trapAt(Math.floor(a.x), Math.floor(a.y));
     if (trap) { hitTrap(trap, a.dmg); a.dead = true; continue; }
-    const hit = a.ally ? S.heroes.find(p => p.part && !(p.warn > 0) && overlaps(box, p)) : inArena() ? (overlaps(box, S.boss) ? S.boss : null) : S.minions.find(m => overlaps(box, m));
+    const hit = a.ally ? S.heroes.find(p => p.part && !(p.warn > 0) && overlaps(box, p)) : inArena() ? (overlaps(box, S.boss) && !a.hitBoss ? S.boss : null) : S.minions.find(m => overlaps(box, m));
     if (hit) {
+      if (a.fury) S.asc.noFury = true;
       damage(hit, a.dmg, "#ffffff", hit.isBoss ? ["#b71c1c", "#5d0f0f"] : hit.part ? ["#4a148c", "#12001f"] : MINIONS[hit.type].blood);
+      if (S.asc) S.asc.noFury = false;
+      // A piercing shot carries on through her; a fireball bursts.
+      if (a.pierce) { a.hitBoss = true; burst(a.x, a.y, 8, ["#ffd54f", "#ffffff"], 4, { glow: true }); continue; }
       a.dead = true;
+      if (a.blast) fireballBlast(a);
       if (a.magic) burst(a.x, a.y, 6, ["#ccff90", "#76ff03"], 3, { glow: true });
     } else if (a.magic && Math.random() < 0.5) {
       particle({ x: a.x, y: a.y + (Math.random() - 0.5) * 0.15, vx: -a.vx * 0.05, life: 0.25, color: Math.random() < 0.5 ? "#ccff90" : "#76ff03", glow: true });
     }
   }
   S.heroArrows = S.heroArrows.filter(a => !a.dead);
+}
+
+function fireballBlast(a) {
+  burst(a.x, a.y, 18, ["#ff6f00", "#ffd54f", "#ff3d00"], 5, { glow: true });
+  ring(a.x, a.y, 1.2, ["#ff6f00", "#ffd54f"]);
+  shatterSkulls(a.x, a.y, 2);
+  S.shake = Math.max(S.shake, 3);
+  Sound.play("boom");
 }
 
 // Platformer AI: jump over walls, pits, and (if clever enough) traps.
@@ -8674,6 +8689,19 @@ function drawWave(w) {
 
 function drawArrow(a) {
   const x = Math.round(a.x * T), y = Math.round(a.y * T), d = Math.sign(a.vx);
+  if (a.rain) {
+    // Falling straight down onto the tower top.
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(x - 1, y - 4, 3, 9);
+    ctx.fillStyle = "#a1887f";
+    ctx.fillRect(x, y - 3, 1, 7);
+    ctx.fillStyle = "#cfd8dc";
+    ctx.fillRect(x, y + 4, 1, 1);
+    ctx.fillStyle = "#e8e2d0";
+    ctx.fillRect(x - 1, y - 3, 1, 1);
+    ctx.fillRect(x + 1, y - 3, 1, 1);
+    return;
+  }
   if (a.fireball) {
     ctx.fillStyle = OUTLINE;
     ctx.fillRect(x - 2, y - 2, 5, 5);
@@ -9497,6 +9525,7 @@ function draw() {
   if (!arena) S.serpents.forEach(n => { if (n.state !== "lurk") drawSerpent(n); });
   themedFx(() => S.waves.forEach(drawWave));
   if (arena && S.mode === "ascent") drawPotions();
+  if (arena && S.mode === "ascent") drawBossSpecialsFx();
   if (arena) { drawRisen(); S.heroArrows.forEach(drawArrow); themedFx(() => { drawPools(true); drawSpecials(); drawVoidFx(); }); }
   // On the tower top nearly every spark is one of his attacks, so they take the map's colours too.
   if (arena) themedFx(() => drawParticles(false)); else drawParticles(false);
@@ -10560,6 +10589,7 @@ function updatePlayer(h, dt) {
   h.bleed = 0;
   if (S.phase !== "wave" && S.phase !== "boss") { h.vx = 0; moveBody(h, dt); return; }
   if (arena && S.intro > 0) { h.vx = h.x < 3.5 ? 2 : 0; h.face = 1; moveBody(h, dt); return; }
+  if (arena) updateBossSpecials(h, dt);
   if (h.grabbed) { h.vx = 0; h.vy = 0; return; }
   if (h.knock > 0 || h.pinned > 0) {
     h.knock -= dt;
@@ -10619,7 +10649,8 @@ function playerAttack(h) {
     return;
   }
   const box = { x: h.face > 0 ? h.x + h.w - 0.1 : h.x - c.reach + 0.1, y: h.y - 0.3, w: c.reach, h: h.h + 0.5 };
-  meleeHit(box, c.atk);
+  meleeHit(box, c.atk * (h.valor > 0 ? 2 : 1));
+  if (h.valor > 0) burst(box.x + box.w / 2, box.y + 0.6, 4, ["#ffd54f", "#ffffff"], 3, { glow: true });
   Sound.play("swing");
 }
 // A blow lands on every monster, trap (or the Lich Queen) inside the box.
@@ -10664,6 +10695,210 @@ function playerAbility(h) {
     Sound.play("heal");
   }
 }
+// Up on the tower top every hero has two more specials (Q and R), and a Fury strike (F) that charges as you hurt her.
+const BOSS_SPECIALS = {
+  knight: { q: { name: "SKYFALL SLAM", cd: 7 }, r: { name: "VALOR", cd: 14 }, f: { name: "HOLY JUDGMENT" } },
+  archer: { q: { name: "ARROW RAIN", cd: 7 }, r: { name: "PIERCING SHOT", cd: 9 }, f: { name: "HAIL OF ARROWS" } },
+  mage: { q: { name: "FIREBALL", cd: 6 }, r: { name: "FROST NOVA", cd: 15 }, f: { name: "METEOR" } },
+  rogue: { q: { name: "SHADOW STEP", cd: 6 }, r: { name: "SMOKE BOMB", cd: 13 }, f: { name: "THOUSAND CUTS" } },
+};
+// Damage you deal the Lich Queen fills the Fury meter; this much fills it.
+const FURY = 140;
+// Things that happen a moment after a special starts (a beam landing, a meteor falling).
+function later(t, fn) { S.asc.later.push({ t, fn }); }
+// A Fury strike's own damage doesn't charge the next one.
+function hurtLich(dmg, colors, fury) {
+  const b = S.boss;
+  if (!b || b.hp <= 0) return;
+  S.asc.noFury = !!fury;
+  damage(b, dmg, "#ffd54f", colors || ["#ffd54f", "#ffffff"]);
+  S.asc.noFury = false;
+}
+const nearLich = (x, r) => S.boss && Math.abs(centerX(S.boss) - x) < r + S.boss.w / 2;
+function shatterSkulls(x, y, r) {
+  for (const sk of S.skulls) if (sk.life > 0 && Math.hypot(sk.x - x, sk.y - y) < r) { sk.life = 0; burst(sk.x, sk.y, 6, ["#e1d5ff", "#b388ff"], 2, { glow: true }); }
+}
+function updateBossSpecials(h, dt) {
+  const a = S.asc;
+  a.later = a.later || [];
+  a.qCd = (a.qCd || 0) - dt;
+  a.rCd = (a.rCd || 0) - dt;
+  h.valor = Math.max(0, (h.valor || 0) - dt);
+  for (const e of a.later) if ((e.t -= dt) <= 0) e.fn();
+  a.later = a.later.filter(e => e.t > 0);
+  a.fx = (a.fx || []).filter(f => (f.t -= dt) > 0);
+  if (S.intro > 0 || S.phase !== "boss" || h.knock > 0 || h.pinned > 0 || h.grabbed) return;
+  const sp = BOSS_SPECIALS[h.kind];
+  const q = !!keys.q, r = !!keys.r, f = !!keys.f;
+  if (q && !h.qHeld && a.qCd <= 0) { a.qCd = sp.q.cd; a.flash = { text: sp.q.name, t: 1.2 }; specialQ(h); }
+  if (r && !h.rHeld && a.rCd <= 0) { a.rCd = sp.r.cd; a.flash = { text: sp.r.name, t: 1.2 }; specialR(h); }
+  if (f && !h.fHeld && (a.fury || 0) >= FURY) { a.fury = 0; a.flash = { text: sp.f.name, t: 1.6 }; S.shake = Math.max(S.shake, 4); specialF(h); }
+  Object.assign(h, { qHeld: q, rHeld: r, fHeld: f });
+  // The knight's slam: falls hard, and the landing sends out a shockwave.
+  if (h.slam) {
+    h.slam.t -= dt;
+    if (h.vy > 0) h.vy += 40 * dt;
+    if (h.slam.t <= 0 && h.onGround) {
+      h.slam = null;
+      const x = centerX(h);
+      S.shake = Math.max(S.shake, 6);
+      dust(x, h.y + h.h, 12);
+      burst(x, h.y + h.h - 0.1, 18, ["#90caf9", "#ffffff", "#ffd54f"], 6, { glow: true });
+      for (const d of [-1, 1]) S.asc.fx.push({ type: "quake", x, y: h.y + h.h, dir: d, t: 0.35, max: 0.35 });
+      if (nearLich(x, 3.5)) hurtLich(30);
+      shatterSkulls(x, h.y, 3.5);
+      Sound.play("slam");
+    }
+  }
+  // The rogue's thousand cuts: she flickers around the Lich Queen, striking again and again.
+  if (h.cuts) {
+    h.cuts.t -= dt;
+    h.iframes = Math.max(h.iframes, 0.2);
+    if (h.cuts.t <= 0) {
+      const b = S.boss;
+      h.cuts.n--;
+      h.cuts.t = 0.12;
+      const side = h.cuts.n % 2 ? 1 : -1;
+      if (b) { h.x = centerX(b) + side * 1.4 - h.w / 2; h.face = -side; h.y = ARENA_FLOOR - h.h; h.vy = 0; }
+      h.trail.push({ x: h.x, y: h.y, face: h.face, t: 0.25 });
+      h.atkAnim = 0.1;
+      hurtLich(9, ["#b39ddb", "#ffffff"], true);
+      Sound.play("slash");
+      if (h.cuts.n <= 0) h.cuts = null;
+    }
+  }
+}
+function specialQ(h) {
+  const b = S.boss, c = CLASSES[h.kind];
+  if (h.kind === "knight") {
+    h.vy = -ASCENT.jump * 1.05;
+    h.slam = { t: 0.25 };
+    Sound.play("jump");
+  } else if (h.kind === "archer") {
+    // Arrows loosed high, coming down in a spread around her.
+    const x0 = b ? centerX(b) : centerX(h) + h.face * 5;
+    Sound.play("bow");
+    for (let i = 0; i < 8; i++) later(0.35 + i * 0.07, () => S.heroArrows.push({ x: x0 + (Math.random() - 0.5) * 3, y: 1.2, vx: 0, vy: 16, dmg: 7, rain: true }));
+  } else if (h.kind === "mage") {
+    S.heroArrows.push({ x: centerX(h) + h.face * 0.5, y: h.y + 0.3, vx: h.face * 9, dmg: 32, fireball: true, blast: true });
+    Sound.play("fireball");
+  } else {
+    // Vanish, and strike from behind her.
+    if (!b) return;
+    burst(centerX(h), centerY(h), 10, ["#b39ddb", "#311b92", "#000000"], 3);
+    const behind = -b.face;
+    h.x = Math.max(0.6, Math.min(W - 0.6 - h.w, centerX(b) + behind * 1.5 - h.w / 2));
+    h.y = ARENA_FLOOR - h.h;
+    h.vx = 0; h.vy = 0;
+    h.face = Math.sign(centerX(b) - centerX(h)) || 1;
+    h.iframes = Math.max(h.iframes, 0.5);
+    burst(centerX(h), centerY(h), 10, ["#b39ddb", "#311b92", "#000000"], 3);
+    h.atkAnim = 0.18;
+    hurtLich(28, ["#b39ddb", "#ffffff"]);
+    Sound.play("dodge");
+  }
+}
+function specialR(h) {
+  const b = S.boss;
+  if (h.kind === "knight") {
+    // For a few seconds every blow hits twice as hard.
+    h.valor = 5;
+    ring(centerX(h), centerY(h), 1.8, ["#ffd54f", "#ffffff"]);
+    float(centerX(h), h.y - 0.4, "x2 DAMAGE", "#ffd54f");
+    Sound.play("empower");
+  } else if (h.kind === "archer") {
+    S.heroArrows.push({ x: centerX(h) + h.face * 0.5, y: h.y + 0.4, vx: h.face * 18, dmg: 36, bolt: true, pierce: true });
+    Sound.play("bow");
+  } else if (h.kind === "mage") {
+    // Frost rolls out: skulls shatter and, if she's close, the Lich Queen freezes solid.
+    const x = centerX(h), y = centerY(h);
+    ring(x, y, 3, ["#b3e5fc", "#ffffff"]);
+    S.asc.fx.push({ type: "nova", x, y, t: 0.4, max: 0.4 });
+    shatterSkulls(x, y, 6);
+    if (b && nearLich(x, 6)) { b.frozenT = 3; hurtLich(12, ["#b3e5fc", "#ffffff"]); float(centerX(b), b.y - 0.5, "FROZEN", "#b3e5fc"); }
+    Sound.play("freeze");
+  } else {
+    // A cloud of smoke: nothing can touch you for a moment.
+    h.iframes = Math.max(h.iframes, 2.2);
+    h.smoke = 2.2;
+    for (let i = 0; i < 24; i++) particle({ x: centerX(h) + (Math.random() - 0.5) * 2, y: centerY(h) + (Math.random() - 0.5) * 1.4, vx: (Math.random() - 0.5) * 1.5, vy: -Math.random(), life: 0.8 + Math.random() * 0.6, color: i % 2 ? "#5d566a" : "#8a8296", size: 2 });
+    Sound.play("dodge");
+  }
+}
+function specialF(h) {
+  const b = S.boss;
+  if (!b) return;
+  if (h.kind === "knight") {
+    // A pillar of holy light comes down on her.
+    const x = centerX(b);
+    S.asc.fx.push({ type: "beam", x, t: 1.0, max: 1.0, color: "#fff59d" });
+    Sound.play("thunder");
+    later(0.45, () => { if (nearLich(x, 1.4)) hurtLich(90, null, true); S.shake = Math.max(S.shake, 7); burst(x, ARENA_FLOOR - 0.2, 24, ["#fff59d", "#ffffff", "#ffd54f"], 7, { glow: true }); });
+  } else if (h.kind === "archer") {
+    Sound.play("bow");
+    for (let i = 0; i < 20; i++) later(0.3 + i * 0.06, () => { const k = S.boss; if (k) S.heroArrows.push({ x: centerX(k) + (Math.random() - 0.5) * 2.4, y: 1.2, vx: 0, vy: 18, dmg: 6, rain: true, fury: true }); });
+  } else if (h.kind === "mage") {
+    const x = centerX(b);
+    S.asc.fx.push({ type: "meteor", x, t: 0.9, max: 0.9 });
+    Sound.play("meteor");
+    later(0.9, () => {
+      if (nearLich(x, 2.5)) hurtLich(95, ["#ff6f00", "#ffd54f"], true);
+      shatterSkulls(x, ARENA_FLOOR - 1, 3);
+      S.shake = Math.max(S.shake, 8);
+      burst(x, ARENA_FLOOR - 0.3, 30, ["#ff6f00", "#ffd54f", "#ff3d00", "#ffffff"], 8, { glow: true });
+      Sound.play("meteorBoom");
+    });
+  } else {
+    h.cuts = { n: 10, t: 0 };
+    Sound.play("dodge");
+  }
+}
+// Effects for the specials: shockwaves, the frost nova, the holy pillar and the falling meteor.
+function drawBossSpecialsFx() {
+  for (const f of (S.asc && S.asc.fx) || []) {
+    const k = 1 - f.t / f.max;
+    if (f.type === "quake") {
+      const x = (f.x + f.dir * k * 3.5) * T, y = f.y * T;
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(Math.round(x) - 3, y - 6, 6, 6);
+      ctx.fillStyle = "#90caf9";
+      ctx.fillRect(Math.round(x) - 2, y - 5, 4, 5);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(Math.round(x) - 1, y - 4, 2, 2);
+    } else if (f.type === "nova") {
+      ctx.globalAlpha = 1 - k;
+      const r = Math.round(6 * T * k);
+      ctx.fillStyle = "#b3e5fc";
+      for (let i = 0; i < 32; i++) { const a = i / 32 * Math.PI * 2; ctx.fillRect(Math.round(f.x * T + Math.cos(a) * r), Math.round(f.y * T + Math.sin(a) * r * 0.5), 2, 2); }
+      ctx.globalAlpha = 1;
+    } else if (f.type === "beam") {
+      // A thin warning line first, then the full pillar.
+      const x = Math.round(f.x * T), on = k > 0.45, w = on ? Math.round(18 * (1 - (k - 0.45) / 0.55) + 4) : 2;
+      ctx.globalAlpha = on ? 0.85 : 0.5 + 0.3 * Math.sin(S.time * 40);
+      ctx.fillStyle = f.color;
+      ctx.fillRect(x - w / 2, 0, w, ARENA_FLOOR * T);
+      if (on) { ctx.fillStyle = "#ffffff"; ctx.fillRect(x - w / 4, 0, Math.max(1, w / 2), ARENA_FLOOR * T); }
+      ctx.globalAlpha = 1;
+    } else if (f.type === "meteor") {
+      const y = Math.round((ARENA_FLOOR - 1) * T * k), x = Math.round(f.x * T + (1 - k) * 60);
+      pxDisc(ctx, x, y, 8, OUTLINE);
+      pxDisc(ctx, x, y, 7, "#ff6f00");
+      pxDisc(ctx, x - 1, y - 1, 4, "#ffd54f");
+      if (Math.random() < 0.8) particle({ x: x / T + 0.3, y: y / T - 0.3, vx: 2, vy: -1, life: 0.4, color: Math.random() < 0.5 ? "#ff6f00" : "#ffd54f", glow: true });
+      // A shadow growing where it will land.
+      ctx.globalAlpha = 0.25 + 0.4 * k;
+      ctx.fillStyle = "#ff3d00";
+      ctx.fillRect(Math.round(f.x * T) - Math.round(14 * k) - 4, ARENA_FLOOR * T - 2, Math.round(28 * k) + 8, 2);
+      ctx.globalAlpha = 1;
+    }
+  }
+  // Smoke hanging around the rogue.
+  const p = S.heroes.find(o => o.player);
+  if (p && p.smoke > 0) {
+    p.smoke -= 1 / 60;
+    if (Math.random() < 0.5) particle({ x: centerX(p) + (Math.random() - 0.5) * 1.6, y: centerY(p) + (Math.random() - 0.5), vx: (Math.random() - 0.5), vy: -0.6, life: 0.6, color: Math.random() < 0.5 ? "#5d566a" : "#8a8296", size: 2 });
+  }
+}
 function hitTrap(t, dmg) {
   t.hp = t.hp ?? ASCENT.trapHp(t.lvl);
   t.hp -= dmg;
@@ -10698,6 +10933,12 @@ function updateLich(b, dt) {
   b.roar = (b.roar || 0) - dt;
   b.castCd -= dt;
   b.skullT -= dt;
+  // Frozen by a frost nova: she can't move, cast or throw skulls until it thaws (a spell already going carries on).
+  if (b.frozenT > 0 && !b.action && !(b.repulse > 0)) {
+    b.frozenT -= dt;
+    if (Math.random() < 0.3) particle({ x: b.x + Math.random() * b.w, y: b.y + Math.random() * b.h, vy: -0.5, life: 0.5, color: Math.random() < 0.5 ? "#b3e5fc" : "#ffffff", glow: true });
+    return;
+  }
   for (const k in b.lcd) b.lcd[k] -= dt;
   const p = S.heroes.find(h => h.player);
   if (!inArena() || S.intro > 0 || !p) return;
@@ -10777,6 +11018,7 @@ function drawLich(b, shadow) {
   ctx.globalAlpha = 1;
   drawSprite(spr, cx, bottom, b.face, (won ? 0.35 : 1) * fade);
   if (b.flash > 0 && !shadow) drawSprite(sprite(LICH_ART, LICH_PAL, "lich", true), cx, bottom, b.face, 0.7 * fade);
+  if (b.frozenT > 0 && !shadow) drawSprite(sprite(LICH_ART, LICH_PAL, "lich", true), cx, bottom, b.face, 0.35 + 0.1 * Math.sin(S.time * 6));
   // Wisps trailing off the hem as she floats.
   if (!shadow && !won && Math.random() < 0.4) particle({ x: b.x + Math.random() * b.w, y: b.y + b.h + 0.2, vy: 0.5, vx: (Math.random() - 0.5) * 0.4, life: 0.5, color: b.enraged ? "#c2185b" : "#5a2d82", glow: true });
 }
@@ -10803,9 +11045,25 @@ function drawAscentHud() {
     const f = b.flashName;
     if (f && f.t > 0) { f.t -= 1 / 60; drawText(f.text, W * T / 2, by + 8, "#b9f6ca", { align: "center" }); }
   }
+  if (inArena() && S.boss && S.boss.lich) drawSpecialsHud(c);
   const f = S.asc.flash;
-  if (f && f.t > 0) { f.t -= 1 / 60; drawText(f.text, W * T - 6, H * T - 12, "#ffd54f", { align: "right" }); }
-  if (S.time - S.asc.startT < 7 && S.phase !== "over") drawText("A/D MOVE   W JUMP   SPACE ATTACK   E ABILITY" + (gameClass === "knight" ? "   S BLOCK" : ""), W * T / 2, H * T - 12, "#e6e0ec", { align: "center" });
+  if (f && f.t > 0) { f.t -= 1 / 60; drawText(f.text, W * T - 6, H * T - (inArena() ? 36 : 12), "#ffd54f", { align: "right" }); }
+  if (S.time - S.asc.startT < 7 && S.phase !== "over") drawText("A/D MOVE   W JUMP   SPACE ATTACK   E ABILITY" + (gameClass === "knight" ? "   S BLOCK" : "") + (inArena() ? "   Q R F SPECIALS" : ""), W * T / 2, H * T - (inArena() ? 24 : 12), "#e6e0ec", { align: "center" });
+}
+// Along the bottom of the boss fight: the Q and R specials' cooldowns, and the Fury meter.
+function drawSpecialsHud(c) {
+  const sp = BOSS_SPECIALS[gameClass], a = S.asc, y = H * T - 11;
+  ctx.fillStyle = "rgba(8,4,14,0.8)";
+  ctx.fillRect(0, y - 4, W * T, 15);
+  const slot = (key, s, left, x) => {
+    const ready = left <= 0;
+    drawText(`${key} ${s.name} ${ready ? "READY" : left.toFixed(1) + "S"}`, x, y, ready ? "#ffd54f" : "#8a8296");
+  };
+  slot("Q", sp.q, a.qCd || 0, 6);
+  slot("R", sp.r, a.rCd || 0, 156);
+  const fury = (a.fury || 0) / FURY, full = fury >= 1;
+  drawText(full ? `F ${sp.f.name}!` : "F FURY", 306, y, full ? (Math.sin(S.time * 10) > 0 ? "#ff8a80" : "#ffd54f") : "#8a8296");
+  drawMeter(W * T - 66, y + 1, 60, 4, fury, "#12001f", "#5a2d82", full ? "#ffd54f" : "#ff8a80");
 }
 
 newGame(true);
