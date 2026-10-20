@@ -30,6 +30,10 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
     - On the Ice Tower, fire, blood, stone and souls become frost and ice: icicles fall instead of fireballs, Cataclysm raises ice spikes, Devour shoots ice chains, the Void Lance turns white.
     - In the Forest they become poison, sap, wood and vines: spiked seed pods fall, Cataclysm raises roots, Devour lashes out with leafy vines, Grasp opens a swamp pool with wooden hands.
     - His glowing eyes and chest change colour to match.
+  - **Themed traps and monsters:** on the ice and forest maps the traps and monsters change too, on the level, in the toolbar, in their tabs and in the placement preview.
+    - On the Ice Tower, their stone, iron, wood and bone turn to frosted ice. Ogres become blue ice trolls, imps and hellhounds burn with icy blue fire, and skeletons and golems are frost-pale.
+    - In the Forest, they turn to bark and lichen. Wraiths become brown forest spirits, imps turn into green goblins, and hellhounds' fire goes a sickly green.
+    - Fire vents, frost totems and tesla sparks keep their colours, so you can still tell what they do.
 - **Boss level:** heroes Vorgath kills himself in the boss battle don't add to your soul counter. Their souls fly into him and level him up instead.
   - Champions are worth 3 souls, colossi 5, and dark souls count double.
   - Level n needs 3 + 2n souls. Each level gives +12% health in every form (filled at once if it happens mid-fight) and +8% damage on the tower.
