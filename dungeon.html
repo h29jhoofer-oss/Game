@@ -179,9 +179,10 @@
     <summary>How to play</summary>
     You are the boss, waiting at the top of your castle tower. Each wave, a group of heroes runs and jumps through the level to reach it.
     Heroes who make it through the door hide inside the tower. Once 5 are inside, they climb up and fight you all at once.<br>
-    <b>Ascent</b> turns it around: you play a single hero (knight, archer, mage or rogue) climbing three levels of traps and monsters
-    (the castle, the ice tower and the forest), then fight Nyxara, the Lich Queen, at the top. A / D move, W jumps, Space attacks (and smashes traps),
-    E uses your hero's ability, and the knight holds S to block. Red potions heal you; R retries after a death.<br>
+    <b>Ascent</b> turns it around: you play a single hero (knight, archer, mage or rogue) climbing three floors up the inside of the
+    tower, jumping from ledge to ledge past its traps, then fight Nyxara, the Lich Queen, at the top. There are no monsters, and the crushers
+    slam on their own. A / D move, W jumps (up through the wooden ledges), Space attacks (and smashes traps), E uses your hero's ability,
+    and the knight holds S to block. Red potions heal you; R retries after a death.<br>
     <b>Modes:</b> <b>Story</b> is the 25-wave tale of the tower and what lies under it. <b>Sandbox</b> has no story and no last wave: the heroes keep coming, a level stronger each wave, joined by eleven sandbox-only heroes (fliers, burrowers, a Siege Colossus every fifth wave from 10, and more). Pick Easy, Normal, Hard or Nightmare for it; each keeps its own best wave. Then pick a map: the <b>Castle</b>; the <b>Ice Tower</b>, with slippery ice patches (heroes skid, and sometimes slip straight into a pit),
     pits of ice spikes, Ice Serpents and Vorgath as the Frost King; or the <b>Forest</b>, with a great tree for a tower, pools of deep water,
     Great Vipers and Vorgath as the Thorn King.<br>
@@ -328,11 +329,23 @@ let START;
 MAP.forEach((row, y) => { const x = row.indexOf("S"); if (x >= 0) START = { x, y }; });
 
 const inArena = () => !!S && S.scene === "arena";
-const mapW = () => (inArena() ? ARENA : MAP)[0].length;
+// The map being played: the level, the tower top, or (in Ascent) one of the tower climbs.
+const curMap = () => (S && S.climb && !inArena() ? S.climb.map : inArena() ? ARENA : MAP);
+const mapW = () => curMap()[0].length;
+const mapH = () => curMap().length;
 const tileIn = (map, x, y) => (map[y] || "")[x] || "#";
-const tileAt = (x, y) => tileIn(inArena() ? ARENA : MAP, x, y);
+const tileAt = (x, y) => tileIn(curMap(), x, y);
 const isSolid = (x, y) => tileAt(x, y) === "#";
-const torches = () => TORCHES[inArena() ? "arena" : "level"];
+// "=" is a wooden ledge in the tower climbs: you jump up through it and land on top.
+const isLedge = (x, y) => tileAt(x, y) === "=";
+const torches = () => (S && S.climb && !inArena() ? S.climb.torches : TORCHES[inArena() ? "arena" : "level"]);
+// Every lava tile on the current map (just the bottom row, except in the climbs), worked out once per map.
+const lavaCache = new Map();
+function lavaCells() {
+  const m = curMap();
+  if (!lavaCache.has(m)) { const out = []; m.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === "L") out.push([x, y]); })); lavaCache.set(m, out); }
+  return lavaCache.get(m);
+}
 const canBuild = (x, y) => !inArena() && y > 0 && tileAt(x, y) === "." && x < TOWER_X - 1;
 
 // ---------- balance ----------
@@ -1940,7 +1953,7 @@ function newGame(title = false) {
 const MODE_CARDS = [
   { mode: "story", name: "STORY", color: "#ff5252", lines: ["25 WAVES OF THE TALE.", "SOMETHING WAITS", "UNDER THE CASTLE."] },
   { mode: "sandbox", name: "SANDBOX", color: "#9cff9c", lines: ["ENDLESS WAVES,", "NO STORY. HEROES GET", "STRONGER EVERY WAVE."] },
-  { mode: "ascent", name: "ASCENT", color: "#ffd54f", lines: ["BE THE HERO: CLIMB", "THREE LEVELS AND SLAY", "THE LICH QUEEN."] },
+  { mode: "ascent", name: "ASCENT", color: "#ffd54f", lines: ["BE THE HERO: CLIMB", "THE TOWER AND SLAY", "THE LICH QUEEN."] },
 ].map((c, i) => Object.assign(c, { x: W * T / 2 - 225 + i * 152, y: H * T / 2 + 6, w: 144, h: 50 }));
 // Choosing Sandbox brings up a second row of cards, one per difficulty.
 const DIFF_CARDS = DIFFICULTIES.map((d, i) => ({ name: d.name, color: d.color, lines: d.lines, x: W * T / 2 - 230 + i * 116, y: H * T / 2 + 6, w: 108, h: 50 }));
@@ -2038,8 +2051,8 @@ function moveBody(e, dt) {
   e.y += e.vy * dt;
   const [c0, c1] = cols(e);
   if (e.vy > 0) {
-    const ty = Math.floor(e.y + e.h);
-    for (let tx = c0; tx <= c1; tx++) if (isSolid(tx, ty)) { e.y = ty - e.h; e.vy = 0; e.onGround = true; break; }
+    const ty = Math.floor(e.y + e.h), wasAbove = e.y + e.h - e.vy * dt <= ty + 0.01;
+    for (let tx = c0; tx <= c1; tx++) if (isSolid(tx, ty) || (wasAbove && isLedge(tx, ty))) { e.y = ty - e.h; e.vy = 0; e.onGround = true; break; }
   } else if (e.vy < 0) {
     const ty = Math.floor(e.y);
     for (let tx = c0; tx <= c1; tx++) if (isSolid(tx, ty)) { e.y = ty + 1; e.vy = 0; break; }
@@ -2051,7 +2064,7 @@ function moveBody(e, dt) {
 }
 
 function inLava(e) {
-  if (e.y > H) return true;
+  if (e.y > mapH()) return true;
   const [c0, c1] = cols(e), [r0, r1] = rows(e);
   for (let y = r0; y <= r1; y++) for (let x = c0; x <= c1; x++) if (tileAt(x, y) === "L") return true;
   return false;
@@ -2834,6 +2847,7 @@ function screenFromEvent(e) {
   return { x: (e.clientX - r.left) / r.width * W * T, y: (e.clientY - r.top) / r.height * H * T };
 }
 const camX = () => (S && !inArena() ? S.camX : 0);
+const camY = () => (S && S.climb && !inArena() ? S.camY : 0);
 const tileAtScreen = p => ({ x: Math.floor(p.x / T + camX()), y: Math.floor(p.y / T) });
 let mouse = null;
 canvas.addEventListener("mousemove", e => { mouse = screenFromEvent(e); });
@@ -2851,7 +2865,7 @@ function updateCamera(dt) {
   if (S.mode === "ascent") {
     // The camera follows the hero.
     const p = S.heroes.find(h => h.player);
-    if (p && !inArena()) S.camX += (Math.max(0, Math.min(LEVEL_W - W, centerX(p) - W * 0.38)) - S.camX) * Math.min(1, dt * 6);
+    if (p && !inArena() && S.climb) S.camY += (Math.max(0, Math.min(mapH() - H, centerY(p) - H * 0.55)) - S.camY) * Math.min(1, dt * 6);
     return;
   }
   if (inArena()) return;
@@ -4417,10 +4431,10 @@ function updateParticles(dt) {
   S.particles = S.particles.filter(p => p.life > 0);
 
   // Embers drifting up from the lava, sparks from the torches.
-  for (let x = 0; x < mapW(); x++) {
-    if (tileAt(x, H - 1) === "L" && Math.random() < dt * 1.5) {
+  for (const [x, ly] of lavaCells()) {
+    if (Math.random() < dt * 1.5) {
       const em = theme().embers;
-      particle({ x: x + Math.random(), y: H - 0.8, vx: (Math.random() - 0.5) * 0.5, vy: theme().pit === "lava" ? -1 - Math.random() * 1.5 : -0.4 - Math.random() * 0.5,
+      particle({ x: x + Math.random(), y: ly + 0.2, vx: (Math.random() - 0.5) * 0.5, vy: theme().pit === "lava" ? -1 - Math.random() * 1.5 : -0.4 - Math.random() * 0.5,
         life: 0.8 + Math.random() * 0.8, color: Math.random() < 0.5 ? em[0] : em[1], glow: true });
     }
   }
@@ -5288,7 +5302,7 @@ function updateTesla(t) {
 // The pendulum's blade (or blades) swing through the air under its mount.
 function pendulumReach(t) {
   let gy = t.y + 1;
-  while (gy < H && !isSolid(t.x, gy)) gy++;
+  while (gy < mapH() && !isSolid(t.x, gy) && !isLedge(t.x, gy)) gy++;
   return Math.max(0.8, Math.min(4.5, gy - t.y - 0.6));
 }
 function pendulumBlades(t) {
@@ -5339,8 +5353,8 @@ function updateFire(t, dt) {
 // How far a crusher can fall before it hits the ground (or the lava).
 function crusherDrop(t) {
   let gy = t.y + 1;
-  while (gy < H && !isSolid(t.x, gy)) gy++;
-  return Math.min(gy, H) - t.y - 1;
+  while (gy < mapH() && !isSolid(t.x, gy) && !isLedge(t.x, gy)) gy++;
+  return Math.min(gy, mapH()) - t.y - 1;
 }
 
 function updateCrusher(t, dt) {
@@ -5352,7 +5366,9 @@ function updateCrusher(t, dt) {
       const dx = t.x + 0.5 - centerX(h);
       return dx > -0.3 && dx < 1.1 && centerY(h) > t.y + 0.5;
     });
-    if (t.cd <= 0 && under) { t.state = "fall"; t.v = 0; t.hits = new Set(); }
+    // In Ascent they slam on their own beat instead of waiting for someone underneath.
+    const beat = S.mode === "ascent" && (t.wait = (t.wait ?? 0.6 + (t.x * 0.37 + t.y * 0.21) % 1.6) - dt) <= 0;
+    if (t.cd <= 0 && (under || beat)) { t.state = "fall"; t.v = 0; t.hits = new Set(); t.wait = 1.6; }
   } else if (t.state === "fall") {
     t.v += numsOf(t).fall * dt;
     t.off = Math.min(drop, t.off + t.v * dt);
@@ -7504,9 +7520,8 @@ const BG = bgFor("castle");
 // ---------- drawing ----------
 function drawLava() {
   const kind = theme().pit;
-  for (let x = 0; x < mapW(); x++) {
-    if (tileAt(x, H - 1) !== "L") continue;
-    const X = x * T, Y = (H - 1) * T;
+  for (const [x, ly] of lavaCells()) {
+    const X = x * T, Y = ly * T;
     if (kind === "spikes") {
       // A bed of ice spikes, glinting.
       ctx.fillStyle = "#0d2a40";
@@ -8074,9 +8089,9 @@ function drawBar(e, width, color) {
 function drawShadow(e) {
   const fx = Math.floor(centerX(e));
   let gy = Math.floor(e.y + e.h - 0.01);
-  while (gy < H && !isSolid(fx, gy)) gy++;
+  while (gy < mapH() && !isSolid(fx, gy) && !isLedge(fx, gy)) gy++;
   const lift = gy - (e.y + e.h);
-  if (gy >= H || lift > 3) return;
+  if (gy >= mapH() || lift > 3) return;
   const w = Math.round(e.w * T * (1 - lift / 4)) + 2, x = Math.round(centerX(e) * T - w / 2), y = gy * T;
   ctx.fillStyle = "rgba(0,0,0,0.45)";
   ctx.fillRect(x + 1, y - 1, w - 2, 1);
@@ -8722,7 +8737,10 @@ function drawLighting() {
   lctx.fillStyle = inArena() ? "rgba(8, 4, 18, 0.42)" : "rgba(8, 4, 18, 0.5)";
   lctx.fillRect(0, 0, light.width, light.height);
   lctx.globalCompositeOperation = "destination-out";
+  // In a climb the darkness covers just the screen, so holes are shifted up by the camera.
+  const oy = camY() * T;
   const hole = (x, y, r, strength = 1) => {
+    y -= oy;
     const g = lctx.createRadialGradient(x / 2, y / 2, 0, x / 2, y / 2, r / 2);
     g.addColorStop(0, `rgba(0,0,0,${strength})`);
     g.addColorStop(0.6, `rgba(0,0,0,${strength * 0.5})`);
@@ -8733,7 +8751,7 @@ function drawLighting() {
   const moon = MOON[inArena() ? "arena" : "level"];
   hole(moon.x + camX() * T, moon.y, moon.r * 9, 0.6);
   torches().forEach((t, i) => hole(t.x * T + 8, t.y * T + 6, 70 + Math.sin(S.time * 9 + i * 2) * 3));
-  for (let x = 0; x < mapW(); x++) if (tileAt(x, H - 1) === "L") hole(x * T + 8, (H - 1) * T + 4, 44, 0.9);
+  for (const [x, ly] of lavaCells()) hole(x * T + 8, ly * T + 4, 44, 0.9);
   for (const h of S.heroes) hole(centerX(h) * T, centerY(h) * T, h.ampBy || h.kind === "champion" ? 56 : 40, 0.7);
   for (const a of S.heroArrows) if (a.magic) hole(a.x * T, a.y * T, 24, 0.8);
   for (const p of S.pools) hole(p.x * T, ARENA_FLOOR * T, p.r * T * 2.2, 0.8);
@@ -8750,6 +8768,7 @@ function drawLighting() {
     for (let d = 0; d < 8; d += 2) hole((m.x + S.boss.face * d) * T, Math.min(ARENA_FLOOR - 0.2, m.y + d * 0.45) * T, 50, 0.9);
   }
   if (S.doorFlash > 0 && !inArena()) hole(TOWER_X * T + 6, 8.5 * T, 50, S.doorFlash * 2);
+  if (S.climb && !inArena()) hole(S.climb.door.x * T + 8, S.climb.door.y * T, 70, 0.9);
   hole(centerX(S.boss) * T, S.boss.y * T + 14, 56, 0.8);
   for (const e of bossEyes(S.boss)) hole(e.x, e.y, 14, 1);
   if (!inArena()) for (const t of S.traps) {
@@ -8761,7 +8780,7 @@ function drawLighting() {
   }
 
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(light, 0, 0, mapW() * T / 2, H * T / 2, 0, 0, mapW() * T, H * T);
+  ctx.drawImage(light, 0, 0, mapW() * T / 2, H * T / 2, 0, oy, mapW() * T, H * T);
 
   // Warm glow around flames and lava.
   ctx.globalCompositeOperation = "lighter";
@@ -8773,7 +8792,7 @@ function drawLighting() {
     ctx.fillRect(x - r, y - r, r * 2, r * 2);
   };
   torches().forEach((t, i) => glow(t.x * T + 8, t.y * T + 6, 22 + Math.sin(S.time * 11 + i) * 2, theme().light));
-  for (let x = 0; x < mapW(); x++) if (tileAt(x, H - 1) === "L") glow(x * T + 8, (H - 1) * T + 4, 20, theme().pitLight);
+  for (const [x, ly] of lavaCells()) glow(x * T + 8, ly * T + 4, 20, theme().pitLight);
   for (const p of S.pools) glow(p.x * T, ARENA_FLOOR * T, p.r * T * 1.4, fxGlow("pool", "rgba(200,20,30,0.3)"));
   for (const m of S.meteors) glow(m.x * T, m.y * T, 14, fxGlow("meteor", "rgba(255,110,20,0.5)"));
   for (const sk of S.skulls) glow(sk.x * T, sk.y * T, 10, "rgba(150,100,255,0.45)");
@@ -9442,10 +9461,10 @@ function draw() {
   if (S.shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * S.shake), Math.round((Math.random() - 0.5) * S.shake));
 
   const arena = inArena();
-  const layers = bgFor(S.theme || "castle")[arena ? "arena" : "level"];
+  const layers = S.climb && !arena ? climbBg(S.climb) : bgFor(S.theme || "castle")[arena ? "arena" : "level"];
   ctx.drawImage(layers.sky, 0, 0);
   // Everything after this is drawn in world space, scrolled by the camera.
-  ctx.translate(-Math.round(camX() * T), 0);
+  ctx.translate(-Math.round(camX() * T), -Math.round(camY() * T));
   ctx.drawImage(layers.world, 0, 0);
   drawTorches();
   if (!arena) {
@@ -9897,25 +9916,171 @@ const CLASS_IDS = ["knight", "archer", "mage", "rogue"];
 let gameClass = "knight";
 // Traps hit a lone hero a little softer than the heroes of a whole wave; a trap takes this much to smash.
 const ASCENT = { trapDmg: 0.75, potion: 0.4, trapHp: lvl => 20 + 15 * lvl, jump: 13.5, airSpeed: 4.8 };
-// Each level: [trap, x, y, level, path], [monster, x, y], the pits a serpent lurks in, and healing potions.
+// Three climbs up the inside of the Hollow King's tower, drawn as maps: "#" stone, "=" a wooden ledge you can jump up
+// through, "L" lava, P where you start, D the door to the next floor, h a healing potion, and a letter for each trap:
+// s spikes, w saw, W patrol saw, t arrow turret, f fire vent, c crusher, m bomb, p pendulum, z tesla coil, k skyhook,
+// r frost totem, a tar. Each climb's traps are a level tougher than the last. No monsters: just you and the traps.
+const CLIMB_TRAPS = { s: "spike", w: "saw", W: "saw", t: "turret", f: "fire", c: "crusher", m: "mine", p: "pendulum", z: "tesla", k: "skyhook", r: "frost", a: "tar" };
+const CLIMB_MAPS = {
+  L1: [
+    "##############################",
+    "#............................#",
+    "#............................#",
+    "#............................#",
+    "#......................D.....#",
+    "#..................#######...#",
+    "#............................#",
+    "#............h...............#",
+    "#..........======............#",
+    "#............................#",
+    "#......s.....................#",
+    "#....=====...................#",
+    "#............................#",
+    "#....................c.......#",
+    "#...........=====............#",
+    "#............................#",
+    "#............................#",
+    "#..................=====.....#",
+    "#............................#",
+    "#...........m................#",
+    "#.........=======............#",
+    "#............................#",
+    "#.t...h......................#",
+    "#...=====....................#",
+    "#............................#",
+    "#............................#",
+    "#.........====...............#",
+    "#............................#",
+    "#............w...............#",
+    "#..............=====.........#",
+    "#............................#",
+    "#............................#",
+    "#....................=====...#",
+    "#............................#",
+    "#.P......s.............f.....#",
+    "##############################",
+  ],
+  L2: [
+    "##############################",
+    "#............................#",
+    "#............................#",
+    "#........................D...#",
+    "#......................#####.#",
+    "#............................#",
+    "#.....................s......#",
+    "#...................====.....#",
+    "#..................W.........#",
+    "#.........c..................#",
+    "#.............====...........#",
+    "#............................#",
+    "#............................#",
+    "#.......====.................#",
+    "#............................#",
+    "#t..h........................#",
+    "#.====.......................#",
+    "#............................#",
+    "#........r...................#",
+    "#......====..................#",
+    "#............................#",
+    "#..............k.............#",
+    "#............====............#",
+    "#............................#",
+    "#......................p.....#",
+    "#..................====......#",
+    "#............................#",
+    "#.........................h..#",
+    "#........................===.#",
+    "#............................#",
+    "#................c..........t#",
+    "#....................====....#",
+    "#............................#",
+    "#............................#",
+    "#..............====..........#",
+    "#............................#",
+    "#..........z.................#",
+    "#........====................#",
+    "#.............w..............#",
+    "#............................#",
+    "#..====......................#",
+    "#............................#",
+    "#.P.....f.....f.....s........#",
+    "#####LLLLL###LLLLL############",
+  ],
+  L3: [
+    "##############################",
+    "#............................#",
+    "#.........................D..#",
+    "#........................###.#",
+    "#.....................p......#",
+    "#......................s.....#",
+    "#....................====....#",
+    "#............................#",
+    "#................m...........#",
+    "#..............====..........#",
+    "#.........c..................#",
+    "#...........h................#",
+    "#........====................#",
+    "#............................#",
+    "#t....z......................#",
+    "#....====....................#",
+    "#............................#",
+    "#...........r................#",
+    "#..........====..............#",
+    "#............................#",
+    "#..................W.........#",
+    "#.................===........#",
+    "#........................c...#",
+    "#.........................h..#",
+    "#.......................====.#",
+    "#....................p.......#",
+    "#............................#",
+    "#..................====......#",
+    "#............................#",
+    "#.............f..............#",
+    "#............===.............#",
+    "#............................#",
+    "#...........................t#",
+    "#......===...................#",
+    "#............................#",
+    "#.hk.........................#",
+    "#====........................#",
+    "#............................#",
+    "#.......a....................#",
+    "#.....====...................#",
+    "#............................#",
+    "#............w...............#",
+    "#...........====.............#",
+    "#...................c........#",
+    "#............................#",
+    "#.................====.......#",
+    "#............................#",
+    "#........................z...#",
+    "#.......................====.#",
+    "#............................#",
+    "#.P......f...s.....f.........#",
+    "####LLLL###LL##LLL####LLLL####",
+  ],
+};
 const LEVELS = [
-  { name: "THE CASTLE GATE", theme: "castle", sub: "Climb to the tower. Smash traps, or jump them.", mon: 1,
-    traps: [["spike", 6, 8, 1], ["spike", 7, 8, 1], ["turret", 11, 8, 1], ["saw", 17, 8, 1], ["fire", 22, 8, 1], ["crusher", 25, 5, 1],
-      ["mine", 30, 8, 1], ["spike", 40, 6, 1], ["turret", 49, 8, 1], ["saw", 52, 8, 1]],
-    monsters: [["skeleton", 10, 8], ["skeleton", 24, 8], ["ogre", 32, 8], ["imp", 41, 6], ["skeleton", 48, 8]],
-    serpents: [13], potions: [[23, 8], [42, 6]] },
-  { name: "THE FROZEN SPIRE", theme: "ice", sub: "Mind the ice: it's easy to slip into the spikes.", mon: 1.5,
-    traps: [["frost", 7, 8, 2], ["spike", 10, 8, 2], ["turret", 15, 8, 2], ["tesla", 18, 8, 2], ["pendulum", 22, 4, 2], ["grinder", 23, 8, 2],
-      ["tar", 29, 8, 2], ["crusher", 32, 5, 2], ["saw", 35, 6, 2], ["mine", 38, 7, 2], ["fire", 43, 7, 2], ["skyhook", 47, 8, 2], ["boulder", 50, 6, 2]],
-    monsters: [["wraith", 11, 6], ["imp", 24, 8], ["hound", 33, 8], ["skeleton", 40, 6], ["ogre", 48, 8]],
-    serpents: [13, 35], potions: [[21, 8], [43, 7], [50, 7]] },
-  { name: "THE THORNWOOD", theme: "forest", sub: "The last climb. The tower waits at the end.", mon: 1.7,
-    traps: [["spike", 2, 8, 2, "barbed"], ["saw", 7, 7, 2, "ripper"], ["turret", 10, 8, 2, "twin"], ["fire", 16, 8, 2, "pillar"], ["crusher", 18, 5, 2, "obsidian"],
-      ["grinder", 21, 8, 2, "meat"], ["pendulum", 25, 3, 2, "twin"], ["tesla", 26, 8, 2, "storm"], ["tar", 29, 8, 2, "burning"], ["mine", 33, 8, 2, "keg"],
-      ["frost", 38, 7, 2], ["boulder", 43, 5, 2, "iron"], ["skyhook", 48, 8, 2, "net"], ["spike", 51, 8, 2, "impaler"], ["turret", 52, 8, 2, "ballista"]],
-    monsters: [["golem", 11, 8], ["hound", 17, 8], ["imp", 26, 8], ["wraith", 31, 5], ["ogre", 40, 6], ["hound", 49, 8]],
-    serpents: [13, 27, 35, 46], potions: [[22, 8], [32, 8], [42, 6]] },
+  { name: "THE LOWER HALLS", map: CLIMB_MAPS.L1, lvl: 1, sub: "Climb to the door at the top. Smash traps, or jump past them." },
+  { name: "THE BURNING STAIR", map: CLIMB_MAPS.L2, lvl: 2, sub: "Higher up, the traps are deadlier, and the floor is lava." },
+  { name: "THE CROWN OF THE TOWER", map: CLIMB_MAPS.L3, lvl: 3, sub: "The last climb. She waits beyond the door." },
 ];
+// Turn a climb's map into tiles, traps, potions, torches and the start and door.
+function parseClimb(L) {
+  const traps = [], potions = [], torches = [];
+  let start = { x: 2, y: 0 }, door = { x: 0, y: 0 };
+  const map = L.map.map((row, y) => [...row].map((ch, x) => {
+    if (ch === "P") { start = { x, y }; return "."; }
+    if (ch === "D") { door = { x, y }; return "."; }
+    if (ch === "h") { potions.push({ x, y }); return "."; }
+    if (CLIMB_TRAPS[ch]) { traps.push({ type: CLIMB_TRAPS[ch], x, y, path: ch === "W" ? "patrol" : null }); return "."; }
+    return ch;
+  }).join(""));
+  // A torch on alternate walls every few rows.
+  for (let y = 3; y < map.length - 2; y += 6) torches.push({ x: (y / 6) % 2 < 1 ? 1 : 28, y });
+  return { map, traps, potions, torches, start, door };
+}
 // The Lich Queen, waiting at the top of the tower.
 const LICH = { name: "NYXARA", title: "THE LICH QUEEN", hp: 900, speed: 2.0, hover: 0.5, dmgTaken: 0.3, skullCd: 3.4, potionEvery: 20 };
 const LICH_ATTACKS = {
@@ -10004,27 +10169,98 @@ function startAscent(cls) {
 }
 let ascentStartedAt = 0;
 function startAscentLevel(i) {
-  const L = LEVELS[i];
-  ascentState(L.theme);
+  const L = LEVELS[i], c = parseClimb(L);
+  ascentState("castle");
   S.asc = { level: i, won: false, inBoss: false, next: null, startT: S.time };
+  S.climb = { index: i, map: c.map, torches: c.torches, door: c.door };
   S.phase = "wave";
-  S.boss = makeLich();
-  Object.assign(S.boss, { x: PERCH.x, y: TOWER_TOP - S.boss.h - LICH.hover });
-  for (const [type, x, y, lvl, path] of L.traps) { const t = newTrap(type, x, y); t.lvl = lvl; if (path) t.path = path; S.traps.push(t); }
-  for (const [type, x, y] of L.monsters) S.minions.push(makeMinion(type, x, y, L.mon));
-  for (const px of L.serpents) {
-    const pit = pitAt(px);
-    if (!pit) continue;
-    const mid = (pit[0] + pit[1] + 1) / 2;
-    S.serpents.push({ pit, x: mid, state: "lurk", t: 0, cd: 2 + Math.random() * 2, prey: null, hx: mid, hy: H - 0.6, jaw: 0, dir: 1, dark: i === 2 && px === 35 });
-  }
-  S.potions = L.potions.map(([x, y]) => ({ x, y }));
-  S.heroes = [makePlayer(gameClass)];
+  for (const tr of c.traps) { const t = newTrap(tr.type, tr.x, tr.y); t.lvl = L.lvl; if (tr.path) t.path = tr.path; S.traps.push(t); }
+  S.potions = c.potions;
+  const p = makePlayer(gameClass);
+  Object.assign(p, { x: c.start.x + 0.2, y: c.start.y + 1 - p.h - 0.02 });
+  S.heroes = [p];
   S.camX = 0;
-  S.camGoal = null;
-  nameSerpent();
-  banner(`LEVEL ${i + 1}: ${L.name}`, L.sub, THEMES[L.theme].color);
-  say(`Level ${i + 1} of 3. A / D move, W jumps, Space attacks (and smashes traps), E uses ${CLASSES[gameClass].ability.name}.`);
+  S.camY = Math.max(0, mapH() - H);
+  banner(`FLOOR ${i + 1}: ${L.name}`, L.sub, "#ffd54f");
+  say(`Floor ${i + 1} of 3. A / D move, W jumps (up through wooden ledges), Space attacks and smashes traps, E uses ${CLASSES[gameClass].ability.name}.`);
+}
+// Each climb's background (the inside of the tower, with its stone and ledges), painted once.
+const climbBgs = {};
+function climbBg(climb) {
+  if (climbBgs[climb.index]) return climbBgs[climb.index];
+  const map = climb.map, mw = map[0].length, mh = map.length;
+  const sky = document.createElement("canvas"), world = document.createElement("canvas");
+  sky.width = W * T; sky.height = H * T;
+  world.width = mw * T; world.height = mh * T;
+  sky.getContext("2d").fillStyle = "#08060c";
+  sky.getContext("2d").fillRect(0, 0, sky.width, sky.height);
+  const g = world.getContext("2d"), rand = rng(31 + climb.index);
+  const px = (x, y, col, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+  const solid = (x, y) => tileIn(map, x, y) === "#";
+  // The back wall: dark bricks, getting a little warmer near the lava at the bottom.
+  const shades = ["#1b1726", "#1d1929", "#191523", "#1f1a2b"];
+  px(0, 0, "#110e18", mw * T, mh * T);
+  for (let y = 0; y < mh * T; y += 4) {
+    const off = (y / 4) % 2 ? 4 : 0;
+    for (let x = -8 + off; x < mw * T; x += 8) px(Math.max(0, x + 1), y + 1, shades[(rand() * 4) | 0], 7, 3);
+  }
+  for (let y = 0; y < 40; y += 2) px(0, mh * T - y, `rgba(255,90,20,${0.12 * (1 - y / 40)})`, mw * T, 2);
+  // Tall arched windows with moonlight, and red banners between them.
+  for (let wy = 4; wy < mh - 4; wy += 9) {
+    for (const wx of [(wy / 9) % 2 < 1 ? 7 : 20]) {
+      // A narrow barred window, pale with moonlight, on a stone sill.
+      const X = wx * T + 3, Y = wy * T + 4;
+      px(X - 1, Y - 3, OUTLINE, 12, 22);
+      px(X + 1, Y - 2, "#9fb3d9", 8, 2);
+      px(X, Y, "#9fb3d9", 10, 18);
+      px(X + 2, Y + 2, "#c9d6ee", 3, 8);
+      for (const bx of [3, 6]) px(X + bx, Y - 2, "#2a2533", 1, 20);
+      px(X, Y + 9, "#2a2533", 10, 1);
+      px(X - 2, Y + 18, "#8a82a0", 14, 2);
+    }
+    const bx = ((wy / 9) % 2 < 1 ? 16 : 11) * T;
+    px(bx - 1, wy * T, "#5d4037", 12, 2);
+    px(bx, wy * T + 2, "#7a1a20", 10, 22);
+    px(bx, wy * T + 2, "#9c2a2f", 2, 22);
+    px(bx + 3, wy * T + 9, "#e8dcc0", 4, 4);
+  }
+  // Stone blocks and wooden ledges.
+  for (let y = 0; y < mh; y++) for (let x = 0; x < mw; x++) {
+    const ch = map[y][x], X = x * T, Y = y * T;
+    if (ch === "#") {
+      px(X, Y, "#1e1a28", T, T);
+      for (let by = 0; by < 2; by++) {
+        const off = (x + y + by) % 2 ? 8 : 0;
+        for (let bx = -1; bx < 2; bx++) {
+          const sx = X + bx * 16 + off, l = Math.max(sx + 1, X), r = Math.min(sx + 16, X + T);
+          if (r <= l) continue;
+          px(l, Y + by * 8 + 1, ["#5b546c", "#615a73", "#575068", "#665e78"][(rand() * 4) | 0], r - l, 6);
+          px(l, Y + by * 8 + 6, "#2c2738", r - l, 1);
+        }
+      }
+      if (!solid(x, y - 1) && y > 0) { px(X, Y, "#8a82a0", T, 2); px(X, Y + 2, "#2c2738", T, 1); }
+    } else if (ch === "=") {
+      // A plank on iron brackets.
+      px(X, Y, OUTLINE, T, 6);
+      px(X, Y + 1, "#8d6e4f", T, 3);
+      px(X, Y + 1, "#a1887f", T, 1);
+      px(X + ((x * 5) % 12) + 2, Y + 2, "#5d4037", 3, 1);
+      px(X + 7, Y + 6, OUTLINE, 3, 4);
+      px(X + 8, Y + 6, "#4a4458", 1, 3);
+    }
+  }
+  // The door to the next floor, in a frame of gold.
+  const dx = climb.door.x * T, dy = (climb.door.y - 1) * T;
+  px(dx - 3, dy - 5, "#c9a227", 22, 37);
+  px(dx - 2, dy - 4, "#ffd54f", 20, 1);
+  px(dx - 1, dy - 3, OUTLINE, 18, 35);
+  px(dx, dy, "#6d4c2f", 16, 32);
+  px(dx + 2, dy - 2, "#6d4c2f", 12, 2);
+  for (let i = 3; i < 16; i += 4) px(dx + i, dy + 1, "#4a3220", 1, 30);
+  px(dx, dy + 10, "#3b3746", 16, 1);
+  px(dx, dy + 22, "#3b3746", 16, 1);
+  px(dx + 12, dy + 16, "#e0b84a", 2, 2);
+  return (climbBgs[climb.index] = { sky, world });
 }
 function retryAscent() {
   if (!S.asc) return;
@@ -10037,16 +10273,16 @@ function levelCleared() {
   S.phase = "cleared";
   Sound.play("cleared");
   if (i < LEVELS.length - 1) {
-    banner("LEVEL CLEARED", `Next: ${LEVELS[i + 1].name}`, "#ffd54f");
+    banner("FLOOR CLEARED", `Next: ${LEVELS[i + 1].name}`, "#ffd54f");
     S.asc.next = { t: 2.6, fn: () => startAscentLevel(i + 1) };
   } else {
-    banner("THE TOWER", "Something waits at the top...", "#69f0ae");
+    banner("THE TOP OF THE TOWER", "Something waits beyond the door...", "#69f0ae");
     Sound.play("door");
     S.asc.next = { t: 2.6, fn: startLichFight };
   }
 }
 function startLichFight() {
-  ascentState(LEVELS[LEVELS.length - 1].theme);
+  ascentState("castle");
   S.asc = { level: LEVELS.length - 1, won: false, inBoss: true, next: null, startT: S.time };
   S.scene = "arena";
   S.phase = "boss";
@@ -10119,11 +10355,12 @@ function updatePlayer(h, dt) {
     h.vx = dir * (h.onGround ? c.speed : Math.max(c.speed, ASCENT.airSpeed)) * (h.blocking ? 0.35 : 1);
     if (dir && !h.blocking) h.face = dir;
   }
-  const jump = !!(keys.w || keys.arrowup || keys.k);
-  if (jump && !h.jumpHeld) {
-    if (h.onGround) { h.vy = -ASCENT.jump; Sound.play("jump"); }
-    else if (h.kind === "rogue" && !h.doubled) { h.vy = -ASCENT.jump * 0.85; h.doubled = true; burst(centerX(h), h.y + h.h, 6, ["#b39ddb", "#ffffff"], 2, { glow: true }); }
-  }
+  // A jump pressed just before landing still counts, and so does one just after running off an edge.
+  const jump = !!(keys.w || keys.arrowup || keys.k), pressed = jump && !h.jumpHeld;
+  h.jumpBuf = pressed ? 0.15 : (h.jumpBuf || 0) - dt;
+  h.coyote = h.onGround ? 0.1 : (h.coyote || 0) - dt;
+  if (h.jumpBuf > 0 && h.coyote > 0) { h.vy = -ASCENT.jump; h.jumpBuf = 0; h.coyote = 0; Sound.play("jump"); }
+  else if (pressed && h.kind === "rogue" && !h.onGround && !h.doubled) { h.vy = -ASCENT.jump * 0.85; h.doubled = true; h.jumpBuf = 0; burst(centerX(h), h.y + h.h, 6, ["#b39ddb", "#ffffff"], 2, { glow: true }); }
   h.jumpHeld = jump;
   if (h.onGround) h.doubled = false;
   if ((keys[" "] || keys.j) && h.cd <= 0 && !h.blocking && !(h.rush > 0)) playerAttack(h);
@@ -10133,6 +10370,8 @@ function updatePlayer(h, dt) {
   pickPotions(h);
   if (arena) { moveBody(h, dt); return; }
   finishHeroMove(h, dt, false);
+  const d = S.climb && S.climb.door;
+  if (d && S.phase === "wave" && overlaps(h, { x: d.x, y: d.y - 1, w: 1, h: 2 })) levelCleared();
 }
 function playerAttack(h) {
   const c = CLASSES[h.kind];
@@ -10307,7 +10546,7 @@ function drawAscentHud() {
   drawMeter(52, 6, 90, 5, p ? Math.max(0, p.hp) / p.maxHp : 0, "#3b1016", "#2e7d32", "#76ff03");
   drawText(p ? `${Math.max(0, Math.ceil(p.hp))}/${p.maxHp}` : "0", 148, 5, "#e6e0ec");
   const L = LEVELS[S.asc.level];
-  drawText(S.asc.inBoss ? "THE TOWER TOP" : `${S.asc.level + 1}/3 ${L.name}`, 258, 5, THEMES[L.theme].color, { align: "center" });
+  drawText(S.asc.inBoss ? "THE TOWER TOP" : `FLOOR ${S.asc.level + 1}/3`, 240, 5, "#ffd54f", { align: "center" });
   const cdLeft = p ? Math.max(0, p.abilityCd) : 0;
   drawText(`E ${c.ability.name} ${cdLeft > 0 ? cdLeft.toFixed(1) + "S" : "READY"}`, W * T - 6, 5, cdLeft > 0 ? "#8a8296" : "#ffd54f", { align: "right" });
   const b = S.boss;

@@ -15,11 +15,14 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
     - Mage: 160 health, magic bolts, E Mend (heals 35%).
     - Rogue: 170 health, fast, double jump, immune to spikes and bombs, E Shadow Dash (an untouchable dash).
   - **Controls:** A / D move, W jump, Space attack, E ability. R or "Try again" restarts the level (or the fight) after a death.
-  - **Three levels:** the Castle Gate (castle, level 1 traps), the Frozen Spire (ice map, level 2 traps, slippery ice), and the Thornwood (forest, level 2 traps with their upgrades).
-    - Each level has its own set of traps, monsters, serpents and red healing potions.
-    - Every trap and monster behaves exactly as it does against the AI heroes.
+  - **Three floors, climbing up:** every floor is a tall shaft inside the castle tower, played like a platformer. The camera follows you up, and you jump from ledge to ledge to the gold-framed door at the top.
+    - Wooden ledges can be jumped up through and landed on. Stone blocks are solid. Lava waits at the bottom.
+    - A jump pressed just before landing, or just after running off an edge, still counts.
+    - The floors are the Lower Halls (36 rows, level 1 traps), the Burning Stair (44 rows, level 2 traps, lava under the floor) and the Crown of the Tower (52 rows, level 3 traps).
+    - Each floor is drawn as a text map in `CLIMB_MAPS`, with a letter for each trap. Every ledge-to-ledge hop has been checked with the game's own physics.
+    - No monsters or serpents, just traps: spikes, saws (some on rails), arrow turrets, fire vents, crushers, bombs, pendulums, tesla coils, skyhooks, frost totems and tar.
+    - In Ascent the crushers slam on their own rhythm instead of waiting for someone underneath.
     - You can smash traps with your weapon, and arrows and bolts break them too.
-    - Serpents bite for 20% of your health and fling you on across the pit instead of swallowing you.
   - **The boss:** reach the forest tower and you fight **Nyxara, the Lich Queen**, a new boss. She is a floating crowned lich in violet robes, with a staff.
     - She keeps her distance and throws homing skulls, which you can strike or shoot down.
     - Her spells: Grasp of the Grave, Starfall, a Death Ray you can jump, and Repulse if you get close.
