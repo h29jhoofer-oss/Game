@@ -26,6 +26,10 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
   - **Forest:** dark woods, fireflies and green lanterns.
     - The tower is a great tree with a door in its trunk, roots and a canopy.
     - Pits are pools of deep water (heroes drown), the serpent is a Great Viper, and Vorgath is the Thorn King (bark and moss, green eyes, a wooden club), with mossy Devourer and Unmade forms.
+  - **Themed attacks:** on the ice and forest maps every boss attack takes the map's look.
+    - On the Ice Tower, fire, blood, stone and souls become frost and ice: icicles fall instead of fireballs, Cataclysm raises ice spikes, Devour shoots ice chains, the Void Lance turns white.
+    - In the Forest they become poison, sap, wood and vines: spiked seed pods fall, Cataclysm raises roots, Devour lashes out with leafy vines, Grasp opens a swamp pool with wooden hands.
+    - His glowing eyes and chest change colour to match.
 - **Boss level:** heroes Vorgath kills himself in the boss battle don't add to your soul counter. Their souls fly into him and level him up instead.
   - Champions are worth 3 souls, colossi 5, and dark souls count double.
   - Level n needs 3 + 2n souls. Each level gives +12% health in every form (filled at once if it happens mid-fight) and +8% damage on the tower.

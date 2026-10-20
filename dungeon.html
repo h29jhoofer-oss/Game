@@ -1753,6 +1753,9 @@ const THEMES = {
     embers: ["#e1f5fe", "#b3e5fc"], death: ["#e1f5fe", "#81d4fa", "#ffffff"], pit: "spikes", deathText: "was impaled on the ice spikes",
     serpent: { name: "Ice Serpent", segs: ["#e1f5fe", "#b3e5fc"], fin: "#4fc3f7", hump: "#b3e5fc", head: { H: "#e1f5fe", h: "#81d4fa", K: "#01579b", R: "#4fc3f7" }, eyes: ["#18ffff", "#0277bd"] },
     title: "THE FROST KING",
+    // His attacks in frost: fire, blood, stone and souls all turn to ice. (Castle colour -> this map's colour.)
+    fx: { "#ff1744": "#40c4ff", "#b71c1c": "#0d47a1", "#ff5252": "#82b1ff", "#ff8a80": "#b3e5fc", "#c62828": "#1565c0", "#ff3d00": "#29b6f6", "#ff6f00": "#4fc3f7", "#ffb300": "#b3e5fc", "#fff3c4": "#ffffff", "#ffeb3b": "#e1f5fe", "#fff59d": "#e1f5fe", "#7a1420": "#0d3a5c", "#5d0f0f": "#082a44", "#2a040b": "#061c30", "#6e0f18": "#0d47a1", "#a0141e": "#1e88e5", "#1a0e0c": "#0b1a28", "#3b1048": "#0d2a40", "#6b6378": "#81d4fa", "#c9c2d6": "#e1f5fe", "#8a82a0": "#b3e5fc", "#8a8296": "#90caf9", "#5d566a": "#4f86b0", "#14101c": "#0d2a40", "#b388ff": "#80d8ff", "#4a148c": "#01579b", "#e1d5ff": "#ffffff", "#e1bee7": "#e1f5fe", "#7c4dff": "#29b6f6", "#ce93d8": "#b3e5fc", "#311b92": "#01579b", "#d1c4e9": "#e1f5fe", "#e8dcc0": "#e1f5fe", "#a8987a": "#81d4fa", "#00e5ff": "#ffffff", "#18ffff": "#e1f5fe", "#80d8ff": "#b3e5fc", "#1a237e": "#4f86b0" },
+    fxGlow: { pool: "rgba(80,180,255,0.3)", meteor: "rgba(160,220,255,0.5)", sky: "120,200,255", eyes: "24,255,255", chest: "128,216,255" },
     boss: { A: "#3a5a78", a: "#1e3348", L: "#6f9cc0", R: "#0277bd", r: "#01579b", H: "#e1f5fe", h: "#90caf9", G: "#b3e5fc", g: "#4fc3f7", E: "#18ffff", Y: "#ffffff", F: "#80d8ff", C: "#0d2a40", c: "#071826" },
     devourer: { A: "#2e4a66", a: "#1a2c40", L: "#5b84a8", H: "#e1f5fe", h: "#90caf9", E: "#18ffff", Y: "#ffffff", F: "#80d8ff", R: "#0277bd", r: "#01579b", P: "#4fc3f7", C: "#0d2a40", c: "#071826", G: "#b3e5fc" },
     unmade: { A: "#0a1a2a", a: "#050d16", L: "#28445e", H: "#e1f5fe", h: "#90caf9", E: "#ffffff", F: "#b3e5fc", R: "#01579b", P: "#4fc3f7", G: "#e1f5fe" },
@@ -1773,6 +1776,9 @@ const THEMES = {
     embers: ["#c5e1a5", "#d4e157"], death: ["#4fc3f7", "#0277bd", "#e1f5fe"], pit: "water", deathText: "drowned",
     serpent: { name: "Great Viper", segs: ["#7cb342", "#33691e"], fin: "#d4e157", hump: "#558b2f", head: { H: "#7cb342", h: "#33691e", K: "#1b2a10", R: "#e53935" }, eyes: ["#ffeb3b", "#827717"] },
     title: "THE THORN KING",
+    // His attacks in poison, sap, wood and vine.
+    fx: { "#ff1744": "#76ff03", "#b71c1c": "#1b5e20", "#ff5252": "#b2ff59", "#ff8a80": "#ccff90", "#c62828": "#2e7d32", "#ff3d00": "#aeea00", "#ff6f00": "#c6ff00", "#ffb300": "#eeff41", "#fff3c4": "#f9fbe7", "#ffeb3b": "#f4ff81", "#fff59d": "#f0f4c3", "#7a1420": "#33691e", "#5d0f0f": "#1b3a1b", "#2a040b": "#0f1f0c", "#6e0f18": "#33522a", "#a0141e": "#4e7a3f", "#1a0e0c": "#1c130e", "#3b1048": "#1b3a1b", "#6b6378": "#6d4c41", "#c9c2d6": "#a1887f", "#8a82a0": "#8d6e63", "#8a8296": "#8d6e63", "#5d566a": "#4e342e", "#14101c": "#1c130e", "#b388ff": "#9ccc65", "#4a148c": "#33691e", "#e1d5ff": "#dcedc8", "#e1bee7": "#dcedc8", "#7c4dff": "#7cb342", "#ce93d8": "#c5e1a5", "#311b92": "#1b5e20", "#d1c4e9": "#c5e1a5", "#e8dcc0": "#8d6e63", "#a8987a": "#5d4037", "#00e5ff": "#76ff03", "#18ffff": "#b2ff59", "#80d8ff": "#ccff90", "#1a237e": "#1b5e20" },
+    fxGlow: { pool: "rgba(60,160,40,0.3)", meteor: "rgba(180,240,60,0.45)", sky: "60,150,30", eyes: "118,255,3", chest: "178,255,89" },
     boss: { A: "#4e342e", a: "#2e1d18", L: "#6d4c41", R: "#2e7d32", r: "#1b5e20", H: "#c5e1a5", h: "#8bc34a", G: "#9ccc65", g: "#558b2f", E: "#76ff03", Y: "#ccff90", F: "#b2ff59", C: "#1b3a1b", c: "#0f220f" },
     devourer: { A: "#3e2723", a: "#24150f", L: "#5d4037", H: "#c5e1a5", h: "#8bc34a", E: "#76ff03", Y: "#ccff90", F: "#b2ff59", R: "#2e7d32", r: "#1b5e20", P: "#558b2f", C: "#1b3a1b", c: "#0f220f", G: "#9ccc65" },
     unmade: { A: "#0d1a0d", a: "#060d06", L: "#264d26", H: "#c5e1a5", h: "#8bc34a", E: "#76ff03", F: "#b2ff59", R: "#1b5e20", P: "#558b2f", G: "#ffd54f" },
@@ -1797,6 +1803,18 @@ function bossPal(which) {
   return (themedPals[key] = pal);
 }
 const bossTitle = () => theme().title;
+// Draw the Hollow King's attacks in the current map's colours: while fn runs, every colour it paints with is
+// translated through the map's fx table (colours not in it are left alone, so heroes' blood stays red).
+const FILL_STYLE = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "fillStyle");
+function themedFx(fn) {
+  const map = theme().fx, c = ctx;
+  if (!map) { fn(); return; }
+  Object.defineProperty(c, "fillStyle", { configurable: true, get() { return FILL_STYLE.get.call(c); }, set(v) { FILL_STYLE.set.call(c, (typeof v === "string" && map[v.toLowerCase()]) || v); } });
+  try { fn(); } finally { delete c.fillStyle; }
+}
+// A sprite palette pushed through the same table, for the skulls and bony hands.
+const fxPal = pal => { const map = theme().fx; return map ? Object.fromEntries(Object.entries(pal).map(([k, v]) => [k, map[v] || v])) : pal; };
+const fxGlow = (key, castle) => (theme().fxGlow || {})[key] || castle;
 // Ice patches on the ice map: every other flat stretch of ground is glazed, and heroes slide on it.
 const ICE_TILES = (() => {
   const set = new Set(), tops = [];
@@ -8089,7 +8107,7 @@ function drawDevourer(b) {
   }
   // Wailing souls gathering in a ring before they fly.
   if (act && act.type === "souls" && act.t < 0.7) {
-    const skull = sprite(ART.skull, SKULL_PAL, "skull");
+    const skull = sprite(ART.skull, fxPal(SKULL_PAL), "skull" + (S.theme || ""));
     for (let i = 0; i < 8; i++) {
       const ang = act.t * 6 + i / 8 * Math.PI * 2;
       ctx.globalAlpha = Math.min(1, act.t * 3);
@@ -8279,7 +8297,7 @@ function drawHero(h) {
   if (held) {
     ctx.restore();
     // Bony hands wrapped around their legs.
-    const hand = sprite(ART.boneHand, { H: "#e8dcc0", h: "#a8987a" }, "hand");
+    const hand = sprite(ART.boneHand, fxPal({ H: "#e8dcc0", h: "#a8987a" }), "hand" + (S.theme || ""));
     ctx.drawImage(hand, Math.round(cx) - 8, ARENA_FLOOR * T - 9);
     ctx.drawImage(hand, Math.round(cx) + 1, ARENA_FLOOR * T - 8);
     return;
@@ -8370,7 +8388,7 @@ function drawPools(front) {
     }
     for (const hand of p.hands) {
       const rise = Math.min(1, hand.t / 0.25, (hand.life - hand.t) / 0.25);
-      const spr = sprite(ART.boneHand, { H: "#e8dcc0", h: "#a8987a" }, "hand");
+      const spr = sprite(ART.boneHand, fxPal({ H: "#e8dcc0", h: "#a8987a" }), "hand" + (S.theme || ""));
       ctx.save();
       ctx.beginPath();
       ctx.rect(0, 0, W * T, fy + 1);
@@ -8409,10 +8427,18 @@ function drawSpecials2() {
       ctx.fillStyle = i % 2 ? "#4a148c" : "#b388ff";
       ctx.fillRect(x, y, 2, 2);
     }
+    if (S.theme === "forest") {
+      // A vine, with leaves along it.
+      for (let i = 3; i < n; i += 5) {
+        const x = Math.round(mx + (ex - mx) * i / n), y = Math.round(my + (ey - my) * i / n);
+        ctx.fillStyle = "#7cb342";
+        ctx.fillRect(x - 2, y - 2 + (i % 2) * 4, 3, 2);
+      }
+    }
     ctx.fillStyle = "#e1d5ff";
     ctx.fillRect(Math.round(ex) - 1, Math.round(ey) - 2, 3, 4);
   }
-  const skull = sprite(ART.skull, SKULL_PAL, "skull");
+  const skull = sprite(ART.skull, fxPal(SKULL_PAL), "skull" + (S.theme || ""));
   for (const sk of S.skulls) ctx.drawImage(skull, Math.round(sk.x * T) - 3, Math.round(sk.y * T) - 3);
 }
 
@@ -8440,9 +8466,32 @@ function drawSpecials() {
     for (let a = Math.PI; a <= Math.PI * 2; a += 0.05) ctx.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r * 0.35), 2, 1);
   }
   ctx.globalAlpha = 1;
-  // Falling fireballs.
+  // Falling fireballs (hailstones of ice, or thorny seed pods, on the other maps).
   for (const m of S.meteors) {
     const x = Math.round(m.x * T), y = Math.round(m.y * T);
+    if (S.theme === "ice") {
+      // An icicle, point first, trailing frost.
+      for (let i = 1; i <= 5; i++) { ctx.globalAlpha = 1 - i / 6; ctx.fillStyle = "#e1f5fe"; ctx.fillRect(x - Math.sign(m.vx) * i * 2, y - i * 3, 2, 2); }
+      ctx.globalAlpha = 1;
+      for (let k = 0; k < 12; k++) {
+        const w = Math.max(1, Math.round(3 - Math.abs(k - 4) * 0.5));
+        ctx.fillStyle = OUTLINE; ctx.fillRect(x - w - 1, y - 8 + k, w * 2 + 2, 1);
+        ctx.fillStyle = k > 9 ? "#ffffff" : k % 3 ? "#81d4fa" : "#b3e5fc"; ctx.fillRect(x - w, y - 8 + k, w * 2, 1);
+      }
+      continue;
+    }
+    if (S.theme === "forest") {
+      // A spiked seed pod, tumbling.
+      pxDisc(ctx, x, y, 5, OUTLINE);
+      pxDisc(ctx, x, y, 4, "#558b2f");
+      pxDisc(ctx, x - 1, y - 1, 2, "#9ccc65");
+      for (let i = 0; i < 6; i++) {
+        const a = S.time * 8 + i * Math.PI / 3;
+        ctx.fillStyle = "#3e2723";
+        ctx.fillRect(Math.round(x + Math.cos(a) * 6), Math.round(y + Math.sin(a) * 6), 2, 2);
+      }
+      continue;
+    }
     // A flaming tail streaming back along its path, then the burning head.
     const dx = -Math.sign(m.vx) || -1;
     for (let i = 1; i <= 6; i++) {
@@ -8464,7 +8513,7 @@ function drawHellSky() {
   if (!hell) return;
   const k = Math.min(1, hell.t / 0.4, (hell.dur + 0.8 - hell.t) / 0.8);
   for (let y = 0; y < 120; y += 2) {
-    ctx.fillStyle = `rgba(180,20,0,${k * 0.35 * (1 - y / 120)})`;
+    ctx.fillStyle = `rgba(${fxGlow("sky", "180,20,0")},${k * 0.35 * (1 - y / 120)})`;
     ctx.fillRect(0, y, W * T, 2);
   }
 }
@@ -8613,8 +8662,8 @@ function drawLighting() {
   };
   torches().forEach((t, i) => glow(t.x * T + 8, t.y * T + 6, 22 + Math.sin(S.time * 11 + i) * 2, theme().light));
   for (let x = 0; x < mapW(); x++) if (tileAt(x, H - 1) === "L") glow(x * T + 8, (H - 1) * T + 4, 20, theme().pitLight);
-  for (const p of S.pools) glow(p.x * T, ARENA_FLOOR * T, p.r * T * 1.4, "rgba(200,20,30,0.3)");
-  for (const m of S.meteors) glow(m.x * T, m.y * T, 14, "rgba(255,110,20,0.5)");
+  for (const p of S.pools) glow(p.x * T, ARENA_FLOOR * T, p.r * T * 1.4, fxGlow("pool", "rgba(200,20,30,0.3)"));
+  for (const m of S.meteors) glow(m.x * T, m.y * T, 14, fxGlow("meteor", "rgba(255,110,20,0.5)"));
   for (const sk of S.skulls) glow(sk.x * T, sk.y * T, 10, "rgba(150,100,255,0.45)");
   if (!inArena()) for (const n of S.serpents) {
     if (n.cd <= 0) glow(n.x * T, (H - 1) * T + 4, 14, n.dark ? "rgba(213,0,249,0.3)" : "rgba(255,23,68,0.25)");
@@ -8632,8 +8681,8 @@ function drawLighting() {
   // The Hollow King's eyes and the soul in his chest burn through the dark.
   if (S.phase !== "over") {
     const b = S.boss, k = b.enraged ? 1.25 : 1;
-    for (const e of bossEyes(b)) glow(e.x, e.y, 6 * k, `rgba(255,23,68,${0.5 * k})`);
-    glow(centerX(b) * T, b.y * T + 26, 12 * k, `rgba(255,61,0,${0.22 * k})`);
+    for (const e of bossEyes(b)) glow(e.x, e.y, 6 * k, `rgba(${fxGlow("eyes", "255,23,68")},${0.5 * k})`);
+    glow(centerX(b) * T, b.y * T + 26, 12 * k, `rgba(${fxGlow("chest", "255,61,0")},${0.22 * k})`);
   }
   if (!inArena()) for (const t of S.traps) {
     if (t.type === "fire" && t.fireOn) glow(t.x * T + 8, t.y * T, 28, "rgba(255,120,30,0.35)");
@@ -9298,18 +9347,19 @@ function draw() {
     S.heroArrows.forEach(drawArrow);
     drawHover();
   }
-  if (arena) { drawDecals(); drawPools(false); }
+  if (arena) themedFx(() => { drawDecals(); drawPools(false); });
   for (const e of [S.boss, ...S.heroes.filter(h => !h.part), ...S.allies, ...(arena ? [] : S.minions)]) drawShadow(e);
   if (!arena) S.minions.forEach(m => drawMinion(m));
-  drawBoss(S.boss);
+  themedFx(() => drawBoss(S.boss));
   S.heroes.forEach(drawHero);
   S.allies.forEach(drawHero);
   if (!arena) S.serpents.forEach(n => { if (n.state !== "lurk") drawSerpent(n); });
-  S.waves.forEach(drawWave);
-  if (arena) { drawRisen(); S.heroArrows.forEach(drawArrow); drawPools(true); drawSpecials(); drawVoidFx(); }
-  drawParticles(false);
+  themedFx(() => S.waves.forEach(drawWave));
+  if (arena) { drawRisen(); S.heroArrows.forEach(drawArrow); themedFx(() => { drawPools(true); drawSpecials(); drawVoidFx(); }); }
+  // On the tower top nearly every spark is one of his attacks, so they take the map's colours too.
+  if (arena) themedFx(() => drawParticles(false)); else drawParticles(false);
   drawLighting();
-  drawParticles(true);
+  if (arena) themedFx(() => drawParticles(true)); else drawParticles(true);
   if (arena) {
     drawHellSky();
     ctx.globalAlpha = 0.7 + Math.max(0, S.pulseRed || 0) * 0.8;
