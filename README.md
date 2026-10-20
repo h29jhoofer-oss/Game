@@ -17,6 +17,15 @@ You are **Vorgath, the Hollow King**: a king who sold his soul so his tower woul
     - *Nightmare:* 220% health, 170% damage, 15% faster, 4 extra heroes each wave, 30% less gold, and you start with 15.
     Each difficulty keeps its own best wave, saved in the browser and shown on its card and on the death screen.
   - "Play again" returns to the title, so you can switch modes.
+- **Sandbox maps:** after the difficulty, pick a map (click, 1-3, or the arrows and Enter; Escape goes back).
+  - **Castle:** the story's map.
+  - **Ice Tower:** an icy castle under snowy peaks and falling snow, with blue torches and icicles on the tower.
+    - Every flat stretch of ground after the first is glazed with ice. Heroes on it build up speed slowly, go 35% faster once moving, and skid when they try to stop.
+    - A hero on ice coming to a pit edge slips in 30% of the time instead of jumping (in testing, about a quarter of unhindered heroes died this way).
+    - Pits are beds of ice spikes, the serpent is an Ice Serpent, and Vorgath is the Frost King (icy armour, cyan eyes, an ice blade), with icy Devourer and Unmade forms.
+  - **Forest:** dark woods, fireflies and green lanterns.
+    - The tower is a great tree with a door in its trunk, roots and a canopy.
+    - Pits are pools of deep water (heroes drown), the serpent is a Great Viper, and Vorgath is the Thorn King (bark and moss, green eyes, a wooden club), with mossy Devourer and Unmade forms.
 - **Boss level:** heroes Vorgath kills himself in the boss battle don't add to your soul counter. Their souls fly into him and level him up instead.
   - Champions are worth 3 souls, colossi 5, and dark souls count double.
   - Level n needs 3 + 2n souls. Each level gives +12% health in every form (filled at once if it happens mid-fight) and +8% damage on the tower.

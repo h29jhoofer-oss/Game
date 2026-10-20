@@ -177,7 +177,9 @@
     <summary>How to play</summary>
     You are the boss, waiting at the top of your castle tower. Each wave, a group of heroes runs and jumps through the level to reach it.
     Heroes who make it through the door hide inside the tower. Once 5 are inside, they climb up and fight you all at once.<br>
-    <b>Modes:</b> <b>Story</b> is the 25-wave tale of the tower and what lies under it. <b>Sandbox</b> has no story and no last wave: the heroes keep coming, a level stronger each wave, joined by eleven sandbox-only heroes (fliers, burrowers, a Siege Colossus every fifth wave from 10, and more). Pick Easy, Normal, Hard or Nightmare for it; each keeps its own best wave.<br>
+    <b>Modes:</b> <b>Story</b> is the 25-wave tale of the tower and what lies under it. <b>Sandbox</b> has no story and no last wave: the heroes keep coming, a level stronger each wave, joined by eleven sandbox-only heroes (fliers, burrowers, a Siege Colossus every fifth wave from 10, and more). Pick Easy, Normal, Hard or Nightmare for it; each keeps its own best wave. Then pick a map: the <b>Castle</b>; the <b>Ice Tower</b>, with slippery ice patches (heroes skid, and sometimes slip straight into a pit),
+    pits of ice spikes, Ice Serpents and Vorgath as the Frost King; or the <b>Forest</b>, with a great tree for a tower, pools of deep water,
+    Great Vipers and Vorgath as the Thorn King.<br>
     <b>Build:</b> pick a tool and click the level. Spikes go on the ground; saws and turrets go anywhere, even over the lava pits.
     Click a placed trap to open its tab on the right side of the screen: upgrade it (U) or sell it for half what you paid (X).
     <b>The Thing Below:</b> every soul the tower takes feeds something beneath it (dark souls and bargains most of all). As it
@@ -1599,6 +1601,14 @@ HERO_KINDS.marshal = Object.assign({}, HERO_KINDS.champion, { label: "Marshal" }
 HERO_KINDS.thing = { label: "thing", hp: 1, atk: 1, speed: 0, w: 1, h: 1, coins: 0, cd: 1, noDodge: true };
 const IMMUNE_NAMES = { grinder: "grinders", boulder: "boulders", pendulum: "pendulums", spike: "spikes", mine: "bombs", fire: "fire", fireball: "fireballs", burn: "burning", frost: "frost", crusher: "crushers", saw: "saw blades" };
 const immuneTo = (h, src) => !!src && !(HERO_KINDS[h.kind].flies && !h.flying) && (HERO_KINDS[h.kind].immune || []).includes(src);
+// On an ice patch a hero trying to jump a pit sometimes loses their footing and skids straight in
+// (decided once for each edge they come to).
+function slips(h) {
+  if (!onIce(h)) return false;
+  const fx = Math.floor(centerX(h));
+  if (h.slipAt !== fx) { h.slipAt = fx; h.slip = Math.random() < 0.3; if (h.slip) float(centerX(h), h.y - 0.3, "SLIP!", "#b3e5fc"); }
+  return h.slip;
+}
 // Can a trap or monster reach this hero at all? Not while they're dodging, or burrowed underground.
 const exposed = h => !(h.evade > 0) && !h.under;
 // A trap passing harmlessly over an immune hero says so, now and then.
@@ -1709,6 +1719,102 @@ function makeBoss() {
   };
 }
 
+// Sandbox maps. Each has its own colours, its own pits (lava, ice spikes or water), serpent and Hollow King.
+// The castle is the story's map; the others only exist in sandbox.
+const THEMES = {
+  castle: {
+    name: "CASTLE", color: "#ff8a80", lines: ["THE HOLLOW KING'S", "OWN TOWER, OVER", "PITS OF LAVA."],
+    bg: {
+      bands: ["#08071a", "#0c0a21", "#110d29", "#171131", "#1e1539", "#271a42", "#301e48"],
+      ridges: ["#1a1533", "#141029"], arenaRidge: "#1d1838", clouds: ["#3a3266", "#2c2552"],
+      wall: { shades: ["#1b1726", "#1d1929", "#191523", "#1f1a2b"], mortar: "#110e18", top: "#2e2838", merlon: "#221d30", merlonHi: "#3a3448" },
+      ground: [["#5b546c", "#615a73", "#575068", "#665e78"], ["#4a445a", "#4f4860", "#463f55", "#524b64"], ["#3a3448", "#3e384d", "#373145", "#413a51"]],
+      tower: [["#686178", "#6d6680", "#635c74", "#726a85"], ["#5d566d", "#625a73", "#59526a", "#665e78"], ["#524b62", "#564f67", "#4e475e", "#5a5369"]],
+      topHi: "#7a7290", lip: "#7c7392", grass: ["#4e7a3f", "#3f6534", "#5f8f4a", "#76a85a"], glow: "255,120,40",
+      towerMerlon: ["#5f5872", "#8a82a0"], towerHi: "#7f7894", flag: ["#9c2a2f", "#7a1a20"],
+    },
+    flame: { y: "#ff6f00", Y: "#ffb300", W: "#fff3c4" }, light: "rgba(255,140,40,0.22)", pitLight: "rgba(255,90,20,0.18)",
+    embers: ["#ffb300", "#ff6f00"], death: ["#ffb300", "#ff6f00", "#fff59d"], pit: "lava", deathText: "fell into the lava",
+    serpent: { name: "Bone Serpent", segs: ["#e8dcc0", "#c9bd9f"], fin: "#8d8270", hump: "#c9bd9f", head: { H: "#e8dcc0", h: "#a8987a", K: "#1a1420", R: "#c62828" }, eyes: ["#ff1744", "#7a1420"] },
+    title: "THE HOLLOW KING", boss: {}, devourer: {}, unmade: {}, cleaver: {},
+  },
+  ice: {
+    name: "ICE TOWER", color: "#80d8ff", lines: ["SLIPPERY ICE PATCHES,", "PITS OF ICE SPIKES", "AND ICE SERPENTS."],
+    bg: {
+      bands: ["#050d1c", "#071226", "#0a1830", "#0d1f3a", "#112845", "#16324f", "#1c3c5a"],
+      ridges: ["#2a3d55", "#1c2b40"], arenaRidge: "#2a3d55", clouds: ["#4a6a8a", "#35506e"],
+      wall: { shades: ["#1a2a3c", "#1d2e42", "#172637", "#203348"], mortar: "#0e1826", top: "#cfe8f7", merlon: "#2a4058", merlonHi: "#e1f5fe" },
+      ground: [["#5b7a94", "#61809b", "#57748d", "#6788a3"], ["#4a6680", "#4f6b86", "#465f78", "#52708b"], ["#3a5268", "#3e566d", "#374d63", "#415a71"]],
+      tower: [["#8fb3cc", "#97bbd3", "#88abc4", "#9fc3da"], ["#7a9fba", "#82a7c1", "#7398b2", "#8aafc8"], ["#6a8ea8", "#7095ae", "#6389a2", "#789cb5"]],
+      topHi: "#b3d4ea", lip: "#cfe8f7", grass: ["#ffffff", "#e1f5fe", "#ffffff", "#b3e5fc"], glow: "120,220,255",
+      towerMerlon: ["#a9cde3", "#e1f5fe"], towerHi: "#cfe8f7", flag: ["#1565c0", "#0d47a1"], snow: true,
+    },
+    flame: { y: "#0288d1", Y: "#40c4ff", W: "#e1f5fe" }, light: "rgba(80,190,255,0.22)", pitLight: "rgba(120,220,255,0.16)",
+    embers: ["#e1f5fe", "#b3e5fc"], death: ["#e1f5fe", "#81d4fa", "#ffffff"], pit: "spikes", deathText: "was impaled on the ice spikes",
+    serpent: { name: "Ice Serpent", segs: ["#e1f5fe", "#b3e5fc"], fin: "#4fc3f7", hump: "#b3e5fc", head: { H: "#e1f5fe", h: "#81d4fa", K: "#01579b", R: "#4fc3f7" }, eyes: ["#18ffff", "#0277bd"] },
+    title: "THE FROST KING",
+    boss: { A: "#3a5a78", a: "#1e3348", L: "#6f9cc0", R: "#0277bd", r: "#01579b", H: "#e1f5fe", h: "#90caf9", G: "#b3e5fc", g: "#4fc3f7", E: "#18ffff", Y: "#ffffff", F: "#80d8ff", C: "#0d2a40", c: "#071826" },
+    devourer: { A: "#2e4a66", a: "#1a2c40", L: "#5b84a8", H: "#e1f5fe", h: "#90caf9", E: "#18ffff", Y: "#ffffff", F: "#80d8ff", R: "#0277bd", r: "#01579b", P: "#4fc3f7", C: "#0d2a40", c: "#071826", G: "#b3e5fc" },
+    unmade: { A: "#0a1a2a", a: "#050d16", L: "#28445e", H: "#e1f5fe", h: "#90caf9", E: "#ffffff", F: "#b3e5fc", R: "#01579b", P: "#4fc3f7", G: "#e1f5fe" },
+    cleaver: { M: "#4f7fa3", m: "#2a4a66", W: "#e1f5fe", R: "#18ffff", G: "#b3e5fc", A: "#2a4a66", L: "#6f9cc0" },
+  },
+  forest: {
+    name: "FOREST", color: "#9cff9c", lines: ["A GREAT TREE FOR A", "TOWER, POOLS OF DEEP", "WATER AND VIPERS."],
+    bg: {
+      bands: ["#050d0a", "#07130e", "#0a1a13", "#0e2218", "#122a1d", "#173322", "#1c3b27"],
+      ridges: ["#0f2418", "#0a1a11"], arenaRidge: "#12301e", clouds: ["#2c4a36", "#1f3a29"],
+      wall: { shades: ["#14231a", "#16261c", "#121f17", "#18291f"], mortar: "#0a140e", top: "#2a4a30", merlon: "#1c3324", merlonHi: "#3b6b3f" },
+      ground: [["#6b5038", "#71563d", "#654b34", "#775b41"], ["#58412d", "#5d4631", "#523c29", "#624a34"], ["#463322", "#4a3725", "#412f1f", "#4e3a28"]],
+      tower: [["#5d4030", "#634535", "#573b2c", "#694a39"], ["#4e3527", "#53392b", "#493124", "#583d2e"], ["#40291d", "#452d20", "#3b251a", "#4a3123"]],
+      topHi: "#8d6e4f", lip: "#5f8f4a", grass: ["#4e7a3f", "#3f6534", "#6fa555", "#8bc34a"], glow: "80,170,255",
+      towerMerlon: ["#3b6b3f", "#5f8f4a"], towerHi: "#6d4c41", flag: ["#2e7d32", "#1b5e20"], trees: true,
+    },
+    flame: { y: "#9ccc65", Y: "#d4e157", W: "#f9fbe7" }, light: "rgba(200,240,120,0.2)", pitLight: "rgba(80,170,255,0.12)",
+    embers: ["#c5e1a5", "#d4e157"], death: ["#4fc3f7", "#0277bd", "#e1f5fe"], pit: "water", deathText: "drowned",
+    serpent: { name: "Great Viper", segs: ["#7cb342", "#33691e"], fin: "#d4e157", hump: "#558b2f", head: { H: "#7cb342", h: "#33691e", K: "#1b2a10", R: "#e53935" }, eyes: ["#ffeb3b", "#827717"] },
+    title: "THE THORN KING",
+    boss: { A: "#4e342e", a: "#2e1d18", L: "#6d4c41", R: "#2e7d32", r: "#1b5e20", H: "#c5e1a5", h: "#8bc34a", G: "#9ccc65", g: "#558b2f", E: "#76ff03", Y: "#ccff90", F: "#b2ff59", C: "#1b3a1b", c: "#0f220f" },
+    devourer: { A: "#3e2723", a: "#24150f", L: "#5d4037", H: "#c5e1a5", h: "#8bc34a", E: "#76ff03", Y: "#ccff90", F: "#b2ff59", R: "#2e7d32", r: "#1b5e20", P: "#558b2f", C: "#1b3a1b", c: "#0f220f", G: "#9ccc65" },
+    unmade: { A: "#0d1a0d", a: "#060d06", L: "#264d26", H: "#c5e1a5", h: "#8bc34a", E: "#76ff03", F: "#b2ff59", R: "#1b5e20", P: "#558b2f", G: "#ffd54f" },
+    cleaver: { M: "#5d4037", m: "#3e2723", W: "#a1887f", R: "#76ff03", G: "#9ccc65", A: "#3e2723", L: "#6d4c41" },
+  },
+};
+const THEME_IDS = ["castle", "ice", "forest"];
+let gameTheme = "castle";
+const theme = () => THEMES[(S && S.theme) || "castle"];
+// The Hollow King's palettes for the current map, built once per map.
+const themedPals = {};
+function bossPal(which) {
+  const id = (S && S.theme) || "castle", key = id + which;
+  if (themedPals[key]) return themedPals[key];
+  const th = THEMES[id];
+  let pal;
+  if (which === "boss") pal = Object.assign({}, BOSS_PAL, th.boss);
+  else if (which === "rage") pal = Object.assign({}, BOSS_PAL, th.boss, { E: "#ffffff", Y: "#ffffff", e: "#ffffff" }, id === "castle" ? { F: "#ffeb3b", R: "#c62828" } : {});
+  else if (which === "devourer") pal = Object.assign({}, DEVOURER_PAL, th.devourer);
+  else if (which === "unmade") pal = Object.assign({}, UNMADE_PAL, th.unmade);
+  else pal = Object.assign({}, CLEAVER_PAL, th.cleaver);
+  return (themedPals[key] = pal);
+}
+const bossTitle = () => theme().title;
+// Ice patches on the ice map: every other flat stretch of ground is glazed, and heroes slide on it.
+const ICE_TILES = (() => {
+  const set = new Set(), tops = [];
+  for (let x = 0; x < TOWER_X - 1; x++) { let y = 0; while (y < H && tileIn(MAP, x, y) !== "#") y++; tops.push(y); }
+  let run = 0;
+  for (let x = 1, start = 0; x <= tops.length; x++) {
+    if (x < tops.length && tops[x] === tops[start] && tops[x] < H - 1) continue;
+    // Every flat stretch of 3 or more except the first, where the heroes come in.
+    if (x - start >= 3 && tops[start] < H - 1) { if (run++ > 0) for (let i = start; i < x; i++) set.add(i + "," + tops[i]); }
+    start = x;
+  }
+  return set;
+})();
+const onIce = h => S.theme === "ice" && !inArena() && ICE_TILES.has(Math.floor(centerX(h)) + "," + Math.floor(h.y + h.h + 0.05));
+// Each map's backgrounds, painted the first time it's played.
+const BGS = {};
+const bgFor = id => BGS[id] || (BGS[id] = { level: buildBackground(MAP, false, id), arena: buildBackground(ARENA, true, id) });
+
 // Story mode is the 25 waves of the lore, ending under the castle. Sandbox has no story, no Thing and no last wave.
 let gameMode = "story";
 const sandbox = () => S.mode === "sandbox";
@@ -1734,7 +1840,7 @@ function saveSandboxBest(i, w) {
 let S;
 function newGame(title = false) {
   S = {
-    mode: gameMode, diff: gameDiff, titleStep: "mode", titlePick: gameMode === "sandbox" ? 1 : 0,
+    mode: gameMode, diff: gameDiff, theme: gameMode === "sandbox" ? gameTheme : "castle", titleStep: "mode", titlePick: gameMode === "sandbox" ? 1 : 0,
     coins: 20, souls: 2, wave: 1, kills: 0, named: 0, bossLv: 1, bossXp: 0, dry: 0, surge: false, reached: 0,
     serpents: [], bolts: [], harpoons: [], boulders: [], heroBombs: [], lavaEyes: [], tendrils: [], hunger: 0, bargains: 0, bargain: null, allies: [], shown: { coins: 20, souls: 2, dark: 0 }, coinFx: [], soulFx: [], darkSouls: 0, powers: new Set(), risen: [], monsterMenu: null,
     gain: { coins: { amount: 0, t: 0 }, souls: { amount: 0, t: 0 }, dark: { amount: 0, t: 0 } },
@@ -1759,10 +1865,13 @@ const MODE_CARDS = [
 ].map((c, i) => Object.assign(c, { x: W * T / 2 - 184 + i * 192, y: H * T / 2 + 6, w: 176, h: 50 }));
 // Choosing Sandbox brings up a second row of cards, one per difficulty.
 const DIFF_CARDS = DIFFICULTIES.map((d, i) => ({ name: d.name, color: d.color, lines: d.lines, x: W * T / 2 - 230 + i * 116, y: H * T / 2 + 6, w: 108, h: 50 }));
-const titleCards = () => S.titleStep === "difficulty" ? DIFF_CARDS : MODE_CARDS;
+// ...and then a third, one per map.
+const MAP_CARDS = THEME_IDS.map((id, i) => ({ id, name: THEMES[id].name, color: THEMES[id].color, lines: THEMES[id].lines, x: W * T / 2 - 228 + i * 156, y: H * T / 2 + 6, w: 144, h: 50 }));
+const titleCards = () => S.titleStep === "map" ? MAP_CARDS : S.titleStep === "difficulty" ? DIFF_CARDS : MODE_CARDS;
 const cardAt = p => !p ? -1 : titleCards().findIndex(c => p.x >= c.x && p.x < c.x + c.w && p.y >= c.y && p.y < c.y + c.h);
 function pickTitleCard(i) {
-  if (S.titleStep === "difficulty") chooseDifficulty(i);
+  if (S.titleStep === "map") chooseMap(i);
+  else if (S.titleStep === "difficulty") chooseDifficulty(i);
   else chooseMode(MODE_CARDS[i].mode);
 }
 function chooseMode(mode) {
@@ -1770,17 +1879,31 @@ function chooseMode(mode) {
   if (mode === "sandbox") { S.titleStep = "difficulty"; S.titlePick = gameDiff; return; }
   startedAt = performance.now();
   gameMode = S.mode = mode;
+  S.theme = "castle";
+  nameSerpent();
   startPrologue();
 }
 function chooseDifficulty(i) {
+  gameDiff = S.diff = i;
+  Sound.play("click");
+  S.titleStep = "map";
+  S.titlePick = Math.max(0, THEME_IDS.indexOf(gameTheme));
+}
+function chooseMap(i) {
   startedAt = performance.now();
   gameMode = S.mode = "sandbox";
-  gameDiff = S.diff = i;
-  const d = DIFFICULTIES[i];
+  gameTheme = S.theme = THEME_IDS[i];
+  const d = DIFFICULTIES[S.diff];
   S.coins = S.shown.coins = d.start;
+  nameSerpent();
   Sound.play("click");
   startOpening();
-  banner(`SANDBOX - ${d.name}`, "Endless waves - how long can the Hollow King hold?", d.color);
+  banner(`${THEMES[S.theme].name} - ${d.name}`, "Endless waves - how long can the Hollow King hold?", THEMES[S.theme].color);
+}
+// The serpent's toolbar button takes the name of the current map's serpent.
+function nameSerpent() {
+  const label = document.querySelector('[data-tool="serpent"] span');
+  if (label && label.firstChild) label.firstChild.nodeValue = theme().serpent.name;
 }
 
 // The story so far, typed out line by line before the opening. A click or key skips ahead.
@@ -2538,6 +2661,7 @@ function wake(e) {
       else if (["arrowright", "d", "tab"].includes(k)) { S.titlePick = (S.titlePick + 1) % n; Sound.play("click"); e.preventDefault(); }
       else if (k >= "1" && k <= String(n)) pickTitleCard(+k - 1);
       else if (k === "enter" || k === " ") pickTitleCard(S.titlePick);
+      else if ((k === "escape" || k === "backspace") && S.titleStep === "map") { S.titleStep = "difficulty"; S.titlePick = S.diff; Sound.play("click"); }
       else if ((k === "escape" || k === "backspace") && S.titleStep === "difficulty") { S.titleStep = "mode"; S.titlePick = 1; Sound.play("click"); }
     } else if (e && e.target === canvas) {
       const i = cardAt(screenFromEvent(e));
@@ -4026,7 +4150,7 @@ function update(dt) {
 const TYPE_SPEED = 40, LINE_HOLD = 1.5, DIALOG_FADE = 0.15;
 function dialogLine(who, text) {
   return who.isBoss
-    ? { boss: true, name: BOSS_NAME, title: who.form === 3 ? "THE UNMADE" : who.form === 2 ? "THE DEVOURER" : BOSS_TITLE, text, rage: !!who.enraged, form: who.form }
+    ? { boss: true, name: BOSS_NAME, title: who.form === 3 ? "THE UNMADE" : who.form === 2 ? "THE DEVOURER" : bossTitle(), text, rage: !!who.enraged, form: who.form }
     : { boss: false, name: who.name.toUpperCase(), lv: who.lv, kind: who.kind, text };
 }
 function speak(who, text, force = false) {
@@ -4108,7 +4232,7 @@ function bossRoar() {
   S.shake = 7;
   Sound.play("roar");
   burst(centerX(b), b.y + 0.5, 24, ["#ff1744", "#7a1420", "#ffeb3b"], 7, { glow: true });
-  banner(BOSS_NAME, BOSS_TITLE, "#ff1744");
+  banner(BOSS_NAME, bossTitle(), "#ff1744");
   speak(b, pick(TAUNTS.roar));
   // The heroes flinch.
   for (const h of S.heroes) { float(centerX(h), h.y - 0.2, "!", "#ffeb3b"); h.vx = 0; }
@@ -4184,9 +4308,18 @@ function updateParticles(dt) {
   // Embers drifting up from the lava, sparks from the torches.
   for (let x = 0; x < mapW(); x++) {
     if (tileAt(x, H - 1) === "L" && Math.random() < dt * 1.5) {
-      particle({ x: x + Math.random(), y: H - 0.8, vx: (Math.random() - 0.5) * 0.5, vy: -1 - Math.random() * 1.5,
-        life: 0.8 + Math.random() * 0.8, color: Math.random() < 0.5 ? "#ffb300" : "#ff6f00", glow: true });
+      const em = theme().embers;
+      particle({ x: x + Math.random(), y: H - 0.8, vx: (Math.random() - 0.5) * 0.5, vy: theme().pit === "lava" ? -1 - Math.random() * 1.5 : -0.4 - Math.random() * 0.5,
+        life: 0.8 + Math.random() * 0.8, color: Math.random() < 0.5 ? em[0] : em[1], glow: true });
     }
+  }
+  if (!inArena() && S.theme === "ice" && Math.random() < dt * 20) {
+    // Snow drifting down over the path.
+    particle({ x: camX() + Math.random() * W, y: 1 + Math.random(), vx: -0.6 + Math.random() * 0.4, vy: 1 + Math.random() * 0.6, life: 6, color: Math.random() < 0.6 ? "#ffffff" : "#b3e5fc" });
+  }
+  if (!inArena() && S.theme === "forest" && Math.random() < dt * 4) {
+    // Fireflies drifting between the trees.
+    particle({ x: camX() + Math.random() * W, y: 3 + Math.random() * 5, vx: (Math.random() - 0.5) * 0.8, vy: (Math.random() - 0.5) * 0.6, life: 2.5, color: Math.random() < 0.5 ? "#d4e157" : "#f0f4c3", glow: true });
   }
   for (const t of torches()) {
     if (Math.random() < dt * 2) {
@@ -4349,7 +4482,7 @@ function updateHero(h, dt) {
     if (h.under && h.onGround && shouldJump(h, dir)) surface(h, 0.8);
     if (h.under) h.vx *= HERO_KINDS[h.kind].burrow.speed;
     // The opening's lone hero never looks where they're going.
-    if (!arena && !h.reckless && h.onGround && shouldJump(h, dir)) h.vy = -JUMP * (HERO_KINDS[h.kind].jump || 1);
+    if (!arena && !h.reckless && h.onGround && shouldJump(h, dir) && !slips(h)) h.vy = -JUMP * (HERO_KINDS[h.kind].jump || 1);
     // Iron Knights are slow on foot but throw their weight into a jump.
     if (!h.onGround && HERO_KINDS[h.kind].airSpeed) h.vx = dir * HERO_KINDS[h.kind].airSpeed * (h.ampBy ? AMP.speed : 1);
   }
@@ -4386,6 +4519,13 @@ function finishHeroMove(h, dt, arena) {
     }
     h.vx *= 1 - h.chill;
     if (belt) h.vx = h.vx > 0 ? Math.max(Math.min(h.vx, 0.5), h.vx - 1.8) : h.vx - 1.8;
+    if (onIce(h) && h.onGround) {
+      // On the ice they can't grip: slow to get going, faster once moving, and they skid when they try to stop.
+      h.slideV = h.slideV ?? h.vx;
+      h.slideV += (h.vx * 1.35 - h.slideV) * Math.min(1, dt * 1.3);
+      h.vx = h.slideV;
+      if (Math.abs(h.vx) > 2 && Math.random() < dt * 14) particle({ x: centerX(h) - Math.sign(h.vx) * 0.3, y: h.y + h.h - 0.05, vx: -h.vx * 0.3, vy: -0.8, life: 0.3, color: "#e1f5fe", glow: true });
+    } else h.slideV = h.vx;
     if (h.chill && Math.random() < dt * 20) {
       particle({ x: h.x + Math.random() * h.w, y: h.y + Math.random() * h.h, vy: 0.6, life: 0.5, color: Math.random() < 0.5 ? "#e1f5fe" : "#81d4fa", glow: true });
     }
@@ -4686,7 +4826,7 @@ function updateArcher(h, dt, arena) {
   }
   h.vx = dir * h.speed;
   if (dir) h.face = dir;
-  if (!arena && dir && !h.reckless && h.onGround && shouldJump(h, dir)) h.vy = -JUMP;
+  if (!arena && dir && !h.reckless && h.onGround && shouldJump(h, dir) && !slips(h)) h.vy = -JUMP;
   // Mages drift on a breath of magic when they leap.
   if (dir && !h.onGround && k.airSpeed) h.vx = dir * k.airSpeed * (h.ampBy ? AMP.speed : 1);
   finishHeroMove(h, dt, arena);
@@ -5356,6 +5496,7 @@ function updateSerpents(dt) {
 
 // The serpent's spine: vertebrae curving up out of the lava to a horned skull.
 function drawSerpent(n) {
+  const sc = theme().serpent;
   const lavaY = (H - 1) * T + 4, hx = n.hx * T, hy = Math.min(n.hy * T, lavaY + 6);
   if (n.dark && n.state === "lurk") {
     // Its pit turns a churning violet.
@@ -5383,9 +5524,9 @@ function drawSerpent(n) {
       const r = 3 - Math.floor(k * 1.5);
       ctx.fillStyle = OUTLINE;
       ctx.fillRect(Math.round(x) - r - 1, Math.round(y) - r - 1, r * 2 + 3, r * 2 + 3);
-      ctx.fillStyle = n.dark ? (i % 2 ? "#7e57c2" : "#4a2d6b") : i % 2 ? "#e8dcc0" : "#c9bd9f";
+      ctx.fillStyle = n.dark ? (i % 2 ? "#7e57c2" : "#4a2d6b") : i % 2 ? sc.segs[0] : sc.segs[1];
       ctx.fillRect(Math.round(x) - r, Math.round(y) - r, r * 2 + 1, r * 2 + 1);
-      ctx.fillStyle = "#8d8270";
+      ctx.fillStyle = sc.fin;
       ctx.fillRect(Math.round(x) - r - 2, Math.round(y), 1, 1);
       ctx.fillRect(Math.round(x) + r + 2, Math.round(y), 1, 1);
     }
@@ -5395,7 +5536,7 @@ function drawSerpent(n) {
       const x = Math.round(n.x * T + i * 5 + Math.sin(S.time * 2 + i) * 1), y = lavaY + 1 + Math.round(Math.sin(S.time * 3 + i * 1.3) * 1.5);
       ctx.fillStyle = OUTLINE;
       ctx.fillRect(x - 2, y - 2, 5, 4);
-      ctx.fillStyle = n.dark ? "#7e57c2" : "#c9bd9f";
+      ctx.fillStyle = n.dark ? "#7e57c2" : sc.hump;
       ctx.fillRect(x - 1, y - 1, 3, 2);
     }
   }
@@ -5403,7 +5544,7 @@ function drawSerpent(n) {
   const art = n.jaw > 0.3 ? ART.serpentOpen : ART.serpentHead;
   const ready = n.cd <= 0 && n.state === "lurk";
   const pal = n.dark ? { H: "#7e57c2", h: "#4a2d6b", K: "#12001f", E: ready ? "#ea80fc" : "#6a1b9a", R: "#d500f9" }
-    : { H: "#e8dcc0", h: "#a8987a", K: "#1a1420", E: ready ? "#ff1744" : "#7a1420", R: "#c62828" };
+    : Object.assign({}, sc.head, { E: ready ? sc.eyes[0] : sc.eyes[1] });
   // While lurking only the horns and eyes show above the lava.
   const headY = out ? hy + 5 : lavaY + 5;
   if (!out) {
@@ -5412,7 +5553,7 @@ function drawSerpent(n) {
     ctx.rect(0, 0, mapW() * T, lavaY);
     ctx.clip();
   }
-  drawSprite(sprite(art, pal, "serpent" + (n.jaw > 0.3) + pal.E + (n.dark ? "d" : "")), (out ? hx : n.x * T + n.dir * 12), headY, face);
+  drawSprite(sprite(art, pal, "serpent" + (S.theme || "") + (n.jaw > 0.3) + pal.E + (n.dark ? "d" : "")), (out ? hx : n.x * T + n.dir * 12), headY, face);
   if (!out) ctx.restore();
 }
 
@@ -5665,7 +5806,7 @@ function heroDied(h) {
   } else if (h.hell) {
     burst(hx, ARENA_FLOOR - 0.1, 26, ["#c62828", "#5d0f0f", "#e8dcc0"], 5);
     if (!S.dialog.cur && Math.random() < 0.5) speak(S.boss, pick(TAUNTS.dragged));
-  } else burst(hx, hy, 24, h.lava ? ["#ffb300", "#ff6f00", "#fff59d"] : ["#d32f2f", gear.main, gear.shade], 6, { glow: !!h.lava });
+  } else burst(hx, hy, 24, h.lava ? theme().death : ["#d32f2f", gear.main, gear.shade], 6, { glow: !!h.lava });
   dropCoins(hx, hy, coins);
   dropSoul(hx, hy - 0.3, dark, byBoss ? bossSoulValue(h, dark) : 0);
   if (dark && !S.seenDark && !byBoss) {
@@ -5679,7 +5820,7 @@ function heroDied(h) {
   else if (inArena() && S.heroes.length && Math.random() < 0.6) speak(S.boss, pick(TAUNTS.kill));
   else if (Math.random() < 0.3) speak(h, pick(h.lava ? HERO_LINES.lava : HERO_LINES.die));
   heroDeathReactions(h);
-  say(h.tendril ? `Something below dragged ${h.name} into the lava.` : h.eaten ? `${h.name} was swallowed by the Bone Serpent!` : h.lava ? `${h.name} fell into the lava!` : `${h.name} has fallen!`);
+  say(h.tendril ? `Something below dragged ${h.name} into the lava.` : h.eaten ? `${h.name} was swallowed by the ${theme().serpent.name}!` : h.lava ? `${h.name} ${theme().deathText}!` : `${h.name} has fallen!`);
   for (const [tool, kind] of Object.entries(TRAPS)) {
     if (kind.unlock !== S.kills) continue;
     S.fresh.add(tool);
@@ -6902,7 +7043,8 @@ function rng(seed) {
 }
 
 // Paint one scene into two layers: a sky that stays put, and the castle and ground that scroll.
-function buildBackground(map, arena) {
+function buildBackground(map, arena, themeId = "castle") {
+  const TH = THEMES[themeId].bg;
   const mw = map[0].length;
   const sky = document.createElement("canvas"), world = document.createElement("canvas");
   sky.width = W * T; sky.height = H * T;
@@ -6913,7 +7055,7 @@ function buildBackground(map, arena) {
   const solid = (x, y) => tileIn(map, x, y) === "#";
 
   // Night sky in dithered bands, darkest at the top.
-  const bands = ["#08071a", "#0c0a21", "#110d29", "#171131", "#1e1539", "#271a42", "#301e48"];
+  const bands = TH.bands;
   const bandH = 18;
   for (let y = 0; y < H * T; y++) {
     const i = Math.min(bands.length - 1, Math.floor(y / bandH));
@@ -6964,16 +7106,31 @@ function buildBackground(map, arena) {
   };
   if (arena) {
     // High above everything: far peaks poking out of a sea of clouds.
-    ridge(118, 12, "#1d1838", 1.3);
+    ridge(118, 12, TH.arenaRidge, 1.3);
     for (let y = 112; y < H * T; y += 3) {
       for (let x = 0; x < W * T; x += 1) {
         const wob = Math.sin(x * 0.05 + y) * 2;
-        if ((x + y) % 7 < 5) px(x, y + Math.round(wob), y < 118 ? "#3a3266" : "#2c2552", 1, 2);
+        if ((x + y) % 7 < 5) px(x, y + Math.round(wob), y < 118 ? TH.clouds[0] : TH.clouds[1], 1, 2);
+      }
+    }
+  } else if (TH.trees) {
+    // A dark treeline instead of mountains: jagged spires of pine.
+    for (const [base, amp, col, step] of [[92, 22, TH.ridges[0], 9], [108, 16, TH.ridges[1], 7]]) {
+      for (let x = 0; x < W * T; x++) {
+        const i = x % step, tip = Math.abs(i - step / 2) * (amp / step) * 2.2, hgt = amp * (0.6 + 0.4 * Math.abs(Math.sin(Math.floor(x / step) * 1.7)));
+        px(x, Math.round(base - hgt + tip), col, 1, H * T);
       }
     }
   } else {
-    ridge(92, 14, "#1a1533", 0.4);
-    ridge(108, 10, "#141029", 2.1);
+    ridge(92, 14, TH.ridges[0], 0.4);
+    ridge(108, 10, TH.ridges[1], 2.1);
+    if (TH.snow) {
+      // Snow on the peaks.
+      for (let x = 0; x < W * T; x++) {
+        const h = Math.sin(x * 0.021 + 0.4) * 14 + Math.sin(x * 0.057 + 1.2) * 6.3 + Math.abs(Math.sin(x * 0.11 + 0.4)) * 3.5;
+        if (h > 8) px(x, Math.round(92 - h), "#cfe8f7", 1, Math.round((h - 8) * 0.6) + 1);
+      }
+    }
   }
   g = world.getContext("2d");
 
@@ -6995,7 +7152,7 @@ function buildBackground(map, arena) {
       px(x, y - h, hi, w, 1);
     }
   };
-  const wallShades = ["#1b1726", "#1d1929", "#191523", "#1f1a2b"];
+  const wallShades = TH.wall.shades;
   // Darken the lower part of a back wall so the foreground pops.
   const shade = (x0, y0, w, h) => {
     for (let y = 0; y < h; y += 2) px(x0, y0 + y, `rgba(6,4,12,${(y / h) * 0.55})`, w, 2);
@@ -7003,26 +7160,52 @@ function buildBackground(map, arena) {
 
   if (arena) {
     // The low parapet that rings the tower top, with merlons.
-    bricks(T, 116, (W - 2) * T, 28, wallShades, "#110e18");
+    bricks(T, 116, (W - 2) * T, 28, wallShades, TH.wall.mortar);
     shade(T, 116, (W - 2) * T, 28);
-    px(T, 116, "#3a3448", (W - 2) * T, 1);
-    merlons(T + 4, (W - 1) * T, 116, 10, 7, 8, "#221d30", "#3a3448");
+    px(T, 116, TH.wall.merlonHi, (W - 2) * T, 1);
+    merlons(T + 4, (W - 1) * T, 116, 10, 7, 8, TH.wall.merlon, TH.wall.merlonHi);
     // Flagpoles with tattered red flags.
     for (const fx of [8 * T, 22 * T]) {
       px(fx, 52, "#3a2a20", 2, 92);
       px(fx - 1, 50, "#e0b84a", 4, 2);
       for (let i = 0; i < 22; i++) {
         const sag = Math.round(Math.sin(i * 0.4) * 1.5);
-        px(fx + 2 + i, 54 + sag, i % 3 ? "#9c2a2f" : "#7a1a20", 1, 14 - Math.floor(i / 4));
+        px(fx + 2 + i, 54 + sag, i % 3 ? TH.flag[0] : TH.flag[1], 1, 14 - Math.floor(i / 4));
       }
       px(fx + 9, 58, "#e8dcc0", 4, 4);
       px(fx + 10, 59, "#3b0a0d"); px(fx + 12, 59, "#3b0a0d");
     }
+  } else if (TH.trees) {
+    // Deep forest behind the path: trunks, roots and a ceiling of leaves.
+    for (let tx = 6; tx < TOWER_X * T; tx += 34 + ((rand() * 20) | 0)) {
+      const w = 8 + ((rand() * 6) | 0);
+      px(tx - 1, 40, OUTLINE, w + 2, H * T);
+      px(tx, 40, "#2a1d16", w, H * T);
+      px(tx, 40, "#3e2b20", 2, H * T);
+      for (let y = 50; y < H * T; y += 7 + ((rand() * 6) | 0)) px(tx + 2 + ((rand() * (w - 4)) | 0), y, "#1c130e", 2, 3);
+      px(tx - 3, 132, "#2a1d16", w + 6, 3);
+      for (let i = 0; i < 6; i++) {
+        const cx = tx + w / 2 + (rand() - 0.5) * 34, cy = 34 + rand() * 30, r = 10 + rand() * 9;
+        for (let y = -r; y <= r; y++) {
+          const hw = Math.sqrt(r * r - y * y);
+          px(Math.round(cx - hw), Math.round(cy + y), rand() < 0.5 ? "#16301e" : "#1a3823", Math.round(hw * 2), 1);
+        }
+      }
+    }
+    for (let x = 0; x < TOWER_X * T; x += 3) if (rand() < 0.6) px(x, 128 + ((rand() * 6) | 0), rand() < 0.5 ? "#1f3a26" : "#2a4a30", 3, 20);
+    shade(0, 97, TOWER_X * T, H * T - 97);
+    for (const t of TORCHES.level) {
+      if (!t.post) continue;
+      let gy = t.y + 1;
+      while (gy < H && !solid(t.x, gy)) gy++;
+      px(t.x * T + 7, t.y * T + 16, "#3a2a20", 3, (gy - t.y - 1) * T);
+      px(t.x * T + 7, t.y * T + 16, "#5d4037", 1, (gy - t.y - 1) * T);
+    }
   } else {
     // The castle's outer wall behind the path.
-    bricks(0, 96, TOWER_X * T, H * T - 96, wallShades, "#110e18");
-    px(0, 96, "#2e2838", TOWER_X * T, 1);
-    merlons(2, TOWER_X * T, 96, 8, 5, 6, "#221d30", "#3a3448");
+    bricks(0, 96, TOWER_X * T, H * T - 96, wallShades, TH.wall.mortar);
+    px(0, 96, TH.wall.top, TOWER_X * T, 1);
+    merlons(2, TOWER_X * T, 96, 8, 5, 6, TH.wall.merlon, TH.wall.merlonHi);
     // Buttresses break up the wall, with a dim arched window between each pair.
     for (let bx = 56; bx < TOWER_X * T - 8; bx += 96) {
       px(bx - 1, 92, OUTLINE, 12, H * T);
@@ -7051,10 +7234,7 @@ function buildBackground(map, arena) {
   }
 
   // Foreground stone blocks, lit from above: the deeper the block, the darker it gets.
-  const PALS = {
-    ground: [["#5b546c", "#615a73", "#575068", "#665e78"], ["#4a445a", "#4f4860", "#463f55", "#524b64"], ["#3a3448", "#3e384d", "#373145", "#413a51"]],
-    tower: [["#686178", "#6d6680", "#635c74", "#726a85"], ["#5d566d", "#625a73", "#59526a", "#665e78"], ["#524b62", "#564f67", "#4e475e", "#5a5369"]],
-  };
+  const PALS = { ground: TH.ground, tower: TH.tower };
   const lavaPit = x => tileIn(map, x, H - 1) === "L";
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < mw; x++) {
@@ -7073,27 +7253,34 @@ function buildBackground(map, arena) {
           if (r <= l) continue;
           const col = pal[(rand() * pal.length) | 0];
           px(l, sy + 1, col, r - l, 6);
-          px(l, sy + 1, depth === 0 && !tower ? "#7a7290" : tower ? "#7f7894" : pal[3], r - l, 1);
+          px(l, sy + 1, depth === 0 && !tower ? TH.topHi : tower ? TH.towerHi : pal[3], r - l, 1);
           px(l, sy + 6, "#2c2738", r - l, 1);
           if (rand() < 0.12) px(l + 2 + ((rand() * 8) | 0), sy + 3, "#2c2738", 2, 1);
         }
       }
       const air = (dx, dy) => !solid(x + dx, y + dy) && y + dy >= 0 && y + dy < H && x + dx >= 0 && x + dx < mw;
       if (air(0, -1)) {
-        px(X, Y, tower || arena ? "#8a82a0" : "#7c7392", T, 2);
+        px(X, Y, tower || arena ? TH.towerMerlon[1] : TH.lip, T, 2);
         px(X, Y + 2, "#2c2738", T, 1);
+        const gr = TH.grass;
         if (!arena && !tower) {
-          // A grassy lip, with blades poking up past the edge.
-          px(X, Y, "#4e7a3f", T, 1);
+          // A grassy (or snowy) lip, with blades poking up past the edge.
+          px(X, Y, gr[0], T, 1);
           for (let i = 0; i < T; i++) {
-            if (rand() < 0.5) px(X + i, Y + 1, rand() < 0.5 ? "#3f6534" : "#4e7a3f");
-            if (rand() < 0.3) px(X + i, Y - 1, rand() < 0.5 ? "#5f8f4a" : "#4e7a3f");
-            if (rand() < 0.08) px(X + i, Y - 2, "#76a85a");
-            if (rand() < 0.1) px(X + i, Y + 2, "#3f6534", 1, 1 + ((rand() * 3) | 0));
+            if (rand() < 0.5) px(X + i, Y + 1, rand() < 0.5 ? gr[1] : gr[0]);
+            if (rand() < 0.3) px(X + i, Y - 1, rand() < 0.5 ? gr[2] : gr[0]);
+            if (rand() < 0.08) px(X + i, Y - 2, gr[3]);
+            if (rand() < 0.1) px(X + i, Y + 2, gr[1], 1, 1 + ((rand() * 3) | 0));
           }
+        } else if (TH.snow) for (let i = 0; i < T; i++) if (rand() < 0.4) px(X + i, Y - 1, "#ffffff");
+        // A glaze of ice on the ice map's slippery patches.
+        if (themeId === "ice" && !arena && ICE_TILES.has(x + "," + y)) {
+          px(X, Y - 1, "#e1f5fe", T, 3);
+          px(X, Y + 2, "#81d4fa", T, 1);
+          for (let i = 0; i < T; i += 5) px(X + i + ((rand() * 3) | 0), Y - 1, "#ffffff", 2, 1);
         }
       }
-      if (air(-1, 0)) px(X, Y, tower ? "#8a82a0" : "#2a2533", 1, T);
+      if (air(-1, 0)) px(X, Y, tower ? TH.towerMerlon[1] : "#2a2533", 1, T);
       if (air(1, 0)) px(X + T - 1, Y, "#1c1924", 1, T);
       if (air(0, 1)) px(X, Y + T - 1, "#1c1924", T, 1);
       // Pit walls glow orange from the lava below.
@@ -7102,17 +7289,17 @@ function buildBackground(map, arena) {
         const a = [0.08, 0.2, 0.38][Math.max(0, y - (H - 3))] || 0;
         if (!a) continue;
         for (let i = 0; i < 4; i++) {
-          px(side < 0 ? X + i : X + T - 1 - i, Y, `rgba(255,120,40,${a * (1 - i / 4)})`, 1, T);
+          px(side < 0 ? X + i : X + T - 1 - i, Y, `rgba(${TH.glow},${a * (1 - i / 4)})`, 1, T);
         }
       }
     }
   }
 
-  const skullBanner = (x0, y0, w, h) => {
+  const skullBanner = (x0, y0, w, h, cols = ["#9c2a2f", "#7a1a20"]) => {
     px(x0 - 1, y0, "#5d4037", w + 2, 2);
-    px(x0, y0 + 2, "#7a1a20", w, h);
-    px(x0, y0 + 2, "#9c2a2f", 2, h);
-    for (let i = 0; i < w / 2; i++) px(x0 + i * 2, y0 + h + 2, "#7a1a20", 1, 2 + (i % 2) * 2);
+    px(x0, y0 + 2, cols[1], w, h);
+    px(x0, y0 + 2, cols[0], 2, h);
+    for (let i = 0; i < w / 2; i++) px(x0 + i * 2, y0 + h + 2, cols[1], 1, 2 + (i % 2) * 2);
     const sx = x0 + Math.floor(w / 2) - 2, sy = y0 + Math.floor(h / 3);
     px(sx, sy, "#e8dcc0", 4, 4);
     px(sx + 1, sy + 1, "#3b0a0d"); px(sx + 3, sy + 1, "#3b0a0d");
@@ -7126,10 +7313,50 @@ function buildBackground(map, arena) {
     px(1 * T + 2, ARENA_FLOOR * T - 15, OUTLINE, 4, 14);
     px(1 * T + 3, ARENA_FLOOR * T - 14, "#6d4c2f", 2, 13);
     px(1 * T + 3, ARENA_FLOOR * T - 10, "#3b3746", 2, 1);
+  } else if (TH.trees) {
+    // The forest's tower is a great tree: bark, roots spreading over the ground, a canopy above, and a door in the trunk.
+    const x0 = TOWER_X * T, x1 = mw * T, top = TOWER_TOP * T;
+    for (let x = x0; x < x1; x++) {
+      for (let y = top; y < H * T; y++) {
+        const ridgeC = (x * 7 + Math.floor(y / 3) * 3) % 11;
+        px(x, y, ridgeC < 2 ? "#2a1a12" : ridgeC < 5 ? "#5d4030" : "#4e3527");
+      }
+    }
+    for (let i = 0; i < 4; i++) {
+      // Roots curling out over the path's last stretch.
+      const rx = x0 - 6 - i * 9, len = 20 + i * 6;
+      for (let k = 0; k < len; k++) px(rx + k, 9 * T - 2 + Math.round(Math.sin(k * 0.3 + i) * 1.5), k % 4 ? "#4e3527" : "#2a1a12", 2, 2);
+    }
+    for (let i = 0; i < 26; i++) {
+      const cx = x0 - 20 + rand() * (x1 - x0 + 40), cy = top - 6 - rand() * 52, r = 12 + rand() * 12;
+      for (let y = -r; y <= r; y++) {
+        const hw = Math.sqrt(r * r - y * y);
+        px(Math.round(cx - hw), Math.round(cy + y), y < -r * 0.4 ? "#3b6b3f" : rand() < 0.5 ? "#24492a" : "#2e5a33", Math.round(hw * 2), 1);
+      }
+    }
+    for (let i = 0; i < 60; i++) px(x0 - 20 + ((rand() * (x1 - x0 + 40)) | 0), top - 60 + ((rand() * 56) | 0), "#5f8f4a", 2, 1);
+    // A hollow in the trunk, glowing, for a window.
+    const wx = (TOWER_X + 4) * T + 5, wy = 8 * T - 30;
+    px(wx - 1, wy - 1, OUTLINE, 9, 12);
+    px(wx, wy, "#d4e157", 7, 10);
+    px(wx + 1, wy + 1, "#9ccc65", 5, 8);
+    const dx = TOWER_X * T + 1, dy = 8 * T;
+    px(dx, dy - 2, "#1a100b", 13, 18);
+    px(dx + 2, dy - 4, "#1a100b", 9, 2);
+    px(dx + 1, dy + 1, "#3e2b20", 11, 15);
+    px(dx + 3, dy - 1, "#3e2b20", 7, 2);
+    px(dx + 9, dy + 8, "#d4e157", 1, 1);
   } else {
     // The tower: battlements on top, a banner, a lit window and the door at its foot.
-    merlons(TOWER_X * T + 1, mw * T, TOWER_TOP * T, 7, 6, 4, "#5f5872", "#8a82a0");
-    skullBanner((TOWER_X + 2) * T + 3, TOWER_TOP * T + 6, 20, 34);
+    merlons(TOWER_X * T + 1, mw * T, TOWER_TOP * T, 7, 6, 4, TH.towerMerlon[0], TH.towerMerlon[1]);
+    if (TH.snow) {
+      // Icicles hanging off the battlements.
+      for (let x = TOWER_X * T + 2; x < mw * T; x += 3 + ((rand() * 3) | 0)) {
+        const len = 2 + ((rand() * 6) | 0);
+        for (let k = 0; k < len; k++) px(x, TOWER_TOP * T + 1 + k, k < len - 1 ? "#e1f5fe" : "#81d4fa", k < len / 2 ? 2 : 1, 1);
+      }
+    }
+    skullBanner((TOWER_X + 2) * T + 3, TOWER_TOP * T + 6, 20, 34, TH.flag);
     const wx = (TOWER_X + 4) * T + 5, wy = 8 * T;
     px(wx - 1, wy - 1, OUTLINE, 8, 13);
     px(wx, wy + 2, "#ffb74d", 6, 10);
@@ -7149,13 +7376,43 @@ function buildBackground(map, arena) {
   }
   return { sky, world };
 }
-const BG = { level: buildBackground(MAP, false), arena: buildBackground(ARENA, true) };
+const BG = bgFor("castle");
 
 // ---------- drawing ----------
 function drawLava() {
+  const kind = theme().pit;
   for (let x = 0; x < mapW(); x++) {
     if (tileAt(x, H - 1) !== "L") continue;
     const X = x * T, Y = (H - 1) * T;
+    if (kind === "spikes") {
+      // A bed of ice spikes, glinting.
+      ctx.fillStyle = "#0d2a40";
+      ctx.fillRect(X, Y + 6, T, T - 6);
+      for (let i = 0; i < 4; i++) {
+        const sx = X + i * 4 + ((x * 3 + i) % 2), hgt = 7 + ((x * 5 + i * 3) % 5);
+        for (let k = 0; k < hgt; k++) {
+          const w = Math.max(1, Math.round(3 * (1 - k / hgt)));
+          ctx.fillStyle = k === hgt - 1 ? "#ffffff" : (i + k) % 3 ? "#81d4fa" : "#b3e5fc";
+          ctx.fillRect(sx + Math.floor((3 - w) / 2), Y + T - 1 - k, w, 1);
+        }
+        if (Math.floor(S.time * 2 + x + i) % 7 === 0) { ctx.fillStyle = "#ffffff"; ctx.fillRect(sx + 1, Y + T - hgt, 1, 1); }
+      }
+      continue;
+    }
+    if (kind === "water") {
+      // Deep water, rippling.
+      ctx.fillStyle = "#0b2a4a";
+      ctx.fillRect(X, Y, T, T);
+      for (let i = 0; i < T; i++) {
+        const s = Math.round(Math.sin(S.time * 2 + (X + i) * 0.3) * 1.2 + Math.sin(S.time * 1.1 + (X + i) * 0.11));
+        ctx.fillStyle = "#1565c0";
+        ctx.fillRect(X + i, Y + 3 + s, 1, 9);
+        ctx.fillStyle = "#42a5f5";
+        ctx.fillRect(X + i, Y + 3 + s, 1, 2);
+        if ((X + i + Math.floor(S.time * 4)) % 9 === 0) { ctx.fillStyle = "#e1f5fe"; ctx.fillRect(X + i, Y + 3 + s, 1, 1); }
+      }
+      continue;
+    }
     ctx.fillStyle = "#8e1b0e";
     ctx.fillRect(X, Y, T, T);
     for (let i = 0; i < T; i++) {
@@ -7194,7 +7451,7 @@ function drawTorches() {
       ["....y..", "...yy..", "..yYy..", ".yYYy..", ".yYWYy.", "yYWWWYy", ".yYWYy."],
       ["...y...", "...yy..", "..yYy..", ".yYYYy.", ".yYWYy.", "yYWWWYy", ".yYWYy."],
     ][f];
-    const cols = { y: "#ff6f00", Y: "#ffb300", W: "#fff3c4" };
+    const cols = theme().flame;
     flame.forEach((row, ry) => [...row].forEach((ch, rx) => {
       if (ch === ".") return;
       ctx.fillStyle = cols[ch];
@@ -7769,7 +8026,7 @@ function drawRoarRings(cx, cy, roar) {
 function drawDevourer(b) {
   const act = b.action, unmade = b.form === 3;
   const jaw = b.roar > 0 || (act && ((act.type === "breath" && act.t > 0.25) || act.type === "devour" || (act.type === "souls" && act.t < 0.7) || act.type === "feast" || act.type === "harvest" || act.type === "lance"));
-  const art = jaw ? ART.devourerRoar : ART.devourer, pal = unmade ? UNMADE_PAL : DEVOURER_PAL, key = (unmade ? "unmade" : "devourer") + (jaw ? "Roar" : "");
+  const art = jaw ? ART.devourerRoar : ART.devourer, pal = bossPal(unmade ? "unmade" : "devourer"), key = (unmade ? "unmade" : "devourer") + (S.theme || "") + (jaw ? "Roar" : "");
   const spr = sprite(art, pal, key);
   // The Unmade hovers a little off the floor.
   const hover = unmade ? Math.round(-3 + Math.sin(S.time * 2.5) * 2) : 0;
@@ -7844,8 +8101,8 @@ function drawDevourer(b) {
 
 function drawBoss(b, shadow = false) {
   if (b.form >= 2) { drawDevourer(b); return; }
-  const pal = shadow ? BOSS_SHADOW_PAL : b.enraged ? BOSS_RAGE_PAL : BOSS_PAL;
-  const spr = sprite(ART.boss, pal, shadow ? "bossShadow" : b.enraged ? "bossRage" : "boss");
+  const pal = shadow ? BOSS_SHADOW_PAL : bossPal(b.enraged ? "rage" : "boss"), tkey = S.theme || "";
+  const spr = sprite(ART.boss, pal, shadow ? "bossShadow" : (b.enraged ? "bossRage" : "boss") + tkey);
   const cx = centerX(b) * T, bottom = (b.y + b.h) * T;
   const breathe = b.onGround && Math.floor(S.time * 2) % 2 ? 1 : 0;
   const top = Math.round(bottom - spr.height + 1);
@@ -7877,11 +8134,13 @@ function drawBoss(b, shadow = false) {
     const k = Math.min(1, b.transform.t / 1.6);
     ctx.fillStyle = "#ff1744";
     for (let i = 0; i < 40 * k; i++) ctx.fillRect(left + 6 + Math.floor(Math.random() * (spr.width - 12)), top + 8 + Math.floor(Math.random() * (spr.height - 12)), 1, 2);
-    drawSprite(sprite(ART.boss, pal, "boss", true), cx, bottom + breathe, b.face, k * 0.7);
+    drawSprite(sprite(ART.boss, pal, "boss" + tkey, true), cx, bottom + breathe, b.face, k * 0.7);
   }
   if (b.flash > 0) drawSprite(sprite(ART.boss, BOSS_PAL, "boss", true), cx, bottom + breathe, b.face, 0.7);
+  if (!shadow && S.theme === "ice" && Math.random() < 0.3) particle({ x: b.x + Math.random() * b.w, y: b.y + Math.random() * b.h, vy: 0.6, life: 0.5, color: "#e1f5fe", glow: true });
+  if (!shadow && S.theme === "forest" && Math.random() < 0.15) particle({ x: b.x + Math.random() * b.w, y: b.y + Math.random() * b.h * 0.5, vy: 1.2, vx: 0.4, g: 2, life: 0.9, color: Math.random() < 0.5 ? "#7cb342" : "#33691e" });
 
-  const arm = sprite(ART.cleaverArm, shadow ? Object.fromEntries(Object.keys(CLEAVER_PAL).map(k => [k, "#050308"])) : CLEAVER_PAL, shadow ? "armShadow" : "arm");
+  const arm = sprite(ART.cleaverArm, shadow ? Object.fromEntries(Object.keys(CLEAVER_PAL).map(k => [k, "#050308"])) : bossPal("cleaver"), shadow ? "armShadow" : "arm" + tkey);
   ctx.save();
   ctx.translate(sx, sy);
   ctx.scale(b.face, 1);
@@ -8352,8 +8611,8 @@ function drawLighting() {
     ctx.fillStyle = g;
     ctx.fillRect(x - r, y - r, r * 2, r * 2);
   };
-  torches().forEach((t, i) => glow(t.x * T + 8, t.y * T + 6, 22 + Math.sin(S.time * 11 + i) * 2, "rgba(255,140,40,0.22)"));
-  for (let x = 0; x < mapW(); x++) if (tileAt(x, H - 1) === "L") glow(x * T + 8, (H - 1) * T + 4, 20, "rgba(255,90,20,0.18)");
+  torches().forEach((t, i) => glow(t.x * T + 8, t.y * T + 6, 22 + Math.sin(S.time * 11 + i) * 2, theme().light));
+  for (let x = 0; x < mapW(); x++) if (tileAt(x, H - 1) === "L") glow(x * T + 8, (H - 1) * T + 4, 20, theme().pitLight);
   for (const p of S.pools) glow(p.x * T, ARENA_FLOOR * T, p.r * T * 1.4, "rgba(200,20,30,0.3)");
   for (const m of S.meteors) glow(m.x * T, m.y * T, 14, "rgba(255,110,20,0.5)");
   for (const sk of S.skulls) glow(sk.x * T, sk.y * T, 10, "rgba(150,100,255,0.45)");
@@ -8904,7 +9163,7 @@ function drawHud() {
       drawText(`${BOSS_NAME}, THE DEVOURER`, bx, by - 10, "#e1bee7");
       drawMeter(bx, by, bw, 4, b.hp / b.maxHp, "#24082e", "#8e24aa", "#e040fb");
     } else {
-      drawText(`${BOSS_NAME}, ${BOSS_TITLE}`, bx, by - 10, b.enraged ? "#ff8a80" : "#e6e0ec");
+      drawText(`${BOSS_NAME}, ${bossTitle()}`, bx, by - 10, b.enraged ? "#ff8a80" : "#e6e0ec");
       drawMeter(bx, by, bw, 4, b.hp / b.maxHp, "#3b1016", "#c62828", "#ef5350");
     }
     drawText(hpText, bx + bw, by - 10, "#8a8296", { align: "right" });
@@ -8962,8 +9221,8 @@ function drawBanner() {
     softBand(mid - 4, 42, 0.8);
     softBand(mid + 33, 34, 0.7);
     drawText(BOSS_TITLE, cx, mid - 40, "#ff5252", { align: "center", scale: 3, shadow: "#000" });
-    const diffs = S.titleStep === "difficulty";
-    drawText(diffs ? "SANDBOX: CHOOSE A DIFFICULTY" : "YOU ARE VORGATH. THE ORDER OF THE DAWN IS COMING FOR YOUR TOWER.", cx, mid - 13, diffs ? "#9cff9c" : "#e6e0ec", { align: "center" });
+    const diffs = S.titleStep === "difficulty", maps = S.titleStep === "map";
+    drawText(maps ? `SANDBOX (${DIFFICULTIES[S.diff].name}): CHOOSE A MAP` : diffs ? "SANDBOX: CHOOSE A DIFFICULTY" : "YOU ARE VORGATH. THE ORDER OF THE DAWN IS COMING FOR YOUR TOWER.", cx, mid - 13, diffs || maps ? "#9cff9c" : "#e6e0ec", { align: "center" });
     const hovered = cardAt(mouse);
     if (hovered >= 0) S.titlePick = hovered;
     titleCards().forEach((c, i) => {
@@ -8978,7 +9237,7 @@ function drawBanner() {
       const best = diffs ? sandboxBest(i) : 0;
       if (best) drawText(`BEST: WAVE ${best}`, c.x + c.w / 2, c.y + c.h + 5, c.color, { align: "center" });
     });
-    const hint = diffs ? "CLICK ONE, OR USE THE ARROWS AND ENTER. ESC GOES BACK" : "CLICK A MODE, OR USE THE ARROWS AND ENTER";
+    const hint = diffs || maps ? "CLICK ONE, OR USE THE ARROWS AND ENTER. ESC GOES BACK" : "CLICK A MODE, OR USE THE ARROWS AND ENTER";
     if (Math.floor(S.time * 2) % 2 === 0) drawText(hint, cx, mid + 74, "#ffd54f", { align: "center" });
     return;
   }
@@ -9020,7 +9279,7 @@ function draw() {
   if (S.shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * S.shake), Math.round((Math.random() - 0.5) * S.shake));
 
   const arena = inArena();
-  const layers = BG[arena ? "arena" : "level"];
+  const layers = bgFor(S.theme || "castle")[arena ? "arena" : "level"];
   ctx.drawImage(layers.sky, 0, 0);
   // Everything after this is drawn in world space, scrolled by the camera.
   ctx.translate(-Math.round(camX() * T), 0);
