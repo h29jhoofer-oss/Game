@@ -1,0 +1,99 @@
+// The crash course: it has to be finished before the real game, every step has to be done, and it ends at the
+// hero select. Run: node tests/tutorial.js
+const path = require('path');
+const { chromium } = require(process.env.PW || 'playwright');
+const FILE = 'file://' + path.resolve(__dirname, '..', 'hollow_depths.html');
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 1200, height: 820 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto(FILE);
+  await page.evaluate('localStorage.clear()');
+  await page.reload();
+  await page.waitForTimeout(400);
+  const ev = s => page.evaluate(s);
+  const step = async secs => { for (let i = 0; i < Math.ceil(secs / 0.05); i++) await ev('tick(0.05)'); };
+  const talk = async () => { for (let i = 0; i < 30 && await ev('!!(DH().dlg)'); i++) await ev('dlgAdvance();dlgAdvance()'); await step(.1); };
+  const at = (x, y) => ev(`(()=>{S.px=${x};S.py=${y};S.fx=S.px+.5;S.fy=S.py+.5;S.vx=S.px;S.vy=S.py;})()`);
+  const results = [];
+  const check = (name, ok, detail) => results.push({ name, ok: !!ok, detail });
+  const stepId = () => ev('tutStep()&&tutStep().id');
+
+  check('the title no longer explains everything', await ev('!/Strike<\\/b> is always ready/.test(document.getElementById("card").innerHTML)&&!/In a duel/.test(document.getElementById("card").innerHTML)'));
+  check('the title is a picture of the ruins on the hill, with Play, Settings and Music', await ev('!!document.getElementById("titleArt")&&["tPlay","tSet","tMus"].every(id=>document.getElementById(id))&&/Play/.test(document.getElementById("tPlay").textContent)&&/Music: (On|Off)/.test(document.getElementById("tMus").textContent)'));
+  await page.click('#tSet'); await page.waitForTimeout(150);
+  check('Settings has music, sound effects and screen shake', await ev('["setMus","setSfx","setShake"].every(id=>document.getElementById(id))&&!document.getElementById("setTut")'));
+  await ev('document.getElementById("setShake").click()');
+  check('and they stick', await ev('SET.shake===false&&JSON.parse(localStorage.getItem("hd-settings")).shake===false'));
+  await ev('document.getElementById("setShake").click();document.getElementById("setBack").click()');
+  await page.click('#tMus'); await page.waitForTimeout(100);
+  check('the Music button switches the music', await ev('musicOn===false&&/Off/.test(document.getElementById("tMus").textContent)'));
+  await page.click('#tMus');
+  await page.click('#tPlay'); await page.waitForTimeout(300);
+  check('the first time, Play goes to the crash course, kept by a friendly old man in a hood', await ev('!!S.tut&&MAPD.dlg&&MAPD.dlg.who==="oldman"&&/Just an old man/.test(MAPD.dlg.lines.map(l=>l.text).join(" "))&&!S.pack.some(isWisp)'));
+  await talk();
+  check('lesson 1: walk to the mark', await stepId() === 'move' && await ev('document.getElementById("tutcard").classList.contains("show")'));
+  await step(1);
+  check('...and it waits until you do', await stepId() === 'move');
+  await ev('(()=>{S.px=TUT_MARK[0]-1;S.py=TUT_MARK[1];S.fx=S.px+.9;S.fy=S.py+.5;held.add("KeyD");})()'); await step(.4); await ev('held.clear()');
+  check('walking there moves on to dashing', await stepId() === 'dash', await ev('[S.px,S.py]'));
+  await ev('held.add("KeyA");dash()'); await step(.3); await ev('held.clear()');
+  check('dash, and it asks you to rest', await stepId() === 'rest');
+  for (let i = 0; i < 60 && await stepId() === 'rest'; i++) await step(.25);
+  check('stand still until stamina is back', await stepId() === 'pickup');
+  await at(...(await ev('TUT_DRAUGHT'))); await ev('stepOn()'); await step(.1);
+  check('pick up the draught', await stepId() === 'pack');
+  await page.keyboard.press('i'); await step(.1);
+  await page.keyboard.press('i'); await step(.1);
+  check('open the pack and close it', await stepId() === 'note');
+  await at(...(await ev('[TUT_NOTE[0]-1,TUT_NOTE[1]]'))); await page.keyboard.press('e'); await step(.1);
+  check('E beside the page reads it: the bargain, in the notary\'s hand', await ev('paperOpen&&/ALDRIC/.test(document.getElementById("card").textContent)&&/the rest/.test(document.getElementById("card").textContent)'));
+  await ev('closePaper()'); await step(.1);
+  check('put it down, and the old man has a thought about the handwriting', await stepId() === 'fight' && await ev('/Lovely handwriting/.test(document.getElementById("log").textContent)'));
+  await talk();
+  check('a rat comes up the stair', await ev('mons.some(m=>m.t.tut)'));
+  await ev('startBattle(mons.find(m=>m.t.tut))'); await step(1.2); await talk(); await ev('B.dlg=null');
+  for (let i = 0; i < 20 && await ev('B&&B.phase!=="choose"'); i++) await step(.1);
+  check('in the fight, it says to play a card', await ev('/Play a card/.test(document.getElementById("tutcard").textContent)'));
+  await ev('B.mhp=1'); await page.keyboard.press('1');
+  await step(.8);
+  check('the rat cannot go down before you have parried', await ev('!!B&&!S.tut.flags.won&&S.tut.flags.played&&!S.tut.flags.parried'), await ev('[!!B,B&&B.mhp,S.tut.flags,B&&B.phase]'));
+  for (let i = 0; i < 90 && await ev('B&&B.phase!=="parry"'); i++) await step(.1);   // blows wait for their dice now
+  await step(.05);   // the banner catches up on the next frame
+  check('it always leaves an opening until you parry', await ev('B.phase==="parry"&&/PARRY/.test(document.getElementById("tutcard").textContent)'), await ev('[B&&B.phase,B&&B.mhp,S.tut&&S.tut.flags,B&&B.log.slice(-5).map(l=>l.t)]'));
+  await ev('(()=>{const P=B.parry;P.t0=performance.now()-P.dur*(P.z0+P.z1)/2;parryPress();})()'); await step(1);
+  check('parry it', await ev('S.tut.flags.parried'));
+  for (let i = 0; i < 30 && await ev('!!B'); i++) { if (await ev('B&&B.phase==="choose"')) { await ev('B.mhp=1'); await page.keyboard.press('1'); } await step(.3); }
+  await step(.5);
+  check('then finish it', await ev('!B&&S.mode==="map"&&(S.tut.flags.won||tutStep().id==="stair")'));
+  await step(.2);
+  check('the old man tells you to take the black cards, every one (and that the roots are friendly)', await ev('MAPD.dlg&&/Take them, child/.test(MAPD.dlg.lines.map(l=>l.text).join(" "))&&/roots/.test(MAPD.dlg.lines.map(l=>l.text).join(" "))'));
+  check('he tells you about the black cards: purple, red and yellow', await ev('(()=>{const t=TUT_TAM.won.map(l=>l.text).join(" ");return /Black and purple/.test(t)&&/Black and red/.test(t)&&/black and yellow/.test(t);})()'));
+  check('and gives nothing away', await ev('![...TUT_TAM.intro,...TUT_TAM.fight,...TUT_TAM.won,...TUT_TAM.bye].some(l=>/Thing|always been|the hill is me/.test(l.text)||(l.who&&l.who!=="hero"))'));
+  await talk();
+  check('the stair opens', await stepId() === 'stair' && await ev('map[TUT_STAIR[1]][TUT_STAIR[0]]===STAIRS'));
+  await at(...(await ev('TUT_STAIR'))); await page.keyboard.press('Enter'); await step(.1);
+  check('at the stair he sees you off, kindly, and gives nothing away', await ev('MAPD.dlg&&MAPD.dlg.who==="oldman"&&MAPD.dlg.lines.every(l=>!l.who||l.who==="hero"||l.who==="oldman")&&!/always been|the hill is me|Thing/.test(MAPD.dlg.lines.map(l=>l.text).join(" "))'));
+  await talk();
+  check('going down ends the course at the hero select', await ev('META.tutorialDone===true&&!S.tut&&/charcard/.test(document.getElementById("card").innerHTML)'));
+  check('he waves you off down the stair', await ev('/raises a hand/.test(document.getElementById("log").textContent)'));
+  check('and on floor 20 he is waiting: the same old man', await ev('(()=>{start("cade");const L=dealLines();return L[0].who==="oldman"&&/one piece/.test(L[0].text)&&L.some(l=>l.who==="thing"&&/the hill is me/.test(l.text));})()'));
+  check('and it is remembered', await ev('JSON.parse(localStorage.getItem("hd-meta")).tutorialDone===true'));
+  await ev('title()');
+  await ev('openSettings()');
+  check('from then on Settings can replay the crash course', await ev('!!document.getElementById("setTut")'));
+  await ev('title()'); await page.click('#tPlay'); await page.waitForTimeout(200);
+  check('and Play goes straight to the heroes', await ev('!S.tut&&/charcard/.test(document.getElementById("card").innerHTML)'));
+  // a save that finished the old crash course (before the old man) hasn't met him: Play takes it through again
+  await ev('localStorage.setItem("hd-meta",JSON.stringify({tutorialDone:true,stats:{},done:{}}))'); await page.reload(); await page.waitForTimeout(300);
+  await ev('tamChatter=false');
+  await page.click('#tPlay'); await page.waitForTimeout(300);
+  check('an older save that finished the old course gets the new one on Play', await ev('!!S.tut&&MAPD.dlg&&MAPD.dlg.who==="oldman"'));
+  check('no page errors', errors.length === 0, errors);
+  let pass = 0;
+  for (const r of results) { console.log((r.ok ? 'ok   ' : 'FAIL ') + r.name + (r.ok ? '' : '  ' + JSON.stringify(r.detail))); if (r.ok) pass++; }
+  console.log(`${pass}/${results.length} passed`);
+  await browser.close();
+  process.exit(pass === results.length ? 0 : 1);
+})();
