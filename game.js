@@ -1520,7 +1520,7 @@
     if (!heli && state === 'play' && wanted >= MAX_WANTED && heliCool <= 0) {
       heli = { x: player.x + CAR_W / 2 - HELI_W / 2, y: -HELI_H - 10, fuel: HELI_FUEL, fireTimer: 2.5,
         target: null, aim: 0, leaving: false, spin: 0 };
-      popup('CHOPPER INBOUND!', W / 2, 60, '#ff4d4d', 2);
+      popup('CHOPPER INBOUND! ROAD CLOSED', W / 2, 60, '#ff4d4d', 2);
       if (!heliTipShown) {
         heliTipShown = true;
         popup('DODGE THE RED TARGETS', W / 2, 70, '#ffd34d', 2.4);
@@ -2040,8 +2040,10 @@
       sfx.tone(330, 0.15, 'triangle', 0.1, null, 0.12);
     }
 
+    // The chopper fight clears the road: civilians stop coming until it bugs out.
     spawnTimer -= wdt * (p.speed / CRUISE);
-    if (spawnTimer <= 0) {
+    if (heli && !heli.leaving) spawnTimer = Math.max(spawnTimer, 0.5);
+    else if (spawnTimer <= 0) {
       spawnCar();
       spawnTimer = Math.max(0.28, 1.0 - level * 0.08) + Math.random() * 0.5;
     }

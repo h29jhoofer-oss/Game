@@ -73,6 +73,7 @@ The sweet spot is fast enough to stay ahead of the rigs, but not so fast that th
 ## The chopper
 
 - At **max heat (5 stars)** a police helicopter flies in and hovers ahead of you.
+- The road is closed while it hunts you: no new civilian traffic shows up, only cops. Traffic returns once the chopper leaves.
 - It locks a **red target** on where you're heading, then sprays a burst of bullets at that spot. Get out of the target before the burst lands.
 - Each hit costs 1 **HP**; you have 5, shown at the top right. Your car smokes when it's badly damaged. At 0 HP it blows up and the run is over.
 - The chopper runs out of fuel after 25 seconds and leaves. It comes back 15 seconds later if you're still at max heat.
