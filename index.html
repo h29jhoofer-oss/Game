@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Reckless Driver</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #111;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #game {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      display: block;
+      background: #000;
+    }
+    #touch {
+      display: none;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 12px;
+      padding: 0 12px;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+    body.touch #touch { display: flex; }
+    #touch .pad { display: flex; gap: 10px; }
+    #touch button {
+      pointer-events: auto;
+      width: 64px;
+      height: 64px;
+      border: 3px solid rgba(255, 255, 255, 0.6);
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.35);
+      color: #fff;
+      font: bold 16px monospace;
+      touch-action: none;
+    }
+    #touch button.active { background: rgba(255, 255, 255, 0.35); }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="touch">
+    <div class="pad">
+      <button data-act="left">&#9664;</button>
+      <button data-act="right">&#9654;</button>
+    </div>
+    <div class="pad">
+      <button data-act="brake">BRK</button>
+      <button data-act="gas">GAS</button>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
