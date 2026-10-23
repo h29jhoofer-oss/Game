@@ -17,6 +17,9 @@
   const POLICE_MPH = 100, POLICE_SPEED = POLICE_MPH / MPH;
   const MAX_COPS = 4, MAX_WANTED = 5, WANTED_STEP = 6;
   const COP_ESCAPE_Y = H + 140;
+  // Dawdling under SLOW_MPH fills a meter; when it fills, a big rig comes
+  // barrelling up behind you and flattens you unless you speed away.
+  const SLOW_MPH = 75, SLOW_SPEED = SLOW_MPH / MPH, SLOW_LIMIT = 3, SLOW_GRACE = 4;
   const MAX_HP = 5;
   const HELI_FUEL = 25, HELI_COOLDOWN = 15;
   const ONCOMING_LANES = 2; // lanes 0-1 drive toward you, lanes 2-3 go your way
@@ -218,9 +221,12 @@
   // Player car bodies sold in the shop. All share the sedan's 10x16 footprint
   // and hitbox, so they change the look, not the difficulty.
   const BODIES = [
-    { id: 'sedan', slot: 'body', name: 'SEDAN', price: 0, desc: 'THE TRUSTY FAMILY FOUR-DOOR', map: CAR },
+    { id: 'sedan', slot: 'body', name: 'SEDAN', price: 0, desc: 'THE TRUSTY FAMILY FOUR-DOOR', map: CAR,
+      pros: 'BALANCED ALL-ROUNDER', cons: 'NO PERKS AND NO FLAWS', stats: {} },
     {
       id: 'van', slot: 'body', name: 'DELIVERY VAN', price: 2000, desc: 'BOXY AND PROUD OF IT',
+      pros: '+1 HP  POTHOLES HURT LESS', cons: '-10 MPH  SLOWER STEERING',
+      stats: { hp: 1, bump: 0.6, speed: -10, steer: 0.9 },
       map: [
         '..SBBBBS..', '.yBBBBBBy.', 'kSwwwwwwSk', 'kSwgwwwwSk', '.SBBBBBBS.', '.SHHHHHHS.',
         '.SHBBBBHS.', '.SHBBBBHS.', '.SHBBBBHS.', '.SHBBBBHS.', '.SHBBBBHS.', 'kSHBBBBHSk',
@@ -229,6 +235,8 @@
     },
     {
       id: 'pickup', slot: 'body', name: 'PICKUP TRUCK', price: 2500, desc: 'CAB UP FRONT AND AN OPEN BED',
+      pros: 'DIRT AND POTHOLES HURT LESS', cons: '-5 MPH TOP SPEED',
+      stats: { dirt: 0.3, bump: 0.7, speed: -5 },
       map: [
         '..SBBBBS..', '.yBBBBBBy.', 'kSBBBBBBSk', 'kSBBBBBBSk', '.SwwwwwwS.', '.SwgwwwwS.',
         '.SBBBBBBS.', '.SBBBBBBS.', '.SSSSSSSS.', '.SkkkkkkS.', '.SkkkkkkS.', 'kSkkkkkkSk',
@@ -237,6 +245,8 @@
     },
     {
       id: 'coupe', slot: 'body', name: 'SPORTS COUPE', price: 3000, desc: 'LONG HOOD AND A REAR SPOILER',
+      pros: '+5 MPH  SHARPER STEERING', cons: 'POTHOLES HURT MORE',
+      stats: { speed: 5, steer: 1.1, bump: 1.4 },
       map: [
         '.SBBBBBBS.', 'yBBBBBBBBy', 'kSBBHHBBSk', 'kSBBHHBBSk', '.SBBHHBBS.', '.SBwwwwBS.',
         '.SwwgwwwS.', '.SwwwwwwS.', '.SBBHHBBS.', '.SBBHHBBS.', '.SBBBBBBS.', 'kSBBBBBBSk',
@@ -245,6 +255,8 @@
     },
     {
       id: 'muscle', slot: 'body', name: 'MUSCLE CAR', price: 5000, desc: 'WIDE BODY AND A HOOD SCOOP',
+      pros: '+10 MPH  NITRO LASTS LONGER', cons: 'SLOWER STEERING',
+      stats: { speed: 10, boost: 1.4, steer: 0.9 },
       map: [
         '.SBBBBBBS.', 'yBBBBBBBBy', 'kSBBkkBBSk', 'kSBBkkBBSk', '.SBBBBBBS.', '.SwwwwwwS.',
         '.SwgwwwwS.', '.SBBBBBBS.', '.SBBBBBBS.', '.SBBBBBBS.', '.SwwwwwwS.', 'kSBBBBBBSk',
@@ -253,6 +265,8 @@
     },
     {
       id: 'racer', slot: 'body', name: 'OPEN-WHEEL RACER', price: 10000, desc: 'BASICALLY A ROCKET ON WHEELS',
+      pros: '+15 MPH  SHARPER STEERING', cons: '-1 HP  POTHOLES HURT MORE',
+      stats: { speed: 15, steer: 1.15, hp: -1, bump: 1.4 },
       map: [
         '.SSSSSSSS.', '....BB....', 'kk..BB..kk', 'kk.BBBB.kk', 'kk.BBBB.kk', '...BBBB...',
         '...BwwB...', '...BggB...', '...BBBB...', '..BBBBBB..', 'kkBBBBBBkk', 'kkBBBBBBkk',
@@ -785,6 +799,7 @@
   const lastTap = { left: -1, right: -1 };
   let roadItems, nextPothole, nextRamp, nextNitro, rampTipShown;
   let heli, heliCool, bullets, hp, hurtTimer, rotorTimer, heliTipShown;
+  let slowMeter, slowWarned, rig, rigCount, runTime, speedMult;
   let curves = [], curveEnd = 0;
   const shiftRows = new Float32Array(H + SHIFT_OFF * 2);
   let newUnlocks = [], isNewBest = false;
@@ -800,7 +815,9 @@
   let shopMsg = null; // { text, color, life } shown in place of the item description
   const lvl = (id) => upgrades[id] || 0;
   const cosmetic = (slot) => COSMETICS.find((c) => c.id === equipped[slot]);
-  const maxHp = () => MAX_HP + lvl('armor');
+  const bodyStats = () => (BODIES.find((b) => b.id === equipped.body) || BODIES[0]).stats;
+  const stat = (k, dflt) => (bodyStats()[k] ?? dflt);
+  const maxHp = () => Math.max(1, MAX_HP + lvl('armor') + stat('hp', 0));
   const cooldownOf = (a) => a.cooldown * (1 - 0.15 * lvl('cooler'));
   function saveShop() {
     store.set('cash', cash);
@@ -814,7 +831,7 @@
   const hasPassive = (id) => paint().passive === id;
   const abilityOn = (id) => paint().active === id && abilityTime > 0;
   const policeSpeed = () => (hasPassive('blend') ? 110 : POLICE_MPH) / MPH;
-  const maxSpeed = () => MAX_SPEED + (hasPassive('hotrod') ? 25 : 0) + lvl('engine') * 13;
+  const maxSpeed = () => MAX_SPEED + (hasPassive('hotrod') ? 25 : 0) + lvl('engine') * 13 + stat('speed', 0) / MPH;
   const pullTime = () => (hasPassive('shadow') ? 3 : 1.5) * (1 + 0.25 * lvl('jammer'));
   const wantedStep = () => (hasPassive('coolhead') ? 9 : WANTED_STEP);
   function addScore(n) {
@@ -827,6 +844,12 @@
     player = { x: laneX(2), vx: 0, speed: CRUISE, braking: false, gas: false, angle: 0, air: 0, airMax: 1, wobble: 0, boost: 0 };
     heli = null;
     heliCool = 0;
+    slowMeter = 0;
+    slowWarned = false;
+    rig = null;
+    rigCount = 0;
+    runTime = 0;
+    speedMult = 1;
     bullets = [];
     hp = maxHp();
     hurtTimer = 0;
@@ -1494,7 +1517,7 @@
   function collectNitro(it) {
     it.used = true;
     it.y = H + 100; // gone from the road
-    player.boost = 2.5;
+    player.boost = 2.5 * stat('boost', 1);
     shake = Math.max(shake, 2);
     for (let i = 0; i < 14; i++) {
       particle(player.x + CAR_W / 2, PLAYER_Y + CAR_H / 2, rand(-50, 50), rand(-50, 50), 0.4, pick(['#9fd0ff', '#2f6fe0', '#ffffff']));
@@ -1507,9 +1530,10 @@
   function hitPothole(it) {
     const p = player;
     it.used = true;
-    p.speed = Math.max(MIN_SPEED, p.speed * (0.65 + 0.12 * lvl('suspension')));
+    const loss = (0.35 - 0.12 * lvl('suspension')) * stat('bump', 1);
+    p.speed = Math.max(MIN_SPEED, p.speed * (1 - loss));
     p.vx += (Math.random() < 0.5 ? -1 : 1) * 90;
-    p.wobble = 0.5 * (1 - 0.5 * lvl('suspension'));
+    p.wobble = 0.5 * (1 - 0.5 * lvl('suspension')) * stat('bump', 1);
     shake = Math.max(shake, 4);
     combo = 0;
     comboTimer = 0;
@@ -1682,6 +1706,58 @@
     }
   }
 
+  function updateRig(dt) {
+    const p = player;
+    runTime += dt;
+    if (runTime > SLOW_GRACE && p.speed < SLOW_SPEED && p.air <= 0) slowMeter += dt;
+    else slowMeter = Math.max(0, slowMeter - dt * 2);
+    if (slowMeter === 0) slowWarned = false;
+    if (slowMeter > 1.2 && !slowWarned && !rig) {
+      slowWarned = true;
+      popup('TOO SLOW! SPEED UP', W / 2, 60, '#ff9d3d', 1.6);
+      sfx.tone(330, 0.15, 'square', 0.07);
+    }
+    if (!rig && slowMeter >= SLOW_LIMIT) {
+      rigCount++;
+      // Each rig is a little faster than the last.
+      rig = { x: p.x - 1, y: H + 10, w: 12, h: TRUCK.length, speed: Math.min(170, 125 + rigCount * 10), honk: 0 };
+      popup('BIG RIG ON YOUR TAIL!', W / 2, 60, '#ff4d4d', 1.8);
+    }
+    if (!rig) return;
+
+    rig.y += (p.speed - rig.speed) * dt;
+    rig.x = clamp(rig.x + clamp(p.x - 1 - rig.x, -35 * dt, 35 * dt), ROAD_X + 1, ROAD_R - 1 - rig.w);
+    rig.honk -= dt;
+    if (rig.honk <= 0 && rig.y < H + 30) {
+      rig.honk = 1.4;
+      sfx.tone(196, 0.4, 'sawtooth', 0.07);
+      sfx.tone(233, 0.4, 'sawtooth', 0.07);
+    }
+    // It plows straight through anything in its way.
+    for (const c of traffic) {
+      if (!c.stopped && overlaps(rig.x, rig.y, rig.w, rig.h, c.x, c.y, c.w, c.h)) {
+        c.wrecked = true;
+        c.stopped = true;
+        c.targetX = null;
+        for (let i = 0; i < 10; i++) {
+          particle(c.x + c.w / 2, c.y + c.h, rand(-40, 40), rand(-40, 10), 0.4, pick(['#fff3a0', '#ffb000', '#8a8a90']));
+        }
+        sfx.bump();
+      }
+    }
+    if (p.air <= 0 && !abilityOn('ghost') &&
+      overlaps(p.x + 1, PLAYER_Y + 1, CAR_W - 2, CAR_H - 2, rig.x + 1, rig.y + 1, rig.w - 2, rig.h - 2)) {
+      crashCause = 'rig';
+      crash(rig);
+      return;
+    }
+    if (rig.y > H + 70) {
+      rig = null;
+      slowMeter = 0;
+      popup('LOST THE BIG RIG', W / 2, 60, '#57c062', 1.4);
+    }
+  }
+
   function bust() {
     state = 'crash';
     endReason = 'busted';
@@ -1763,8 +1839,11 @@
       store.set('best', best);
     }
     newUnlocks = PAINTS.filter((p) => p.need > oldBest && p.need <= best);
-    cashEarned = final;
-    cash += final;
+    // Cash pays out by average speed: dawdlers earn half, speed demons 1.5x.
+    const avgMph = runTime > 0 ? (dist / runTime) * MPH : 0;
+    speedMult = Math.round(clamp(avgMph / 90, 0.5, 1.5) * 10) / 10;
+    cashEarned = Math.round(final * speedMult);
+    cash += cashEarned;
     saveShop();
     if (newUnlocks.length) sfx.unlock();
     state = 'over';
@@ -1874,7 +1953,7 @@
     const offroad = !airborne && (p.x < ROAD_X - 2 || p.x + CAR_W > ROAD_R + 2);
     if (offroad) {
       if (!hasPassive('offroad')) {
-        p.speed -= (p.speed - 55) * Math.min(1, 2.5 * dt);
+        p.speed -= (p.speed - 55) * Math.min(1, 2.5 * stat('dirt', 1) * dt);
         shake = Math.max(shake, 1);
       }
       if (Math.random() < 0.7) {
@@ -1891,7 +1970,7 @@
     ensureCurves(dist + 600);
     const k = curvAt(dist);
     const dir = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0);
-    const steer = (55 + Math.min(p.speed, MAX_SPEED) * 0.15) * (1 + 0.1 * lvl('tires'));
+    const steer = (55 + Math.min(p.speed, MAX_SPEED) * 0.15) * (1 + 0.1 * lvl('tires')) * stat('steer', 1);
     for (const d of ['left', 'right']) {
       if (!pressed.has(d)) continue;
       if (time - lastTap[d] < DOUBLE_TAP) driftDir = d === 'left' ? -1 : 1;
@@ -2034,6 +2113,7 @@
     updateTraffic(wdt);
     updateHazards(wdt);
     if (state === 'play') checkPlayerVsTraffic();
+    if (state === 'play') updateRig(wdt);
     if (state === 'play') updatePolice(wdt);
     updateHeli(wdt);
     hurtTimer = Math.max(0, hurtTimer - dt);
@@ -2262,6 +2342,14 @@
       for (const w of copWrecks) drawVehicle(policeWreckSprite, sx(w.x, w.y + w.h / 2), Math.round(w.y), w.w, w.h);
       for (const c of traffic) drawTrafficCar(c);
       for (const cop of cops) drawCop(cop);
+      if (rig) {
+        const rx = sx(rig.x, rig.y + rig.h / 2), ry = Math.round(rig.y);
+        drawVehicle(vehicleSprite('truck', '#5a1010', '#d8d8d8'), rx, ry, rig.w, rig.h);
+        if (Math.floor(time * 6) % 2) {
+          ctx.fillStyle = 'rgba(255,243,160,0.5)';
+          ctx.fillRect(rx, ry - 3, rig.w, 3);
+        }
+      }
       drawPlayer();
     }
     for (const p of particles) {
@@ -2396,6 +2484,23 @@
       drawText('PULL OVER', px, PLAYER_Y - 13, flip ? '#ff4d4d' : '#6fa8ff', 1, 'center');
     }
 
+    // Big rig coming up from behind, and the slow-driving warning.
+    if (rig && rig.y >= H - 6 && state === 'play') {
+      const ix = sx(rig.x, H - 8) + 4;
+      ctx.fillStyle = lightsOn() ? '#ff9d3d' : '#ffffff';
+      ctx.fillRect(ix + 1, H - 12, 2, 1);
+      ctx.fillRect(ix, H - 11, 4, 1);
+      ctx.fillRect(ix - 1, H - 10, 6, 2);
+    }
+    if (!rig && slowMeter > 0.6 && state === 'play') {
+      const bw = 30, bx = W / 2 - bw / 2;
+      if (Math.floor(time * 4) % 2) drawText('SPEED UP!', W / 2, H - 16, '#ff9d3d', 1, 'center');
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(bx, H - 9, bw, 3);
+      ctx.fillStyle = '#ff9d3d';
+      ctx.fillRect(bx, H - 8, Math.round(bw * Math.min(1, slowMeter / SLOW_LIMIT)), 1);
+    }
+
     // Cops coming up from behind but still off screen.
     for (const cop of cops) {
       if (cop.y < H - 6) continue;
@@ -2423,6 +2528,8 @@
     ctx.fillRect(1, H - 2, Math.round((W - 2) * sf), 1);
     ctx.fillStyle = '#6fa8ff';
     ctx.fillRect(1 + Math.round((W - 2) * (policeSpeed() - MIN_SPEED) / span), H - 3, 1, 3);
+    ctx.fillStyle = '#ff9d3d';
+    ctx.fillRect(1 + Math.round((W - 2) * (SLOW_SPEED - MIN_SPEED) / span), H - 3, 1, 3);
   }
 
   function dim(alpha) {
@@ -2505,6 +2612,7 @@
       const why = {
         traffic: 'TOTALED IN TRAFFIC', barrier: 'SPUN INTO THE BARRIERS',
         wreck: 'PLOWED INTO A WRECK', landing: 'LANDED ON A CAR', heli: 'SHOT DOWN BY THE CHOPPER',
+        rig: 'FLATTENED BY A BIG RIG',
       };
       drawText(why[crashCause] || why.traffic, W / 2, 42, '#aaaaaa', 1, 'center');
     }
@@ -2522,7 +2630,10 @@
       drawText('NEW PAINT UNLOCKED!', W / 2, 102, '#57c062', 1, 'center');
       newUnlocks.forEach((p, i) => drawText(p.name, W / 2, 111 + i * 8, p.color, 1, 'center'));
     }
-    drawText('+' + cashEarned + ' CASH', W / 2, 136, '#57c062', 1, 'center');
+    drawText('+' + cashEarned + ' CASH', W / 2, 128, '#57c062', 1, 'center');
+    const avg = runTime > 0 ? Math.round((dist / runTime) * MPH) : 0;
+    drawText('AVG ' + avg + ' MPH  X' + speedMult.toFixed(1) + ' CASH', W / 2, 137,
+      speedMult >= 1 ? '#57c062' : '#ff7a7a', 1, 'center');
     if (overTimer >= 0.7) {
       if (Math.floor(time * 2) % 2 === 0) {
         drawText(isTouch ? 'TAP TO RETRY' : 'ENTER: RETRY', W / 2, 150, '#ffd34d', 1, 'center');
@@ -2570,7 +2681,10 @@
 
     const sel = items[shopSel];
     if (shopMsg) drawText(shopMsg.text, W / 2, 124, shopMsg.color, 1, 'center');
-    else drawText(sel.desc, W / 2, 124, '#cfcfcf', 1, 'center');
+    else if (sel.slot === 'body') {
+      drawText(sel.pros, W / 2, 121, '#57c062', 1, 'center');
+      drawText(sel.cons, W / 2, 128, '#ff7a7a', 1, 'center');
+    } else drawText(sel.desc, W / 2, 124, '#cfcfcf', 1, 'center');
 
     // Preview: your current look, trying on the selected style item.
     const look = { decal: equipped.decal, glow: equipped.glow, trail: equipped.trail, body: equipped.body };

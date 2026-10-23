@@ -53,6 +53,16 @@ Messages stay out of the driving view. Announcements like **CURVE AHEAD** or **M
 - Driving on the grass slows you down.
 - One crash and you're wrecked.
 
+## Don't dawdle
+
+Driving slowly isn't safe either:
+
+- After the first few seconds, driving under **75 MPH** fills a **SPEED UP!** meter at the bottom of the screen. An orange tick on the speed bar marks the line.
+- If the meter fills, a **big rig** barrels up behind you, honking and smashing through any car in its way. If it catches you, you're flattened. Get above its speed to leave it behind. Each new rig is a little faster than the last.
+- Cash is paid out by your **average speed** for the run: from x0.5 for a slow run up to x1.5 for a fast one (x1.0 at 90 MPH). The game-over screen shows your average and the multiplier.
+
+The sweet spot is fast enough to stay ahead of the rigs, but not so fast that the cops pile on.
+
 ## Police
 
 - Go over **100 MPH** and a police cruiser starts chasing you. A blue tick on the speed bar marks the limit.
@@ -106,15 +116,15 @@ Every point you score is also banked as **cash** at the end of the run. Press **
 - **Trails:** fire, sparkle, rainbow
 - **Neon underglow:** blue, pink, green
 
-**Bodies** (buy once, then switch any time). Every body has the same size and hitbox, so they change the look, not the difficulty. Decals follow each body's shape:
+**Bodies** (buy once, then switch any time). Every body has the same size and hitbox, and each comes with a small trade-off. Decals follow each body's shape:
 
-| Body | Price |
-| --- | --- |
-| Sedan | Free (default) |
-| Delivery Van | 2,000 |
-| Pickup Truck | 2,500 |
-| Sports Coupe | 3,000 |
-| Muscle Car | 5,000 |
-| Open-Wheel Racer | 10,000 |
+| Body | Price | Pros | Cons |
+| --- | --- | --- | --- |
+| Sedan | Free (default) | Balanced | None |
+| Delivery Van | 2,000 | +1 HP, potholes hurt less | -10 MPH, slower steering |
+| Pickup Truck | 2,500 | Dirt and potholes hurt less | -5 MPH |
+| Sports Coupe | 3,000 | +5 MPH, sharper steering | Potholes hurt more |
+| Muscle Car | 5,000 | +10 MPH, nitro pickups last longer | Slower steering |
+| Open-Wheel Racer | 10,000 | +15 MPH, sharper steering | -1 HP, potholes hurt more |
 
 Your best score, chosen paint, cash, upgrades and style are saved in your browser.
