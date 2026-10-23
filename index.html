@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- page -->
+<title>Chapter 3 Review Game</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: one column on graph paper; a score strip on top, the problem "card" below, worked steps unfold underneath. */
+:root {
+  --bg: #f3f6f8;
+  --grid: #dbe5ec;
+  --panel: #ffffff;
+  --ink: #17263a;
+  --muted: #5a6b7d;
+  --line: #c9d5df;
+  --accent: #2252c2;
+  --accent-ink: #ffffff;
+  --mark: #ffd84a;
+  --mark-ink: #2a2200;
+  --good: #1d7f47;
+  --bad: #c2352b;
+  --r1: #2252c2;
+  --r2: #d9701f;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-math: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1b2b; --grid: #182c44; --panel: #13253a; --ink: #e5edf6; --muted: #94a8bd;
+    --line: #29425f; --accent: #7eaaff; --accent-ink: #0b1626; --mark: #ffd84a; --mark-ink: #2a2200;
+    --good: #4fc685; --bad: #ff7b6f; --r1: #7eaaff; --r2: #ffa45c; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1b2b; --grid: #182c44; --panel: #13253a; --ink: #e5edf6; --muted: #94a8bd;
+  --line: #29425f; --accent: #7eaaff; --accent-ink: #0b1626; --mark: #ffd84a; --mark-ink: #2a2200;
+  --good: #4fc685; --bad: #ff7b6f; --r1: #7eaaff; --r2: #ffa45c; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--ink);
+  font: 17px/1.5 var(--font-body);
+}
+.wrap {
+  max-width: 820px;
+  margin: 0 auto;
+  padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid;
+  gap: 20px;
+}
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+i { font-family: var(--font-math); font-style: italic; }
+.math { font-family: var(--font-math); font-size: 1.05rem; }
+button { font: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--mark); outline-offset: 2px; }
+
+/* Home */
+.hero { display: grid; gap: 10px; }
+.eyebrow { font-size: .78rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.hero h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); line-height: .95; font-weight: 800; letter-spacing: -.02em; }
+.hero h1 mark { background: linear-gradient(transparent 55%, var(--mark) 55%); color: inherit; padding: 0 .1em; }
+.hero p { margin: 0; max-width: 60ch; color: var(--muted); }
+.credits { font-size: .9rem; color: var(--muted); }
+.sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 520px) { .sections { grid-template-columns: 1fr; } }
+.sec {
+  text-align: left; background: var(--panel); color: var(--ink);
+  border: 1.5px solid var(--line); border-radius: 10px; padding: 16px;
+  display: grid; gap: 6px; min-width: 0;
+  transition: border-color .15s, transform .15s;
+}
+.sec:hover { border-color: var(--accent); transform: translateY(-2px); }
+.sec .num { font-family: var(--font-math); font-weight: 600; color: var(--accent); font-size: .95rem; }
+.sec h3 { font-size: 1.2rem; font-weight: 800; }
+.sec .ex { font-family: var(--font-math); font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
+.sec .best { font-size: .8rem; color: var(--muted); }
+.sec.mixed { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); grid-column: 1 / -1; }
+.sec.mixed .num, .sec.mixed .ex, .sec.mixed .best { color: var(--accent-ink); opacity: .9; }
+.rules { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: .9rem; color: var(--muted); margin: 0; padding: 0; list-style: none; }
+.rules b { color: var(--ink); }
+
+/* HUD */
+.hud {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+  background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 14px;
+  font-variant-numeric: tabular-nums;
+}
+.hud .tag { font-family: var(--font-math); font-weight: 600; color: var(--accent); }
+.hud .grow { flex: 1; }
+.hud .stat { display: flex; gap: 6px; align-items: baseline; }
+.hud .stat span { font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.hud .stat b { font-family: var(--font-display); font-size: 1.25rem; }
+.hearts { letter-spacing: 2px; color: var(--bad); font-size: 1.1rem; }
+.hearts .lost { color: var(--line); }
+.progress { height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
+.progress div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+.quit { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 0; font-size: .9rem; }
+
+/* Problem */
+.card { background: var(--panel); border: 1.5px solid var(--line); border-radius: 12px; padding: 22px; display: grid; gap: 18px; min-width: 0; }
+.card .kicker { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: .85rem; color: var(--muted); }
+.card h2 { font-size: 1.5rem; font-weight: 800; }
+.sys {
+  display: grid; gap: 6px; padding: 6px 0 6px 16px; border-left: 3px solid var(--accent);
+  font-family: var(--font-math); font-size: 1.15rem; overflow-x: auto;
+}
+.sys .row { display: flex; gap: 14px; white-space: nowrap; }
+.sys .row small { color: var(--muted); font-size: .85rem; align-self: center; }
+.ineq-a { color: var(--r1); } .ineq-b { color: var(--r2); }
+.mrow { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-family: var(--font-math); font-size: 1.15rem; }
+.mat { position: relative; display: inline-grid; grid-template-columns: repeat(2, auto); gap: 4px 14px; padding: 6px 14px; text-align: right; font-variant-numeric: tabular-nums; }
+.mat::before, .mat::after { content: ""; position: absolute; top: 0; bottom: 0; width: 7px; border: 2px solid currentColor; }
+.mat::before { left: 0; border-right: 0; }
+.mat::after { right: 0; border-left: 0; }
+.mat input { width: 4.2em; text-align: center; }
+.graph { width: 100%; max-width: 380px; height: auto; display: block; }
+.graph-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+.graph-row > div { min-width: 0; flex: 1 1 220px; display: grid; gap: 10px; }
+.legend { font-size: .85rem; color: var(--muted); }
+
+.answer { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
+.field { display: flex; align-items: center; gap: 8px; font-family: var(--font-math); font-size: 1.15rem; }
+input[type="text"] {
+  font: 600 1.1rem var(--font-math); width: 5.5em; padding: 8px 10px; border-radius: 8px;
+  border: 1.5px solid var(--line); background: var(--bg); color: var(--ink);
+}
+input.right { border-color: var(--good); background: color-mix(in srgb, var(--good) 14%, var(--panel)); }
+input.wrong { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, var(--panel)); }
+.choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; }
+.choice {
+  display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 8px;
+  border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); font-family: var(--font-math);
+}
+.choice:hover:not(:disabled) { border-color: var(--accent); }
+.choice b { font-family: var(--font-display); font-size: 1.1rem; }
+.choice.right { border-color: var(--good); background: color-mix(in srgb, var(--good) 16%, var(--panel)); }
+.choice.wrong { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 16%, var(--panel)); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn { border-radius: 8px; padding: 10px 18px; font-weight: 700; border: 1.5px solid var(--accent); background: var(--accent); color: var(--accent-ink); }
+.btn.ghost { background: transparent; color: var(--accent); }
+.btn:disabled { opacity: .45; cursor: default; }
+.msg { font-size: .95rem; color: var(--bad); min-height: 1.4em; }
+.hint { background: color-mix(in srgb, var(--mark) 35%, var(--panel)); border-radius: 8px; padding: 10px 14px; font-size: .95rem; }
+
+.feedback { border-top: 1.5px dashed var(--line); padding-top: 16px; display: grid; gap: 12px; }
+.verdict { font-family: var(--font-display); font-weight: 800; font-size: 1.4rem; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.verdict.ok { color: var(--good); } .verdict.no { color: var(--bad); }
+.verdict small { font-family: var(--font-body); font-weight: 400; font-size: .95rem; color: var(--muted); }
+.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; counter-reset: s; }
+.steps li { display: grid; grid-template-columns: minmax(0, 15em) minmax(0, 1fr); gap: 4px 16px; counter-increment: s; }
+.steps li .lab { color: var(--muted); font-size: .9rem; }
+.steps li .lab::before { content: counter(s) ". "; font-weight: 700; color: var(--ink); }
+.steps li .m { font-family: var(--font-math); overflow-x: auto; white-space: nowrap; }
+@media (max-width: 560px) {
+  .steps li { grid-template-columns: 1fr; }
+  .choices { grid-template-columns: 1fr; }
+  .card { padding: 16px; }
+}
+.pop { animation: pop .5s ease-out; }
+@keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.25); } 100% { transform: scale(1); } }
+
+/* Results */
+.result h2 { font-size: clamp(2rem, 6vw, 3rem); }
+.bigscore { font-family: var(--font-display); font-weight: 800; font-size: clamp(3rem, 12vw, 5.5rem); line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
+.summary { display: flex; flex-wrap: wrap; gap: 8px 24px; color: var(--muted); }
+.summary b { color: var(--ink); }
+.review { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: .95rem; }
+.review li { display: flex; gap: 10px; }
+.review .ok { color: var(--good); font-weight: 700; } .review .no { color: var(--bad); font-weight: 700; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+<!-- /page -->
+</head>
+<body>
+<!-- page -->
+<div class="wrap">
+
+  <section id="home" class="hero" aria-labelledby="t">
+    <div class="eyebrow">Algebra 2 · Chapter 3 · Systems &amp; Matrices</div>
+    <h1 id="t">Chapter Review <mark>Game</mark></h1>
+    <p>Every problem is freshly generated, so you can play again and again. Pick a lesson to practice, or take on the full chapter review.</p>
+    <div class="credits">By Isaiah Mason-Oswald &amp; Jack Hoofer</div>
+    <div class="sections" id="sections"></div>
+    <ul class="rules">
+      <li><b>10</b> problems per round</li>
+      <li><b>3</b> hearts</li>
+      <li><b>100</b> points per answer, plus a streak bonus</li>
+      <li>A hint halves the points</li>
+    </ul>
+  </section>
+
+  <section id="play" hidden>
+    <div style="display:grid; gap:10px">
+      <div class="hud">
+        <span class="tag" id="hudMode">3-1</span>
+        <span class="stat"><span>Problem</span><b id="hudQ">1/10</b></span>
+        <span class="stat"><span>Score</span><b id="hudScore">0</b></span>
+        <span class="stat"><span>Streak</span><b id="hudStreak">0</b></span>
+        <span class="grow"></span>
+        <span class="hearts" id="hudHearts" aria-label="3 hearts left"></span>
+        <button class="quit" id="quit" type="button">Quit</button>
+      </div>
+      <div class="progress"><div id="bar"></div></div>
+    </div>
+    <div class="card" id="card" style="margin-top:20px"></div>
+  </section>
+
+  <section id="over" class="card result" hidden></section>
+
+</div>
+
+<script>
+(() => {
+  // ---------- helpers ----------
+  const $ = s => document.querySelector(s);
+  const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const rnz = (a, b) => { let v; do v = ri(a, b); while (!v); return v; };
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = ri(0, i); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const gcd = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a; };
+  const N = n => n < 0 ? "−" + (-n) : "" + n;          // display number with a real minus sign
+  const P = n => n < 0 ? "(" + N(n) + ")" : N(n);      // wrap negatives in parentheses
+  const V = v => `<i>${v}</i>`;
+  // Linear expression from [[coef, var], ...]; var "" is the constant term.
+  function expr(terms) {
+    let s = "";
+    for (const [c, v] of terms) {
+      if (!c) continue;
+      const a = Math.abs(c);
+      const body = v ? (a === 1 ? "" : a) + V(v) : "" + a;
+      s += s ? (c < 0 ? " − " : " + ") + body : (c < 0 ? "−" : "") + body;
+    }
+    return s || "0";
+  }
+  const store = {
+    get(k) { try { return Number(localStorage.getItem(k)) || 0; } catch { return 0; } },
+    set(k, v) { try { localStorage.setItem(k, String(v)); } catch {} }
+  };
+
+  // ---------- 3-1 Substitution ----------
+  function genSub() {
+    const v = {};
+    let iso, oth, a, b, pI, pO;
+    do {
+      v.x = ri(-6, 6); v.y = ri(-6, 6);
+      iso = pick(["x", "y"]); oth = iso === "x" ? "y" : "x";
+      a = rnz(-5, 5); b = v[iso] - a * v[oth];
+      pI = rnz(-6, 6); pO = rnz(-6, 6);
+    } while (pI * a + pO === 0 || Math.abs(b) > 20);
+    const c = { [iso]: pI, [oth]: pO };
+    const r = c.x * v.x + c.y * v.y;
+    const sub = expr([[a, oth], [b, ""]]);
+    let line = "";
+    ["x", "y"].forEach((vn, i) => {
+      const k = c[vn], ak = Math.abs(k);
+      const sign = i === 0 ? (k < 0 ? "−" : "") : (k < 0 ? " − " : " + ");
+      line += sign + (ak === 1 ? "" : ak) + (vn === iso ? "(" + sub + ")" : V(vn));
+    });
+    const distributed = ["x", "y"].flatMap(vn => vn === iso ? [[pI * a, oth], [pI * b, ""]] : [[pO, oth]]);
+    const k = pI * a + pO, rhs = r - pI * b;
+    return {
+      sec: "3-1",
+      title: "Solve the system by substitution.",
+      system: [`${expr([[c.x, "x"], [c.y, "y"]])} = ${N(r)}`, `${V(iso)} = ${sub}`],
+      fields: ["x", "y"],
+      ans: { x: v.x, y: v.y },
+      hint: `The second equation already tells you what ${V(iso)} equals. Replace ${V(iso)} in the first equation with <span class="math">(${sub})</span>, then solve for ${V(oth)}.`,
+      steps: [
+        [`Substitute for ${V(iso)}`, `${line} = ${N(r)}`],
+        ["Multiply (distribute)", `${expr(distributed)} = ${N(r)}`],
+        ["Combine like terms", `${expr([[k, oth], [pI * b, ""]])} = ${N(r)}`],
+        [`Get ${V(oth)} by itself`, `${expr([[k, oth]])} = ${N(rhs)}`],
+        ["Simplify", `${V(oth)} = ${N(v[oth])}`],
+        [`Plug back in to find ${V(iso)}`, `${V(iso)} = ${a === 1 ? "" : a === -1 ? "−" : N(a)}${P(v[oth])}${b ? (b < 0 ? " − " : " + ") + Math.abs(b) : ""} = ${N(v[iso])}`]
+      ]
+    };
+  }
+
+  // ---------- 3-2 Systems of inequalities ----------
+  const OPS = [">", "≥", "<", "≤"];
+  const val = (I, x, y) => I.t === "y" ? y - (I.m * x + I.b) : x - I.k;
+  const holds = (op, d) => (op === ">" || op === "≥") ? d > 0 : d < 0;
+  const ineqText = I => I.t === "y" ? `${V("y")} ${I.op} ${expr([[I.m, "x"], [I.b, ""]])}` : `${V("x")} ${I.op} ${N(I.k)}`;
+  const far = (p, q) => Math.max(Math.abs(p[0] - q[0]), Math.abs(p[1] - q[1])) >= 2;
+
+  function genIneq() {
+    for (;;) {
+      const A = { t: "y", m: ri(-3, 3), b: ri(-5, 5), op: pick(OPS) };
+      let B;
+      if (Math.random() < 0.3) B = { t: "x", k: ri(-5, 5), op: pick(OPS) };
+      else { B = { t: "y", m: ri(-3, 3), b: ri(-6, 6), op: pick(OPS) }; if (B.m === A.m) continue; }
+      const good = [], fa = [], fb = [], fab = [];
+      for (let x = -7; x <= 7; x++) for (let y = -7; y <= 7; y++) {
+        const da = val(A, x, y), db = val(B, x, y);
+        if (!da || !db) continue; // skip points on a boundary line
+        const sa = holds(A.op, da), sb = holds(B.op, db);
+        (sa && sb ? good : !sa && !sb ? fab : !sa ? fa : fb).push([x, y]);
+      }
+      if (good.length < 3 || !fa.length || !fb.length) continue;
+      const pts = [pick(good), pick(fa), pick(fb), pick(fab.length ? fab : fa.concat(fb))];
+      let ok = true;
+      for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) if (!far(pts[i], pts[j])) ok = false;
+      if (!ok) continue;
+      const correct = pts[0];
+      const order = shuffle(pts.slice());
+      const letters = ["A", "B", "C", "D"];
+      const check = (I, [x, y], cls) => {
+        const d = val(I, x, y), yes = holds(I.op, d);
+        const lhs = I.t === "y" ? N(y) : N(x), rhs = I.t === "y" ? N(I.m * x + I.b) : N(I.k);
+        return `<span class="${cls}">${lhs} ${I.op} ${rhs}</span> ${yes ? "✓" : "✗"}`;
+      };
+      return {
+        sec: "3-2",
+        title: "Which point is a solution to the system?",
+        system: [`<span class="ineq-a">${ineqText(A)}</span>`, `<span class="ineq-b">${ineqText(B)}</span>`],
+        A, B,
+        points: order,
+        choice: order.findIndex(p => p === correct),
+        hint: "A dashed line means the boundary is not included (&lt; or &gt;). A solid line means it is (≤ or ≥). Test each point: it has to make <b>both</b> inequalities true.",
+        steps: order.map((p, i) => [`Point ${letters[i]} (${N(p[0])}, ${N(p[1])})`, `${check(A, p, "ineq-a")} &nbsp; ${check(B, p, "ineq-b")}`])
+      };
+    }
+  }
+
+  function graphSVG(q, reveal, picked) {
+    const U = 20, O = 170, L = 8.5;
+    const sx = x => O + x * U, sy = y => O - y * U;
+    let g = "";
+    for (let i = -8; i <= 8; i++) {
+      const w = i === 0 ? 2 : 1, col = i === 0 ? "var(--muted)" : "var(--grid)";
+      g += `<line x1="${sx(i)}" y1="${sy(-L)}" x2="${sx(i)}" y2="${sy(L)}" stroke="${col}" stroke-width="${w}"/>`;
+      g += `<line x1="${sx(-L)}" y1="${sy(i)}" x2="${sx(L)}" y2="${sy(i)}" stroke="${col}" stroke-width="${w}"/>`;
+      if (i && i % 2 === 0) {
+        g += `<text x="${sx(i)}" y="${sy(0) + 14}" text-anchor="middle" font-size="9" fill="var(--muted)">${N(i)}</text>`;
+        g += `<text x="${sx(0) - 5}" y="${sy(i) + 3}" text-anchor="end" font-size="9" fill="var(--muted)">${N(i)}</text>`;
+      }
+    }
+    const shade = (I, col) => {
+      const up = I.op === ">" || I.op === "≥", F = 40;
+      let pts;
+      if (I.t === "y") {
+        const yl = I.m * -L + I.b, yr = I.m * L + I.b, e = up ? F : -F;
+        pts = [[-L, yl], [L, yr], [L, e], [-L, e]];
+      } else {
+        const e = up ? F : -F;
+        pts = [[I.k, -L], [I.k, L], [e, L], [e, -L]];
+      }
+      return `<polygon points="${pts.map(p => sx(p[0]) + "," + sy(p[1])).join(" ")}" fill="${col}" fill-opacity=".18"/>`;
+    };
+    const bound = (I, col) => {
+      const dash = I.op === ">" || I.op === "<" ? ` stroke-dasharray="7 5"` : "";
+      const [x1, y1, x2, y2] = I.t === "y" ? [-L, I.m * -L + I.b, L, I.m * L + I.b] : [I.k, -L, I.k, L];
+      return `<line x1="${sx(x1)}" y1="${sy(y1)}" x2="${sx(x2)}" y2="${sy(y2)}" stroke="${col}" stroke-width="2.5"${dash}/>`;
+    };
+    let body = g;
+    if (reveal) body += shade(q.A, "var(--r1)") + shade(q.B, "var(--r2)");
+    body += bound(q.A, "var(--r1)") + bound(q.B, "var(--r2)");
+    q.points.forEach((p, i) => {
+      let fill = "var(--ink)";
+      if (reveal) fill = i === q.choice ? "var(--good)" : i === picked ? "var(--bad)" : "var(--muted)";
+      body += `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="6" fill="${fill}" stroke="var(--panel)" stroke-width="2"/>`;
+      body += `<text x="${sx(p[0]) + 9}" y="${sy(p[1]) - 7}" font-size="14" font-weight="700" fill="${fill}" stroke="var(--panel)" stroke-width="3" paint-order="stroke">${"ABCD"[i]}</text>`;
+    });
+    return `<svg class="graph" viewBox="0 0 340 340" role="img" aria-label="Graph of the two boundary lines with points A to D">
+      <defs><clipPath id="clip"><rect x="${sx(-L)}" y="${sy(L)}" width="${2 * L * U}" height="${2 * L * U}"/></clipPath></defs>
+      <rect x="0" y="0" width="340" height="340" fill="var(--panel)"/>
+      <g clip-path="url(#clip)" font-family="JetBrains Mono, monospace">${body}</g></svg>`;
+  }
+
+  // ---------- 3-4 Three-variable systems ----------
+  const det3 = m => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  function gen3() {
+    let M, s;
+    do {
+      s = [ri(-4, 4), ri(-4, 4), ri(-4, 4)];
+      M = [0, 1, 2].map(() => [rnz(-5, 5), rnz(-5, 5), rnz(-5, 5)]);
+    } while (det3(M) === 0);
+    const d = M.map(r => r[0] * s[0] + r[1] * s[1] + r[2] * s[2]);
+    const eq = i => `${expr([[M[i][0], "x"], [M[i][1], "y"], [M[i][2], "z"]])} = ${N(d[i])}`;
+    const elim = j => {
+      const c1 = M[0][2], cj = M[j][2];
+      let A = cj * M[0][0] - c1 * M[j][0], B = cj * M[0][1] - c1 * M[j][1], D = cj * d[0] - c1 * d[j];
+      let g = gcd(gcd(A, B), D) || 1;
+      if (A < 0 || (A === 0 && B < 0)) g = -g;
+      return { how: `${P(cj)}·(1) − ${P(c1)}·(${j + 1})`, eq: `${expr([[A / g, "x"], [B / g, "y"]])} = ${N(D / g)}` };
+    };
+    const e2 = elim(1), e3 = elim(2);
+    const rest = d[0] - M[0][0] * s[0] - M[0][1] * s[1];
+    const plug = i => M[i].map((c, k) => (k ? (c < 0 ? " − " : " + ") : (c < 0 ? "−" : "")) + Math.abs(c) + P(s[k])).join("");
+    return {
+      sec: "3-4",
+      title: "Solve the system of three equations.",
+      system: [0, 1, 2].map(eq),
+      numbered: true,
+      fields: ["x", "y", "z"],
+      ans: { x: s[0], y: s[1], z: s[2] },
+      hint: "Pick one variable (try <i>z</i>) and eliminate it twice, using two different pairs of equations. That leaves two equations in <i>x</i> and <i>y</i>.",
+      steps: [
+        [`Eliminate ${V("z")} with (1) and (2): ${e2.how}`, `${e2.eq} &nbsp;(4)`],
+        [`Eliminate ${V("z")} with (1) and (3): ${e3.how}`, `${e3.eq} &nbsp;(5)`],
+        ["Solve (4) and (5) together", `${V("x")} = ${N(s[0])}, &nbsp;${V("y")} = ${N(s[1])}`],
+        ["Substitute into (1)", `${expr([[M[0][2], "z"]])} = ${N(rest)} &nbsp;→&nbsp; ${V("z")} = ${N(s[2])}`],
+        ["Check in (2)", `${plug(1)} = ${N(d[1])} ✓`],
+        ["Check in (3)", `${plug(2)} = ${N(d[2])} ✓`]
+      ]
+    };
+  }
+
+  // ---------- 3-5 Matrix operations ----------
+  const mat = (lo, hi) => [[ri(lo, hi), ri(lo, hi)], [ri(lo, hi), ri(lo, hi)]];
+  const matHTML = m => `<span class="mat">${m.flat().map(N).map(x => `<span>${x}</span>`).join("")}</span>`;
+  const SPOTS = ["Top left", "Top right", "Bottom left", "Bottom right"];
+  function genMat() {
+    const op = pick(["add", "sub", "scalar", "combo"]);
+    let A, B, k, sg, R, show, work;
+    if (op === "add") {
+      A = mat(-9, 15); B = mat(-9, 9);
+      R = A.map((r, i) => r.map((a, j) => a + B[i][j]));
+      show = `${matHTML(A)} + ${matHTML(B)}`;
+      work = (i, j) => `${N(A[i][j])} + ${P(B[i][j])}`;
+    } else if (op === "sub") {
+      A = mat(-9, 15); B = mat(-9, 9);
+      R = A.map((r, i) => r.map((a, j) => a - B[i][j]));
+      show = `${matHTML(A)} − ${matHTML(B)}`;
+      work = (i, j) => `${N(A[i][j])} − ${P(B[i][j])}`;
+    } else if (op === "scalar") {
+      k = pick([-3, -2, 2, 3, 4, 5]); A = mat(-8, 8);
+      R = A.map(r => r.map(a => k * a));
+      show = `${N(k)} ${matHTML(A)}`;
+      work = (i, j) => `${N(k)} · ${P(A[i][j])}`;
+    } else {
+      k = pick([-2, 2, 3]); sg = pick([1, -1]); A = mat(-6, 6); B = mat(-9, 9);
+      R = A.map((r, i) => r.map((a, j) => k * a + sg * B[i][j]));
+      show = `${N(k)} ${matHTML(A)} ${sg > 0 ? "+" : "−"} ${matHTML(B)}`;
+      work = (i, j) => `${N(k)} · ${P(A[i][j])} ${sg > 0 ? "+" : "−"} ${P(B[i][j])}`;
+    }
+    const tips = {
+      add: "Add the numbers that are in the same position in each matrix.",
+      sub: "Subtract the numbers in the same position. Watch the signs: subtracting a negative means adding.",
+      scalar: "Multiply every entry in the matrix by the number in front.",
+      combo: "First multiply every entry of the first matrix by the number in front. Then add or subtract matching positions."
+    };
+    return {
+      sec: "3-5",
+      title: "Simplify. Fill in the result matrix.",
+      matrix: show,
+      fields: ["a", "b", "c", "d"],
+      ans: { a: R[0][0], b: R[0][1], c: R[1][0], d: R[1][1] },
+      hint: tips[op],
+      steps: [0, 1, 2, 3].map(n => { const i = n >> 1, j = n & 1; return [SPOTS[n], `${work(i, j)} = ${N(R[i][j])}`]; })
+    };
+  }
+
+  // ---------- game ----------
+  const SECTIONS = {
+    "3-1": { name: "Solving by Substitution", gen: genSub, ex: "−3x − 2y = 7,  x = −4y + 9" },
+    "3-2": { name: "Systems of Inequalities", gen: genIneq, ex: "y > −7,  y ≤ −x + 4" },
+    "3-4": { name: "Three-Variable Systems", gen: gen3, ex: "7x + 5y − 4z = −17, …" },
+    "3-5": { name: "Operations with Matrices", gen: genMat, ex: "[15 3; 7 6] + [−2 3; 1 −4]" }
+  };
+  const ROUND = 10;
+  const S = {};
+
+  function renderHome() {
+    const cards = Object.entries(SECTIONS).map(([id, s]) => `
+      <button class="sec" type="button" data-mode="${id}">
+        <span class="num">Lesson ${id}</span><h3>${s.name}</h3>
+        <span class="ex">${s.ex}</span>
+        <span class="best">Best: ${store.get("ch3-best-" + id)}</span>
+      </button>`).join("");
+    $("#sections").innerHTML = cards + `
+      <button class="sec mixed" type="button" data-mode="mix">
+        <span class="num">Lessons 3-1 to 3-5</span><h3>Full Chapter Review</h3>
+        <span class="ex">A mix of every lesson, 10 problems</span>
+        <span class="best">Best: ${store.get("ch3-best-mix")}</span>
+      </button>`;
+    $("#sections").querySelectorAll("button").forEach(b => b.onclick = () => start(b.dataset.mode));
+  }
+
+  function show(id) { ["home", "play", "over"].forEach(s => $("#" + s).hidden = s !== id); window.scrollTo(0, 0); }
+
+  function start(mode) {
+    Object.assign(S, { mode, qn: 0, score: 0, hearts: 3, streak: 0, bestStreak: 0, correct: 0, log: [] });
+    const keys = Object.keys(SECTIONS);
+    S.queue = mode === "mix" ? shuffle([...keys, ...keys, ...shuffle(keys.slice()).slice(0, 2)]) : Array(ROUND).fill(mode);
+    show("play");
+    next();
+  }
+
+  function hud() {
+    $("#hudMode").textContent = S.mode === "mix" ? "Chapter 3" : S.mode;
+    $("#hudQ").textContent = `${Math.min(S.qn, ROUND)}/${ROUND}`;
+    $("#hudScore").textContent = S.score;
+    $("#hudStreak").textContent = S.streak;
+    $("#hudHearts").innerHTML = [0, 1, 2].map(i => `<span class="${i < S.hearts ? "" : "lost"}">♥</span>`).join("");
+    $("#hudHearts").setAttribute("aria-label", `${S.hearts} hearts left`);
+    $("#bar").style.width = (100 * (S.qn - (S.answered ? 0 : 1)) / ROUND) + "%";
+  }
+
+  function next() {
+    if (S.qn >= ROUND || S.hearts <= 0) return finish();
+    const sec = S.queue[S.qn];
+    S.qn++;
+    S.q = SECTIONS[sec].gen();
+    S.hint = false; S.answered = false;
+    renderQ();
+    hud();
+  }
+
+  function renderQ() {
+    const q = S.q, sec = SECTIONS[q.sec];
+    let prob = "";
+    if (q.system) prob = `<div class="sys">${q.system.map((e, i) => `<div class="row">${q.numbered ? `<small>(${i + 1})</small>` : ""}<span>${e}</span></div>`).join("")}</div>`;
+    if (q.matrix) prob = `<div class="mrow">${q.matrix}</div>`;
+    let ans;
+    if (q.points) {
+      ans = `<div class="choices">${q.points.map((p, i) => `<button class="choice" type="button" data-i="${i}"><b>${"ABCD"[i]}</b> (${N(p[0])}, ${N(p[1])})</button>`).join("")}</div>`;
+      prob = `<div class="graph-row"><div id="graphBox">${graphSVG(q, false)}</div><div>${prob}<p class="legend">Dashed line: not included. Solid line: included. The shading appears after you answer.</p></div></div>`;
+    } else if (q.matrix) {
+      ans = `<div class="mrow"><span>=</span><span class="mat">${q.fields.map(f => `<input type="text" inputmode="text" autocomplete="off" id="in-${f}" aria-label="${SPOTS[q.fields.indexOf(f)]} entry">`).join("")}</span></div>`;
+    } else {
+      ans = q.fields.map(f => `<label class="field" for="in-${f}"><i>${f}</i> =<input type="text" inputmode="text" autocomplete="off" id="in-${f}"></label>`).join("");
+    }
+    $("#card").innerHTML = `
+      <div class="kicker"><span>Lesson ${q.sec} · ${sec.name}</span><span>Worth ${worth()} pts</span></div>
+      <h2>${q.title}</h2>
+      ${prob}
+      <form class="answer" id="form" novalidate>${ans}</form>
+      <div class="hint" id="hintBox" hidden>${q.hint}</div>
+      <div class="msg" id="msg" role="status"></div>
+      <div class="actions" id="acts">
+        ${q.points ? "" : `<button class="btn" type="submit" form="form" id="checkBtn">Check answer</button>`}
+        <button class="btn ghost" type="button" id="hintBtn">Show hint (half points)</button>
+      </div>
+      <div class="feedback" id="fb" hidden></div>`;
+    $("#form").addEventListener("submit", e => { e.preventDefault(); check(); });
+    $("#hintBtn").onclick = () => { S.hint = true; $("#hintBox").hidden = false; $("#hintBtn").disabled = true; $(".kicker span:last-child").textContent = `Worth ${worth()} pts`; };
+    if (q.points) $("#card").querySelectorAll(".choice").forEach(b => b.onclick = () => check(+b.dataset.i));
+    const first = $("#card input, #card .choice");
+    if (first) first.focus({ preventScroll: true });
+  }
+
+  const worth = () => (S.hint ? 50 : 100) + Math.min(S.streak, 5) * 20;
+
+  function parse(s) {
+    s = s.replace(/[−–]/g, "-").replace(/\s+/g, "");
+    if (!s) return NaN;
+    const f = s.match(/^(-?\d+)\/(-?\d+)$/);
+    if (f) return +f[1] / +f[2];
+    return /^-?\d*\.?\d+$/.test(s) ? +s : NaN;
+  }
+
+  function check(choice) {
+    if (S.answered) return;
+    const q = S.q;
+    let right;
+    if (q.points) {
+      right = choice === q.choice;
+    } else {
+      const vals = q.fields.map(f => parse($("#in-" + f).value));
+      if (vals.some(isNaN)) { $("#msg").textContent = "Fill in every box with a number, like 4 or −3."; return; }
+      right = true;
+      q.fields.forEach((f, i) => {
+        const ok = Math.abs(vals[i] - q.ans[f]) < 1e-9;
+        if (!ok) right = false;
+        const el = $("#in-" + f); el.classList.add(ok ? "right" : "wrong"); el.readOnly = true;
+      });
+    }
+    S.answered = true;
+    $("#msg").textContent = "";
+    const gained = right ? worth() : 0;
+    if (right) { S.score += gained; S.streak++; S.correct++; S.bestStreak = Math.max(S.bestStreak, S.streak); }
+    else { S.streak = 0; S.hearts--; }
+    S.log.push({ sec: q.sec, right });
+
+    if (q.points) {
+      $("#card").querySelectorAll(".choice").forEach((b, i) => {
+        b.disabled = true;
+        if (i === q.choice) b.classList.add("right"); else if (i === choice) b.classList.add("wrong");
+      });
+      $("#graphBox").innerHTML = graphSVG(q, true, choice);
+    }
+    $("#checkBtn") && ($("#checkBtn").disabled = true);
+    $("#hintBtn").disabled = true;
+
+    const answerText = q.points ? `Point ${"ABCD"[q.choice]} (${N(q.points[q.choice][0])}, ${N(q.points[q.choice][1])})`
+      : q.matrix ? "shown in the steps below"
+      : q.fields.map(f => `${V(f)} = ${N(q.ans[f])}`).join(", ");
+    const last = S.qn >= ROUND || S.hearts <= 0;
+    $("#fb").hidden = false;
+    $("#fb").innerHTML = `
+      <div class="verdict ${right ? "ok" : "no"}">${right ? `Correct! +${gained}` : "Not quite."}
+        <small>${right ? (S.streak > 1 ? `${S.streak} in a row` : "Keep it going") : `The answer is ${answerText}.${S.hearts > 0 ? "" : " Out of hearts."}`}</small></div>
+      <ol class="steps">${q.steps.map(([l, m]) => `<li><span class="lab">${l}</span><span class="m">${m}</span></li>`).join("")}</ol>
+      <div class="actions"><button class="btn" type="button" id="nextBtn">${last ? "See results" : "Next problem"}</button></div>`;
+    $("#nextBtn").onclick = next;
+    $("#nextBtn").focus({ preventScroll: true });
+    hud();
+    const el = right ? $("#hudScore") : $("#hudHearts");
+    el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop");
+  }
+
+  function finish() {
+    const key = "ch3-best-" + S.mode;
+    const prev = store.get(key), isBest = S.score > prev;
+    if (isBest) store.set(key, S.score);
+    const answered = S.log.length;
+    const bySec = {};
+    S.log.forEach(l => { (bySec[l.sec] ||= { r: 0, n: 0 }); bySec[l.sec].n++; if (l.right) bySec[l.sec].r++; });
+    const title = S.hearts <= 0 ? "Out of hearts" : S.correct === ROUND ? "Perfect round!" : S.correct >= 7 ? "Nice work!" : "Round complete";
+    $("#over").innerHTML = `
+      <div class="eyebrow">${S.mode === "mix" ? "Full Chapter Review" : "Lesson " + S.mode + " · " + SECTIONS[S.mode].name}</div>
+      <h2>${title}</h2>
+      <div class="bigscore">${S.score}</div>
+      <div class="summary">
+        <span><b>${S.correct}</b> of ${answered} correct</span>
+        <span>Best streak <b>${S.bestStreak}</b></span>
+        <span>${isBest ? "<b>New high score!</b>" : `High score <b>${prev}</b>`}</span>
+      </div>
+      <ul class="review">${Object.entries(bySec).map(([s, v]) => `<li><span class="${v.r === v.n ? "ok" : "no"}">${v.r}/${v.n}</span> Lesson ${s} · ${SECTIONS[s].name}</li>`).join("")}</ul>
+      <div class="actions">
+        <button class="btn" type="button" id="again">Play again</button>
+        <button class="btn ghost" type="button" id="menu">Choose a lesson</button>
+      </div>`;
+    $("#again").onclick = () => start(S.mode);
+    $("#menu").onclick = () => { renderHome(); show("home"); };
+    show("over");
+    $("#again").focus({ preventScroll: true });
+  }
+
+  $("#quit").onclick = () => { renderHome(); show("home"); };
+  renderHome();
+})();
+</script>
+<!-- /page -->
+</body>
+</html>
