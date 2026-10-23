@@ -6,8 +6,9 @@
   // Constants
   // ---------------------------------------------------------------------------
   const W = 128, H = 192;
-  const ROAD_X = 20, LANE_W = 22, LANES = 4, ROAD_W = LANE_W * LANES;
-  const ROAD_R = ROAD_X + ROAD_W;
+  const LANE_W = 22;
+  // The road layout changes from level to level (see setLayout).
+  let ROAD_X = 20, LANES = 4, ROAD_W = LANE_W * LANES, ROAD_R = ROAD_X + ROAD_W;
   const CAR_W = 10, CAR_H = 16;
   const PLAYER_Y = 148;
   const CRUISE = 100, MIN_SPEED = 40, MAX_SPEED = 240, RECKLESS_SPEED = 200;
@@ -22,12 +23,32 @@
   const SLOW_MPH = 75, SLOW_SPEED = SLOW_MPH / MPH, SLOW_LIMIT = 3, SLOW_GRACE = 4;
   const MAX_HP = 5;
   const HELI_FUEL = 25, HELI_COOLDOWN = 15;
-  const ONCOMING_LANES = 2; // lanes 0-1 drive toward you, lanes 2-3 go your way
+  let ONCOMING_LANES = 2; // lanes 0-1 drive toward you, lanes 2-3 go your way
   const PAD = 48; // extra road tile width on each side so curves never show an edge
   const SHIFT_OFF = 60;
 
   const laneX = (lane, w = CAR_W) => ROAD_X + LANE_W * lane + (LANE_W - w) / 2;
   const laneDir = (lane) => (lane < ONCOMING_LANES ? -1 : 1);
+
+  // Levels alternate between two roads. Odd levels: the four-lane
+  // construction zone, two lanes each way. Even levels: a three-lane bridge,
+  // all one way, with no railings, so you can drive right off the edge.
+  let bridge = false;
+  const roadLayout = (isBridge) => {
+    const lanes = isBridge ? 3 : 4;
+    const x = Math.round((W - LANE_W * lanes) / 2);
+    return { lanes, x, w: LANE_W * lanes, r: x + LANE_W * lanes, oncoming: isBridge ? 0 : 2 };
+  };
+  function setLayout(isBridge) {
+    const L = roadLayout(isBridge);
+    bridge = isBridge;
+    LANES = L.lanes;
+    ROAD_X = L.x;
+    ROAD_W = L.w;
+    ROAD_R = L.r;
+    ONCOMING_LANES = L.oncoming;
+    roadTile = isBridge ? bridgeTile : highwayTile;
+  }
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const rand = (a, b) => a + Math.random() * (b - a);
   const randInt = (a, b) => Math.floor(rand(a, b + 1));
@@ -390,6 +411,7 @@
       'kYSSSSSSYk',
       '.SSSSSSSS.',
     ],
+    boat: ['..c..', '.cwc.', 'cwwwc', 'cwbwc', 'cwwwc', 'cwwwc', '.ccc.'],
     gravel: ['..ddddd..', '.dDDDDDd.', 'dDDDDDDDd', 'dDDDDDDDd', '.dDDDDDd.', '..ddddd..'],
   };
   const DECOR_WEIGHTS = [
@@ -530,41 +552,86 @@
     ['...kkkkkk...', '.kkkkqkkkkk.', 'kkkqkkkkkkkk', 'kkkkkkkqkkkk', '.kkkkkkkkkk.', '...kkkkkk...'],
     { k: '#101014', q: '#4a3a6a' });
 
-  // Pre-rendered road tile: dirt shoulders, curbs, asphalt and lane markings.
-  // Every pattern period divides TILE_H so the tile loops seamlessly.
-  const roadTile = (() => {
+  // Pre-rendered road tiles. Highway: dirt shoulders, curbs, asphalt and lane
+  // markings. Bridge: a bare deck over open water. Every pattern period
+  // divides TILE_H so the tiles loop seamlessly.
+  function makeRoadTile(isBridge) {
+    const L = roadLayout(isBridge);
     const c = document.createElement('canvas');
     c.width = W + PAD * 2;
     c.height = TILE_H;
     const g = c.getContext('2d');
-    const rx = ROAD_X + PAD, rr = ROAD_R + PAD;
-    for (let y = 0; y < TILE_H; y++) {
-      g.fillStyle = Math.floor(y / 12) % 2 ? '#7d6b4f' : '#776549';
-      g.fillRect(0, y, c.width, 1);
-    }
-    for (let i = 0; i < 520; i++) {
-      const left = Math.random() < 0.5;
-      const x = left ? randInt(0, rx - 4) : randInt(rr + 3, c.width - 1);
-      g.fillStyle = pick(['#6a5a40', '#8f7d5f', '#9a9a90', '#5f5038']);
-      g.fillRect(x, randInt(0, TILE_H - 1), 1, 1);
-    }
-    for (let y = 0; y < TILE_H; y += 6) {
-      g.fillStyle = (y / 6) % 2 ? '#eeeeee' : '#f07a1a';
-      g.fillRect(rx - 3, y, 2, 6);
-      g.fillRect(rr + 1, y, 2, 6);
-    }
-    g.fillStyle = '#45454f';
-    g.fillRect(rx - 1, 0, ROAD_W + 2, TILE_H);
-    for (let i = 0; i < 500; i++) {
-      g.fillStyle = Math.random() < 0.5 ? '#3d3d46' : '#50505a';
-      g.fillRect(randInt(rx - 1, rr), randInt(0, TILE_H - 1), 1, 1);
+    const rx = L.x + PAD, rr = L.r + PAD;
+    if (isBridge) {
+      for (let y = 0; y < TILE_H; y++) {
+        g.fillStyle = Math.floor(y / 10) % 2 ? '#1f4f7a' : '#1d4a73';
+        g.fillRect(0, y, c.width, 1);
+      }
+      for (let i = 0; i < 140; i++) {
+        // Wave crests.
+        const left = Math.random() < 0.5;
+        const x = left ? randInt(0, rx - 8) : randInt(rr + 6, c.width - 4);
+        const y = randInt(0, TILE_H - 1);
+        g.fillStyle = Math.random() < 0.3 ? '#7ab0d8' : '#3a78a8';
+        g.fillRect(x, y, 3, 1);
+      }
+      // The deck's shadow on the water, and the steel girders under it.
+      g.fillStyle = '#123352';
+      g.fillRect(rx - 3, 0, 2, TILE_H);
+      g.fillRect(rr + 1, 0, 4, TILE_H);
+      for (let y = 0; y < TILE_H; y += 40) {
+        g.fillStyle = '#5a5a62';
+        g.fillRect(rx - 5, y, 4, 3);
+        g.fillRect(rr + 1, y, 4, 3);
+        g.fillStyle = '#2c2c34';
+        g.fillRect(rx - 5, y + 3, 4, 1);
+        g.fillRect(rr + 1, y + 3, 4, 1);
+      }
+      // Bare concrete lip: nothing to stop you going over.
+      g.fillStyle = '#7a7a72';
+      g.fillRect(rx - 1, 0, 1, TILE_H);
+      g.fillRect(rr, 0, 1, TILE_H);
+      g.fillStyle = '#a8a8a0';
+      g.fillRect(rx, 0, 1, TILE_H);
+      g.fillRect(rr - 1, 0, 1, TILE_H);
+      g.fillStyle = '#45454f';
+      g.fillRect(rx + 1, 0, L.w - 2, TILE_H);
+      for (let i = 0; i < 400; i++) {
+        g.fillStyle = Math.random() < 0.5 ? '#3d3d46' : '#50505a';
+        g.fillRect(randInt(rx + 1, rr - 2), randInt(0, TILE_H - 1), 1, 1);
+      }
+      // Expansion joints across the deck.
+      g.fillStyle = '#2c2c34';
+      for (let y = 0; y < TILE_H; y += 80) g.fillRect(rx + 1, y, L.w - 2, 1);
+    } else {
+      for (let y = 0; y < TILE_H; y++) {
+        g.fillStyle = Math.floor(y / 12) % 2 ? '#7d6b4f' : '#776549';
+        g.fillRect(0, y, c.width, 1);
+      }
+      for (let i = 0; i < 520; i++) {
+        const left = Math.random() < 0.5;
+        const x = left ? randInt(0, rx - 4) : randInt(rr + 3, c.width - 1);
+        g.fillStyle = pick(['#6a5a40', '#8f7d5f', '#9a9a90', '#5f5038']);
+        g.fillRect(x, randInt(0, TILE_H - 1), 1, 1);
+      }
+      for (let y = 0; y < TILE_H; y += 6) {
+        g.fillStyle = (y / 6) % 2 ? '#eeeeee' : '#f07a1a';
+        g.fillRect(rx - 3, y, 2, 6);
+        g.fillRect(rr + 1, y, 2, 6);
+      }
+      g.fillStyle = '#45454f';
+      g.fillRect(rx - 1, 0, L.w + 2, TILE_H);
+      for (let i = 0; i < 500; i++) {
+        g.fillStyle = Math.random() < 0.5 ? '#3d3d46' : '#50505a';
+        g.fillRect(randInt(rx - 1, rr), randInt(0, TILE_H - 1), 1, 1);
+      }
     }
     g.fillStyle = '#e8e8e8';
-    g.fillRect(rx + 1, 0, 1, TILE_H);
-    g.fillRect(rr - 2, 0, 1, TILE_H);
-    for (let lane = 1; lane < LANES; lane++) {
+    g.fillRect(rx + 1 + (isBridge ? 1 : 0), 0, 1, TILE_H);
+    g.fillRect(rr - 2 - (isBridge ? 1 : 0), 0, 1, TILE_H);
+    for (let lane = 1; lane < L.lanes; lane++) {
       const x = rx + LANE_W * lane;
-      if (lane === ONCOMING_LANES) {
+      if (lane === L.oncoming) {
         // Double yellow line between the two directions.
         g.fillStyle = '#f0c419';
         g.fillRect(x - 2, 0, 1, TILE_H);
@@ -575,7 +642,10 @@
       }
     }
     return c;
-  })();
+  }
+  const highwayTile = makeRoadTile(false);
+  const bridgeTile = makeRoadTile(true);
+  let roadTile = highwayTile;
 
   // ---------------------------------------------------------------------------
   // Audio (tiny WebAudio synth; created on first input)
@@ -798,6 +868,7 @@
   // score multiplier. It never resets or caps during a run; it just stops
   // growing while you're out of the zone.
   let zoneMult, zoneTipShown;
+  let stage = 1, stageFade = 0;
   const ZONE_RATE = 0.01; // +0.1x for every 10 seconds in the zone
   let curves = [], curveEnd = 0;
   const shiftRows = new Float32Array(H + SHIFT_OFF * 2);
@@ -863,6 +934,12 @@
     speedMult = 1;
     zoneMult = 1;
     zoneTipShown = false;
+    stage = 1;
+    stageFade = 0;
+    if (bridge) {
+      setLayout(false);
+      initDecor();
+    }
     bullets = [];
     hp = maxHp();
     hurtTimer = 0;
@@ -945,6 +1022,18 @@
   // so pieces never overlap. Everything stays clear of where the player can drive.
   function spawnDecorAt(side) {
     const bottom = decorNext[side];
+    if (bridge) {
+      // Out on the water: the odd boat far below the deck.
+      if (Math.random() < 0.3) {
+        const spr = decorSprites.boat;
+        const x = side === 'left'
+          ? randInt(2, ROAD_X - 8 - spr.width)
+          : randInt(ROAD_R + 8, W - 2 - spr.width);
+        decor.push({ kind: 'boat', x, y: bottom - spr.height });
+      }
+      decorNext[side] = bottom - rand(30, 70);
+      return;
+    }
     if (Math.random() < 0.15) {
       decorNext[side] = bottom - rand(8, 20);
       return;
@@ -986,6 +1075,10 @@
   // and as a sideways push you have to steer (or drift) against.
   function ensureCurves(upto) {
     while (curveEnd < upto) {
+      if (bridge) {
+        curveEnd = upto; // bridges run straight
+        break;
+      }
       const len = rand(500, 900);
       const sharpest = Math.min(0.0038, 0.0024 + level * 0.0002);
       const k = (Math.random() < 0.5 ? -1 : 1) * rand(0.0018, sharpest);
@@ -1360,10 +1453,11 @@
         cop.x += clamp(desired - cop.x, -step, step);
       }
 
-      // Shoved hard into the construction barriers.
+      // Shoved hard into the construction barriers, or off the bridge.
       const minX = ROAD_X + 1, maxX = ROAD_R - 1 - cop.w;
       if ((cop.x < minX || cop.x > maxX) && Math.abs(cop.shove) > 70) {
-        wreckCop(cop, null);
+        if (bridge) copOverboard(cop);
+        else wreckCop(cop, null);
         continue;
       }
       cop.x = clamp(cop.x, minX, maxX);
@@ -1588,7 +1682,8 @@
         heli.leaving = true;
         heli.target = null;
         heliCool = HELI_COOLDOWN;
-        if (state === 'play') popup('CHOPPER BUGGING OUT', W / 2, 60, '#57c062', 1.6);
+        if (state === 'play' && heli.fuel <= 0 && wanted >= MAX_WANTED) levelClear();
+        else if (state === 'play') popup('CHOPPER BUGGING OUT', W / 2, 60, '#57c062', 1.6);
       }
     }
     if (heli.leaving) {
@@ -1803,6 +1898,84 @@
     }
   }
 
+  function fallOff() {
+    state = 'crash';
+    crashTimer = 1.8;
+    endReason = 'fell';
+    crashCause = 'fell';
+    player.fall = 0;
+    player.fallDir = player.x + CAR_W / 2 < W / 2 ? -1 : 1;
+    sfx.engineOff();
+    sfx.tone(600, 0.7, 'triangle', 0.1, 90);
+  }
+
+  // Over the edge: the car shrinks away toward the water, then splashes.
+  function updateFall(dt) {
+    const p = player;
+    if (p.fall < 0) return;
+    p.fall += dt;
+    p.x += p.fallDir * 18 * dt;
+    if (p.fall >= 0.7) {
+      p.fall = -1;
+      splash(p.x + CAR_W / 2, PLAYER_Y + CAR_H / 2, 30);
+      shake = 3;
+    }
+  }
+
+  function splash(x, y, n) {
+    for (let i = 0; i < n; i++) {
+      particle(x, y, rand(-40, 40), rand(-40, 40), rand(0.3, 0.8), pick(['#ffffff', '#cfe8ff', '#7ab0d8']), randInt(1, 2), true);
+    }
+    sfx.noise(0.5, 0.5);
+  }
+
+  // A cop shoved off the bridge is out of the chase for good.
+  function copOverboard(cop) {
+    cop.dead = true;
+    copsWrecked++;
+    popup('COP OVERBOARD! +' + addScore(600), W / 2, 90, '#6fa8ff', 1.4);
+    splash(cop.x < ROAD_X ? ROAD_X - 8 : ROAD_R + 8, cop.y + cop.h / 2, 24);
+  }
+
+  // Outlasting the chopper clears the level. The screen fades out, the next
+  // road fades in, and the heat starts over.
+  function levelClear() {
+    popup('CHOPPER BEATEN! +' + addScore(2000 * stage), W / 2, 60, '#ffd34d', 1.6);
+    popup('LEVEL ' + (stage + 1) + ': ' + (stage % 2 ? 'THE BRIDGE' : 'CONSTRUCTION ZONE'), W / 2, 60, '#ffd34d', 1.6);
+    stageFade = 1.4;
+    sfx.unlock();
+  }
+
+  function nextStage() {
+    stage++;
+    setLayout(stage % 2 === 0);
+    traffic = [];
+    cops = [];
+    copWrecks = [];
+    slicks = [];
+    roadItems = [];
+    bullets = [];
+    heli = null;
+    heliCool = HELI_COOLDOWN;
+    wanted = 0;
+    heat = 0;
+    calm = 0;
+    copCool = 3;
+    rig = null;
+    slowMeter = 0;
+    slowWarned = false;
+    curves = [];
+    curveEnd = dist + 1400;
+    nextRamp = dist + 450;
+    spawnTimer = 1;
+    hp = maxHp();
+    Object.assign(player, { x: laneX(Math.floor(LANES / 2)), vx: 0, angle: 0, air: 0 });
+    driftDir = 0;
+    stompTime = STOMP_TIME; // a moment to find your feet
+    initDecor();
+    if (bridge) popup("NO RAILINGS: DON'T FALL OFF!", W / 2, 60, '#ff9d3d', 1.8);
+  }
+
   function gameOver() {
     const final = Math.floor(score);
     const oldBest = best;
@@ -1908,6 +2081,11 @@
     }
     // Slow-mo slows the world down; your steering stays full speed.
     const wdt = abilityOn('slowmo') ? dt * 0.4 : dt;
+    if (stageFade > 0) {
+      const before = stageFade;
+      stageFade -= dt;
+      if (before > 0.7 && stageFade <= 0.7) nextStage();
+    }
 
     p.gas = keys.has('gas');
     p.braking = keys.has('brake') && !p.gas;
@@ -1922,7 +2100,7 @@
     else if (p.braking) p.speed -= 170 * dt;
     else p.speed += (CRUISE - p.speed) * Math.min(1, 0.6 * dt);
 
-    const offroad = !airborne && (p.x < ROAD_X - 2 || p.x + CAR_W > ROAD_R + 2);
+    const offroad = !bridge && !airborne && (p.x < ROAD_X - 2 || p.x + CAR_W > ROAD_R + 2);
     if (offroad) {
       if (!hasPassive('offroad')) {
         p.speed -= (p.speed - 55) * Math.min(1, 2.5 * stat('dirt', 1) * dt);
@@ -1984,7 +2162,18 @@
       crash({ x: p.x < ROAD_X ? p.x - 4 : p.x + CAR_W, y: PLAYER_Y, w: 4, h: CAR_H });
       return;
     }
-    p.x = clamp(p.x, minX, maxX);
+    if (bridge) {
+      // No railings. A jump can carry you out over the water, but once your
+      // wheels are down with half the car past the edge, over you go.
+      p.x = clamp(p.x, -CAR_W, W);
+      const mid = p.x + CAR_W / 2;
+      if (!airborne && (mid < ROAD_X || mid > ROAD_R)) {
+        fallOff();
+        return;
+      }
+    } else {
+      p.x = clamp(p.x, minX, maxX);
+    }
 
     if (drifting && p.speed > 90) {
       if (Math.abs(p.angle) > 0.15) {
@@ -2134,6 +2323,7 @@
     updateHazards(dt);
     updateHeli(dt);
     if (endReason === 'wreck') burnParticles(0.9);
+    if (endReason === 'fell') updateFall(dt);
     crashTimer -= dt;
     if (crashTimer <= 0) gameOver();
   }
@@ -2244,6 +2434,15 @@
     else if (stompTime > 0 && Math.floor(time * 16) % 2) ctx.globalAlpha = 0.45;
     else if (hurtTimer > 0 && Math.floor(time * 20) % 2) ctx.globalAlpha = 0.3;
     const spr = vehicleSprite('car', paint().color, undefined, wrecked, false, equipped.decal, equipped.body);
+    if (endReason === 'fell' && (state === 'crash' || state === 'over')) {
+      if (player.fall < 0) return;
+      const t = player.fall / 0.7, s = 1 - 0.65 * t;
+      ctx.globalAlpha = 1 - 0.5 * t;
+      ctx.drawImage(spr, Math.round(x + CAR_W * (1 - s) / 2), Math.round(y + CAR_H * (1 - s) / 2),
+        Math.max(1, Math.round(CAR_W * s)), Math.max(1, Math.round(CAR_H * s)));
+      ctx.globalAlpha = 1;
+      return;
+    }
     const glow = cosmetic('glow');
     if (glow && !wrecked) drawGlow(glow, x, y, 1);
     const hgt = player.air > 0 ? Math.sin(Math.PI * (1 - player.air / player.airMax)) : 0;
@@ -2406,6 +2605,7 @@
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(0, 0, W, 9);
     drawText('SCORE ' + Math.floor(score), 2, 2, '#ffffff');
+    drawText('LV' + stage, W / 2 + 6, 2, '#ffd34d', 1, 'center');
     const reckless = player.speed >= RECKLESS_SPEED;
     drawText(Math.round(player.speed * MPH) + ' MPH', W - 2, 2, reckless ? '#ff4d4d' : '#ffffff', 1, 'right');
     if (reckless) {
@@ -2608,6 +2808,9 @@
     if (endReason === 'busted') {
       drawText('BUSTED!', W / 2, 26, lightsOn() ? '#6fa8ff' : '#ff4d4d', 2, 'center', '#0a1030');
       drawText('PULLED OVER BY THE COPS', W / 2, 42, '#aaaaaa', 1, 'center');
+    } else if (endReason === 'fell') {
+      drawText('SPLASH!', W / 2, 26, '#7ab0d8', 2, 'center', '#0a1a30');
+      drawText('DROVE OFF THE BRIDGE', W / 2, 42, '#aaaaaa', 1, 'center');
     } else {
       drawText('WRECKED!', W / 2, 26, '#ff4d4d', 2, 'center', '#5a0000');
       const why = {
@@ -2617,7 +2820,7 @@
       };
       drawText(why[crashCause] || why.traffic, W / 2, 42, '#aaaaaa', 1, 'center');
     }
-    drawText('SCORE', W / 2, 54, '#aaaaaa', 1, 'center');
+    drawText('LEVEL ' + stage + '  SCORE', W / 2, 54, '#aaaaaa', 1, 'center');
     drawText(Math.floor(score), W / 2, 62, '#ffffff', 2, 'center');
     if (isNewBest) {
       if (Math.floor(time * 4) % 2 === 0) drawText('NEW BEST!', W / 2, 80, '#ffd34d', 1, 'center');
@@ -2723,6 +2926,11 @@
     }
     drawWorld();
     ctx.restore();
+    if (stageFade > 0 && (state === 'play' || state === 'paused')) {
+      // Fade to black and back while the next level's road swaps in.
+      ctx.fillStyle = 'rgba(0,0,0,' + clamp(1 - Math.abs(stageFade - 0.7) / 0.7, 0, 1).toFixed(2) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
 
     if (state === 'title') drawTitle();
     else if (state === 'shop') {

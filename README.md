@@ -23,6 +23,8 @@ On phones and tablets, on-screen buttons appear (double-tap ◀ or ▶ to drift)
 
 ## The road
 
+This is the level 1 road, the construction zone. See [Levels](#levels) for the bridge.
+
 - The right two lanes go your way. The left two lanes, past the double yellow line, are **oncoming traffic** coming straight at you.
 - Every so often the road **curves**. A warning pops up just before each one, and chevrons (`>>>` / `<<<`) show which way to steer while you're in it.
 - A curve pushes your car toward the outside, harder the faster you go. At high speed, normal steering can't hold the line. If the curve throws you into the barriers, you're wrecked.
@@ -86,8 +88,25 @@ Staying in that sweet spot pays off. Between **75 MPH** (orange tick) and the **
 - The road is closed while it hunts you: no new civilian traffic shows up, only cops. Traffic returns once the chopper leaves.
 - It locks a **red target** on where you're heading, then sprays a burst of bullets at that spot. Get out of the target before the burst lands.
 - Each hit costs 1 **HP**; you have 5, shown at the top right. Your car smokes when it's badly damaged. At 0 HP it blows up and the run is over.
-- The chopper runs out of fuel after 25 seconds and leaves. It comes back 15 seconds later if you're still at max heat.
+- The chopper runs out of fuel after 25 seconds and leaves. **Survive until then at max heat and you beat it**, which clears the level (see [Levels](#levels)). If you drop below max heat first, it just bugs out and comes back 15 seconds after you're at max heat again.
 - Black's **Smoke** hides you from the chopper, and White's **Ghost** lets bullets pass straight through.
+
+## Levels
+
+Beat the chopper to move on to the next level. You get **CHOPPER BEATEN! +2,000 × the level number**, the screen fades out, and the next road fades in. The level number is shown as **LV** at the top of the screen.
+
+Every new level starts fresh: heat back to zero, cops and the chopper gone, HP fully repaired and 2 seconds of invulnerability. Your score and **zone multiplier** carry over.
+
+| Level | Road |
+| --- | --- |
+| 1, 3, 5... | **Construction zone:** four lanes, two each way, with curves and barriers |
+| 2, 4, 6... | **The bridge:** three lanes, all going your way, dead straight, and **no railings** |
+
+On the bridge:
+
+- Drift too far and you drive right off the edge. Once the middle of your car is past the edge with its wheels down, you go over and the run ends: **SPLASH!**
+- A ramp jump can carry you out over the water, but if you come down off the deck, you go in.
+- Cops can go over too. Ram one or blast it with Blue's Shockwave off the edge for **COP OVERBOARD! +600**.
 
 ## Paint jobs and abilities
 
