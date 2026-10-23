@@ -27,14 +27,13 @@ On phones and tablets, on-screen buttons appear (double-tap ◀ or ▶ to drift)
 - Every so often the road **curves**. A warning pops up just before each one, and chevrons (`>>>` / `<<<`) show which way to steer while you're in it.
 - A curve pushes your car toward the outside, harder the faster you go. At high speed, normal steering can't hold the line. If the curve throws you into the barriers, you're wrecked.
 
-## Potholes, ramps and nitro
+## Potholes and ramps
 
 - **Potholes** are dark holes in the road. Hitting one costs a big chunk of speed, knocks your car sideways, and takes the wheel out of your hands for a moment. It also breaks your combo and any drift in progress. Cops that hit one get thrown off line too.
 - **Launch ramps** have yellow chevrons. Drive over one to jump; the faster you hit it, the longer you fly.
   - In the air you sail over cars, potholes and cops, and you can't be pulled over. Steering is lighter and your speed holds steady.
   - Each car you clear is worth **JUMPED IT! +200**, or +300 for an oncoming car.
   - Watch where you come down: **landing on a car wrecks you.**
-- **Nitro bottles** are glowing blue canisters that show up every so often in a random lane. Drive through one (you can grab it mid-jump too) for a 2.5-second boost up to about 190 MPH, plus 100 points.
 
 ## On-screen messages
 
@@ -42,7 +41,7 @@ Messages stay out of the driving view. Announcements like **CURVE AHEAD** or **M
 
 ## Drifting
 
-- **Double-tap** left or right (A / D, the arrow keys, or the ◀ ▶ buttons) and keep holding the second tap to drift that way. Let go to stop. The car slides sideways much harder, shrugs off most of a curve's push, and bleeds a little speed.
+- **Double-tap** left or right (A / D, the arrow keys, or the ◀ ▶ buttons) and keep holding to drift that way. While drifting, a single tap the other way flicks the drift into the other direction. Letting go for a moment (under 0.2s) doesn't end it; let go a bit longer to stop. The car slides sideways much harder, shrugs off most of a curve's push, and bleeds a little speed.
 - Drifting at speed builds drift points (shown under your car). Let go to bank them. Drifts through a curve score **x2**.
 
 ## How to score
@@ -124,7 +123,7 @@ Every point you score is also banked as **cash** at the end of the run. Press **
 | Delivery Van | 2,000 | +1 HP, potholes hurt less | -10 MPH, slower steering |
 | Pickup Truck | 2,500 | Dirt and potholes hurt less | -5 MPH |
 | Sports Coupe | 3,000 | +5 MPH, sharper steering | Potholes hurt more |
-| Muscle Car | 5,000 | +10 MPH, nitro pickups last longer | Slower steering |
+| Muscle Car | 5,000 | +10 MPH, faster acceleration | Slower steering |
 | Open-Wheel Racer | 10,000 | +15 MPH, sharper steering | -1 HP, potholes hurt more |
 
 Your best score, chosen paint, cash, upgrades and style are saved in your browser.

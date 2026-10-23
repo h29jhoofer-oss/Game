@@ -255,8 +255,8 @@
     },
     {
       id: 'muscle', slot: 'body', name: 'MUSCLE CAR', price: 5000, desc: 'WIDE BODY AND A HOOD SCOOP',
-      pros: '+10 MPH  NITRO LASTS LONGER', cons: 'SLOWER STEERING',
-      stats: { speed: 10, boost: 1.4, steer: 0.9 },
+      pros: '+10 MPH  FASTER PICKUP', cons: 'SLOWER STEERING',
+      stats: { speed: 10, accel: 1.3, steer: 0.9 },
       map: [
         '.SBBBBBBS.', 'yBBBBBBBBy', 'kSBBkkBBSk', 'kSBBkkBBSk', '.SBBBBBBS.', '.SwwwwwwS.',
         '.SwgwwwwS.', '.SBBBBBBS.', '.SBBBBBBS.', '.SBBBBBBS.', '.SwwwwwwS.', 'kSBBBBBBSk',
@@ -439,9 +439,6 @@
     '......kyyk......',
   ];
   const HELI_PAL = { B: '#2a3346', W: '#e8e8e8', w: '#4a6aa5', g: '#b0c8f0', T: '#555a66', k: '#0e0e12', y: '#fff3a0' };
-  // Nitro pickup: a blue bottle with a white band.
-  const NITRO_CAN = ['..kk..', '.kggk.', 'kbbbbk', 'kbwwbk', 'kbbbbk', 'kbBbbk', 'kbBbbk', 'kbbbbk', '.kkkk.'];
-  const NITRO_PAL = { k: '#0e1a3a', b: '#2f6fe0', B: '#9fd0ff', w: '#ffffff', g: '#c0c0c8' };
   const HAZARD_PAL = { r: '#5a5a62', k: '#16161a', q: '#2c2c36', C: '#9aa0a8', c: '#6a707a', Y: '#f2c200' };
 
   function buildSprite(map, pal) {
@@ -527,7 +524,6 @@
   for (const k in DECOR_MAPS) decorSprites[k] = buildSprite(DECOR_MAPS[k], DECOR_PAL);
   const policeSprite = buildSprite(POLICE, POLICE_PAL);
   const potholeSprite = buildSprite(POTHOLE, HAZARD_PAL);
-  const nitroSprite = buildSprite(NITRO_CAN, NITRO_PAL);
   const heliSprite = buildSprite(HELI, HELI_PAL);
   const HELI_W = HELI[0].length, HELI_H = HELI.length;
   const rampSprite = buildSprite(RAMP, HAZARD_PAL);
@@ -794,10 +790,11 @@
   let driftPts, driftCurve, skidTimer, driftTipShown, crashCause;
   // Drifting starts with a quick double tap of left or right and lasts while
   // that direction stays held.
-  const DOUBLE_TAP = 0.3;
-  let driftDir = 0;
+  const DOUBLE_TAP = 0.4;
+  const DRIFT_GRACE = 0.2; // a drift survives letting go for this long
+  let driftDir = 0, driftGrace = 0;
   const lastTap = { left: -1, right: -1 };
-  let roadItems, nextPothole, nextRamp, nextNitro, rampTipShown;
+  let roadItems, nextPothole, nextRamp, rampTipShown;
   let heli, heliCool, bullets, hp, hurtTimer, rotorTimer, heliTipShown;
   let slowMeter, slowWarned, rig, rigCount, runTime, speedMult;
   let curves = [], curveEnd = 0;
@@ -841,7 +838,7 @@
   }
 
   function reset() {
-    player = { x: laneX(2), vx: 0, speed: CRUISE, braking: false, gas: false, angle: 0, air: 0, airMax: 1, wobble: 0, boost: 0 };
+    player = { x: laneX(2), vx: 0, speed: CRUISE, braking: false, gas: false, angle: 0, air: 0, airMax: 1, wobble: 0 };
     heli = null;
     heliCool = 0;
     slowMeter = 0;
@@ -858,7 +855,6 @@
     roadItems = [];
     nextPothole = 500;
     nextRamp = 900;
-    nextNitro = 700;
     rampTipShown = false;
     traffic = [];
     cops = [];
@@ -871,6 +867,7 @@
     driftCurve = false;
     skidTimer = 0;
     driftDir = 0;
+    driftGrace = 0;
     lastTap.left = lastTap.right = -1;
     driftTipShown = false;
     crashCause = 'traffic';
@@ -1456,9 +1453,6 @@
         if (it.used) continue;
         if (it.kind === 'ramp') {
           if (p.air <= 0 && overlaps(p.x + 1, PLAYER_Y, CAR_W - 2, CAR_H, it.x, it.y, it.w, it.h)) launch(it);
-        } else if (it.kind === 'nitro') {
-          // Grab it on the ground or in the air.
-          if (overlaps(p.x - 1, PLAYER_Y, CAR_W + 2, CAR_H, it.x, it.y, it.w, it.h)) collectNitro(it);
         } else if (p.air <= 0 && !abilityOn('ghost') &&
           overlaps(p.x + 1, PLAYER_Y + 2, CAR_W - 2, CAR_H - 4, it.x + 2, it.y + 1, it.w - 4, it.h - 2)) {
           hitPothole(it);
@@ -1488,12 +1482,6 @@
 
   // Potholes and ramps are bolted to the road, spaced out by distance travelled.
   function spawnRoadItems() {
-    if (dist >= nextNitro) {
-      const lane = randInt(0, LANES - 1);
-      const w = NITRO_CAN[0].length;
-      roadItems.push({ kind: 'nitro', x: laneX(lane, w), y: -NITRO_CAN.length - 2, w, h: NITRO_CAN.length, used: false });
-      nextNitro = dist + rand(700, 1300);
-    }
     if (dist >= nextPothole) {
       const lane = randInt(0, LANES - 1);
       roadItems.push({ kind: 'pothole', x: laneX(lane, POTHOLE[0].length) + randInt(-4, 4), y: -8,
@@ -1512,19 +1500,6 @@
         popup('RAMP AHEAD! JUMP THE CARS', W / 2, 46, '#f2c200', 2);
       }
     }
-  }
-
-  function collectNitro(it) {
-    it.used = true;
-    it.y = H + 100; // gone from the road
-    player.boost = 2.5 * stat('boost', 1);
-    shake = Math.max(shake, 2);
-    for (let i = 0; i < 14; i++) {
-      particle(player.x + CAR_W / 2, PLAYER_Y + CAR_H / 2, rand(-50, 50), rand(-50, 50), 0.4, pick(['#9fd0ff', '#2f6fe0', '#ffffff']));
-    }
-    popup('NITRO! +' + addScore(100), player.x + CAR_W / 2, PLAYER_Y, '#9fd0ff');
-    sfx.noise(0.5, 0.3);
-    sfx.tone(160, 0.5, 'sawtooth', 0.1, 520);
   }
 
   function hitPothole(it) {
@@ -1937,8 +1912,7 @@
 
     p.gas = keys.has('gas');
     p.braking = keys.has('brake') && !p.gas;
-    p.boost = Math.max(0, p.boost - dt);
-    const nitro = abilityOn('nitro') || p.boost > 0;
+    const nitro = abilityOn('nitro');
     const top = maxSpeed() + (nitro ? 80 : 0);
     const airborne = p.air > 0;
     p.wobble = Math.max(0, p.wobble - dt);
@@ -1946,7 +1920,7 @@
     if (airborne) {
       // No grip in the air: speed holds steady.
     } else if (nitro) p.speed = Math.max(p.speed, Math.min(top, p.speed + 220 * dt));
-    else if (p.gas) p.speed += 85 * dt;
+    else if (p.gas) p.speed += 85 * stat('accel', 1) * dt;
     else if (p.braking) p.speed -= 170 * dt;
     else p.speed += (CRUISE - p.speed) * Math.min(1, 0.6 * dt);
 
@@ -1973,26 +1947,38 @@
     const steer = (55 + Math.min(p.speed, MAX_SPEED) * 0.15) * (1 + 0.1 * lvl('tires')) * stat('steer', 1);
     for (const d of ['left', 'right']) {
       if (!pressed.has(d)) continue;
-      if (time - lastTap[d] < DOUBLE_TAP) driftDir = d === 'left' ? -1 : 1;
+      // A double tap starts a drift; once drifting, a single tap either way
+      // keeps it going in that direction, so you can flick between turns.
+      if (time - lastTap[d] < DOUBLE_TAP || driftDir) {
+        driftDir = d === 'left' ? -1 : 1;
+        driftGrace = DRIFT_GRACE;
+      }
       lastTap[d] = time;
     }
-    if (driftDir && !keys.has(driftDir < 0 ? 'left' : 'right')) driftDir = 0;
-    const drifting = driftDir !== 0 && p.speed > 90 && !airborne;
+    if (driftDir) {
+      if (keys.has('left') || keys.has('right')) {
+        driftDir = keys.has(driftDir < 0 ? 'left' : 'right') ? driftDir : -driftDir;
+        driftGrace = DRIFT_GRACE;
+      } else if ((driftGrace -= dt) <= 0) {
+        driftDir = 0;
+      }
+    }
+    const drifting = driftDir !== 0 && p.speed > 70 && !airborne;
     if (airborne) {
       p.vx += (dir * steer * 0.6 - p.vx) * Math.min(1, 3 * dt);
     } else if (p.wobble > 0) {
       // Knocked off line by a pothole: the wheel is out of your hands for a moment.
       p.vx -= p.vx * Math.min(1, 2 * dt);
     } else if (drifting) {
-      p.vx += (dir * steer * 1.6 - p.vx) * Math.min(1, 5 * dt);
-      p.speed -= 25 * dt;
+      p.vx += (dir * steer * 1.6 - p.vx) * Math.min(1, 8 * dt);
+      p.speed -= 15 * dt;
       const targetAngle = dir !== 0 ? dir * 0.4 : p.angle;
       p.angle += (targetAngle - p.angle) * Math.min(1, 8 * dt);
     } else {
       p.vx += (dir * steer - p.vx) * Math.min(1, 12 * dt);
       p.angle -= p.angle * Math.min(1, 10 * dt);
     }
-    const push = airborne ? 0 : k * p.speed * p.speed * 0.55 * (drifting ? 0.35 : 1) * (1 - 0.1 * lvl('tires'));
+    const push = airborne ? 0 : k * p.speed * p.speed * 0.55 * (drifting ? 0.2 : 1) * (1 - 0.1 * lvl('tires'));
     const lateral = p.vx - push;
     const minX = ROAD_X - 8, maxX = ROAD_R + 8 - CAR_W;
     p.x += lateral * dt;
@@ -2005,7 +1991,7 @@
     }
     p.x = clamp(p.x, minX, maxX);
 
-    if (drifting && p.speed > 110) {
+    if (drifting && p.speed > 90) {
       if (Math.abs(p.angle) > 0.15) {
         const curve = Math.abs(k) > 0.001;
         driftPts += p.speed * dt * 0.3 * (curve ? 2 : 1);
@@ -2308,15 +2294,7 @@
     const inMenu = state === 'title' || state === 'shop';
     if (!inMenu) {
       for (const it of roadItems) {
-        if (it.kind === 'nitro') {
-          // Bob and glow so it stands out on the asphalt.
-          const nx = sx(it.x, it.y + it.h / 2), ny = Math.round(it.y + Math.sin(time * 6) * 1.5);
-          ctx.fillStyle = 'rgba(80,160,255,' + (0.25 + 0.15 * Math.sin(time * 8)).toFixed(2) + ')';
-          ctx.fillRect(nx - 2, ny - 1, it.w + 4, it.h + 2);
-          ctx.drawImage(nitroSprite, nx, ny);
-        } else {
-          ctx.drawImage(it.kind === 'ramp' ? rampSprite : potholeSprite, sx(it.x, it.y + it.h / 2), Math.round(it.y));
-        }
+        ctx.drawImage(it.kind === 'ramp' ? rampSprite : potholeSprite, sx(it.x, it.y + it.h / 2), Math.round(it.y));
       }
       for (const s of slicks) {
         for (let i = 0; i < 3; i++) ctx.drawImage(oilSprite, sx(s.x, s.y) + i * 11, Math.round(s.y) + (i === 1 ? 1 : 0));
@@ -2524,7 +2502,7 @@
     const sf = clamp((player.speed - MIN_SPEED) / span, 0, 1);
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(0, H - 3, W, 3);
-    ctx.fillStyle = abilityOn('nitro') || player.boost > 0 ? (flip ? '#3a7bff' : '#ffffff') : reckless ? '#ff4d4d' : sf > 0.6 ? '#ffd34d' : '#57c062';
+    ctx.fillStyle = abilityOn('nitro') ? (flip ? '#3a7bff' : '#ffffff') : reckless ? '#ff4d4d' : sf > 0.6 ? '#ffd34d' : '#57c062';
     ctx.fillRect(1, H - 2, Math.round((W - 2) * sf), 1);
     ctx.fillStyle = '#6fa8ff';
     ctx.fillRect(1 + Math.round((W - 2) * (policeSpeed() - MIN_SPEED) / span), H - 3, 1, 3);
