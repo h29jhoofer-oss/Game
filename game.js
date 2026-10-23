@@ -33,14 +33,43 @@
   }
 
   // The player always starts out white; other paints unlock with a high score.
+  // Every paint has a passive perk and an active ability (B key) with a cooldown.
   const PAINTS = [
-    { name: 'WHITE', color: '#f2f2f2', need: 0 },
-    { name: 'RED', color: '#d82828', need: 1500 },
-    { name: 'BLUE', color: '#2f6fe0', need: 4000 },
-    { name: 'YELLOW', color: '#f0c419', need: 8000 },
-    { name: 'GREEN', color: '#2fae4f', need: 15000 },
-    { name: 'BLACK', color: '#34343f', need: 25000 },
-    { name: 'HOT PINK', color: '#f060b0', need: 40000 },
+    {
+      name: 'WHITE', color: '#f2f2f2', need: 0,
+      passive: 'blend', passiveText: 'BLEND IN: COPS AT 110 MPH',
+      active: 'ghost', activeName: 'GHOST', activeText: 'PHASE THROUGH CARS', cooldown: 20, duration: 3,
+    },
+    {
+      name: 'RED', color: '#d82828', need: 1500,
+      passive: 'hotrod', passiveText: 'HOT ROD: +15 MPH TOP SPEED',
+      active: 'nitro', activeName: 'NITRO', activeText: 'HUGE BURST OF SPEED', cooldown: 14, duration: 3,
+    },
+    {
+      name: 'BLUE', color: '#2f6fe0', need: 4000,
+      passive: 'coolhead', passiveText: 'COOL HEAD: HEAT RISES SLOWER',
+      active: 'shockwave', activeName: 'SHOCKWAVE', activeText: 'SHOVE NEARBY CARS AWAY', cooldown: 12, duration: 0,
+    },
+    {
+      name: 'YELLOW', color: '#f0c419', need: 8000,
+      passive: 'fares', passiveText: 'BIG FARES: 2X CLOSE BONUS',
+      active: 'horn', activeName: 'HORN', activeText: 'CARS CLEAR YOUR LANE', cooldown: 8, duration: 0,
+    },
+    {
+      name: 'GREEN', color: '#2fae4f', need: 15000,
+      passive: 'offroad', passiveText: "OFF-ROADER: DIRT DOESN'T SLOW",
+      active: 'oil', activeName: 'OIL SLICK', activeText: 'COPS BEHIND SPIN OUT', cooldown: 10, duration: 0,
+    },
+    {
+      name: 'BLACK', color: '#34343f', need: 25000,
+      passive: 'shadow', passiveText: 'SHADOW: COPS NEED 2X TO BUST',
+      active: 'smoke', activeName: 'SMOKE', activeText: 'BLINDS COPS BEHIND YOU', cooldown: 16, duration: 4,
+    },
+    {
+      name: 'HOT PINK', color: '#f060b0', need: 40000,
+      passive: 'fab', passiveText: 'FABULOUS: 1.5X ALL POINTS',
+      active: 'slowmo', activeName: 'SLOW-MO', activeText: 'TIME CRAWLS AROUND YOU', cooldown: 20, duration: 4,
+    },
   ];
   const TRAFFIC_COLORS = [
     { color: '#ececec', w: 25 }, // white
@@ -337,6 +366,11 @@
   const decorSprites = {};
   for (const k in DECOR_MAPS) decorSprites[k] = buildSprite(DECOR_MAPS[k], DECOR_PAL);
   const policeSprite = buildSprite(POLICE, POLICE_PAL);
+  const policeWreckSprite = buildSprite(POLICE, Object.fromEntries(
+    Object.entries(POLICE_PAL).map(([k, v]) => [k, mix(v, '#000000', 0.6)])));
+  const oilSprite = buildSprite(
+    ['...kkkkkk...', '.kkkkqkkkkk.', 'kkkqkkkkkkkk', 'kkkkkkkqkkkk', '.kkkkkkkkkk.', '...kkkkkk...'],
+    { k: '#101014', q: '#4a3a6a' });
 
   // Pre-rendered road tile: dirt shoulders, curbs, asphalt and lane markings.
   // Every pattern period divides TILE_H so the tile loops seamlessly.
@@ -512,6 +546,7 @@
     Enter: 'start', Space: 'start',
     KeyP: 'pause', Escape: 'pause',
     KeyM: 'mute',
+    KeyB: 'ability',
   };
 
   function actDown(a) {
@@ -574,18 +609,38 @@
   let paintIdx = store.get('paint', 0);
   if (!PAINTS[paintIdx] || PAINTS[paintIdx].need > best) paintIdx = 0;
 
-  let player, traffic, cops, particles, popups;
+  let player, traffic, cops, copWrecks, slicks, particles, popups;
   let score, dist, spawnTimer, combo, comboTimer, shake, level, crashTimer, overTimer;
-  let wanted, heat, calm, copCool, copsShaken, sirenTimer, sirenHigh, endReason;
+  let wanted, heat, calm, copCool, copsShaken, copsWrecked, sirenTimer, sirenHigh, endReason;
+  let abilityCd, abilityTime;
   let newUnlocks = [], isNewBest = false;
   let roadScroll = 0, time = 0;
   let decor = [];
   const decorNext = { left: 0, right: 0 };
 
+  // Paint perks.
+  const paint = () => PAINTS[paintIdx];
+  const hasPassive = (id) => paint().passive === id;
+  const abilityOn = (id) => paint().active === id && abilityTime > 0;
+  const policeSpeed = () => (hasPassive('blend') ? 110 : POLICE_MPH) / MPH;
+  const maxSpeed = () => MAX_SPEED + (hasPassive('hotrod') ? 25 : 0);
+  const pullTime = () => (hasPassive('shadow') ? 3 : 1.5);
+  const wantedStep = () => (hasPassive('coolhead') ? 9 : WANTED_STEP);
+  function addScore(n) {
+    const pts = n * (hasPassive('fab') ? 1.5 : 1);
+    score += pts;
+    return Math.round(pts);
+  }
+
   function reset() {
     player = { x: laneX(1), vx: 0, speed: CRUISE, braking: false, gas: false };
     traffic = [];
     cops = [];
+    copWrecks = [];
+    slicks = [];
+    copsWrecked = 0;
+    abilityCd = 0;
+    abilityTime = 0;
     wanted = 0;
     heat = 0;
     calm = 0;
@@ -706,7 +761,9 @@
   function updateTraffic(dt) {
     for (const c of traffic) {
       let sp = c.base;
-      if (c.wrecked) {
+      if (c.stopped) {
+        sp = 0;
+      } else if (c.wrecked) {
         sp = player.speed;
       } else {
         // Don't rear-end the car ahead in the same lane.
@@ -718,8 +775,9 @@
       c.speed = sp;
       c.y += (player.speed - c.speed) * dt;
 
-      if (c.wrecked || c.kind === 'truck') continue;
+      if (c.wrecked) continue;
       if (c.targetX === null) {
+        if (c.kind === 'truck') continue;
         c.lcTimer -= dt;
         if (c.lcTimer <= 0) {
           c.lcTimer = rand(1.5, 4);
@@ -738,11 +796,12 @@
         c.signal -= dt;
       } else {
         const d = c.targetX - c.x;
-        const step = 16 * dt;
+        const step = (c.lcSpeed || 16) * dt;
         if (Math.abs(d) <= step) {
           c.x = c.targetX;
           c.lane = c.targetLane;
           c.targetX = null;
+          c.lcSpeed = 0;
         } else {
           c.x += Math.sign(d) * step;
         }
@@ -754,10 +813,28 @@
   const overlaps = (ax, ay, aw, ah, bx, by, bw, bh) =>
     ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
 
+  // Steer a traffic car into the next lane over, quickly and without signalling.
+  function forceLaneChange(c, dirs, speed) {
+    if (c.wrecked || c.targetX !== null) return false;
+    for (const dir of dirs) {
+      const nl = c.lane + dir;
+      if (nl >= 0 && nl < LANES && laneClear(nl, c.y - 14, c.y + c.h + 14, c)) {
+        c.targetLane = nl;
+        c.targetX = laneX(nl, c.w);
+        c.signal = 0;
+        c.blinkDir = dir;
+        c.lcSpeed = speed;
+        return true;
+      }
+    }
+    return false;
+  }
+
   function checkPlayerVsTraffic() {
     const px = player.x, py = PLAYER_Y;
+    const ghost = abilityOn('ghost');
     for (const c of traffic) {
-      if (overlaps(px + 1, py + 1, CAR_W - 2, CAR_H - 2, c.x + 1, c.y + 1, c.w - 2, c.h - 2)) {
+      if (!ghost && overlaps(px + 1, py + 1, CAR_W - 2, CAR_H - 2, c.x + 1, c.y + 1, c.w - 2, c.h - 2)) {
         crash(c);
         return;
       }
@@ -773,8 +850,7 @@
   function nearMiss() {
     combo = comboTimer > 0 ? combo + 1 : 1;
     comboTimer = 2.5;
-    const bonus = 50 * combo;
-    score += bonus;
+    const bonus = addScore(50 * combo * (hasPassive('fares') ? 2 : 1));
     popup('CLOSE! +' + bonus, player.x + CAR_W / 2, PLAYER_Y - 8, combo > 2 ? '#ff7ab8' : '#ffd34d', 0.9);
     sfx.nearMiss(combo);
   }
@@ -800,20 +876,24 @@
   // ---------------------------------------------------------------------------
   // Police
   // ---------------------------------------------------------------------------
-  // Going over POLICE_MPH puts a cruiser on your tail. Staying over it raises
-  // your wanted level every WANTED_STEP seconds, adding faster cruisers. Cops
-  // only fall back if you out-drive them; if one reaches you, you're busted.
+  // Going over the police limit puts a cruiser on your tail. Staying over it
+  // raises your wanted level, adding faster cruisers. To pull you over a cop
+  // has to hold position right beside you. While lining up it has tunnel
+  // vision, so you can ram it, or lead it, into other cars.
   function spawnCop() {
     if (cops.length >= MAX_COPS) return;
     const playerLane = Math.round((player.x + CAR_W / 2 - ROAD_X - LANE_W / 2) / LANE_W);
     const lane = clamp(playerLane + randInt(-1, 1), 0, LANES - 1);
     const max = 180 + wanted * 11;
-    cops.push({ x: laneX(lane), y: H + 10, w: CAR_W, h: CAR_H, speed: max, max, stun: 0 });
+    cops.push({
+      x: laneX(lane), y: H + 10, w: CAR_W, h: CAR_H, speed: max, max,
+      side: 0, pull: 0, shove: 0, stun: 0, spin: 0, blind: 0, wander: 0, dead: false,
+    });
   }
 
   function updatePolice(dt) {
     copCool = Math.max(0, copCool - dt);
-    if (player.speed > POLICE_SPEED) {
+    if (player.speed > policeSpeed()) {
       calm = 0;
       if (wanted === 0) {
         wanted = 1;
@@ -823,7 +903,7 @@
         sfx.copAlert();
       } else {
         heat += dt;
-        if (heat >= WANTED_STEP) {
+        if (heat >= wantedStep()) {
           heat = 0;
           wanted = Math.min(MAX_WANTED, wanted + 1);
           spawnCop();
@@ -848,21 +928,19 @@
 
     const hadCops = cops.length > 0;
     updateCops(dt);
+    if (state !== 'play') return;
 
     for (const cop of cops) {
       if (cop.y > COP_ESCAPE_Y) {
         copsShaken++;
-        score += 250;
-        popup('SHOOK A COP! +250', W / 2, H - 30, '#6fa8ff', 1.2);
+        popup('SHOOK A COP! +' + addScore(250), W / 2, H - 30, '#6fa8ff', 1.2);
         sfx.tone(880, 0.1, 'square', 0.08);
       }
     }
     cops = cops.filter((c) => c.y <= COP_ESCAPE_Y);
 
     if (hadCops && cops.length === 0) {
-      const bonus = 200 * wanted;
-      score += bonus;
-      popup('LOST THEM! +' + bonus, W / 2, 70, '#57c062', 1.6);
+      popup('LOST THEM! +' + addScore(200 * wanted), W / 2, 70, '#57c062', 1.6);
       sfx.unlock();
       copCool = 3;
     }
@@ -876,57 +954,186 @@
         sfx.siren(sirenHigh, 0.05 * clamp(1 - (nearest - PLAYER_Y) / 150, 0.15, 1));
       }
     }
+  }
 
-    for (const cop of cops) {
-      if (overlaps(player.x + 1, PLAYER_Y + 1, CAR_W - 2, CAR_H - 2, cop.x + 1, cop.y + 1, cop.w - 2, cop.h - 2)) {
-        bust();
-        return;
+  // The x a cop aims for to pull up beside you. Each cop sticks to one side,
+  // preferring a side no other cop has taken.
+  function flankX(cop) {
+    const left = player.x - cop.w - 2, right = player.x + CAR_W + 2;
+    const leftOk = left >= ROAD_X + 1, rightOk = right + cop.w <= ROAD_R - 1;
+    if ((cop.side < 0 && !leftOk) || (cop.side > 0 && !rightOk)) cop.side = 0;
+    if (!cop.side) {
+      if (leftOk && rightOk) {
+        const leftTaken = cops.some((o) => o !== cop && o.side < 0);
+        const rightTaken = cops.some((o) => o !== cop && o.side > 0);
+        if (leftTaken !== rightTaken) cop.side = leftTaken ? 1 : -1;
+        else cop.side = cop.x + cop.w / 2 < player.x + CAR_W / 2 ? -1 : 1;
+      } else {
+        cop.side = leftOk ? -1 : 1;
       }
     }
+    return cop.side < 0 ? left : right;
   }
 
   function updateCops(dt) {
     const chasing = state === 'play';
+    const ghost = abilityOn('ghost');
     for (const cop of cops) {
       if (!chasing) {
         cop.speed = player.speed;
         continue;
       }
       cop.stun = Math.max(0, cop.stun - dt);
-      let target = cop.stun > 0 ? 80 : cop.max;
-      // A cop that got ahead of you eases off so you run into it.
-      if (cop.y + cop.h < PLAYER_Y) target = Math.min(target, player.speed * 0.85);
-      cop.speed += clamp(target - cop.speed, -200 * dt, 120 * dt);
-      cop.y += (player.speed - cop.speed) * dt;
+      cop.spin = Math.max(0, cop.spin - dt);
+      cop.blind = Math.max(0, cop.blind - dt);
+      const lost = cop.spin > 0 || cop.blind > 0;
+      const dy = cop.y - PLAYER_Y;
+      const flanking = Math.abs(dy) < 40;
 
-      // Steer at the player, swerving around traffic in the way.
-      let desired = player.x;
-      for (const c of traffic) {
-        if (c.y + c.h > cop.y - 30 && c.y < cop.y + cop.h && c.x < cop.x + cop.w + 2 && c.x + c.w > cop.x - 2) {
-          const left = c.x - cop.w - 3, right = c.x + c.w + 3;
-          const leftOk = left >= ROAD_X + 1, rightOk = right + cop.w <= ROAD_R - 1;
-          if (leftOk && rightOk) desired = Math.abs(player.x - left) < Math.abs(player.x - right) ? left : right;
-          else desired = leftOk ? left : right;
+      // Race up from behind, then match your speed to sit level with you.
+      let target = clamp(player.speed + dy * 3, 40, cop.max);
+      if (cop.stun > 0) target = Math.min(target, 80);
+      if (cop.spin > 0) target = 70;
+      else if (cop.blind > 0) target = Math.min(target, 120);
+
+      let desired;
+      if (lost) {
+        cop.wander = clamp(cop.wander + rand(-300, 300) * dt, -40, 40);
+        desired = cop.x + cop.wander;
+      } else {
+        desired = flankX(cop);
+        for (const c of traffic) {
+          const ahead = c.x < cop.x + cop.w + 1 && c.x + c.w > cop.x - 1 &&
+            c.y < cop.y && c.y + c.h > cop.y - (flanking ? 18 : 30);
+          if (!ahead) continue;
+          if (flanking) {
+            // Locked on to you: it brakes for the car ahead but won't swerve.
+            target = Math.min(target, c.speed);
+          } else {
+            const left = c.x - cop.w - 3, right = c.x + c.w + 3;
+            const leftOk = left >= ROAD_X + 1, rightOk = right + cop.w <= ROAD_R - 1;
+            if (leftOk && rightOk) desired = Math.abs(player.x - left) < Math.abs(player.x - right) ? left : right;
+            else desired = leftOk ? left : right;
+          }
           break;
         }
       }
-      const step = 70 * dt;
-      cop.x = clamp(cop.x + clamp(desired - cop.x, -step, step), ROAD_X + 1, ROAD_R - 1 - cop.w);
+      cop.speed += clamp(target - cop.speed, -220 * dt, 140 * dt);
+      cop.y += (player.speed - cop.speed) * dt;
 
-      // Clipping traffic slows the cop down, which is your chance to pull away.
-      if (cop.stun <= 0) {
-        for (const c of traffic) {
-          if (overlaps(cop.x + 1, cop.y + 1, cop.w - 2, cop.h - 2, c.x + 1, c.y + 1, c.w - 2, c.h - 2)) {
-            cop.stun = 0.8;
-            cop.speed = Math.min(cop.speed, c.speed);
-            for (let i = 0; i < 8; i++) {
-              particle(cop.x + cop.w / 2, cop.y, rand(-40, 40), rand(-40, 10), 0.4, pick(['#fff3a0', '#ffb000']));
-            }
-            sfx.bump();
+      if (Math.abs(cop.shove) > 1) {
+        cop.x += cop.shove * dt;
+        cop.shove -= cop.shove * Math.min(1, 5 * dt);
+      }
+      if (Math.abs(cop.shove) < 30) {
+        const step = (lost ? 40 : 70) * dt;
+        cop.x += clamp(desired - cop.x, -step, step);
+      }
+
+      // Shoved hard into the construction barriers.
+      const minX = ROAD_X + 1, maxX = ROAD_R - 1 - cop.w;
+      if ((cop.x < minX || cop.x > maxX) && Math.abs(cop.shove) > 70) {
+        wreckCop(cop, null);
+        continue;
+      }
+      cop.x = clamp(cop.x, minX, maxX);
+
+      // Hitting traffic takes the cop out of the chase.
+      const hit = traffic.find((c) => !c.stopped &&
+        overlaps(cop.x + 1, cop.y + 1, cop.w - 2, cop.h - 2, c.x + 1, c.y + 1, c.w - 2, c.h - 2));
+      if (hit) {
+        wreckCop(cop, hit);
+        continue;
+      }
+
+      if (cop.spin <= 0) {
+        for (const s of slicks) {
+          if (overlaps(cop.x, cop.y, cop.w, cop.h, s.x, s.y, s.w, s.h)) {
+            cop.spin = 1.6;
+            cop.shove = (Math.random() < 0.5 ? -1 : 1) * 120;
+            cop.pull = 0;
+            sfx.tone(600, 0.4, 'sawtooth', 0.06, 200);
             break;
           }
         }
       }
+
+      // Contact with the player.
+      if (!ghost && overlaps(player.x, PLAYER_Y, CAR_W, CAR_H, cop.x, cop.y, cop.w, cop.h)) {
+        const dir = Math.sign(cop.x + cop.w / 2 - (player.x + CAR_W / 2)) || 1;
+        if (Math.abs(dy) < CAR_H - 5) {
+          // Side contact: swerving into a cop rams it sideways.
+          cop.x = dir > 0 ? player.x + CAR_W : player.x - cop.w;
+          if (Math.sign(player.vx) === dir && Math.abs(player.vx) > 25) {
+            cop.shove = dir * 170;
+            cop.stun = 0.5;
+            cop.pull = 0;
+            shake = Math.max(shake, 2);
+            for (let i = 0; i < 10; i++) {
+              particle(dir > 0 ? cop.x : cop.x + cop.w, cop.y + cop.h / 2, rand(-30, 30), rand(-30, 30), 0.3,
+                pick(['#fff3a0', '#ffb000', '#ffffff']));
+            }
+            sfx.bump();
+          }
+        } else if (dy > 0) {
+          cop.y = PLAYER_Y + CAR_H;
+          cop.speed = Math.min(cop.speed, player.speed);
+        } else {
+          cop.y = PLAYER_Y - cop.h;
+          cop.speed = Math.max(cop.speed, player.speed);
+        }
+      }
+
+      // Holding position right beside you fills the pull-over meter.
+      const gap = Math.max(cop.x - (player.x + CAR_W), player.x - (cop.x + cop.w));
+      const beside = Math.abs(cop.y - PLAYER_Y) < 8 && gap >= -1 && gap <= 5;
+      if (beside && !lost && cop.stun <= 0 && !ghost) {
+        cop.pull += dt;
+        if (cop.pull >= pullTime()) {
+          bust();
+          break;
+        }
+      } else {
+        cop.pull = Math.max(0, cop.pull - dt * 0.75);
+      }
+    }
+    cops = cops.filter((c) => !c.dead);
+  }
+
+  function wreckCop(cop, car) {
+    cop.dead = true;
+    copWrecks.push({ x: cop.x, y: cop.y, w: cop.w, h: cop.h });
+    if (car) {
+      car.wrecked = true;
+      car.stopped = true;
+      car.targetX = null;
+    }
+    copsWrecked++;
+    popup('COP DOWN! +' + addScore(500), W / 2, 90, '#6fa8ff', 1.4);
+    const cx = cop.x + cop.w / 2, cy = cop.y + cop.h / 2;
+    for (let i = 0; i < 30; i++) {
+      particle(cx, cy, rand(-60, 60), rand(-60, 60), rand(0.3, 0.9),
+        pick(['#fff3a0', '#ffb000', '#ff6a00', '#555555', '#3a7bff']), randInt(1, 2));
+    }
+    shake = Math.max(shake, 3);
+    sfx.crash();
+  }
+
+  // Cop wrecks and oil slicks sit still on the road.
+  function updateHazards(dt) {
+    for (const w of copWrecks) {
+      w.y += player.speed * dt;
+      if (Math.random() < 0.4) {
+        particle(w.x + rand(2, 8), w.y + rand(3, 10), rand(-5, 5), rand(-25, -10), rand(0.4, 0.8),
+          pick(['#555555', '#777777', '#ff6a00']), randInt(1, 2), true);
+      }
+    }
+    copWrecks = copWrecks.filter((w) => w.y < H + 40);
+    for (const s of slicks) s.y += player.speed * dt;
+    slicks = slicks.filter((s) => s.y < H + 10);
+    if (state === 'play' && !abilityOn('ghost')) {
+      const w = copWrecks.find((w) => overlaps(player.x + 1, PLAYER_Y + 1, CAR_W - 2, CAR_H - 2, w.x + 1, w.y + 1, w.w - 2, w.h - 2));
+      if (w) crash(w);
     }
   }
 
@@ -938,6 +1145,68 @@
     popup('PULL OVER!', W / 2, PLAYER_Y - 14, '#6fa8ff', 1.6);
     sfx.engineOff();
     sfx.busted();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Abilities
+  // ---------------------------------------------------------------------------
+  function activateAbility() {
+    const a = paint();
+    abilityCd = a.cooldown;
+    abilityTime = a.duration;
+    popup(a.activeName + '!', player.x + CAR_W / 2, PLAYER_Y - 16, '#ffffff', 1);
+    const cx = player.x + CAR_W / 2, cy = PLAYER_Y + CAR_H / 2;
+    switch (a.active) {
+      case 'ghost':
+        sfx.tone(300, 0.4, 'sine', 0.12, 900);
+        break;
+      case 'nitro':
+        sfx.noise(0.5, 0.3);
+        sfx.tone(120, 0.5, 'sawtooth', 0.12, 400);
+        shake = 2;
+        break;
+      case 'shockwave':
+        for (let i = 0; i < 28; i++) {
+          const ang = (i / 28) * Math.PI * 2;
+          particle(cx, cy, Math.cos(ang) * 110, Math.sin(ang) * 110, 0.35, pick(['#9fd0ff', '#ffffff']));
+        }
+        for (const cop of cops) {
+          const dx = cop.x + cop.w / 2 - cx, dy = cop.y + cop.h / 2 - cy;
+          if (Math.hypot(dx, dy) < 48) {
+            cop.shove = (Math.sign(dx) || 1) * 200;
+            cop.stun = 0.6;
+            cop.pull = 0;
+          }
+        }
+        for (const c of traffic) {
+          const dx = c.x + c.w / 2 - cx, dy = c.y + c.h / 2 - cy;
+          if (Math.hypot(dx, dy) < 48) forceLaneChange(c, [Math.sign(dx) || 1], 70);
+        }
+        shake = 3;
+        sfx.tone(220, 0.35, 'square', 0.12, 50);
+        sfx.noise(0.3, 0.3);
+        break;
+      case 'horn':
+        for (const c of traffic) {
+          if (c.y < PLAYER_Y && c.y + c.h > PLAYER_Y - 110 && c.x < player.x + CAR_W + 1 && c.x + c.w > player.x - 1) {
+            if (!forceLaneChange(c, Math.random() < 0.5 ? [-1, 1] : [1, -1], 45)) c.base += 50;
+          }
+        }
+        sfx.tone(440, 0.45, 'square', 0.08);
+        sfx.tone(554, 0.45, 'square', 0.08);
+        break;
+      case 'oil':
+        // A wide spill that also covers the spots beside you where cops pull up.
+        slicks.push({ x: Math.round(player.x) - 12, y: PLAYER_Y + CAR_H + 1, w: 34, h: 6 });
+        sfx.noise(0.25, 0.2);
+        break;
+      case 'smoke':
+        sfx.noise(0.6, 0.25);
+        break;
+      case 'slowmo':
+        sfx.tone(900, 0.6, 'sine', 0.12, 150);
+        break;
+    }
   }
 
   function gameOver() {
@@ -970,26 +1239,42 @@
 
   function updatePlay(dt) {
     const p = player;
+    abilityCd = Math.max(0, abilityCd - dt);
+    abilityTime = Math.max(0, abilityTime - dt);
+    if (pressed.has('ability')) {
+      if (abilityCd <= 0) activateAbility();
+      else sfx.buzz();
+    }
+    // Slow-mo slows the world down; your steering stays full speed.
+    const wdt = abilityOn('slowmo') ? dt * 0.4 : dt;
+
     p.gas = keys.has('gas');
     p.braking = keys.has('brake') && !p.gas;
+    const nitro = abilityOn('nitro');
+    const top = maxSpeed() + (nitro ? 80 : 0);
 
-    if (p.gas) p.speed += 85 * dt;
+    if (nitro) p.speed += 220 * dt;
+    else if (p.gas) p.speed += 85 * dt;
     else if (p.braking) p.speed -= 170 * dt;
     else p.speed += (CRUISE - p.speed) * Math.min(1, 0.6 * dt);
 
     const offroad = p.x < ROAD_X - 2 || p.x + CAR_W > ROAD_R + 2;
     if (offroad) {
-      p.speed -= (p.speed - 55) * Math.min(1, 2.5 * dt);
-      shake = Math.max(shake, 1);
+      if (!hasPassive('offroad')) {
+        p.speed -= (p.speed - 55) * Math.min(1, 2.5 * dt);
+        shake = Math.max(shake, 1);
+      }
       if (Math.random() < 0.7) {
         particle(p.x + rand(0, CAR_W), PLAYER_Y + CAR_H, rand(-15, 15), rand(0, 20), 0.4,
           pick(['#8b6b3e', '#a5865a', '#6f5530']), 1, true);
       }
     }
-    p.speed = clamp(p.speed, MIN_SPEED, MAX_SPEED);
+    p.speed = Math.max(MIN_SPEED, p.speed);
+    // Nitro wears off gradually instead of snapping back to top speed.
+    if (p.speed > top) p.speed = Math.max(top, p.speed - 90 * dt);
 
     const dir = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0);
-    const steer = 55 + p.speed * 0.15;
+    const steer = 55 + Math.min(p.speed, MAX_SPEED) * 0.15;
     p.vx += (dir * steer - p.vx) * Math.min(1, 12 * dt);
     p.x = clamp(p.x + p.vx * dt, ROAD_X - 8, ROAD_R + 8 - CAR_W);
 
@@ -997,10 +1282,25 @@
       particle(p.x + (Math.random() < 0.5 ? 2 : 7), PLAYER_Y + CAR_H, rand(-4, 4), 15, 0.35,
         pick(['#9a9a9a', '#bdbdbd']), 1, true);
     }
+    if (nitro) {
+      for (let i = 0; i < 2; i++) {
+        particle(p.x + (i ? 7 : 2), PLAYER_Y + CAR_H, rand(-6, 6), rand(20, 50), 0.25,
+          pick(['#fff3a0', '#ffb000', '#3a7bff']), randInt(1, 2), true);
+      }
+    }
+    if (abilityOn('smoke')) {
+      for (let i = 0; i < 3; i++) {
+        particle(p.x + rand(0, CAR_W), PLAYER_Y + CAR_H, rand(-25, 25), rand(-10, 10), rand(0.8, 1.4),
+          pick(['#8a8a8a', '#a0a0a0', '#6a6a6a']), randInt(2, 3), true);
+      }
+      for (const cop of cops) {
+        if (cop.y > PLAYER_Y - 6 && cop.y < PLAYER_Y + 130) cop.blind = 1;
+      }
+    }
 
-    const moved = p.speed * dt;
+    const moved = p.speed * wdt;
     dist += moved;
-    score += moved * 0.1 * (p.speed >= RECKLESS_SPEED ? 2 : 1);
+    addScore(moved * 0.1 * (p.speed >= RECKLESS_SPEED ? 2 : 1));
     scrollWorld(moved);
 
     const newLevel = 1 + Math.floor(dist / 4000);
@@ -1011,7 +1311,7 @@
       sfx.tone(330, 0.15, 'triangle', 0.1, null, 0.12);
     }
 
-    spawnTimer -= dt * (p.speed / CRUISE);
+    spawnTimer -= wdt * (p.speed / CRUISE);
     if (spawnTimer <= 0) {
       spawnCar();
       spawnTimer = Math.max(0.28, 1.0 - level * 0.08) + Math.random() * 0.5;
@@ -1022,10 +1322,11 @@
       if (comboTimer <= 0) combo = 0;
     }
 
-    updateTraffic(dt);
-    checkPlayerVsTraffic();
-    if (state === 'play') updatePolice(dt);
-    sfx.engineSet(p.speed);
+    updateTraffic(wdt);
+    updateHazards(wdt);
+    if (state === 'play') checkPlayerVsTraffic();
+    if (state === 'play') updatePolice(wdt);
+    sfx.engineSet(p.speed * (abilityOn('slowmo') ? 0.6 : 1));
   }
 
   function burnParticles(rate) {
@@ -1042,6 +1343,7 @@
     scrollWorld(player.speed * dt);
     updateTraffic(dt);
     updateCops(dt);
+    updateHazards(dt);
     if (endReason === 'wreck') burnParticles(0.9);
     crashTimer -= dt;
     if (crashTimer <= 0) gameOver();
@@ -1051,6 +1353,7 @@
     overTimer += dt;
     updateTraffic(dt);
     updateCops(dt);
+    updateHazards(dt);
     if (endReason === 'wreck') burnParticles(0.5);
     if (overTimer < 0.7) return;
     if (pressed.has('start')) startGame();
@@ -1125,7 +1428,9 @@
   function drawPlayer() {
     const x = Math.round(player.x), y = PLAYER_Y;
     const wrecked = (state === 'crash' || state === 'over') && endReason === 'wreck';
-    drawVehicle(vehicleSprite('car', PAINTS[paintIdx].color, undefined, wrecked), x, y, CAR_W, CAR_H);
+    if (abilityOn('ghost')) ctx.globalAlpha = Math.floor(time * 12) % 2 ? 0.35 : 0.6;
+    drawVehicle(vehicleSprite('car', paint().color, undefined, wrecked), x, y, CAR_W, CAR_H);
+    ctx.globalAlpha = 1;
     if (!wrecked && player.braking) {
       ctx.fillStyle = 'rgba(255,40,40,0.45)';
       ctx.fillRect(x, y + 15, 3, 2);
@@ -1139,7 +1444,9 @@
   const lightsOn = () => Math.floor(time * 8) % 2 === 0;
 
   function drawCop(cop) {
-    const x = Math.round(cop.x), y = Math.round(cop.y);
+    // A spinning cop shudders side to side.
+    const jitter = cop.spin > 0 ? (Math.floor(time * 20) % 2 ? 1 : -1) : 0;
+    const x = Math.round(cop.x) + jitter, y = Math.round(cop.y);
     const flip = lightsOn();
     ctx.fillStyle = flip ? 'rgba(255,40,40,0.22)' : 'rgba(60,120,255,0.22)';
     ctx.fillRect(x - 2, y + 3, cop.w + 4, 7);
@@ -1148,6 +1455,7 @@
     ctx.fillRect(x + 3, y + 6, 2, 1);
     ctx.fillStyle = flip ? '#1a2a60' : '#3a7bff';
     ctx.fillRect(x + 5, y + 6, 2, 1);
+    if (cop.blind > 0 && Math.floor(time * 4) % 2) drawText('?', x + cop.w / 2, y - 7, '#ffffff', 1, 'center');
   }
 
   function drawWorld() {
@@ -1156,6 +1464,10 @@
     ctx.drawImage(roadTile, 0, off);
     for (const d of decor) ctx.drawImage(decorSprites[d.kind], d.x, Math.round(d.y));
     if (state !== 'title') {
+      for (const s of slicks) {
+        for (let i = 0; i < 3; i++) ctx.drawImage(oilSprite, s.x + i * 11, Math.round(s.y) + (i === 1 ? 1 : 0));
+      }
+      for (const w of copWrecks) drawVehicle(policeWreckSprite, Math.round(w.x), Math.round(w.y), w.w, w.h);
       for (const c of traffic) drawTrafficCar(c);
       for (const cop of cops) drawCop(cop);
       drawPlayer();
@@ -1176,13 +1488,30 @@
   }
 
   function drawHUD() {
+    if (abilityOn('slowmo')) {
+      ctx.fillStyle = 'rgba(170,80,255,0.14)';
+      ctx.fillRect(0, 0, W, H);
+    }
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(0, 0, W, 9);
     drawText('SCORE ' + Math.floor(score), 2, 2, '#ffffff');
     const reckless = player.speed >= RECKLESS_SPEED;
     drawText(Math.round(player.speed * MPH) + ' MPH', W - 2, 2, reckless ? '#ff4d4d' : '#ffffff', 1, 'right');
-    if (combo > 1 && comboTimer > 0) drawText('COMBO X' + combo, 2, 12, '#ffd34d');
     if (reckless && Math.floor(time * 4) % 2 === 0) drawText('RECKLESS X2', W - 2, 12, '#ff4d4d', 1, 'right');
+
+    // Active ability: name plus a cooldown bar (yellow while it's running).
+    const a = paint();
+    const label = 'B ' + a.activeName;
+    const ready = abilityCd <= 0;
+    const running = abilityTime > 0;
+    drawText(label, 2, 12, running ? '#ffd34d' : ready ? '#ffffff' : '#888888');
+    const barW = textWidth(label);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(2, 18, barW, 2);
+    ctx.fillStyle = running ? '#ffd34d' : ready ? '#57c062' : '#6a6a6a';
+    const frac = running ? abilityTime / a.duration : ready ? 1 : 1 - abilityCd / a.cooldown;
+    ctx.fillRect(2, 18, Math.round(barW * frac), 2);
+    if (combo > 1 && comboTimer > 0) drawText('COMBO X' + combo, 2, 23, '#ffd34d');
 
     // Wanted level stars.
     if (wanted > 0 && state !== 'over') {
@@ -1202,8 +1531,20 @@
       }
     }
 
-    // Cops coming up from behind but still off screen.
     const flip = lightsOn();
+    // Pull-over meter above your car while a cop is lined up beside you.
+    const pull = cops.reduce((m, c) => Math.max(m, c.pull), 0);
+    if (pull > 0 && state === 'play') {
+      const px = clamp(Math.round(player.x + CAR_W / 2), 20, W - 20);
+      const bw = 20;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(px - bw / 2 - 1, PLAYER_Y - 6, bw + 2, 4);
+      ctx.fillStyle = flip ? '#ff2a2a' : '#3a7bff';
+      ctx.fillRect(px - bw / 2, PLAYER_Y - 5, Math.round(bw * Math.min(1, pull / pullTime())), 2);
+      drawText('PULL OVER', px, PLAYER_Y - 13, flip ? '#ff4d4d' : '#6fa8ff', 1, 'center');
+    }
+
+    // Cops coming up from behind but still off screen.
     for (const cop of cops) {
       if (cop.y < H - 6) continue;
       const ix = Math.round(cop.x) + 3;
@@ -1222,13 +1563,14 @@
     }
 
     // Speedometer bar along the bottom, with a blue tick at the police threshold.
-    const frac = (player.speed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED);
+    const span = maxSpeed() - MIN_SPEED;
+    const sf = clamp((player.speed - MIN_SPEED) / span, 0, 1);
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(0, H - 3, W, 3);
-    ctx.fillStyle = reckless ? '#ff4d4d' : frac > 0.6 ? '#ffd34d' : '#57c062';
-    ctx.fillRect(1, H - 2, Math.round((W - 2) * frac), 1);
+    ctx.fillStyle = abilityOn('nitro') ? (flip ? '#3a7bff' : '#ffffff') : reckless ? '#ff4d4d' : sf > 0.6 ? '#ffd34d' : '#57c062';
+    ctx.fillRect(1, H - 2, Math.round((W - 2) * sf), 1);
     ctx.fillStyle = '#6fa8ff';
-    ctx.fillRect(1 + Math.round((W - 2) * (POLICE_SPEED - MIN_SPEED) / (MAX_SPEED - MIN_SPEED)), H - 3, 1, 3);
+    ctx.fillRect(1 + Math.round((W - 2) * (policeSpeed() - MIN_SPEED) / span), H - 3, 1, 3);
   }
 
   function dim(alpha) {
@@ -1259,12 +1601,14 @@
     }
 
     if (locked) {
-      drawText('LOCKED', W / 2, 115, '#aaaaaa', 1, 'center');
-      drawText('SCORE ' + paint.need + ' TO UNLOCK', W / 2, 123, '#aaaaaa', 1, 'center');
+      drawText('LOCKED - SCORE ' + paint.need, W / 2, 113, '#aaaaaa', 1, 'center');
     } else {
-      drawText(paint.name, W / 2, 115, paint.color, 1, 'center');
-      drawText('YOUR RIDE', W / 2, 123, '#aaaaaa', 1, 'center');
+      drawText(paint.name, W / 2, 113, paint.name === 'BLACK' ? '#9a9aae' : paint.color, 1, 'center');
     }
+    const dimText = locked ? '#888888' : null;
+    drawText(paint.passiveText, W / 2, 121, dimText || '#9fe0a0', 1, 'center');
+    drawText('B: ' + paint.activeName, W / 2, 129, dimText || '#ffd34d', 1, 'center');
+    drawText(paint.activeText, W / 2, 137, dimText || '#ffffff', 1, 'center');
 
     const chipW = 6, gap = 3;
     const total = PAINTS.length * (chipW + gap) - gap;
@@ -1273,25 +1617,23 @@
       const p = PAINTS[i];
       if (i === paintIdx) {
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(cx - 1, 132, chipW + 2, chipW + 2);
+        ctx.fillRect(cx - 1, 145, chipW + 2, chipW + 2);
       }
       ctx.fillStyle = p.need <= best ? p.color : '#2a2a2a';
-      ctx.fillRect(cx, 133, chipW, chipW);
+      ctx.fillRect(cx, 146, chipW, chipW);
       if (p.need > best) {
         ctx.fillStyle = '#666666';
-        ctx.fillRect(cx + 2, 135, 2, 2);
+        ctx.fillRect(cx + 2, 148, 2, 2);
       }
       cx += chipW + gap;
     }
 
     if (Math.floor(time * 2) % 2 === 0) {
-      drawText(isTouch ? 'TAP TO DRIVE' : 'PRESS ENTER TO DRIVE', W / 2, 144, '#ffd34d', 1, 'center');
+      drawText(isTouch ? 'TAP TO DRIVE' : 'PRESS ENTER TO DRIVE', W / 2, 157, '#ffd34d', 1, 'center');
     }
-    drawText('ARROWS / WASD TO DRIVE', W / 2, 154, '#ffffff', 1, 'center');
-    drawText('GAS: UP   BRAKE: DOWN', W / 2, 162, '#ffffff', 1, 'center');
-    drawText('PASS CLOSE FOR BONUS!', W / 2, 170, '#57c062', 1, 'center');
-    drawText('OVER ' + POLICE_MPH + ' MPH = COPS!', W / 2, 178, '#6fa8ff', 1, 'center');
-    drawText('P: PAUSE   M: MUTE', W / 2, 186, '#aaaaaa', 1, 'center');
+    drawText('ARROWS / WASD TO DRIVE', W / 2, 167, '#ffffff', 1, 'center');
+    drawText('OVER ' + POLICE_MPH + ' MPH = COPS!', W / 2, 175, '#6fa8ff', 1, 'center');
+    drawText('B: ABILITY  P: PAUSE  M: MUTE', W / 2, 183, '#aaaaaa', 1, 'center');
   }
 
   function dimRect(x, y, w, h) {
@@ -1315,7 +1657,9 @@
     } else {
       drawText('BEST ' + best, W / 2, 80, '#ffffff', 1, 'center');
     }
-    if (copsShaken > 0) drawText('COPS SHAKEN: ' + copsShaken, W / 2, 89, '#6fa8ff', 1, 'center');
+    if (copsShaken || copsWrecked) {
+      drawText('COPS: ' + copsShaken + ' SHAKEN ' + copsWrecked + ' WRECKED', W / 2, 89, '#6fa8ff', 1, 'center');
+    }
     if (newUnlocks.length) {
       drawText('NEW PAINT UNLOCKED!', W / 2, 102, '#57c062', 1, 'center');
       newUnlocks.forEach((p, i) => drawText(p.name, W / 2, 111 + i * 8, p.color, 1, 'center'));
