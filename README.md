@@ -99,8 +99,9 @@ Every new level starts fresh: heat back to zero, cops and the chopper gone, HP f
 
 | Level | Road |
 | --- | --- |
-| 1, 3, 5... | **Construction zone:** four lanes, two each way, with curves and barriers |
-| 2, 4, 6... | **The bridge:** three lanes, all going your way, dead straight, and **no railings** |
+| 1, 4, 7... | **Construction zone:** four lanes, two each way, with curves and barriers |
+| 2, 5, 8... | **The bridge:** three lanes, all going your way, dead straight, and **no railings** |
+| 3, 6, 9... | **Snowy pass:** the construction zone's layout (four lanes, two each way, curves) under snow, with pines, snowmen and snowplows on the shoulders. The road is **icy**, so your car is slower to respond to steering and keeps sliding a moment after you let go. |
 
 On the bridge:
 

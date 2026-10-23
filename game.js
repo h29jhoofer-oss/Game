@@ -30,24 +30,29 @@
   const laneX = (lane, w = CAR_W) => ROAD_X + LANE_W * lane + (LANE_W - w) / 2;
   const laneDir = (lane) => (lane < ONCOMING_LANES ? -1 : 1);
 
-  // Levels alternate between two roads. Odd levels: the four-lane
-  // construction zone, two lanes each way. Even levels: a three-lane bridge,
-  // all one way, with no railings, so you can drive right off the edge.
-  let bridge = false;
+  // Levels cycle through three roads: the four-lane construction zone (two
+  // lanes each way), a three-lane bridge (all one way, no railings, so you
+  // can drive right off the edge), and a snowy pass laid out like the
+  // construction zone but with icy steering.
+  const THEMES = ['construction', 'bridge', 'snow'];
+  const LEVEL_NAMES = { construction: 'CONSTRUCTION ZONE', bridge: 'THE BRIDGE', snow: 'SNOWY PASS' };
+  const themeFor = (n) => THEMES[(n - 1) % THEMES.length];
+  let theme = 'construction', bridge = false;
   const roadLayout = (isBridge) => {
     const lanes = isBridge ? 3 : 4;
     const x = Math.round((W - LANE_W * lanes) / 2);
     return { lanes, x, w: LANE_W * lanes, r: x + LANE_W * lanes, oncoming: isBridge ? 0 : 2 };
   };
-  function setLayout(isBridge) {
-    const L = roadLayout(isBridge);
-    bridge = isBridge;
+  function setLayout(t) {
+    theme = t;
+    bridge = t === 'bridge';
+    const L = roadLayout(bridge);
     LANES = L.lanes;
     ROAD_X = L.x;
     ROAD_W = L.w;
     ROAD_R = L.r;
     ONCOMING_LANES = L.oncoming;
-    roadTile = isBridge ? bridgeTile : highwayTile;
+    roadTile = roadTiles[t];
   }
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -354,6 +359,7 @@
     o: '#ff7a1a', O: '#ffb060', w: '#ffffff', k: '#1e1e1e', q: '#5a5a5a',
     c: '#a9a9a2', C: '#c9c9c2', Y: '#f2b705', S: '#b07f08', b: '#1c2541',
     t: '#5a4a3a', d: '#8a7a62', D: '#a89880', l: '#6e5c40',
+    g: '#2f5a3a', G: '#1f3f2a', W: '#f4f8fc', s: '#b8c6d4',
   };
   const DECOR_MAPS = {
     cone: ['.ooo.', 'owwwo', 'owOwo', 'owwwo', '.ooo.'],
@@ -411,6 +417,36 @@
       'kYSSSSSSYk',
       '.SSSSSSSS.',
     ],
+    // Snowy pass.
+    pine: [
+      '....g....',
+      '..gWgGg..',
+      '.gGgWgGg.',
+      '.WgGgGgW.',
+      'gGgWtWgGg',
+      '.gWgGgWg.',
+      '.gGgWgGg.',
+      '..gGgWg..',
+      '....g....',
+    ],
+    snowman: ['.WWW.', 'WkWkW', 'WWoWW', '.WWW.', '.sWs.', 'WWWWW', 'WWkWW', 'WWWWW', '.sss.'],
+    snowbank: ['..WWWWW...', '.WWWWWWWW.', 'WWsWWWWsWW', '.ssssssss.'],
+    plow: [
+      'qqqqqqqqqq',
+      'cccccccccc',
+      '.oOOOOOOo.',
+      'kobbbbbbok',
+      'kooooooook',
+      '.oooooooo.',
+      '.oWWWWWWo.',
+      '.oWsWWWWo.',
+      'koWWWWsWok',
+      'koWWWWWWok',
+      '.oooooooo.',
+      'kooooooook',
+      'kooooooook',
+      '.oooooooo.',
+    ],
     boat: ['..c..', '.cwc.', 'cwwwc', 'cwbwc', 'cwwwc', 'cwwwc', '.ccc.'],
     gravel: ['..ddddd..', '.dDDDDDd.', 'dDDDDDDDd', 'dDDDDDDDd', '.dDDDDDd.', '..ddddd..'],
   };
@@ -418,6 +454,10 @@
     { kind: 'cone', w: 30 }, { kind: 'barrel', w: 12 }, { kind: 'barrier', w: 12 },
     { kind: 'jersey', w: 10 }, { kind: 'sign', w: 8 }, { kind: 'excavator', w: 9 },
     { kind: 'bulldozer', w: 8 }, { kind: 'dumptruck', w: 7 }, { kind: 'gravel', w: 6 },
+  ];
+  const SNOW_DECOR_WEIGHTS = [
+    { kind: 'pine', w: 34 }, { kind: 'snowbank', w: 26 }, { kind: 'snowman', w: 7 },
+    { kind: 'plow', w: 8 }, { kind: 'sign', w: 6 }, { kind: 'barrel', w: 6 },
   ];
   const STAR = ['..1..', '.111.', '11111', '.111.', '.1.1.'];
 
@@ -555,7 +595,8 @@
   // Pre-rendered road tiles. Highway: dirt shoulders, curbs, asphalt and lane
   // markings. Bridge: a bare deck over open water. Every pattern period
   // divides TILE_H so the tiles loop seamlessly.
-  function makeRoadTile(isBridge) {
+  function makeRoadTile(t) {
+    const isBridge = t === 'bridge', snow = t === 'snow';
     const L = roadLayout(isBridge);
     const c = document.createElement('canvas');
     c.width = W + PAD * 2;
@@ -605,25 +646,51 @@
       for (let y = 0; y < TILE_H; y += 80) g.fillRect(rx + 1, y, L.w - 2, 1);
     } else {
       for (let y = 0; y < TILE_H; y++) {
-        g.fillStyle = Math.floor(y / 12) % 2 ? '#7d6b4f' : '#776549';
+        g.fillStyle = snow
+          ? (Math.floor(y / 12) % 2 ? '#e6edf4' : '#dde6ef')
+          : (Math.floor(y / 12) % 2 ? '#7d6b4f' : '#776549');
         g.fillRect(0, y, c.width, 1);
       }
       for (let i = 0; i < 520; i++) {
         const left = Math.random() < 0.5;
         const x = left ? randInt(0, rx - 4) : randInt(rr + 3, c.width - 1);
-        g.fillStyle = pick(['#6a5a40', '#8f7d5f', '#9a9a90', '#5f5038']);
+        g.fillStyle = pick(snow ? ['#c8d4e0', '#ffffff', '#b8c6d4', '#f8fbff'] : ['#6a5a40', '#8f7d5f', '#9a9a90', '#5f5038']);
         g.fillRect(x, randInt(0, TILE_H - 1), 1, 1);
       }
-      for (let y = 0; y < TILE_H; y += 6) {
-        g.fillStyle = (y / 6) % 2 ? '#eeeeee' : '#f07a1a';
-        g.fillRect(rx - 3, y, 2, 6);
-        g.fillRect(rr + 1, y, 2, 6);
+      if (snow) {
+        // Plowed banks of snow along both edges.
+        g.fillStyle = '#ffffff';
+        g.fillRect(rx - 4, 0, 3, TILE_H);
+        g.fillRect(rr + 1, 0, 3, TILE_H);
+        g.fillStyle = '#9fb0c2';
+        g.fillRect(rx - 2, 0, 1, TILE_H);
+        g.fillRect(rr + 1, 0, 1, TILE_H);
+      } else {
+        for (let y = 0; y < TILE_H; y += 6) {
+          g.fillStyle = (y / 6) % 2 ? '#eeeeee' : '#f07a1a';
+          g.fillRect(rx - 3, y, 2, 6);
+          g.fillRect(rr + 1, y, 2, 6);
+        }
       }
-      g.fillStyle = '#45454f';
+      g.fillStyle = snow ? '#4a4e58' : '#45454f';
       g.fillRect(rx - 1, 0, L.w + 2, TILE_H);
       for (let i = 0; i < 500; i++) {
-        g.fillStyle = Math.random() < 0.5 ? '#3d3d46' : '#50505a';
+        g.fillStyle = snow ? (Math.random() < 0.5 ? '#42464f' : '#585d68') : (Math.random() < 0.5 ? '#3d3d46' : '#50505a');
         g.fillRect(randInt(rx - 1, rr), randInt(0, TILE_H - 1), 1, 1);
+      }
+      if (snow) {
+        // Slush along the edges and patches of ice and packed snow.
+        for (let i = 0; i < 260; i++) {
+          const edge = Math.random() < 0.5 ? rx - 1 + randInt(0, 4) : rr - randInt(0, 4);
+          g.fillStyle = pick(['#c8d0da', '#aab4c0', '#e6edf4']);
+          g.fillRect(edge, randInt(0, TILE_H - 1), 1, randInt(1, 4));
+        }
+        for (let i = 0; i < 14; i++) {
+          const x = randInt(rx + 4, rr - 12), y = randInt(0, TILE_H - 8);
+          g.fillStyle = Math.random() < 0.5 ? 'rgba(160,200,235,0.35)' : 'rgba(220,230,240,0.45)';
+          g.fillRect(x, y, randInt(5, 9), randInt(3, 6));
+          g.fillRect(x + 1, y - 1, randInt(3, 6), 1);
+        }
       }
     }
     g.fillStyle = '#e8e8e8';
@@ -643,9 +710,8 @@
     }
     return c;
   }
-  const highwayTile = makeRoadTile(false);
-  const bridgeTile = makeRoadTile(true);
-  let roadTile = highwayTile;
+  const roadTiles = Object.fromEntries(THEMES.map((t) => [t, makeRoadTile(t)]));
+  let roadTile = roadTiles.construction;
 
   // ---------------------------------------------------------------------------
   // Audio (tiny WebAudio synth; created on first input)
@@ -936,8 +1002,8 @@
     zoneTipShown = false;
     stage = 1;
     stageFade = 0;
-    if (bridge) {
-      setLayout(false);
+    if (theme !== 'construction') {
+      setLayout('construction');
       initDecor();
     }
     bullets = [];
@@ -1038,7 +1104,7 @@
       decorNext[side] = bottom - rand(8, 20);
       return;
     }
-    const kind = pickWeighted(DECOR_WEIGHTS).kind;
+    const kind = pickWeighted(theme === 'snow' ? SNOW_DECOR_WEIGHTS : DECOR_WEIGHTS).kind;
     const spr = decorSprites[kind];
     const x = side === 'left'
       ? randInt(0, Math.max(0, ROAD_X - 8 - spr.width))
@@ -1941,14 +2007,14 @@
   // road fades in, and the heat starts over.
   function levelClear() {
     popup('CHOPPER BEATEN! +' + addScore(2000 * stage), W / 2, 60, '#ffd34d', 1.6);
-    popup('LEVEL ' + (stage + 1) + ': ' + (stage % 2 ? 'THE BRIDGE' : 'CONSTRUCTION ZONE'), W / 2, 60, '#ffd34d', 1.6);
+    popup('LEVEL ' + (stage + 1) + ': ' + LEVEL_NAMES[themeFor(stage + 1)], W / 2, 60, '#ffd34d', 1.6);
     stageFade = 1.4;
     sfx.unlock();
   }
 
   function nextStage() {
     stage++;
-    setLayout(stage % 2 === 0);
+    setLayout(themeFor(stage));
     traffic = [];
     cops = [];
     copWrecks = [];
@@ -1974,6 +2040,7 @@
     stompTime = STOMP_TIME; // a moment to find your feet
     initDecor();
     if (bridge) popup("NO RAILINGS: DON'T FALL OFF!", W / 2, 60, '#ff9d3d', 1.8);
+    if (theme === 'snow') popup('ICY ROAD: STEERING IS SLIPPERY', W / 2, 60, '#9fd0ff', 1.8);
   }
 
   function gameOver() {
@@ -2148,7 +2215,7 @@
       const targetAngle = dir !== 0 ? dir * 0.4 : p.angle;
       p.angle += (targetAngle - p.angle) * Math.min(1, 8 * dt);
     } else {
-      p.vx += (dir * steer - p.vx) * Math.min(1, 12 * dt);
+      p.vx += (dir * steer - p.vx) * Math.min(1, (theme === 'snow' ? 5 : 12) * dt);
       p.angle -= p.angle * Math.min(1, 10 * dt);
     }
     const push = airborne ? 0 : k * p.speed * p.speed * 0.55 * (drifting ? 0.2 : 1) * (1 - 0.1 * lvl('tires'));
@@ -2558,6 +2625,18 @@
         ctx.fillRect(Math.round(b.x), Math.round(b.y), 2, 2);
       }
       if (heli) drawHeli();
+    }
+    if (theme === 'snow') drawSnowfall();
+  }
+
+  // Flakes drift down and sideways; faster driving makes them stream past.
+  function drawSnowfall() {
+    for (let i = 0; i < 48; i++) {
+      const fall = 30 + (i % 3) * 12 + player.speed * 0.25;
+      const y = (((i * 53 + time * fall) % (H + 4)) + H + 4) % (H + 4) - 2;
+      const x = (((i * 37 + Math.sin(time * 1.3 + i) * 5 - time * 6) % W) + W) % W;
+      ctx.fillStyle = i % 4 ? 'rgba(255,255,255,0.85)' : 'rgba(220,235,255,0.6)';
+      ctx.fillRect(Math.round(x), Math.round(y), i % 5 ? 1 : 2, i % 5 ? 1 : 2);
     }
   }
 
