@@ -86,7 +86,7 @@ Every paint has a passive perk that is always on, and an active ability you trig
 
 ## Shop
 
-Every point you score is also banked as **cash** at the end of the run. Press **Down** (or **BRK** on a phone) on the title screen to open the shop. Use Up/Down to pick, Left/Right to switch tabs, Enter to buy or equip, and Esc to go back.
+Every point you score is also banked as **cash** at the end of the run. Press **Down** (or **BRK** on a phone) on the title screen to open the shop. Use Up/Down to pick, Left/Right to switch between the Upgrades, Style and Bodies tabs, Enter to buy or equip, and Esc to go back.
 
 **Upgrades** (each level costs more):
 
@@ -105,5 +105,16 @@ Every point you score is also banked as **cash** at the end of the run. Press **
 - **Decals:** racing stripes, checker roof, flame decals
 - **Trails:** fire, sparkle, rainbow
 - **Neon underglow:** blue, pink, green
+
+**Bodies** (buy once, then switch any time). Every body has the same size and hitbox, so they change the look, not the difficulty. Decals follow each body's shape:
+
+| Body | Price |
+| --- | --- |
+| Sedan | Free (default) |
+| Delivery Van | 2,000 |
+| Pickup Truck | 2,500 |
+| Sports Coupe | 3,000 |
+| Muscle Car | 5,000 |
+| Open-Wheel Racer | 10,000 |
 
 Your best score, chosen paint, cash, upgrades and style are saved in your browser.

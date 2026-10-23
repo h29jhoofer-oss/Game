@@ -215,6 +215,53 @@
     '..SSSSSS..',
   ];
 
+  // Player car bodies sold in the shop. All share the sedan's 10x16 footprint
+  // and hitbox, so they change the look, not the difficulty.
+  const BODIES = [
+    { id: 'sedan', slot: 'body', name: 'SEDAN', price: 0, desc: 'THE TRUSTY FAMILY FOUR-DOOR', map: CAR },
+    {
+      id: 'van', slot: 'body', name: 'DELIVERY VAN', price: 2000, desc: 'BOXY AND PROUD OF IT',
+      map: [
+        '..SBBBBS..', '.yBBBBBBy.', 'kSwwwwwwSk', 'kSwgwwwwSk', '.SBBBBBBS.', '.SHHHHHHS.',
+        '.SHBBBBHS.', '.SHBBBBHS.', '.SHBBBBHS.', '.SHBBBBHS.', '.SHBBBBHS.', 'kSHBBBBHSk',
+        'kSHHHHHHSk', '.SBBBBBBS.', '.rBBBBBBr.', '..SSSSSS..',
+      ],
+    },
+    {
+      id: 'pickup', slot: 'body', name: 'PICKUP TRUCK', price: 2500, desc: 'CAB UP FRONT AND AN OPEN BED',
+      map: [
+        '..SBBBBS..', '.yBBBBBBy.', 'kSBBBBBBSk', 'kSBBBBBBSk', '.SwwwwwwS.', '.SwgwwwwS.',
+        '.SBBBBBBS.', '.SBBBBBBS.', '.SSSSSSSS.', '.SkkkkkkS.', '.SkkkkkkS.', 'kSkkkkkkSk',
+        'kSkkkkkkSk', '.SkkkkkkS.', '.rSSSSSSr.', '..SSSSSS..',
+      ],
+    },
+    {
+      id: 'coupe', slot: 'body', name: 'SPORTS COUPE', price: 3000, desc: 'LONG HOOD AND A REAR SPOILER',
+      map: [
+        '.SBBBBBBS.', 'yBBBBBBBBy', 'kSBBHHBBSk', 'kSBBHHBBSk', '.SBBHHBBS.', '.SBwwwwBS.',
+        '.SwwgwwwS.', '.SwwwwwwS.', '.SBBHHBBS.', '.SBBHHBBS.', '.SBBBBBBS.', 'kSBBBBBBSk',
+        'kSBBBBBBSk', '.SBBBBBBS.', 'SSSSSSSSSS', '.rr....rr.',
+      ],
+    },
+    {
+      id: 'muscle', slot: 'body', name: 'MUSCLE CAR', price: 5000, desc: 'WIDE BODY AND A HOOD SCOOP',
+      map: [
+        '.SBBBBBBS.', 'yBBBBBBBBy', 'kSBBkkBBSk', 'kSBBkkBBSk', '.SBBBBBBS.', '.SwwwwwwS.',
+        '.SwgwwwwS.', '.SBBBBBBS.', '.SBBBBBBS.', '.SBBBBBBS.', '.SwwwwwwS.', 'kSBBBBBBSk',
+        'kSBBBBBBSk', '.SBBBBBBS.', 'rSSSSSSSSr', '.SSSSSSSS.',
+      ],
+    },
+    {
+      id: 'racer', slot: 'body', name: 'OPEN-WHEEL RACER', price: 10000, desc: 'BASICALLY A ROCKET ON WHEELS',
+      map: [
+        '.SSSSSSSS.', '....BB....', 'kk..BB..kk', 'kk.BBBB.kk', 'kk.BBBB.kk', '...BBBB...',
+        '...BwwB...', '...BggB...', '...BBBB...', '..BBBBBB..', 'kkBBBBBBkk', 'kkBBBBBBkk',
+        'kk.BBBB.kk', '...BBBB...', 'SSSSSSSSSS', '.r......r.',
+      ],
+    },
+  ];
+  const bodyMap = (id) => (BODIES.find((b) => b.id === id) || BODIES[0]).map;
+
   const TRUCK = [
     '..SBBBBBBS..',
     '.yBBBBBBBBy.',
@@ -413,13 +460,13 @@
 
   const spriteCache = new Map();
   // Pixels a decal paints on top of the car body, as [x, y, color].
-  function decalPixels(id, body) {
+  function decalPixels(id, body, map) {
     const px = [];
     const [r, g, b] = hexToRgb(body);
     const light = (r * 0.3 + g * 0.59 + b * 0.11) / 255 > 0.6;
     if (id === 'stripes') {
       const c = light ? '#1e2a6e' : '#f2f2f2';
-      CAR.forEach((row, y) => { for (const x of [4, 5]) if ('BHS'.includes(row[x])) px.push([x, y, c]); });
+      for (let y = 0; y < map.length; y++) for (const x of [4, 5]) px.push([x, y, c]);
     } else if (id === 'checker') {
       for (let y = 6; y <= 9; y++) for (let x = 2; x <= 7; x++) px.push([x, y, (x + y) % 2 ? '#111111' : '#f2f2f2']);
     } else if (id === 'flames') {
@@ -428,11 +475,12 @@
         [...map[y]].forEach((ch, x) => { if (ch !== '.') px.push([x, +y, ch === 'a' ? '#ff6a00' : '#ffd000']); });
       }
     }
-    return px;
+    // Only paint on bodywork, never on glass, tyres or empty space.
+    return px.filter(([x, y]) => 'BHS'.includes((map[y] || '')[x]));
   }
 
-  function vehicleSprite(kind, color, accent = TRAILER_COLORS[0], wrecked = false, flip = false, decal = null) {
-    const key = kind + color + accent + wrecked + flip + decal;
+  function vehicleSprite(kind, color, accent = TRAILER_COLORS[0], wrecked = false, flip = false, decal = null, bodyId = null) {
+    const key = kind + color + accent + wrecked + flip + decal + bodyId;
     let s = spriteCache.get(key);
     if (s) return s;
     const body = wrecked ? mix(color, '#000000', 0.55) : color;
@@ -448,11 +496,11 @@
       y: wrecked ? '#555555' : '#fff3a0',
       r: wrecked ? '#440000' : '#d01818',
     };
-    const map = kind === 'truck' ? TRUCK : CAR;
+    const map = kind === 'truck' ? TRUCK : bodyId ? bodyMap(bodyId) : CAR;
     s = buildSprite(flip ? [...map].reverse() : map, pal);
     if (decal && !wrecked) {
       const g = s.getContext('2d');
-      for (const [x, y, c] of decalPixels(decal, color)) {
+      for (const [x, y, c] of decalPixels(decal, color, map)) {
         g.fillStyle = c;
         g.fillRect(x, y, 1, 1);
       }
@@ -1743,7 +1791,11 @@
     }
   }
 
-  const shopItems = () => (shopTab === 0 ? UPGRADES : COSMETICS);
+  const SHOP_TABS = ['UPGRADES', 'STYLE', 'BODIES'];
+  const shopItems = () => [UPGRADES, COSMETICS, BODIES][shopTab];
+  // The sedan is free and is what you drive until you pick another body.
+  const isOwned = (it) => it.price === 0 || owned.includes(it.id);
+  const isEquipped = (it) => (equipped[it.slot] || (it.slot === 'body' ? 'sedan' : null)) === it.id;
 
   function updateShop(dt) {
     scrollWorld(CRUISE * 0.5 * dt);
@@ -1751,7 +1803,12 @@
     const items = shopItems();
     if (pressed.has('gas')) { shopSel = (shopSel - 1 + items.length) % items.length; sfx.blip(); }
     if (pressed.has('brake')) { shopSel = (shopSel + 1) % items.length; sfx.blip(); }
-    if (pressed.has('left') || pressed.has('right')) { shopTab = 1 - shopTab; shopSel = 0; sfx.blip(); }
+    const tabStep = (pressed.has('right') ? 1 : 0) - (pressed.has('left') ? 1 : 0);
+    if (tabStep) {
+      shopTab = (shopTab + tabStep + SHOP_TABS.length) % SHOP_TABS.length;
+      shopSel = 0;
+      sfx.blip();
+    }
     if (pressed.has('pause') || pressed.has('ability')) { state = 'title'; sfx.blip(); return; }
     if (startPressed()) buySelected();
   }
@@ -1768,7 +1825,12 @@
       upgrades[it.id] = l + 1;
       say(it.name + ' LEVEL ' + (l + 1) + '!', '#57c062');
       sfx.unlock();
-    } else if (owned.includes(it.id)) {
+    } else if (it.slot === 'body' && isOwned(it)) {
+      // You always drive some body, so picking one just swaps to it.
+      equipped.body = it.id;
+      say('NOW DRIVING THE ' + it.name, '#ffffff');
+      sfx.blip();
+    } else if (isOwned(it)) {
       equipped[it.slot] = equipped[it.slot] === it.id ? null : it.id;
       say(equipped[it.slot] ? 'EQUIPPED' : 'TAKEN OFF', '#ffffff');
       sfx.blip();
@@ -2101,7 +2163,7 @@
     const wrecked = (state === 'crash' || state === 'over') && endReason === 'wreck';
     if (abilityOn('ghost')) ctx.globalAlpha = Math.floor(time * 12) % 2 ? 0.35 : 0.6;
     else if (hurtTimer > 0 && Math.floor(time * 20) % 2) ctx.globalAlpha = 0.3;
-    const spr = vehicleSprite('car', paint().color, undefined, wrecked, false, equipped.decal);
+    const spr = vehicleSprite('car', paint().color, undefined, wrecked, false, equipped.decal, equipped.body);
     const glow = cosmetic('glow');
     if (glow && !wrecked) drawGlow(glow, x, y, 1);
     const hgt = player.air > 0 ? Math.sin(Math.PI * (1 - player.air / player.airMax)) : 0;
@@ -2377,7 +2439,7 @@
 
     const paint = PAINTS[paintIdx];
     const locked = paint.need > best;
-    const spr = vehicleSprite('car', paint.color, undefined, false, false, equipped.decal);
+    const spr = vehicleSprite('car', paint.color, undefined, false, false, equipped.decal, equipped.body);
     if (cosmetic('glow') && !locked) drawGlow(cosmetic('glow'), W / 2 - 10, 78, 2);
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.fillRect(W / 2 - 8, 82, 20, 32);
@@ -2473,8 +2535,8 @@
     dim(0.72);
     drawText('SHOP', W / 2, 4, '#ffd34d', 2, 'center', '#5a3a00');
     drawText('CASH ' + cash, W / 2, 18, '#57c062', 1, 'center');
-    ['UPGRADES', 'STYLE'].forEach((t, i) => {
-      const cx = i ? 96 : 32;
+    SHOP_TABS.forEach((t, i) => {
+      const cx = 22 + i * 42;
       drawText(t, cx, 27, i === shopTab ? '#ffffff' : '#777777', 1, 'center');
       if (i === shopTab) {
         ctx.fillStyle = '#ffd34d';
@@ -2499,8 +2561,8 @@
         }
         if (l >= it.prices.length) { right = 'MAX'; rightColor = '#57c062'; }
         else { right = String(it.prices[l]); rightColor = cash >= it.prices[l] ? '#ffd34d' : '#aa5555'; }
-      } else if (equipped[it.slot] === it.id) { right = 'ON'; rightColor = '#57c062'; }
-      else if (owned.includes(it.id)) { right = 'OWNED'; rightColor = '#aaaaaa'; }
+      } else if (isEquipped(it)) { right = 'ON'; rightColor = '#57c062'; }
+      else if (isOwned(it)) { right = it.price === 0 ? 'FREE' : 'OWNED'; rightColor = '#aaaaaa'; }
       else { right = String(it.price); rightColor = cash >= it.price ? '#ffd34d' : '#aa5555'; }
       drawText(it.name, 7, y, '#ffffff');
       drawText(right, W - 2, y, rightColor, 1, 'right');
@@ -2511,8 +2573,8 @@
     else drawText(sel.desc, W / 2, 124, '#cfcfcf', 1, 'center');
 
     // Preview: your current look, trying on the selected style item.
-    const look = { decal: equipped.decal, glow: equipped.glow, trail: equipped.trail };
-    if (shopTab === 1) look[sel.slot] = sel.id;
+    const look = { decal: equipped.decal, glow: equipped.glow, trail: equipped.trail, body: equipped.body };
+    if (shopTab > 0) look[sel.slot] = sel.id;
     const px = W / 2 - 10, py = 136;
     const glow = COSMETICS.find((c) => c.id === look.glow);
     if (glow) drawGlow(glow, px, py, 2);
@@ -2525,7 +2587,7 @@
         ctx.fillRect(px + 8 + (look.trail === 'sparkle' ? rand(-4, 4) : 0), py + 33 + i * 2, 4, 2);
       }
     }
-    ctx.drawImage(vehicleSprite('car', paint().color, undefined, false, false, look.decal), px, py, 20, 32);
+    ctx.drawImage(vehicleSprite('car', paint().color, undefined, false, false, look.decal, look.body), px, py, 20, 32);
 
     drawText(isTouch ? 'GAS/BRK PICK  ARROWS: TAB' : 'UP/DOWN PICK  LEFT/RIGHT TAB', W / 2, 176, '#aaaaaa', 1, 'center');
     drawText(isTouch ? 'TAP: BUY   B: BACK' : 'ENTER: BUY/EQUIP   ESC: BACK', W / 2, 184, '#aaaaaa', 1, 'center');
