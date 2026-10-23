@@ -658,8 +658,7 @@
     ArrowRight: 'right', KeyD: 'right',
     ArrowUp: 'gas', KeyW: 'gas',
     ArrowDown: 'brake', KeyS: 'brake',
-    Enter: 'start',
-    Space: 'drift', ShiftLeft: 'drift', ShiftRight: 'drift',
+    Enter: 'start', Space: 'start',
     KeyP: 'pause', Escape: 'pause',
     KeyM: 'mute',
     KeyB: 'ability',
@@ -670,8 +669,7 @@
     keys.add(a);
   }
   function actUp(a) { keys.delete(a); }
-  // Space doubles as start on menus and drift while driving.
-  const startPressed = () => pressed.has('start') || pressed.has('drift');
+  const startPressed = () => pressed.has('start');
 
   addEventListener('keydown', (e) => {
     const a = KEYMAP[e.code];
@@ -732,6 +730,11 @@
   let wanted, heat, calm, copCool, copsShaken, copsWrecked, sirenTimer, sirenHigh, endReason;
   let abilityCd, abilityTime;
   let driftPts, driftCurve, skidTimer, driftTipShown, crashCause;
+  // Drifting starts with a quick double tap of left or right and lasts while
+  // that direction stays held.
+  const DOUBLE_TAP = 0.3;
+  let driftDir = 0;
+  const lastTap = { left: -1, right: -1 };
   let roadItems, nextPothole, nextRamp, nextNitro, rampTipShown;
   let heli, heliCool, bullets, hp, hurtTimer, rotorTimer, heliTipShown;
   let curves = [], curveEnd = 0;
@@ -796,6 +799,8 @@
     driftPts = 0;
     driftCurve = false;
     skidTimer = 0;
+    driftDir = 0;
+    lastTap.left = lastTap.right = -1;
     driftTipShown = false;
     crashCause = 'traffic';
     curves = [];
@@ -1825,7 +1830,13 @@
     const k = curvAt(dist);
     const dir = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0);
     const steer = (55 + Math.min(p.speed, MAX_SPEED) * 0.15) * (1 + 0.1 * lvl('tires'));
-    const drifting = keys.has('drift') && p.speed > 90 && !airborne;
+    for (const d of ['left', 'right']) {
+      if (!pressed.has(d)) continue;
+      if (time - lastTap[d] < DOUBLE_TAP) driftDir = d === 'left' ? -1 : 1;
+      lastTap[d] = time;
+    }
+    if (driftDir && !keys.has(driftDir < 0 ? 'left' : 'right')) driftDir = 0;
+    const drifting = driftDir !== 0 && p.speed > 90 && !airborne;
     if (airborne) {
       p.vx += (dir * steer * 0.6 - p.vx) * Math.min(1, 3 * dt);
     } else if (p.wobble > 0) {
@@ -1884,7 +1895,7 @@
         popup(cv.k > 0 ? 'CURVE AHEAD >>' : '<< CURVE AHEAD', W / 2, 46, '#ffd34d', 1.8);
         if (!driftTipShown) {
           driftTipShown = true;
-          popup(isTouch ? 'HOLD DFT TO DRIFT' : 'HOLD SPACE TO DRIFT', W / 2, 56, '#ff9de2', 2.2);
+          popup('DOUBLE-TAP + HOLD TO DRIFT', W / 2, 56, '#ff9de2', 2.2);
         }
         sfx.tone(520, 0.1, 'triangle', 0.08);
         sfx.tone(520, 0.1, 'triangle', 0.08, null, 0.15);
@@ -2411,7 +2422,7 @@
     if (Math.floor(time * 2) % 2 === 0) {
       drawText(isTouch ? 'TAP TO DRIVE' : 'PRESS ENTER TO DRIVE', W / 2, 157, '#ffd34d', 1, 'center');
     }
-    drawText('ARROWS/WASD DRIVE  SPACE DRIFT', W / 2, 167, '#ffffff', 1, 'center');
+    drawText('DOUBLE-TAP LEFT/RIGHT: DRIFT', W / 2, 167, '#ffffff', 1, 'center');
     drawText('OVER ' + POLICE_MPH + ' MPH = COPS!', W / 2, 175, '#6fa8ff', 1, 'center');
     drawText(isTouch ? 'BRK: SHOP   B: ABILITY' : 'DOWN: SHOP   B: ABILITY', W / 2, 183,
       Math.floor(time * 2) % 2 ? '#57c062' : '#aaaaaa', 1, 'center');

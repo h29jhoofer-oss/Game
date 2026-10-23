@@ -11,7 +11,7 @@ Open `index.html` in any modern browser. You don't need to build or install anyt
 | Action | Keys |
 | --- | --- |
 | Steer | ← → or A / D |
-| Drift | Space or Shift (hold) |
+| Drift | Double-tap ← / → or A / D, and keep holding |
 | Gas | ↑ or W |
 | Brake | ↓ or S |
 | Start / retry | Enter or Space |
@@ -19,7 +19,7 @@ Open `index.html` in any modern browser. You don't need to build or install anyt
 | Ability | B |
 | Mute | M |
 
-On phones and tablets, on-screen buttons appear (including **DFT** for drift), and you tap the screen to start.
+On phones and tablets, on-screen buttons appear (double-tap ◀ or ▶ to drift), and you tap the screen to start.
 
 ## The road
 
@@ -42,7 +42,7 @@ Messages stay out of the driving view. Announcements like **CURVE AHEAD** or **M
 
 ## Drifting
 
-- Hold **Space** (or Shift) while steering to drift. The car slides sideways much harder, shrugs off most of a curve's push, and bleeds a little speed.
+- **Double-tap** left or right (A / D, the arrow keys, or the ◀ ▶ buttons) and keep holding the second tap to drift that way. Let go to stop. The car slides sideways much harder, shrugs off most of a curve's push, and bleeds a little speed.
 - Drifting at speed builds drift points (shown under your car). Let go to bank them. Drifts through a curve score **x2**.
 
 ## How to score
