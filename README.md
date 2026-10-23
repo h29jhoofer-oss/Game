@@ -79,4 +79,26 @@ Every paint has a passive perk that is always on, and an active ability you trig
 | Black | 25,000 | **Shadow:** cops take twice as long to bust you | **Smoke:** blinds cops behind you for 4s |
 | Hot Pink | 40,000 | **Fabulous:** 1.5x all points | **Slow-Mo:** the world slows while you steer at full speed |
 
-Your best score and chosen paint are saved in your browser.
+## Shop
+
+Every point you score is also banked as **cash** at the end of the run. Press **Down** (or **BRK** on a phone) on the title screen to open the shop. Use Up/Down to pick, Left/Right to switch tabs, Enter to buy or equip, and Esc to go back.
+
+**Upgrades** (each level costs more):
+
+| Upgrade | Levels | Effect per level |
+| --- | --- | --- |
+| Armor | 3 | +1 HP against the chopper |
+| Engine | 3 | +8 MPH top speed |
+| Tires | 3 | Sharper steering and less push in curves |
+| Cooler | 3 | Your B ability recharges 15% faster |
+| Suspension | 2 | Potholes cost less speed and knock you around less |
+| Radar Jammer | 2 | Cops need 25% longer beside you to bust you |
+| Springs | 2 | 20% longer jumps off ramps |
+
+**Style** (cosmetic only; buy once, then equip or take off any time). You can preview anything before you buy it:
+
+- **Decals:** racing stripes, checker roof, flame decals
+- **Trails:** fire, sparkle, rainbow
+- **Neon underglow:** blue, pink, green
+
+Your best score, chosen paint, cash, upgrades and style are saved in your browser.

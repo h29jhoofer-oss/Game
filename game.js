@@ -77,6 +77,27 @@
       active: 'slowmo', activeName: 'SLOW-MO', activeText: 'TIME CRAWLS AROUND YOU', cooldown: 20, duration: 4,
     },
   ];
+  // Shop. Cash comes from your score at the end of every run.
+  const UPGRADES = [
+    { id: 'armor', name: 'ARMOR', desc: '+1 HP AGAINST THE CHOPPER', prices: [2000, 5000, 10000] },
+    { id: 'engine', name: 'ENGINE', desc: '+8 MPH TOP SPEED', prices: [1500, 4000, 9000] },
+    { id: 'tires', name: 'TIRES', desc: 'MORE GRIP IN TURNS AND CURVES', prices: [1500, 4000, 8000] },
+    { id: 'cooler', name: 'COOLER', desc: 'ABILITY RECHARGES FASTER', prices: [2500, 6000, 12000] },
+    { id: 'suspension', name: 'SUSPENSION', desc: 'POTHOLES HURT LESS', prices: [2000, 6000] },
+    { id: 'jammer', name: 'RADAR JAMMER', desc: 'COPS TAKE LONGER TO BUST YOU', prices: [3000, 8000] },
+    { id: 'springs', name: 'SPRINGS', desc: 'LONGER JUMPS OFF RAMPS', prices: [2000, 5000] },
+  ];
+  const COSMETICS = [
+    { id: 'stripes', slot: 'decal', name: 'RACING STRIPES', price: 1000, desc: 'TWO STRIPES NOSE TO TAIL' },
+    { id: 'checker', slot: 'decal', name: 'CHECKER ROOF', price: 2000, desc: 'A CHECKERED FLAG ON TOP' },
+    { id: 'flames', slot: 'decal', name: 'FLAME DECALS', price: 3000, desc: 'HOT RODS GO FASTER. MAYBE.' },
+    { id: 'fire', slot: 'trail', name: 'FIRE TRAIL', price: 2500, desc: 'LEAVE FLAMES IN YOUR WAKE' },
+    { id: 'sparkle', slot: 'trail', name: 'SPARKLE TRAIL', price: 4000, desc: 'A SHOWER OF SPARKS' },
+    { id: 'rainbow', slot: 'trail', name: 'RAINBOW TRAIL', price: 6000, desc: 'TASTE THE RAINBOW' },
+    { id: 'neon-blue', slot: 'glow', name: 'BLUE NEON', price: 3000, rgb: '60,140,255', desc: 'UNDERGLOW. VERY STREET.' },
+    { id: 'neon-pink', slot: 'glow', name: 'PINK NEON', price: 3000, rgb: '255,80,200', desc: 'UNDERGLOW. VERY STREET.' },
+    { id: 'neon-green', slot: 'glow', name: 'GREEN NEON', price: 3000, rgb: '80,255,120', desc: 'UNDERGLOW. VERY STREET.' },
+  ];
   const TRAFFIC_COLORS = [
     { color: '#ececec', w: 25 }, // white
     { color: '#8c9098', w: 25 }, // grey
@@ -388,8 +409,27 @@
   }
 
   const spriteCache = new Map();
-  function vehicleSprite(kind, color, accent = TRAILER_COLORS[0], wrecked = false, flip = false) {
-    const key = kind + color + accent + wrecked + flip;
+  // Pixels a decal paints on top of the car body, as [x, y, color].
+  function decalPixels(id, body) {
+    const px = [];
+    const [r, g, b] = hexToRgb(body);
+    const light = (r * 0.3 + g * 0.59 + b * 0.11) / 255 > 0.6;
+    if (id === 'stripes') {
+      const c = light ? '#1e2a6e' : '#f2f2f2';
+      CAR.forEach((row, y) => { for (const x of [4, 5]) if ('BHS'.includes(row[x])) px.push([x, y, c]); });
+    } else if (id === 'checker') {
+      for (let y = 6; y <= 9; y++) for (let x = 2; x <= 7; x++) px.push([x, y, (x + y) % 2 ? '#111111' : '#f2f2f2']);
+    } else if (id === 'flames') {
+      const map = { 1: '...b..b...', 2: '..baabab..', 3: '..aaaaaa..', 11: '.a......a.', 12: '.ab....ba.', 13: '.a......a.' };
+      for (const y in map) {
+        [...map[y]].forEach((ch, x) => { if (ch !== '.') px.push([x, +y, ch === 'a' ? '#ff6a00' : '#ffd000']); });
+      }
+    }
+    return px;
+  }
+
+  function vehicleSprite(kind, color, accent = TRAILER_COLORS[0], wrecked = false, flip = false, decal = null) {
+    const key = kind + color + accent + wrecked + flip + decal;
     let s = spriteCache.get(key);
     if (s) return s;
     const body = wrecked ? mix(color, '#000000', 0.55) : color;
@@ -407,6 +447,13 @@
     };
     const map = kind === 'truck' ? TRUCK : CAR;
     s = buildSprite(flip ? [...map].reverse() : map, pal);
+    if (decal && !wrecked) {
+      const g = s.getContext('2d');
+      for (const [x, y, c] of decalPixels(decal, color)) {
+        g.fillStyle = c;
+        g.fillRect(x, y, 1, 1);
+      }
+    }
     spriteCache.set(key, s);
     return s;
   }
@@ -690,13 +737,30 @@
   let decor = [];
   const decorNext = { left: 0, right: 0 };
 
+  let cash = store.get('cash', 0);
+  const upgrades = store.get('upgrades', {});
+  const owned = store.get('owned', []);
+  const equipped = store.get('equipped', {});
+  let shopTab = 0, shopSel = 0, cashEarned = 0;
+  let shopMsg = null; // { text, color, life } shown in place of the item description
+  const lvl = (id) => upgrades[id] || 0;
+  const cosmetic = (slot) => COSMETICS.find((c) => c.id === equipped[slot]);
+  const maxHp = () => MAX_HP + lvl('armor');
+  const cooldownOf = (a) => a.cooldown * (1 - 0.15 * lvl('cooler'));
+  function saveShop() {
+    store.set('cash', cash);
+    store.set('upgrades', upgrades);
+    store.set('owned', owned);
+    store.set('equipped', equipped);
+  }
+
   // Paint perks.
   const paint = () => PAINTS[paintIdx];
   const hasPassive = (id) => paint().passive === id;
   const abilityOn = (id) => paint().active === id && abilityTime > 0;
   const policeSpeed = () => (hasPassive('blend') ? 110 : POLICE_MPH) / MPH;
-  const maxSpeed = () => MAX_SPEED + (hasPassive('hotrod') ? 25 : 0);
-  const pullTime = () => (hasPassive('shadow') ? 3 : 1.5);
+  const maxSpeed = () => MAX_SPEED + (hasPassive('hotrod') ? 25 : 0) + lvl('engine') * 13;
+  const pullTime = () => (hasPassive('shadow') ? 3 : 1.5) * (1 + 0.25 * lvl('jammer'));
   const wantedStep = () => (hasPassive('coolhead') ? 9 : WANTED_STEP);
   function addScore(n) {
     const pts = n * (hasPassive('fab') ? 1.5 : 1);
@@ -709,7 +773,7 @@
     heli = null;
     heliCool = 0;
     bullets = [];
-    hp = MAX_HP;
+    hp = maxHp();
     hurtTimer = 0;
     rotorTimer = 0;
     heliTipShown = false;
@@ -1077,8 +1141,8 @@
         heat = 0;
         calm = 0;
         popup("HEAT'S OFF", W / 2, 70, '#57c062', 1.4);
-        if (hp < MAX_HP) {
-          hp = MAX_HP;
+        if (hp < maxHp()) {
+          hp = maxHp();
           popup('CAR PATCHED UP', W / 2, 80, '#57c062', 1.4);
         }
       }
@@ -1353,9 +1417,9 @@
   function hitPothole(it) {
     const p = player;
     it.used = true;
-    p.speed = Math.max(MIN_SPEED, p.speed * 0.65);
+    p.speed = Math.max(MIN_SPEED, p.speed * (0.65 + 0.12 * lvl('suspension')));
     p.vx += (Math.random() < 0.5 ? -1 : 1) * 90;
-    p.wobble = 0.5;
+    p.wobble = 0.5 * (1 - 0.5 * lvl('suspension'));
     shake = Math.max(shake, 4);
     combo = 0;
     comboTimer = 0;
@@ -1372,7 +1436,7 @@
   function launch(ramp) {
     const p = player;
     ramp.used = true;
-    p.airMax = p.air = 0.8 + p.speed / 300;
+    p.airMax = p.air = (0.8 + p.speed / 300) * (1 + 0.2 * lvl('springs'));
     p.wobble = 0;
     popup('AIRBORNE!', p.x + CAR_W / 2, PLAYER_Y - 12, '#f2c200', 0.9);
     sfx.tone(200, 0.5, 'square', 0.09, 700);
@@ -1543,7 +1607,7 @@
   // ---------------------------------------------------------------------------
   function activateAbility() {
     const a = paint();
-    abilityCd = a.cooldown;
+    abilityCd = cooldownOf(a);
     abilityTime = a.duration;
     popup(a.activeName + '!', player.x + CAR_W / 2, PLAYER_Y - 16, '#ffffff', 1);
     const cx = player.x + CAR_W / 2, cy = PLAYER_Y + CAR_H / 2;
@@ -1609,6 +1673,9 @@
       store.set('best', best);
     }
     newUnlocks = PAINTS.filter((p) => p.need > oldBest && p.need <= best);
+    cashEarned = final;
+    cash += final;
+    saveShop();
     if (newUnlocks.length) sfx.unlock();
     state = 'over';
     overTimer = 0;
@@ -1622,10 +1689,56 @@
     const n = PAINTS.length;
     if (pressed.has('left')) { paintIdx = (paintIdx - 1 + n) % n; sfx.blip(); }
     if (pressed.has('right')) { paintIdx = (paintIdx + 1) % n; sfx.blip(); }
+    if (pressed.has('brake')) {
+      state = 'shop';
+      shopSel = 0;
+      sfx.blip();
+      return;
+    }
     if (startPressed()) {
       if (PAINTS[paintIdx].need <= best) startGame();
       else { sfx.buzz(); shake = 2; }
     }
+  }
+
+  const shopItems = () => (shopTab === 0 ? UPGRADES : COSMETICS);
+
+  function updateShop(dt) {
+    scrollWorld(CRUISE * 0.5 * dt);
+    if (shopMsg && (shopMsg.life -= dt) <= 0) shopMsg = null;
+    const items = shopItems();
+    if (pressed.has('gas')) { shopSel = (shopSel - 1 + items.length) % items.length; sfx.blip(); }
+    if (pressed.has('brake')) { shopSel = (shopSel + 1) % items.length; sfx.blip(); }
+    if (pressed.has('left') || pressed.has('right')) { shopTab = 1 - shopTab; shopSel = 0; sfx.blip(); }
+    if (pressed.has('pause') || pressed.has('ability')) { state = 'title'; sfx.blip(); return; }
+    if (startPressed()) buySelected();
+  }
+
+  function buySelected() {
+    const it = shopItems()[shopSel];
+    const say = (text, color) => { shopMsg = { text, color, life: 1.4 }; };
+    if (shopTab === 0) {
+      const l = lvl(it.id);
+      if (l >= it.prices.length) { say('ALREADY MAXED', '#aaaaaa'); sfx.buzz(); return; }
+      const price = it.prices[l];
+      if (cash < price) { say('NEED ' + (price - cash) + ' MORE CASH', '#ff4d4d'); sfx.buzz(); return; }
+      cash -= price;
+      upgrades[it.id] = l + 1;
+      say(it.name + ' LEVEL ' + (l + 1) + '!', '#57c062');
+      sfx.unlock();
+    } else if (owned.includes(it.id)) {
+      equipped[it.slot] = equipped[it.slot] === it.id ? null : it.id;
+      say(equipped[it.slot] ? 'EQUIPPED' : 'TAKEN OFF', '#ffffff');
+      sfx.blip();
+    } else {
+      if (cash < it.price) { say('NEED ' + (it.price - cash) + ' MORE CASH', '#ff4d4d'); sfx.buzz(); return; }
+      cash -= it.price;
+      owned.push(it.id);
+      equipped[it.slot] = it.id;
+      say('BOUGHT ' + it.name + '!', '#57c062');
+      sfx.unlock();
+    }
+    saveShop();
   }
 
   function updatePlay(dt) {
@@ -1673,7 +1786,7 @@
     ensureCurves(dist + 600);
     const k = curvAt(dist);
     const dir = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0);
-    const steer = 55 + Math.min(p.speed, MAX_SPEED) * 0.15;
+    const steer = (55 + Math.min(p.speed, MAX_SPEED) * 0.15) * (1 + 0.1 * lvl('tires'));
     const drifting = keys.has('drift') && p.speed > 90 && !airborne;
     if (airborne) {
       p.vx += (dir * steer * 0.6 - p.vx) * Math.min(1, 3 * dt);
@@ -1689,7 +1802,7 @@
       p.vx += (dir * steer - p.vx) * Math.min(1, 12 * dt);
       p.angle -= p.angle * Math.min(1, 10 * dt);
     }
-    const push = airborne ? 0 : k * p.speed * p.speed * 0.55 * (drifting ? 0.35 : 1);
+    const push = airborne ? 0 : k * p.speed * p.speed * 0.55 * (drifting ? 0.35 : 1) * (1 - 0.1 * lvl('tires'));
     const lateral = p.vx - push;
     const minX = ROAD_X - 8, maxX = ROAD_R + 8 - CAR_W;
     p.x += lateral * dt;
@@ -1740,6 +1853,19 @@
       }
     }
 
+    const trail = cosmetic('trail');
+    if (trail) {
+      const rx = p.x + CAR_W / 2, ry = PLAYER_Y + CAR_H;
+      if (trail.id === 'fire') {
+        particle(rx + rand(-3, 3), ry, rand(-8, 8), rand(20, 45), 0.35, pick(['#fff3a0', '#ffb000', '#ff6a00', '#d02000']), randInt(1, 2), true);
+      } else if (trail.id === 'rainbow') {
+        const c = 'hsl(' + Math.floor((time * 300) % 360) + ',100%,60%)';
+        particle(p.x + 2, ry, 0, 0, 0.5, c, 2, true);
+        particle(p.x + 6, ry, 0, 0, 0.5, c, 2, true);
+      } else if (Math.random() < 0.7) {
+        particle(rx + rand(-5, 5), ry, rand(-30, 30), rand(-10, 30), 0.4, pick(['#ffffff', '#fff3a0', '#9fd0ff']), 1, true);
+      }
+    }
     if (p.gas && Math.random() < 0.5) {
       particle(p.x + (Math.random() < 0.5 ? 2 : 7), PLAYER_Y + CAR_H, rand(-4, 4), 15, 0.35,
         pick(['#9a9a9a', '#bdbdbd']), 1, true);
@@ -1862,6 +1988,7 @@
 
     computeShifts();
     if (state === 'title') updateTitle(dt);
+    else if (state === 'shop') updateShop(dt);
     else if (state === 'play') {
       if (pressed.has('pause')) {
         state = 'paused';
@@ -1907,12 +2034,24 @@
     }
   }
 
+  // Neon underglow: a soft outer halo and a brighter inner pool, gently pulsing.
+  function drawGlow(glow, x, y, scale) {
+    const a = 0.3 + 0.15 * Math.sin(time * 6);
+    ctx.fillStyle = 'rgba(' + glow.rgb + ',' + (a * 0.45).toFixed(2) + ')';
+    ctx.fillRect(x - 3 * scale, y + scale, (CAR_W + 6) * scale, (CAR_H - 2) * scale);
+    ctx.fillRect(x - scale, y - 2 * scale, (CAR_W + 2) * scale, (CAR_H + 4) * scale);
+    ctx.fillStyle = 'rgba(' + glow.rgb + ',' + a.toFixed(2) + ')';
+    ctx.fillRect(x - scale, y, (CAR_W + 2) * scale, CAR_H * scale);
+  }
+
   function drawPlayer() {
     const x = Math.round(player.x), y = PLAYER_Y;
     const wrecked = (state === 'crash' || state === 'over') && endReason === 'wreck';
     if (abilityOn('ghost')) ctx.globalAlpha = Math.floor(time * 12) % 2 ? 0.35 : 0.6;
     else if (hurtTimer > 0 && Math.floor(time * 20) % 2) ctx.globalAlpha = 0.3;
-    const spr = vehicleSprite('car', paint().color, undefined, wrecked);
+    const spr = vehicleSprite('car', paint().color, undefined, wrecked, false, equipped.decal);
+    const glow = cosmetic('glow');
+    if (glow && !wrecked) drawGlow(glow, x, y, 1);
     const hgt = player.air > 0 ? Math.sin(Math.PI * (1 - player.air / player.airMax)) : 0;
     if (hgt > 0) {
       // In the air: the shadow falls away and the car looms bigger.
@@ -1972,7 +2111,8 @@
       const spr = decorSprites[d.kind];
       ctx.drawImage(spr, sx(d.x, d.y + spr.height / 2), Math.round(d.y));
     }
-    if (state !== 'title') {
+    const inMenu = state === 'title' || state === 'shop';
+    if (!inMenu) {
       for (const it of roadItems) {
         ctx.drawImage(it.kind === 'ramp' ? rampSprite : potholeSprite, sx(it.x, it.y + it.h / 2), Math.round(it.y));
       }
@@ -2008,7 +2148,7 @@
       ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
     }
     ctx.globalAlpha = 1;
-    if (state !== 'title') {
+    if (!inMenu) {
       for (const b of bullets) {
         if (b.delay > 0) continue;
         ctx.fillStyle = 'rgba(255,200,60,0.5)';
@@ -2061,11 +2201,11 @@
 
     // Active ability: name plus a cooldown bar (yellow while it's running).
     const a = paint();
-    if (heli || hp < MAX_HP) {
+    if (heli || hp < maxHp()) {
       // Armor: one block per hit you can still take.
-      const bx = W - 2 - MAX_HP * 5 + 1;
+      const bx = W - 2 - maxHp() * 5 + 1;
       drawText('HP', bx - 2, 20, hp <= 1 && lightsOn() ? '#ff4d4d' : '#ffffff', 1, 'right');
-      for (let i = 0; i < MAX_HP; i++) {
+      for (let i = 0; i < maxHp(); i++) {
         ctx.fillStyle = '#000';
         ctx.fillRect(bx + i * 5, 20, 4, 5);
         ctx.fillStyle = i < hp ? (hp <= 2 ? '#ff4d4d' : '#57c062') : '#3a3a3a';
@@ -2080,7 +2220,7 @@
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(2, 18, barW, 2);
     ctx.fillStyle = running ? '#ffd34d' : ready ? '#57c062' : '#6a6a6a';
-    const frac = running ? abilityTime / a.duration : ready ? 1 : 1 - abilityCd / a.cooldown;
+    const frac = running ? abilityTime / a.duration : ready ? 1 : 1 - abilityCd / cooldownOf(a);
     ctx.fillRect(2, 18, Math.round(barW * frac), 2);
     if (combo > 1 && comboTimer > 0) drawText('COMBO X' + combo, 2, 23, '#ffd34d');
 
@@ -2164,11 +2304,12 @@
     drawText('RECKLESS', W / 2, 14, '#ff4d4d', 3, 'center', '#5a0000');
     drawText('DRIVER', W / 2, 33, '#ffffff', 3, 'center', '#333333');
     drawText('WEAVE PAST THE TRAFFIC', W / 2, 54, '#ffd34d', 1, 'center');
-    drawText('BEST ' + best, W / 2, 64, '#ffffff', 1, 'center');
+    drawText('BEST ' + best + '   CASH ' + cash, W / 2, 64, '#ffffff', 1, 'center');
 
     const paint = PAINTS[paintIdx];
     const locked = paint.need > best;
-    const spr = vehicleSprite('car', paint.color);
+    const spr = vehicleSprite('car', paint.color, undefined, false, false, equipped.decal);
+    if (cosmetic('glow') && !locked) drawGlow(cosmetic('glow'), W / 2 - 10, 78, 2);
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.fillRect(W / 2 - 8, 82, 20, 32);
     ctx.drawImage(spr, W / 2 - 10, 78, 20, 32);
@@ -2214,7 +2355,8 @@
     }
     drawText('ARROWS/WASD DRIVE  SPACE DRIFT', W / 2, 167, '#ffffff', 1, 'center');
     drawText('OVER ' + POLICE_MPH + ' MPH = COPS!', W / 2, 175, '#6fa8ff', 1, 'center');
-    drawText('B: ABILITY  P: PAUSE  M: MUTE', W / 2, 183, '#aaaaaa', 1, 'center');
+    drawText(isTouch ? 'BRK: SHOP   B: ABILITY' : 'DOWN: SHOP   B: ABILITY', W / 2, 183,
+      Math.floor(time * 2) % 2 ? '#57c062' : '#aaaaaa', 1, 'center');
   }
 
   function dimRect(x, y, w, h) {
@@ -2249,12 +2391,75 @@
       drawText('NEW PAINT UNLOCKED!', W / 2, 102, '#57c062', 1, 'center');
       newUnlocks.forEach((p, i) => drawText(p.name, W / 2, 111 + i * 8, p.color, 1, 'center'));
     }
+    drawText('+' + cashEarned + ' CASH', W / 2, 136, '#57c062', 1, 'center');
     if (overTimer >= 0.7) {
       if (Math.floor(time * 2) % 2 === 0) {
         drawText(isTouch ? 'TAP TO RETRY' : 'ENTER: RETRY', W / 2, 150, '#ffd34d', 1, 'center');
       }
-      drawText(isTouch ? 'ARROWS: GARAGE' : 'ESC: GARAGE', W / 2, 160, '#ffffff', 1, 'center');
+      drawText(isTouch ? 'ARROWS: GARAGE + SHOP' : 'ESC: GARAGE + SHOP', W / 2, 160, '#ffffff', 1, 'center');
     }
+  }
+
+  function drawShop() {
+    dim(0.72);
+    drawText('SHOP', W / 2, 4, '#ffd34d', 2, 'center', '#5a3a00');
+    drawText('CASH ' + cash, W / 2, 18, '#57c062', 1, 'center');
+    ['UPGRADES', 'STYLE'].forEach((t, i) => {
+      const cx = i ? 96 : 32;
+      drawText(t, cx, 27, i === shopTab ? '#ffffff' : '#777777', 1, 'center');
+      if (i === shopTab) {
+        ctx.fillStyle = '#ffd34d';
+        ctx.fillRect(cx - textWidth(t) / 2, 33, textWidth(t), 1);
+      }
+    });
+
+    const items = shopItems();
+    items.forEach((it, i) => {
+      const y = 38 + i * 9;
+      if (i === shopSel) {
+        ctx.fillStyle = 'rgba(255,255,255,0.14)';
+        ctx.fillRect(1, y - 2, W - 2, 9);
+        drawText('>', 2, y, '#ffd34d');
+      }
+      let right, rightColor;
+      if (shopTab === 0) {
+        const l = lvl(it.id);
+        for (let k = 0; k < it.prices.length; k++) {
+          ctx.fillStyle = k < l ? '#57c062' : '#444444';
+          ctx.fillRect(62 + k * 4, y + 1, 3, 3);
+        }
+        if (l >= it.prices.length) { right = 'MAX'; rightColor = '#57c062'; }
+        else { right = String(it.prices[l]); rightColor = cash >= it.prices[l] ? '#ffd34d' : '#aa5555'; }
+      } else if (equipped[it.slot] === it.id) { right = 'ON'; rightColor = '#57c062'; }
+      else if (owned.includes(it.id)) { right = 'OWNED'; rightColor = '#aaaaaa'; }
+      else { right = String(it.price); rightColor = cash >= it.price ? '#ffd34d' : '#aa5555'; }
+      drawText(it.name, 7, y, '#ffffff');
+      drawText(right, W - 2, y, rightColor, 1, 'right');
+    });
+
+    const sel = items[shopSel];
+    if (shopMsg) drawText(shopMsg.text, W / 2, 124, shopMsg.color, 1, 'center');
+    else drawText(sel.desc, W / 2, 124, '#cfcfcf', 1, 'center');
+
+    // Preview: your current look, trying on the selected style item.
+    const look = { decal: equipped.decal, glow: equipped.glow, trail: equipped.trail };
+    if (shopTab === 1) look[sel.slot] = sel.id;
+    const px = W / 2 - 10, py = 136;
+    const glow = COSMETICS.find((c) => c.id === look.glow);
+    if (glow) drawGlow(glow, px, py, 2);
+    if (look.trail) {
+      for (let i = 0; i < 6; i++) {
+        const c = look.trail === 'rainbow' ? 'hsl(' + Math.floor((time * 300 + i * 40) % 360) + ',100%,60%)'
+          : look.trail === 'fire' ? ['#fff3a0', '#ffb000', '#ff6a00', '#d02000', '#d02000', '#555555'][i]
+            : (Math.floor(time * 10) + i) % 2 ? '#ffffff' : '#9fd0ff';
+        ctx.fillStyle = c;
+        ctx.fillRect(px + 8 + (look.trail === 'sparkle' ? rand(-4, 4) : 0), py + 33 + i * 2, 4, 2);
+      }
+    }
+    ctx.drawImage(vehicleSprite('car', paint().color, undefined, false, false, look.decal), px, py, 20, 32);
+
+    drawText(isTouch ? 'GAS/BRK PICK  ARROWS: TAB' : 'UP/DOWN PICK  LEFT/RIGHT TAB', W / 2, 176, '#aaaaaa', 1, 'center');
+    drawText(isTouch ? 'TAP: BUY   B: BACK' : 'ENTER: BUY/EQUIP   ESC: BACK', W / 2, 184, '#aaaaaa', 1, 'center');
   }
 
   function drawPaused() {
@@ -2274,7 +2479,10 @@
     ctx.restore();
 
     if (state === 'title') drawTitle();
-    else {
+    else if (state === 'shop') {
+      drawShop();
+      drawPopups();
+    } else {
       drawPopups();
       drawHUD();
       if (state === 'paused') drawPaused();
