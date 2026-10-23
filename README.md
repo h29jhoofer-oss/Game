@@ -1,6 +1,6 @@
 # Reckless Driver
 
-A pixelated, top-down arcade game where you're a reckless driver weaving through traffic in a highway construction zone to get ahead of the other cars. Your car starts out **white**. Beat high scores to unlock new paint colors.
+A pixelated, top-down arcade game where you're a reckless driver weaving through two-way traffic on a winding construction-zone road, drifting through curves and dodging the cops. Your car starts out **white**. Beat high scores to unlock new paint colors.
 
 ## Play
 
@@ -11,6 +11,7 @@ Open `index.html` in any modern browser. You don't need to build or install anyt
 | Action | Keys |
 | --- | --- |
 | Steer | ← → or A / D |
+| Drift | Space or Shift (hold) |
 | Gas | ↑ or W |
 | Brake | ↓ or S |
 | Start / retry | Enter or Space |
@@ -18,12 +19,23 @@ Open `index.html` in any modern browser. You don't need to build or install anyt
 | Ability | B |
 | Mute | M |
 
-On phones and tablets, on-screen buttons appear, and you tap the screen to start.
+On phones and tablets, on-screen buttons appear (including **DFT** for drift), and you tap the screen to start.
+
+## The road
+
+- The right two lanes go your way. The left two lanes, past the double yellow line, are **oncoming traffic** coming straight at you.
+- Every so often the road **curves**. A warning pops up just before each one, and chevrons (`>>>` / `<<<`) show which way to steer while you're in it.
+- A curve pushes your car toward the outside, harder the faster you go. At high speed, normal steering can't hold the line. If the curve throws you into the barriers, you're wrecked.
+
+## Drifting
+
+- Hold **Space** (or Shift) while steering to drift. The car slides sideways much harder, shrugs off most of a curve's push, and bleeds a little speed.
+- Drifting at speed builds drift points (shown under your car). Let go to bank them. Drifts through a curve score **x2**.
 
 ## How to score
 
 - You earn points for distance. Above 120 MPH you're driving **RECKLESS** and earn double points.
-- Squeeze past a car with only a few pixels to spare to get a **CLOSE!** bonus. Close calls in a row build a combo.
+- Squeeze past a car with only a few pixels to spare to get a **CLOSE!** bonus. Close calls in a row build a combo. Close calls with oncoming cars (**HEAD-ON!**) are worth double.
 - Traffic gets heavier the farther you go, and cars signal before they change lanes. Watch for the blinkers!
 - Driving on the grass slows you down.
 - One crash and you're wrecked.

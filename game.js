@@ -17,8 +17,12 @@
   const POLICE_MPH = 100, POLICE_SPEED = POLICE_MPH / MPH;
   const MAX_COPS = 4, MAX_WANTED = 5, WANTED_STEP = 6;
   const COP_ESCAPE_Y = H + 140;
+  const ONCOMING_LANES = 2; // lanes 0-1 drive toward you, lanes 2-3 go your way
+  const PAD = 48; // extra road tile width on each side so curves never show an edge
+  const SHIFT_OFF = 60;
 
   const laneX = (lane, w = CAR_W) => ROAD_X + LANE_W * lane + (LANE_W - w) / 2;
+  const laneDir = (lane) => (lane < ONCOMING_LANES ? -1 : 1);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const rand = (a, b) => a + Math.random() * (b - a);
   const randInt = (a, b) => Math.floor(rand(a, b + 1));
@@ -341,8 +345,8 @@
   }
 
   const spriteCache = new Map();
-  function vehicleSprite(kind, color, accent = TRAILER_COLORS[0], wrecked = false) {
-    const key = kind + color + accent + wrecked;
+  function vehicleSprite(kind, color, accent = TRAILER_COLORS[0], wrecked = false, flip = false) {
+    const key = kind + color + accent + wrecked + flip;
     let s = spriteCache.get(key);
     if (s) return s;
     const body = wrecked ? mix(color, '#000000', 0.55) : color;
@@ -358,7 +362,8 @@
       y: wrecked ? '#555555' : '#fff3a0',
       r: wrecked ? '#440000' : '#d01818',
     };
-    s = buildSprite(kind === 'truck' ? TRUCK : CAR, pal);
+    const map = kind === 'truck' ? TRUCK : CAR;
+    s = buildSprite(flip ? [...map].reverse() : map, pal);
     spriteCache.set(key, s);
     return s;
   }
@@ -376,36 +381,45 @@
   // Every pattern period divides TILE_H so the tile loops seamlessly.
   const roadTile = (() => {
     const c = document.createElement('canvas');
-    c.width = W;
+    c.width = W + PAD * 2;
     c.height = TILE_H;
     const g = c.getContext('2d');
+    const rx = ROAD_X + PAD, rr = ROAD_R + PAD;
     for (let y = 0; y < TILE_H; y++) {
       g.fillStyle = Math.floor(y / 12) % 2 ? '#7d6b4f' : '#776549';
-      g.fillRect(0, y, W, 1);
+      g.fillRect(0, y, c.width, 1);
     }
-    for (let i = 0; i < 320; i++) {
+    for (let i = 0; i < 520; i++) {
       const left = Math.random() < 0.5;
-      const x = left ? randInt(0, ROAD_X - 4) : randInt(ROAD_R + 3, W - 1);
+      const x = left ? randInt(0, rx - 4) : randInt(rr + 3, c.width - 1);
       g.fillStyle = pick(['#6a5a40', '#8f7d5f', '#9a9a90', '#5f5038']);
       g.fillRect(x, randInt(0, TILE_H - 1), 1, 1);
     }
     for (let y = 0; y < TILE_H; y += 6) {
       g.fillStyle = (y / 6) % 2 ? '#eeeeee' : '#f07a1a';
-      g.fillRect(ROAD_X - 3, y, 2, 6);
-      g.fillRect(ROAD_R + 1, y, 2, 6);
+      g.fillRect(rx - 3, y, 2, 6);
+      g.fillRect(rr + 1, y, 2, 6);
     }
     g.fillStyle = '#45454f';
-    g.fillRect(ROAD_X - 1, 0, ROAD_W + 2, TILE_H);
+    g.fillRect(rx - 1, 0, ROAD_W + 2, TILE_H);
     for (let i = 0; i < 500; i++) {
       g.fillStyle = Math.random() < 0.5 ? '#3d3d46' : '#50505a';
-      g.fillRect(randInt(ROAD_X - 1, ROAD_R), randInt(0, TILE_H - 1), 1, 1);
+      g.fillRect(randInt(rx - 1, rr), randInt(0, TILE_H - 1), 1, 1);
     }
     g.fillStyle = '#e8e8e8';
-    g.fillRect(ROAD_X + 1, 0, 1, TILE_H);
-    g.fillRect(ROAD_R - 2, 0, 1, TILE_H);
-    g.fillStyle = '#dcdcdc';
+    g.fillRect(rx + 1, 0, 1, TILE_H);
+    g.fillRect(rr - 2, 0, 1, TILE_H);
     for (let lane = 1; lane < LANES; lane++) {
-      for (let y = 0; y < TILE_H; y += 20) g.fillRect(ROAD_X + LANE_W * lane - 1, y, 2, 10);
+      const x = rx + LANE_W * lane;
+      if (lane === ONCOMING_LANES) {
+        // Double yellow line between the two directions.
+        g.fillStyle = '#f0c419';
+        g.fillRect(x - 2, 0, 1, TILE_H);
+        g.fillRect(x + 1, 0, 1, TILE_H);
+      } else {
+        g.fillStyle = '#dcdcdc';
+        for (let y = 0; y < TILE_H; y += 20) g.fillRect(x - 1, y, 2, 10);
+      }
     }
     return c;
   })();
@@ -543,7 +557,8 @@
     ArrowRight: 'right', KeyD: 'right',
     ArrowUp: 'gas', KeyW: 'gas',
     ArrowDown: 'brake', KeyS: 'brake',
-    Enter: 'start', Space: 'start',
+    Enter: 'start',
+    Space: 'drift', ShiftLeft: 'drift', ShiftRight: 'drift',
     KeyP: 'pause', Escape: 'pause',
     KeyM: 'mute',
     KeyB: 'ability',
@@ -554,6 +569,8 @@
     keys.add(a);
   }
   function actUp(a) { keys.delete(a); }
+  // Space doubles as start on menus and drift while driving.
+  const startPressed = () => pressed.has('start') || pressed.has('drift');
 
   addEventListener('keydown', (e) => {
     const a = KEYMAP[e.code];
@@ -613,6 +630,9 @@
   let score, dist, spawnTimer, combo, comboTimer, shake, level, crashTimer, overTimer;
   let wanted, heat, calm, copCool, copsShaken, copsWrecked, sirenTimer, sirenHigh, endReason;
   let abilityCd, abilityTime;
+  let driftPts, driftCurve, skidTimer, driftTipShown, crashCause;
+  let curves = [], curveEnd = 0;
+  const shiftRows = new Float32Array(H + SHIFT_OFF * 2);
   let newUnlocks = [], isNewBest = false;
   let roadScroll = 0, time = 0;
   let decor = [];
@@ -633,7 +653,7 @@
   }
 
   function reset() {
-    player = { x: laneX(1), vx: 0, speed: CRUISE, braking: false, gas: false };
+    player = { x: laneX(2), vx: 0, speed: CRUISE, braking: false, gas: false, angle: 0 };
     traffic = [];
     cops = [];
     copWrecks = [];
@@ -641,6 +661,13 @@
     copsWrecked = 0;
     abilityCd = 0;
     abilityTime = 0;
+    driftPts = 0;
+    driftCurve = false;
+    skidTimer = 0;
+    driftTipShown = false;
+    crashCause = 'traffic';
+    curves = [];
+    curveEnd = 1400;
     wanted = 0;
     heat = 0;
     calm = 0;
@@ -719,6 +746,53 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Road curves
+  // ---------------------------------------------------------------------------
+  // Curves are stretches of road with a curvature (sideways bend per pixel)
+  // that eases in and out. Everything lives in straight "road space" and is
+  // drawn shifted by the bend at its screen row. The camera keeps the road
+  // straight at your car, so a curve shows up as the road ahead bending away,
+  // and as a sideways push you have to steer (or drift) against.
+  function ensureCurves(upto) {
+    while (curveEnd < upto) {
+      const len = rand(500, 900);
+      const sharpest = Math.min(0.0038, 0.0024 + level * 0.0002);
+      const k = (Math.random() < 0.5 ? -1 : 1) * rand(0.0018, sharpest);
+      curves.push({ start: curveEnd, end: curveEnd + len, k, warned: false });
+      curveEnd += len + rand(1200, 2600);
+    }
+    curves = curves.filter((c) => c.end > dist - 300);
+  }
+
+  function curvAt(pos) {
+    for (const c of curves) {
+      if (pos >= c.start && pos < c.end) return c.k * Math.sin(Math.PI * (pos - c.start) / (c.end - c.start));
+    }
+    return 0;
+  }
+
+  function computeShifts() {
+    let h = 0, o = 0;
+    shiftRows[PLAYER_Y + SHIFT_OFF] = 0;
+    for (let s = 1; PLAYER_Y - s + SHIFT_OFF >= 0; s++) {
+      h += curvAt(dist + s);
+      o += h;
+      shiftRows[PLAYER_Y - s + SHIFT_OFF] = o;
+    }
+    h = 0;
+    o = 0;
+    for (let s = 1; PLAYER_Y + s + SHIFT_OFF < shiftRows.length; s++) {
+      h -= curvAt(dist - s);
+      o -= h;
+      shiftRows[PLAYER_Y + s + SHIFT_OFF] = o;
+    }
+  }
+
+  const shiftAt = (y) => clamp(shiftRows[clamp(Math.round(y) + SHIFT_OFF, 0, shiftRows.length - 1)], -PAD, PAD);
+  // Screen x for something at road-space x whose middle is at screen row y.
+  const sx = (x, y) => Math.round(x + shiftAt(y));
+
+  // ---------------------------------------------------------------------------
   // Traffic
   // ---------------------------------------------------------------------------
   function spawnCar() {
@@ -739,11 +813,12 @@
     if (free.length <= 1) return;
 
     const lane = pick(free);
+    const dir = laneDir(lane);
     traffic.push({
       kind: truck ? 'truck' : 'car',
-      lane, targetLane: lane, targetX: null,
+      lane, targetLane: lane, targetX: null, dir,
       x: laneX(lane, w), y: -h - 2, w, h,
-      base: truck ? rand(45, 70) : rand(50, 115),
+      base: dir < 0 ? (truck ? rand(50, 75) : rand(60, 110)) : truck ? rand(45, 70) : rand(50, 115),
       speed: 0,
       color: pickWeighted(TRAFFIC_COLORS).color,
       accent: pick(TRAILER_COLORS),
@@ -761,19 +836,22 @@
   function updateTraffic(dt) {
     for (const c of traffic) {
       let sp = c.base;
-      if (c.stopped) {
+      if (c.stopped || c.wrecked) {
         sp = 0;
-      } else if (c.wrecked) {
-        sp = player.speed;
       } else {
-        // Don't rear-end the car ahead in the same lane.
+        // Don't rear-end the car ahead (above you going up, below you coming down).
         for (const o of traffic) {
-          if (o === c || Math.abs(o.x - c.x) >= 11 || o.y >= c.y) continue;
-          if (c.y - (o.y + o.h) < 10) sp = Math.min(sp, o.speed || o.base);
+          if (o === c || Math.abs(o.x - c.x) >= 11 || (o.dir !== c.dir && !o.stopped)) continue;
+          const gap = c.dir > 0 ? c.y - (o.y + o.h) : o.y - (c.y + c.h);
+          const ahead = c.dir > 0 ? o.y < c.y : o.y > c.y;
+          if (ahead && gap < 10) sp = Math.min(sp, o.stopped ? 0 : o.speed || o.base);
         }
       }
       c.speed = sp;
-      c.y += (player.speed - c.speed) * dt;
+      // World velocity: forward lanes move up the road, oncoming lanes down it.
+      // A car wrecked by you stays put beside your car while you slide to a stop.
+      const vel = c.wrecked && !c.stopped ? player.speed : c.dir * sp;
+      c.y += (player.speed - vel) * dt;
 
       if (c.wrecked) continue;
       if (c.targetX === null) {
@@ -784,7 +862,7 @@
           if (Math.random() < 0.15 + level * 0.05 && c.y > -10 && c.y < H - 40) {
             const dir = Math.random() < 0.5 ? -1 : 1;
             const nl = c.lane + dir;
-            if (nl >= 0 && nl < LANES && laneClear(nl, c.y - 24, c.y + c.h + 24, c)) {
+            if (nl >= 0 && nl < LANES && laneDir(nl) === c.dir && laneClear(nl, c.y - 24, c.y + c.h + 24, c)) {
               c.targetLane = nl;
               c.targetX = laneX(nl, c.w);
               c.signal = 0.8;
@@ -818,7 +896,7 @@
     if (c.wrecked || c.targetX !== null) return false;
     for (const dir of dirs) {
       const nl = c.lane + dir;
-      if (nl >= 0 && nl < LANES && laneClear(nl, c.y - 14, c.y + c.h + 14, c)) {
+      if (nl >= 0 && nl < LANES && laneDir(nl) === c.dir && laneClear(nl, c.y - 14, c.y + c.h + 14, c)) {
         c.targetLane = nl;
         c.targetX = laneX(nl, c.w);
         c.signal = 0;
@@ -842,16 +920,17 @@
       if (c.y < py + CAR_H && c.y + c.h > py) c.minGap = Math.min(c.minGap, gap);
       if (!c.passed && c.y > py + CAR_H) {
         c.passed = true;
-        if (c.minGap <= NEAR_MISS_GAP && player.speed >= 90) nearMiss();
+        if (c.minGap <= NEAR_MISS_GAP && player.speed >= 90 && !c.wrecked) nearMiss(c);
       }
     }
   }
 
-  function nearMiss() {
+  function nearMiss(c) {
     combo = comboTimer > 0 ? combo + 1 : 1;
     comboTimer = 2.5;
-    const bonus = addScore(50 * combo * (hasPassive('fares') ? 2 : 1));
-    popup('CLOSE! +' + bonus, player.x + CAR_W / 2, PLAYER_Y - 8, combo > 2 ? '#ff7ab8' : '#ffd34d', 0.9);
+    const headOn = c.dir < 0;
+    const bonus = addScore(50 * combo * (hasPassive('fares') ? 2 : 1) * (headOn ? 2 : 1));
+    popup((headOn ? 'HEAD-ON! +' : 'CLOSE! +') + bonus, player.x + CAR_W / 2, PLAYER_Y - 8, combo > 2 ? '#ff7ab8' : '#ffd34d', 0.9);
     sfx.nearMiss(combo);
   }
 
@@ -966,8 +1045,8 @@
       if (leftOk && rightOk) {
         const leftTaken = cops.some((o) => o !== cop && o.side < 0);
         const rightTaken = cops.some((o) => o !== cop && o.side > 0);
-        if (leftTaken !== rightTaken) cop.side = leftTaken ? 1 : -1;
-        else cop.side = cop.x + cop.w / 2 < player.x + CAR_W / 2 ? -1 : 1;
+        // Cops prefer your right side, away from oncoming traffic.
+        cop.side = leftTaken && !rightTaken ? 1 : rightTaken && !leftTaken ? -1 : 1;
       } else {
         cop.side = leftOk ? -1 : 1;
       }
@@ -1003,11 +1082,14 @@
       } else {
         desired = flankX(cop);
         for (const c of traffic) {
+          const look = c.dir < 0 && !c.stopped ? 70 : flanking ? 18 : 30;
           const ahead = c.x < cop.x + cop.w + 1 && c.x + c.w > cop.x - 1 &&
-            c.y < cop.y && c.y + c.h > cop.y - (flanking ? 18 : 30);
+            c.y < cop.y && c.y + c.h > cop.y - look;
           if (!ahead) continue;
           if (flanking) {
-            // Locked on to you: it brakes for the car ahead but won't swerve.
+            // Locked on to you: it brakes for the car ahead but won't swerve,
+            // not even for oncoming traffic.
+            if (c.dir < 0 && !c.stopped) continue;
             target = Math.min(target, c.speed);
           } else {
             const left = c.x - cop.w - 3, right = c.x + c.w + 3;
@@ -1133,7 +1215,10 @@
     slicks = slicks.filter((s) => s.y < H + 10);
     if (state === 'play' && !abilityOn('ghost')) {
       const w = copWrecks.find((w) => overlaps(player.x + 1, PLAYER_Y + 1, CAR_W - 2, CAR_H - 2, w.x + 1, w.y + 1, w.w - 2, w.h - 2));
-      if (w) crash(w);
+      if (w) {
+        crashCause = 'wreck';
+        crash(w);
+      }
     }
   }
 
@@ -1231,7 +1316,7 @@
     const n = PAINTS.length;
     if (pressed.has('left')) { paintIdx = (paintIdx - 1 + n) % n; sfx.blip(); }
     if (pressed.has('right')) { paintIdx = (paintIdx + 1) % n; sfx.blip(); }
-    if (pressed.has('start')) {
+    if (startPressed()) {
       if (PAINTS[paintIdx].need <= best) startGame();
       else { sfx.buzz(); shake = 2; }
     }
@@ -1273,10 +1358,72 @@
     // Nitro wears off gradually instead of snapping back to top speed.
     if (p.speed > top) p.speed = Math.max(top, p.speed - 90 * dt);
 
+    // Steering and drifting. Drifting slides the car sideways much harder and
+    // shrugs off most of a curve's push, at the cost of a little speed.
+    ensureCurves(dist + 600);
+    const k = curvAt(dist);
     const dir = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0);
     const steer = 55 + Math.min(p.speed, MAX_SPEED) * 0.15;
-    p.vx += (dir * steer - p.vx) * Math.min(1, 12 * dt);
-    p.x = clamp(p.x + p.vx * dt, ROAD_X - 8, ROAD_R + 8 - CAR_W);
+    const drifting = keys.has('drift') && p.speed > 90;
+    if (drifting) {
+      p.vx += (dir * steer * 1.6 - p.vx) * Math.min(1, 5 * dt);
+      p.speed -= 25 * dt;
+      const targetAngle = dir !== 0 ? dir * 0.4 : p.angle;
+      p.angle += (targetAngle - p.angle) * Math.min(1, 8 * dt);
+    } else {
+      p.vx += (dir * steer - p.vx) * Math.min(1, 12 * dt);
+      p.angle -= p.angle * Math.min(1, 10 * dt);
+    }
+    const push = k * p.speed * p.speed * 0.55 * (drifting ? 0.35 : 1);
+    const lateral = p.vx - push;
+    const minX = ROAD_X - 8, maxX = ROAD_R + 8 - CAR_W;
+    p.x += lateral * dt;
+    // A curve throwing you into the barriers at speed is a wreck.
+    if (((p.x < minX && lateral < -45) || (p.x > maxX && lateral > 45)) && Math.abs(push) > 35 && !abilityOn('ghost')) {
+      p.x = clamp(p.x, minX, maxX);
+      crashCause = 'barrier';
+      crash({ x: p.x < ROAD_X ? p.x - 4 : p.x + CAR_W, y: PLAYER_Y, w: 4, h: CAR_H });
+      return;
+    }
+    p.x = clamp(p.x, minX, maxX);
+
+    if (drifting && p.speed > 110) {
+      if (Math.abs(p.angle) > 0.15) {
+        const curve = Math.abs(k) > 0.001;
+        driftPts += p.speed * dt * 0.3 * (curve ? 2 : 1);
+        driftCurve = driftCurve || curve;
+        for (const wx of [1, 8]) particle(p.x + wx, PLAYER_Y + 13, 0, 0, 1.6, '#1e1e22', 1, true);
+        if (Math.random() < 0.4) {
+          particle(p.x + rand(0, CAR_W), PLAYER_Y + CAR_H, rand(-10, 10), rand(-5, 10), 0.6, pick(['#bdbdbd', '#d8d8d8']), 2, true);
+        }
+        skidTimer -= dt;
+        if (skidTimer <= 0) {
+          skidTimer = 0.09;
+          sfx.noise(0.09, 0.05);
+        }
+      }
+    } else if (driftPts > 0) {
+      if (driftPts >= 15) {
+        popup((driftCurve ? 'CURVE DRIFT +' : 'DRIFT +') + addScore(driftPts), W / 2, PLAYER_Y - 26, '#ff9de2', 1.3);
+        sfx.tone(660, 0.08, 'square', 0.07);
+        sfx.tone(990, 0.1, 'square', 0.07, null, 0.07);
+      }
+      driftPts = 0;
+      driftCurve = false;
+    }
+
+    for (const cv of curves) {
+      if (!cv.warned && cv.start - dist < 260) {
+        cv.warned = true;
+        popup(cv.k > 0 ? 'CURVE AHEAD >>' : '<< CURVE AHEAD', W / 2, 46, '#ffd34d', 1.8);
+        if (!driftTipShown) {
+          driftTipShown = true;
+          popup(isTouch ? 'HOLD DFT TO DRIFT' : 'HOLD SPACE TO DRIFT', W / 2, 56, '#ff9de2', 2.2);
+        }
+        sfx.tone(520, 0.1, 'triangle', 0.08);
+        sfx.tone(520, 0.1, 'triangle', 0.08, null, 0.15);
+      }
+    }
 
     if (p.gas && Math.random() < 0.5) {
       particle(p.x + (Math.random() < 0.5 ? 2 : 7), PLAYER_Y + CAR_H, rand(-4, 4), 15, 0.35,
@@ -1340,6 +1487,7 @@
 
   function updateCrash(dt) {
     player.speed = Math.max(0, player.speed - (endReason === 'busted' ? 140 : 220) * dt);
+    dist += player.speed * dt;
     scrollWorld(player.speed * dt);
     updateTraffic(dt);
     updateCops(dt);
@@ -1356,7 +1504,7 @@
     updateHazards(dt);
     if (endReason === 'wreck') burnParticles(0.5);
     if (overTimer < 0.7) return;
-    if (pressed.has('start')) startGame();
+    if (startPressed()) startGame();
     else if (pressed.has('pause') || pressed.has('left') || pressed.has('right')) {
       state = 'title';
       reset();
@@ -1371,7 +1519,7 @@
     }
 
     if (state === 'paused') {
-      if (pressed.has('pause') || pressed.has('start')) {
+      if (pressed.has('pause') || startPressed()) {
         state = 'play';
         sfx.engineOn();
       }
@@ -1379,6 +1527,7 @@
       return;
     }
 
+    computeShifts();
     if (state === 'title') updateTitle(dt);
     else if (state === 'play') {
       if (pressed.has('pause')) {
@@ -1415,8 +1564,8 @@
   }
 
   function drawTrafficCar(c) {
-    const x = Math.round(c.x), y = Math.round(c.y);
-    drawVehicle(vehicleSprite(c.kind, c.color, c.accent, c.wrecked), x, y, c.w, c.h);
+    const x = sx(c.x, c.y + c.h / 2), y = Math.round(c.y);
+    drawVehicle(vehicleSprite(c.kind, c.color, c.accent, c.wrecked, c.dir < 0), x, y, c.w, c.h);
     if (c.targetX !== null && Math.floor(time * 6) % 2 === 0) {
       ctx.fillStyle = '#ffb000';
       const bx = c.blinkDir < 0 ? x : x + c.w - 1;
@@ -1429,7 +1578,16 @@
     const x = Math.round(player.x), y = PLAYER_Y;
     const wrecked = (state === 'crash' || state === 'over') && endReason === 'wreck';
     if (abilityOn('ghost')) ctx.globalAlpha = Math.floor(time * 12) % 2 ? 0.35 : 0.6;
-    drawVehicle(vehicleSprite('car', paint().color, undefined, wrecked), x, y, CAR_W, CAR_H);
+    const spr = vehicleSprite('car', paint().color, undefined, wrecked);
+    if (Math.abs(player.angle) > 0.02) {
+      ctx.save();
+      ctx.translate(x + CAR_W / 2, y + CAR_H / 2);
+      ctx.rotate(player.angle);
+      drawVehicle(spr, -CAR_W / 2, -CAR_H / 2, CAR_W, CAR_H);
+      ctx.restore();
+    } else {
+      drawVehicle(spr, x, y, CAR_W, CAR_H);
+    }
     ctx.globalAlpha = 1;
     if (!wrecked && player.braking) {
       ctx.fillStyle = 'rgba(255,40,40,0.45)';
@@ -1446,7 +1604,7 @@
   function drawCop(cop) {
     // A spinning cop shudders side to side.
     const jitter = cop.spin > 0 ? (Math.floor(time * 20) % 2 ? 1 : -1) : 0;
-    const x = Math.round(cop.x) + jitter, y = Math.round(cop.y);
+    const x = sx(cop.x, cop.y + cop.h / 2) + jitter, y = Math.round(cop.y);
     const flip = lightsOn();
     ctx.fillStyle = flip ? 'rgba(255,40,40,0.22)' : 'rgba(60,120,255,0.22)';
     ctx.fillRect(x - 2, y + 3, cop.w + 4, 7);
@@ -1459,15 +1617,21 @@
   }
 
   function drawWorld() {
+    // Draw the road one row at a time so it can bend.
     const off = Math.floor(roadScroll);
-    ctx.drawImage(roadTile, 0, off - TILE_H);
-    ctx.drawImage(roadTile, 0, off);
-    for (const d of decor) ctx.drawImage(decorSprites[d.kind], d.x, Math.round(d.y));
+    for (let y = 0; y < H; y++) {
+      const srcY = (((y - off) % TILE_H) + TILE_H) % TILE_H;
+      ctx.drawImage(roadTile, PAD - Math.round(shiftAt(y)), srcY, W, 1, 0, y, W, 1);
+    }
+    for (const d of decor) {
+      const spr = decorSprites[d.kind];
+      ctx.drawImage(spr, sx(d.x, d.y + spr.height / 2), Math.round(d.y));
+    }
     if (state !== 'title') {
       for (const s of slicks) {
-        for (let i = 0; i < 3; i++) ctx.drawImage(oilSprite, s.x + i * 11, Math.round(s.y) + (i === 1 ? 1 : 0));
+        for (let i = 0; i < 3; i++) ctx.drawImage(oilSprite, sx(s.x, s.y) + i * 11, Math.round(s.y) + (i === 1 ? 1 : 0));
       }
-      for (const w of copWrecks) drawVehicle(policeWreckSprite, Math.round(w.x), Math.round(w.y), w.w, w.h);
+      for (const w of copWrecks) drawVehicle(policeWreckSprite, sx(w.x, w.y + w.h / 2), Math.round(w.y), w.w, w.h);
       for (const c of traffic) drawTrafficCar(c);
       for (const cop of cops) drawCop(cop);
       drawPlayer();
@@ -1532,6 +1696,16 @@
     }
 
     const flip = lightsOn();
+    if (driftPts > 0) {
+      const label = 'DRIFT ' + Math.floor(driftPts * (hasPassive('fab') ? 1.5 : 1)) + (driftCurve ? ' X2' : '');
+      drawText(label, clamp(player.x + CAR_W / 2, 24, W - 24), PLAYER_Y + CAR_H + 5, driftCurve ? '#ffd34d' : '#ff9de2', 1, 'center');
+    }
+    // Chevrons point the way while you're in a curve.
+    const bend = curvAt(dist);
+    if (Math.abs(bend) > 0.0012 && state === 'play' && Math.floor(time * 5) % 2) {
+      if (bend > 0) drawText('>>>', W - 3, 90, '#ffd34d', 1, 'right');
+      else drawText('<<<', 3, 90, '#ffd34d', 1, 'left');
+    }
     // Pull-over meter above your car while a cop is lined up beside you.
     const pull = cops.reduce((m, c) => Math.max(m, c.pull), 0);
     if (pull > 0 && state === 'play') {
@@ -1547,7 +1721,7 @@
     // Cops coming up from behind but still off screen.
     for (const cop of cops) {
       if (cop.y < H - 6) continue;
-      const ix = Math.round(cop.x) + 3;
+      const ix = sx(cop.x, H - 8) + 3;
       ctx.fillStyle = flip ? '#ff2a2a' : '#3a7bff';
       ctx.fillRect(ix + 1, H - 11, 2, 1);
       ctx.fillRect(ix, H - 10, 4, 1);
@@ -1631,7 +1805,7 @@
     if (Math.floor(time * 2) % 2 === 0) {
       drawText(isTouch ? 'TAP TO DRIVE' : 'PRESS ENTER TO DRIVE', W / 2, 157, '#ffd34d', 1, 'center');
     }
-    drawText('ARROWS / WASD TO DRIVE', W / 2, 167, '#ffffff', 1, 'center');
+    drawText('ARROWS/WASD DRIVE  SPACE DRIFT', W / 2, 167, '#ffffff', 1, 'center');
     drawText('OVER ' + POLICE_MPH + ' MPH = COPS!', W / 2, 175, '#6fa8ff', 1, 'center');
     drawText('B: ABILITY  P: PAUSE  M: MUTE', W / 2, 183, '#aaaaaa', 1, 'center');
   }
@@ -1648,7 +1822,8 @@
       drawText('PULLED OVER BY THE COPS', W / 2, 42, '#aaaaaa', 1, 'center');
     } else {
       drawText('WRECKED!', W / 2, 26, '#ff4d4d', 2, 'center', '#5a0000');
-      drawText('TOTALED IN TRAFFIC', W / 2, 42, '#aaaaaa', 1, 'center');
+      const why = { traffic: 'TOTALED IN TRAFFIC', barrier: 'SPUN INTO THE BARRIERS', wreck: 'PLOWED INTO A WRECK' };
+      drawText(why[crashCause] || why.traffic, W / 2, 42, '#aaaaaa', 1, 'center');
     }
     drawText('SCORE', W / 2, 54, '#aaaaaa', 1, 'center');
     drawText(Math.floor(score), W / 2, 62, '#ffffff', 2, 'center');
