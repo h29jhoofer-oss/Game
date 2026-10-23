@@ -783,7 +783,7 @@
   let player, traffic, cops, copWrecks, slicks, particles, popups, banners;
   let score, dist, spawnTimer, combo, comboTimer, shake, level, crashTimer, overTimer;
   let wanted, heat, calm, copCool, copsShaken, copsWrecked, sirenTimer, sirenHigh, endReason;
-  let abilityCd, abilityTime;
+  let abilityCd, abilityTime, stompTime;
   let driftPts, driftCurve, skidTimer, driftTipShown, crashCause;
   // Drifting starts with a quick double tap of left or right and lasts while
   // that direction stays held.
@@ -832,6 +832,9 @@
   const paint = () => PAINTS[paintIdx];
   const hasPassive = (id) => paint().passive === id;
   const abilityOn = (id) => paint().active === id && abilityTime > 0;
+  // Ghost, or the short invulnerability you get from squashing a car.
+  const invuln = () => abilityOn('ghost') || stompTime > 0;
+  const STOMP_TIME = 2;
   const policeSpeed = () => (hasPassive('blend') ? 110 : POLICE_MPH) / MPH;
   const maxSpeed = () => MAX_SPEED + (hasPassive('hotrod') ? 25 : 0) + lvl('engine') * 13 + stat('speed', 0) / MPH;
   const pullTime = () => (hasPassive('shadow') ? 3 : 1.5) * (1 + 0.25 * lvl('jammer'));
@@ -867,6 +870,7 @@
     copsWrecked = 0;
     abilityCd = 0;
     abilityTime = 0;
+    stompTime = 0;
     driftPts = 0;
     driftCurve = false;
     skidTimer = 0;
@@ -1129,9 +1133,10 @@
 
   function checkPlayerVsTraffic() {
     const px = player.x, py = PLAYER_Y;
-    const ghost = abilityOn('ghost');
+    const ghost = invuln();
     const airborne = player.air > 0;
     for (const c of traffic) {
+      if (c.squashed) continue; // flat enough to drive over
       if (overlaps(px + 1, py + 1, CAR_W - 2, CAR_H - 2, c.x + 1, c.y + 1, c.w - 2, c.h - 2)) {
         if (airborne) {
           c.jumped = true;
@@ -1291,7 +1296,7 @@
 
   function updateCops(dt) {
     const chasing = state === 'play';
-    const ghost = abilityOn('ghost');
+    const ghost = invuln();
     for (const cop of cops) {
       if (!chasing) {
         cop.speed = player.speed;
@@ -1459,7 +1464,7 @@
       }
     }
 
-    if (state === 'play' && !abilityOn('ghost') && player.air <= 0) {
+    if (state === 'play' && !invuln() && player.air <= 0) {
       const w = copWrecks.find((w) => overlaps(player.x + 1, PLAYER_Y + 1, CAR_W - 2, CAR_H - 2, w.x + 1, w.y + 1, w.w - 2, w.h - 2));
       if (w) {
         crashCause = 'wreck';
@@ -1497,14 +1502,40 @@
       particle(p.x + rand(0, CAR_W), PLAYER_Y + CAR_H - 2, rand(-30, 30), rand(-10, 10), 0.4, pick(['#bdbdbd', '#8a8a8a']), 1, true);
     }
     sfx.noise(0.15, 0.3);
-    if (abilityOn('ghost')) return;
     const on = traffic.find((c) => !c.wrecked &&
       overlaps(p.x + 1, PLAYER_Y + 1, CAR_W - 2, CAR_H - 2, c.x + 1, c.y + 1, c.w - 2, c.h - 2)) ||
-      cops.find((c) => overlaps(p.x + 1, PLAYER_Y + 1, CAR_W - 2, CAR_H - 2, c.x + 1, c.y + 1, c.w - 2, c.h - 2));
-    if (on) {
-      crashCause = 'landing';
-      crash(on);
+      cops.find((c) => !c.dead && overlaps(p.x + 1, PLAYER_Y + 1, CAR_W - 2, CAR_H - 2, c.x + 1, c.y + 1, c.w - 2, c.h - 2));
+    if (on && traffic.includes(on)) squash(on);
+    else if (on) {
+      wreckCop(on);
+      squashFx(on, '#3a7bff');
+      popup('SQUASHED A COP! +' + addScore(500), W / 2, PLAYER_Y - 20, '#f2c200', 1.2);
+      stompTime = STOMP_TIME;
     }
+  }
+
+  // Landing on a car flattens it, pays out, and leaves you briefly untouchable.
+  function squash(c) {
+    c.wrecked = true;
+    c.stopped = true;
+    c.squashed = true;
+    c.targetX = null;
+    c.passed = true;
+    const bonus = addScore((c.kind === 'truck' ? 750 : 500) * (c.dir < 0 ? 1.5 : 1));
+    popup('SQUASHED! +' + bonus, W / 2, PLAYER_Y - 20, '#f2c200', 1.2);
+    squashFx(c, c.color);
+    stompTime = STOMP_TIME;
+  }
+
+  function squashFx(c, color) {
+    const cx = c.x + c.w / 2, cy = c.y + c.h / 2;
+    for (let i = 0; i < 24; i++) {
+      particle(cx, cy, rand(-60, 60), rand(-40, 40), rand(0.3, 0.7), pick(['#d8d8d8', '#9a9a9a', '#9fd0ff', color]), randInt(1, 2));
+    }
+    shake = Math.max(shake, 4);
+    sfx.noise(0.3, 0.5);
+    sfx.tone(160, 0.25, 'square', 0.12, 50);
+    sfx.tone(880, 0.1, 'square', 0.08, null, 0.15);
   }
 
   // ---------------------------------------------------------------------------
@@ -1613,7 +1644,7 @@
           particle(b.tx, b.ty, rand(-25, 25), rand(-25, 25), 0.25, pick(['#fff3a0', '#ffb000', '#8a8a90']), 1, true);
         }
         const hitbox = overlaps(b.tx - 1, b.ty - 1, 2, 2, player.x - 1, PLAYER_Y - 1, CAR_W + 2, CAR_H + 2);
-        if (hitbox && hurtTimer <= 0 && !abilityOn('ghost') && state === 'play') hitPlayer();
+        if (hitbox && hurtTimer <= 0 && !invuln() && state === 'play') hitPlayer();
       }
     }
     bullets = bullets.filter((b) => !b.dead);
@@ -1679,7 +1710,7 @@
         sfx.bump();
       }
     }
-    if (p.air <= 0 && !abilityOn('ghost') &&
+    if (p.air <= 0 && !invuln() &&
       overlaps(p.x + 1, PLAYER_Y + 1, CAR_W - 2, CAR_H - 2, rig.x + 1, rig.y + 1, rig.w - 2, rig.h - 2)) {
       crashCause = 'rig';
       crash(rig);
@@ -1862,6 +1893,7 @@
     const p = player;
     abilityCd = Math.max(0, abilityCd - dt);
     abilityTime = Math.max(0, abilityTime - dt);
+    stompTime = Math.max(0, stompTime - dt);
     if (pressed.has('ability')) {
       if (abilityCd <= 0) activateAbility();
       else sfx.buzz();
@@ -1938,7 +1970,7 @@
     const minX = ROAD_X - 8, maxX = ROAD_R + 8 - CAR_W;
     p.x += lateral * dt;
     // A curve throwing you into the barriers at speed is a wreck.
-    if (((p.x < minX && lateral < -45) || (p.x > maxX && lateral > 45)) && Math.abs(push) > 35 && !abilityOn('ghost')) {
+    if (((p.x < minX && lateral < -45) || (p.x > maxX && lateral > 45)) && Math.abs(push) > 35 && !invuln()) {
       p.x = clamp(p.x, minX, maxX);
       crashCause = 'barrier';
       crash({ x: p.x < ROAD_X ? p.x - 4 : p.x + CAR_W, y: PLAYER_Y, w: 4, h: CAR_H });
@@ -2162,6 +2194,13 @@
 
   function drawTrafficCar(c) {
     const x = sx(c.x, c.y + c.h / 2), y = Math.round(c.y);
+    if (c.squashed) {
+      // Pancaked: wider and shorter than it used to be.
+      const spr = vehicleSprite(c.kind, c.color, c.accent, true, c.dir < 0);
+      const sh = Math.round(c.h * 0.6);
+      ctx.drawImage(spr, x - 2, y + (c.h - sh) / 2, c.w + 4, sh);
+      return;
+    }
     drawVehicle(vehicleSprite(c.kind, c.color, c.accent, c.wrecked, c.dir < 0), x, y, c.w, c.h);
     if (c.targetX !== null && Math.floor(time * 6) % 2 === 0) {
       ctx.fillStyle = '#ffb000';
@@ -2185,6 +2224,7 @@
     const x = Math.round(player.x), y = PLAYER_Y;
     const wrecked = (state === 'crash' || state === 'over') && endReason === 'wreck';
     if (abilityOn('ghost')) ctx.globalAlpha = Math.floor(time * 12) % 2 ? 0.35 : 0.6;
+    else if (stompTime > 0 && Math.floor(time * 16) % 2) ctx.globalAlpha = 0.45;
     else if (hurtTimer > 0 && Math.floor(time * 20) % 2) ctx.globalAlpha = 0.3;
     const spr = vehicleSprite('car', paint().color, undefined, wrecked, false, equipped.decal, equipped.body);
     const glow = cosmetic('glow');
@@ -2546,7 +2586,7 @@
       drawText('WRECKED!', W / 2, 26, '#ff4d4d', 2, 'center', '#5a0000');
       const why = {
         traffic: 'TOTALED IN TRAFFIC', barrier: 'SPUN INTO THE BARRIERS',
-        wreck: 'PLOWED INTO A WRECK', landing: 'LANDED ON A CAR', heli: 'SHOT DOWN BY THE CHOPPER',
+        wreck: 'PLOWED INTO A WRECK', heli: 'SHOT DOWN BY THE CHOPPER',
         rig: 'FLATTENED BY A BIG RIG',
       };
       drawText(why[crashCause] || why.traffic, W / 2, 42, '#aaaaaa', 1, 'center');
