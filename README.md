@@ -29,7 +29,7 @@ On phones and tablets, on-screen buttons appear (double-tap ◀ or ▶ to drift)
 
 ## Ramps
 
-- **Launch ramps** have yellow chevrons. Drive over one to jump; the faster you hit it, the longer you fly.
+- **Launch ramps** have yellow chevrons and show up every few seconds. Drive over one to jump; the faster you hit it, the longer you fly.
   - In the air you sail over cars and cops, and you can't be pulled over. Steering is lighter and your speed holds steady.
   - Each car you clear is worth **JUMPED IT! +200**, or +300 for an oncoming car.
   - Come down on top of a car and you **squash it flat**: **SQUASHED! +500** (+750 for a truck, 1.5x for oncoming cars, +500 on top of the cop bonus for a cruiser). You then flash for **2 seconds of invulnerability**: cars, cops, bullets, the big rig and barriers can't hurt you, and cops can't pull you over.

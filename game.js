@@ -861,7 +861,7 @@
     rotorTimer = 0;
     heliTipShown = false;
     roadItems = [];
-    nextRamp = 900;
+    nextRamp = 450;
     rampTipShown = false;
     traffic = [];
     cops = [];
@@ -1479,7 +1479,7 @@
       const lane = randInt(0, LANES - 1);
       const w = RAMP[0].length;
       roadItems.push({ kind: 'ramp', x: laneX(lane, w), y: -RAMP.length - 2, w, h: RAMP.length, used: false });
-      nextRamp = dist + rand(1100, 1900);
+      nextRamp = dist + rand(400, 800);
       if (!rampTipShown) {
         rampTipShown = true;
         popup('RAMP AHEAD! JUMP THE CARS', W / 2, 46, '#f2c200', 2);
