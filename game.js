@@ -86,7 +86,6 @@
     { id: 'engine', name: 'ENGINE', desc: '+8 MPH TOP SPEED', prices: [1500, 4000, 9000] },
     { id: 'tires', name: 'TIRES', desc: 'MORE GRIP IN TURNS AND CURVES', prices: [1500, 4000, 8000] },
     { id: 'cooler', name: 'COOLER', desc: 'ABILITY RECHARGES FASTER', prices: [2500, 6000, 12000] },
-    { id: 'suspension', name: 'SUSPENSION', desc: 'POTHOLES HURT LESS', prices: [2000, 6000] },
     { id: 'jammer', name: 'RADAR JAMMER', desc: 'COPS TAKE LONGER TO BUST YOU', prices: [3000, 8000] },
     { id: 'springs', name: 'SPRINGS', desc: 'LONGER JUMPS OFF RAMPS', prices: [2000, 5000] },
   ];
@@ -225,8 +224,8 @@
       pros: 'BALANCED ALL-ROUNDER', cons: 'NO PERKS AND NO FLAWS', stats: {} },
     {
       id: 'van', slot: 'body', name: 'DELIVERY VAN', price: 2000, desc: 'BOXY AND PROUD OF IT',
-      pros: '+1 HP  POTHOLES HURT LESS', cons: '-10 MPH  SLOWER STEERING',
-      stats: { hp: 1, bump: 0.6, speed: -10, steer: 0.9 },
+      pros: '+2 HP', cons: '-10 MPH  SLOWER STEERING',
+      stats: { hp: 2, speed: -10, steer: 0.9 },
       map: [
         '..SBBBBS..', '.yBBBBBBy.', 'kSwwwwwwSk', 'kSwgwwwwSk', '.SBBBBBBS.', '.SHHHHHHS.',
         '.SHBBBBHS.', '.SHBBBBHS.', '.SHBBBBHS.', '.SHBBBBHS.', '.SHBBBBHS.', 'kSHBBBBHSk',
@@ -235,8 +234,8 @@
     },
     {
       id: 'pickup', slot: 'body', name: 'PICKUP TRUCK', price: 2500, desc: 'CAB UP FRONT AND AN OPEN BED',
-      pros: 'DIRT AND POTHOLES HURT LESS', cons: '-5 MPH TOP SPEED',
-      stats: { dirt: 0.3, bump: 0.7, speed: -5 },
+      pros: '+1 HP  DIRT BARELY SLOWS YOU', cons: '-5 MPH TOP SPEED',
+      stats: { hp: 1, dirt: 0.3, speed: -5 },
       map: [
         '..SBBBBS..', '.yBBBBBBy.', 'kSBBBBBBSk', 'kSBBBBBBSk', '.SwwwwwwS.', '.SwgwwwwS.',
         '.SBBBBBBS.', '.SBBBBBBS.', '.SSSSSSSS.', '.SkkkkkkS.', '.SkkkkkkS.', 'kSkkkkkkSk',
@@ -245,8 +244,8 @@
     },
     {
       id: 'coupe', slot: 'body', name: 'SPORTS COUPE', price: 3000, desc: 'LONG HOOD AND A REAR SPOILER',
-      pros: '+5 MPH  SHARPER STEERING', cons: 'POTHOLES HURT MORE',
-      stats: { speed: 5, steer: 1.1, bump: 1.4 },
+      pros: '+5 MPH  SHARPER STEERING', cons: '-1 HP',
+      stats: { speed: 5, steer: 1.1, hp: -1 },
       map: [
         '.SBBBBBBS.', 'yBBBBBBBBy', 'kSBBHHBBSk', 'kSBBHHBBSk', '.SBBHHBBS.', '.SBwwwwBS.',
         '.SwwgwwwS.', '.SwwwwwwS.', '.SBBHHBBS.', '.SBBHHBBS.', '.SBBBBBBS.', 'kSBBBBBBSk',
@@ -265,8 +264,8 @@
     },
     {
       id: 'racer', slot: 'body', name: 'OPEN-WHEEL RACER', price: 10000, desc: 'BASICALLY A ROCKET ON WHEELS',
-      pros: '+15 MPH  SHARPER STEERING', cons: '-1 HP  POTHOLES HURT MORE',
-      stats: { speed: 15, steer: 1.15, hp: -1, bump: 1.4 },
+      pros: '+15 MPH  SHARPER STEERING', cons: '-2 HP',
+      stats: { speed: 15, steer: 1.15, hp: -2 },
       map: [
         '.SSSSSSSS.', '....BB....', 'kk..BB..kk', 'kk.BBBB.kk', 'kk.BBBB.kk', '...BBBB...',
         '...BwwB...', '...BggB...', '...BBBB...', '..BBBBBB..', 'kkBBBBBBkk', 'kkBBBBBBkk',
@@ -400,8 +399,7 @@
   ];
   const STAR = ['..1..', '.111.', '11111', '.111.', '.1.1.'];
 
-  // Road hazards: a pothole to avoid and a launch ramp (chevrons point the way up).
-  const POTHOLE = ['..rrrrr...', '.rkkkkkrr.', 'rkkqkkkkkr', 'rkkkkkkqkr', '.rkkkkkkr.', '...rrrr...'];
+  // Launch ramp (chevrons point the way up).
   const RAMP = [
     'CCCCCCCCCCCC',
     'CCCCCYYCCCCC',
@@ -523,7 +521,6 @@
   const decorSprites = {};
   for (const k in DECOR_MAPS) decorSprites[k] = buildSprite(DECOR_MAPS[k], DECOR_PAL);
   const policeSprite = buildSprite(POLICE, POLICE_PAL);
-  const potholeSprite = buildSprite(POTHOLE, HAZARD_PAL);
   const heliSprite = buildSprite(HELI, HELI_PAL);
   const HELI_W = HELI[0].length, HELI_H = HELI.length;
   const rampSprite = buildSprite(RAMP, HAZARD_PAL);
@@ -794,7 +791,7 @@
   const DRIFT_GRACE = 0.2; // a drift survives letting go for this long
   let driftDir = 0, driftGrace = 0;
   const lastTap = { left: -1, right: -1 };
-  let roadItems, nextPothole, nextRamp, rampTipShown;
+  let roadItems, nextRamp, rampTipShown;
   let heli, heliCool, bullets, hp, hurtTimer, rotorTimer, heliTipShown;
   let slowMeter, slowWarned, rig, rigCount, runTime, speedMult;
   let curves = [], curveEnd = 0;
@@ -810,6 +807,14 @@
   const equipped = store.get('equipped', {});
   let shopTab = 0, shopSel = 0, cashEarned = 0;
   let shopMsg = null; // { text, color, life } shown in place of the item description
+  // Potholes (and the suspension upgrade for them) are gone: refund anyone
+  // who bought suspension levels.
+  if (upgrades.suspension) {
+    cash += [2000, 6000].slice(0, upgrades.suspension).reduce((a, b) => a + b, 0);
+    delete upgrades.suspension;
+    store.set('cash', cash);
+    store.set('upgrades', upgrades);
+  }
   const lvl = (id) => upgrades[id] || 0;
   const cosmetic = (slot) => COSMETICS.find((c) => c.id === equipped[slot]);
   const bodyStats = () => (BODIES.find((b) => b.id === equipped.body) || BODIES[0]).stats;
@@ -838,7 +843,7 @@
   }
 
   function reset() {
-    player = { x: laneX(2), vx: 0, speed: CRUISE, braking: false, gas: false, angle: 0, air: 0, airMax: 1, wobble: 0 };
+    player = { x: laneX(2), vx: 0, speed: CRUISE, braking: false, gas: false, angle: 0, air: 0, airMax: 1 };
     heli = null;
     heliCool = 0;
     slowMeter = 0;
@@ -853,7 +858,6 @@
     rotorTimer = 0;
     heliTipShown = false;
     roadItems = [];
-    nextPothole = 500;
     nextRamp = 900;
     rampTipShown = false;
     traffic = [];
@@ -1451,23 +1455,7 @@
       const p = player;
       for (const it of roadItems) {
         if (it.used) continue;
-        if (it.kind === 'ramp') {
-          if (p.air <= 0 && overlaps(p.x + 1, PLAYER_Y, CAR_W - 2, CAR_H, it.x, it.y, it.w, it.h)) launch(it);
-        } else if (p.air <= 0 && !abilityOn('ghost') &&
-          overlaps(p.x + 1, PLAYER_Y + 2, CAR_W - 2, CAR_H - 4, it.x + 2, it.y + 1, it.w - 4, it.h - 2)) {
-          hitPothole(it);
-        }
-      }
-      for (const cop of cops) {
-        if (cop.stun > 0) continue;
-        const hole = roadItems.find((it) => it.kind === 'pothole' &&
-          overlaps(cop.x + 1, cop.y + 2, cop.w - 2, cop.h - 4, it.x + 2, it.y + 1, it.w - 4, it.h - 2));
-        if (hole) {
-          cop.stun = 0.6;
-          cop.pull = 0;
-          cop.shove = (Math.random() < 0.5 ? -1 : 1) * 60;
-          sfx.bump();
-        }
+        if (p.air <= 0 && overlaps(p.x + 1, PLAYER_Y, CAR_W - 2, CAR_H, it.x, it.y, it.w, it.h)) launch(it);
       }
     }
 
@@ -1480,19 +1468,11 @@
     }
   }
 
-  // Potholes and ramps are bolted to the road, spaced out by distance travelled.
+  // Ramps are bolted to the road, spaced out by distance travelled.
   function spawnRoadItems() {
-    if (dist >= nextPothole) {
-      const lane = randInt(0, LANES - 1);
-      roadItems.push({ kind: 'pothole', x: laneX(lane, POTHOLE[0].length) + randInt(-4, 4), y: -8,
-        w: POTHOLE[0].length, h: POTHOLE.length, used: false });
-      nextPothole = dist + rand(300, 650) / (1 + level * 0.1);
-    }
     if (dist >= nextRamp) {
       const lane = randInt(0, LANES - 1);
       const w = RAMP[0].length;
-      // Keep the ramp clear of potholes so the run-up is fair.
-      roadItems = roadItems.filter((it) => !(it.kind === 'pothole' && it.y < 40 && Math.abs(it.x - laneX(lane, w)) < 14));
       roadItems.push({ kind: 'ramp', x: laneX(lane, w), y: -RAMP.length - 2, w, h: RAMP.length, used: false });
       nextRamp = dist + rand(1100, 1900);
       if (!rampTipShown) {
@@ -1502,31 +1482,10 @@
     }
   }
 
-  function hitPothole(it) {
-    const p = player;
-    it.used = true;
-    const loss = (0.35 - 0.12 * lvl('suspension')) * stat('bump', 1);
-    p.speed = Math.max(MIN_SPEED, p.speed * (1 - loss));
-    p.vx += (Math.random() < 0.5 ? -1 : 1) * 90;
-    p.wobble = 0.5 * (1 - 0.5 * lvl('suspension')) * stat('bump', 1);
-    shake = Math.max(shake, 4);
-    combo = 0;
-    comboTimer = 0;
-    driftPts = 0;
-    for (let i = 0; i < 12; i++) {
-      particle(p.x + rand(0, CAR_W), PLAYER_Y + rand(4, CAR_H), rand(-40, 40), rand(-40, 20), 0.4,
-        pick(['#5a5a62', '#8a8a90', '#2c2c36']), 1, true);
-    }
-    popup('POTHOLE!', p.x + CAR_W / 2, PLAYER_Y - 10, '#ff9d3d', 0.9);
-    sfx.noise(0.25, 0.45);
-    sfx.tone(90, 0.25, 'square', 0.12, 50);
-  }
-
   function launch(ramp) {
     const p = player;
     ramp.used = true;
     p.airMax = p.air = (0.8 + p.speed / 300) * (1 + 0.2 * lvl('springs'));
-    p.wobble = 0;
     popup('AIRBORNE!', p.x + CAR_W / 2, PLAYER_Y - 12, '#f2c200', 0.9);
     sfx.tone(200, 0.5, 'square', 0.09, 700);
   }
@@ -1915,7 +1874,6 @@
     const nitro = abilityOn('nitro');
     const top = maxSpeed() + (nitro ? 80 : 0);
     const airborne = p.air > 0;
-    p.wobble = Math.max(0, p.wobble - dt);
 
     if (airborne) {
       // No grip in the air: speed holds steady.
@@ -1966,9 +1924,6 @@
     const drifting = driftDir !== 0 && p.speed > 70 && !airborne;
     if (airborne) {
       p.vx += (dir * steer * 0.6 - p.vx) * Math.min(1, 3 * dt);
-    } else if (p.wobble > 0) {
-      // Knocked off line by a pothole: the wheel is out of your hands for a moment.
-      p.vx -= p.vx * Math.min(1, 2 * dt);
     } else if (drifting) {
       p.vx += (dir * steer * 1.6 - p.vx) * Math.min(1, 8 * dt);
       p.speed -= 15 * dt;
@@ -2294,7 +2249,7 @@
     const inMenu = state === 'title' || state === 'shop';
     if (!inMenu) {
       for (const it of roadItems) {
-        ctx.drawImage(it.kind === 'ramp' ? rampSprite : potholeSprite, sx(it.x, it.y + it.h / 2), Math.round(it.y));
+        ctx.drawImage(rampSprite, sx(it.x, it.y + it.h / 2), Math.round(it.y));
       }
       for (const s of slicks) {
         for (let i = 0; i < 3; i++) ctx.drawImage(oilSprite, sx(s.x, s.y) + i * 11, Math.round(s.y) + (i === 1 ? 1 : 0));

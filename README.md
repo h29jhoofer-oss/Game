@@ -27,17 +27,16 @@ On phones and tablets, on-screen buttons appear (double-tap ◀ or ▶ to drift)
 - Every so often the road **curves**. A warning pops up just before each one, and chevrons (`>>>` / `<<<`) show which way to steer while you're in it.
 - A curve pushes your car toward the outside, harder the faster you go. At high speed, normal steering can't hold the line. If the curve throws you into the barriers, you're wrecked.
 
-## Potholes and ramps
+## Ramps
 
-- **Potholes** are dark holes in the road. Hitting one costs a big chunk of speed, knocks your car sideways, and takes the wheel out of your hands for a moment. It also breaks your combo and any drift in progress. Cops that hit one get thrown off line too.
 - **Launch ramps** have yellow chevrons. Drive over one to jump; the faster you hit it, the longer you fly.
-  - In the air you sail over cars, potholes and cops, and you can't be pulled over. Steering is lighter and your speed holds steady.
+  - In the air you sail over cars and cops, and you can't be pulled over. Steering is lighter and your speed holds steady.
   - Each car you clear is worth **JUMPED IT! +200**, or +300 for an oncoming car.
   - Watch where you come down: **landing on a car wrecks you.**
 
 ## On-screen messages
 
-Messages stay out of the driving view. Announcements like **CURVE AHEAD** or **MORE COPS!** show one at a time in a slim banner under the top bar. Points and callouts like **CLOSE! +50** or **POTHOLE!** stack in a small feed in the bottom-right corner, behind your car.
+Messages stay out of the driving view. Announcements like **CURVE AHEAD** or **MORE COPS!** show one at a time in a slim banner under the top bar. Points and callouts like **CLOSE! +50** or **JUMPED IT! +200** stack in a small feed in the bottom-right corner, behind your car.
 
 ## Drifting
 
@@ -105,7 +104,6 @@ Every point you score is also banked as **cash** at the end of the run. Press **
 | Engine | 3 | +8 MPH top speed |
 | Tires | 3 | Sharper steering and less push in curves |
 | Cooler | 3 | Your B ability recharges 15% faster |
-| Suspension | 2 | Potholes cost less speed and knock you around less |
 | Radar Jammer | 2 | Cops need 25% longer beside you to bust you |
 | Springs | 2 | 20% longer jumps off ramps |
 
@@ -120,10 +118,10 @@ Every point you score is also banked as **cash** at the end of the run. Press **
 | Body | Price | Pros | Cons |
 | --- | --- | --- | --- |
 | Sedan | Free (default) | Balanced | None |
-| Delivery Van | 2,000 | +1 HP, potholes hurt less | -10 MPH, slower steering |
-| Pickup Truck | 2,500 | Dirt and potholes hurt less | -5 MPH |
-| Sports Coupe | 3,000 | +5 MPH, sharper steering | Potholes hurt more |
+| Delivery Van | 2,000 | +2 HP | -10 MPH, slower steering |
+| Pickup Truck | 2,500 | +1 HP, dirt barely slows you | -5 MPH |
+| Sports Coupe | 3,000 | +5 MPH, sharper steering | -1 HP |
 | Muscle Car | 5,000 | +10 MPH, faster acceleration | Slower steering |
-| Open-Wheel Racer | 10,000 | +15 MPH, sharper steering | -1 HP, potholes hurt more |
+| Open-Wheel Racer | 10,000 | +15 MPH, sharper steering | -2 HP |
 
 Your best score, chosen paint, cash, upgrades and style are saved in your browser.
