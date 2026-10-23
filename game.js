@@ -794,6 +794,11 @@
   let roadItems, nextRamp, rampTipShown;
   let heli, heliCool, bullets, hp, hurtTimer, rotorTimer, heliTipShown;
   let slowMeter, slowWarned, rig, rigCount, runTime, speedMult;
+  // Cruising between the big-rig limit and the police limit slowly builds a
+  // score multiplier. It never resets or caps during a run; it just stops
+  // growing while you're out of the zone.
+  let zoneMult, zoneTipShown;
+  const ZONE_RATE = 0.01; // +0.1x for every 10 seconds in the zone
   let curves = [], curveEnd = 0;
   const shiftRows = new Float32Array(H + SHIFT_OFF * 2);
   let newUnlocks = [], isNewBest = false;
@@ -839,8 +844,9 @@
   const maxSpeed = () => MAX_SPEED + (hasPassive('hotrod') ? 25 : 0) + lvl('engine') * 13 + stat('speed', 0) / MPH;
   const pullTime = () => (hasPassive('shadow') ? 3 : 1.5) * (1 + 0.25 * lvl('jammer'));
   const wantedStep = () => (hasPassive('coolhead') ? 9 : WANTED_STEP);
+  const inZone = () => player.speed >= SLOW_SPEED && player.speed <= policeSpeed() && state === 'play';
   function addScore(n) {
-    const pts = n * (hasPassive('fab') ? 1.5 : 1);
+    const pts = n * (hasPassive('fab') ? 1.5 : 1) * zoneMult;
     score += pts;
     return Math.round(pts);
   }
@@ -855,6 +861,8 @@
     rigCount = 0;
     runTime = 0;
     speedMult = 1;
+    zoneMult = 1;
+    zoneTipShown = false;
     bullets = [];
     hp = maxHp();
     hurtTimer = 0;
@@ -2062,6 +2070,15 @@
     dist += moved;
     spawnRoadItems();
     addScore(moved * 0.1 * (p.speed >= RECKLESS_SPEED ? 2 : 1));
+    if (inZone() && runTime > SLOW_GRACE) {
+      const before = Math.floor(zoneMult * 2);
+      zoneMult += ZONE_RATE * dt;
+      if (!zoneTipShown) {
+        zoneTipShown = true;
+        popup('IN THE ZONE: MULTIPLIER UP', W / 2, 60, '#57c062', 1.6);
+      }
+      if (Math.floor(zoneMult * 2) > before) popup('ZONE X' + zoneMult.toFixed(1) + '!', W / 2, 60, '#57c062', 1.4);
+    }
     scrollWorld(moved);
 
     const newLevel = 1 + Math.floor(dist / 4000);
@@ -2391,7 +2408,11 @@
     drawText('SCORE ' + Math.floor(score), 2, 2, '#ffffff');
     const reckless = player.speed >= RECKLESS_SPEED;
     drawText(Math.round(player.speed * MPH) + ' MPH', W - 2, 2, reckless ? '#ff4d4d' : '#ffffff', 1, 'right');
-    if (reckless && Math.floor(time * 4) % 2 === 0) drawText('RECKLESS X2', W - 2, 12, '#ff4d4d', 1, 'right');
+    if (reckless) {
+      if (Math.floor(time * 4) % 2 === 0) drawText('RECKLESS X2', W - 2, 12, '#ff4d4d', 1, 'right');
+    } else if (zoneMult >= 1.01 || inZone()) {
+      drawText('ZONE X' + zoneMult.toFixed(2), W - 2, 12, inZone() ? '#57c062' : '#888888', 1, 'right');
+    }
 
     // Active ability: name plus a cooldown bar (yellow while it's running).
     const a = paint();
@@ -2501,8 +2522,13 @@
     ctx.fillRect(0, H - 3, W, 3);
     ctx.fillStyle = abilityOn('nitro') ? (flip ? '#3a7bff' : '#ffffff') : reckless ? '#ff4d4d' : sf > 0.6 ? '#ffd34d' : '#57c062';
     ctx.fillRect(1, H - 2, Math.round((W - 2) * sf), 1);
+    const zx0 = 1 + Math.round((W - 2) * (SLOW_SPEED - MIN_SPEED) / span);
+    const zx1 = 1 + Math.round((W - 2) * (policeSpeed() - MIN_SPEED) / span);
+    // The multiplier zone between the two ticks lights up while you're in it.
+    ctx.fillStyle = inZone() ? 'rgba(87,192,98,0.6)' : 'rgba(87,192,98,0.2)';
+    ctx.fillRect(zx0, H - 3, zx1 - zx0, 1);
     ctx.fillStyle = '#6fa8ff';
-    ctx.fillRect(1 + Math.round((W - 2) * (policeSpeed() - MIN_SPEED) / span), H - 3, 1, 3);
+    ctx.fillRect(zx1, H - 3, 1, 3);
     ctx.fillStyle = '#ff9d3d';
     ctx.fillRect(1 + Math.round((W - 2) * (SLOW_SPEED - MIN_SPEED) / span), H - 3, 1, 3);
   }

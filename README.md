@@ -61,6 +61,16 @@ Driving slowly isn't safe either:
 
 The sweet spot is fast enough to stay ahead of the rigs, but not so fast that the cops pile on.
 
+## The zone
+
+Staying in that sweet spot pays off. Between **75 MPH** (orange tick) and the **police limit** (blue tick), the stretch of the speed bar between them glows green and you're **in the zone**:
+
+- Every second in the zone adds **0.01x** to a score multiplier (+0.1x every 10 seconds). It starts at **x1.00** and has **no cap**.
+- It's shown as **ZONE X1.23** under your speed: green while it's growing, grey while you're out of the zone.
+- Leaving the zone doesn't reset it. It just stops growing until you're back in. It lasts until the run ends.
+- It multiplies **all** points: distance, close calls, jumps, squashes, drifts and cop bonuses.
+
+
 ## Police
 
 - Go over **100 MPH** and a police cruiser starts chasing you. A blue tick on the speed bar marks the limit.
