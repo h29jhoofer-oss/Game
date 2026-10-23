@@ -378,6 +378,9 @@
     '......kyyk......',
   ];
   const HELI_PAL = { B: '#2a3346', W: '#e8e8e8', w: '#4a6aa5', g: '#b0c8f0', T: '#555a66', k: '#0e0e12', y: '#fff3a0' };
+  // Nitro pickup: a blue bottle with a white band.
+  const NITRO_CAN = ['..kk..', '.kggk.', 'kbbbbk', 'kbwwbk', 'kbbbbk', 'kbBbbk', 'kbBbbk', 'kbbbbk', '.kkkk.'];
+  const NITRO_PAL = { k: '#0e1a3a', b: '#2f6fe0', B: '#9fd0ff', w: '#ffffff', g: '#c0c0c8' };
   const HAZARD_PAL = { r: '#5a5a62', k: '#16161a', q: '#2c2c36', C: '#9aa0a8', c: '#6a707a', Y: '#f2c200' };
 
   function buildSprite(map, pal) {
@@ -462,6 +465,7 @@
   for (const k in DECOR_MAPS) decorSprites[k] = buildSprite(DECOR_MAPS[k], DECOR_PAL);
   const policeSprite = buildSprite(POLICE, POLICE_PAL);
   const potholeSprite = buildSprite(POTHOLE, HAZARD_PAL);
+  const nitroSprite = buildSprite(NITRO_CAN, NITRO_PAL);
   const heliSprite = buildSprite(HELI, HELI_PAL);
   const HELI_W = HELI[0].length, HELI_H = HELI.length;
   const rampSprite = buildSprite(RAMP, HAZARD_PAL);
@@ -723,12 +727,12 @@
   let paintIdx = store.get('paint', 0);
   if (!PAINTS[paintIdx] || PAINTS[paintIdx].need > best) paintIdx = 0;
 
-  let player, traffic, cops, copWrecks, slicks, particles, popups;
+  let player, traffic, cops, copWrecks, slicks, particles, popups, banners;
   let score, dist, spawnTimer, combo, comboTimer, shake, level, crashTimer, overTimer;
   let wanted, heat, calm, copCool, copsShaken, copsWrecked, sirenTimer, sirenHigh, endReason;
   let abilityCd, abilityTime;
   let driftPts, driftCurve, skidTimer, driftTipShown, crashCause;
-  let roadItems, nextPothole, nextRamp, rampTipShown;
+  let roadItems, nextPothole, nextRamp, nextNitro, rampTipShown;
   let heli, heliCool, bullets, hp, hurtTimer, rotorTimer, heliTipShown;
   let curves = [], curveEnd = 0;
   const shiftRows = new Float32Array(H + SHIFT_OFF * 2);
@@ -769,7 +773,7 @@
   }
 
   function reset() {
-    player = { x: laneX(2), vx: 0, speed: CRUISE, braking: false, gas: false, angle: 0, air: 0, airMax: 1, wobble: 0 };
+    player = { x: laneX(2), vx: 0, speed: CRUISE, braking: false, gas: false, angle: 0, air: 0, airMax: 1, wobble: 0, boost: 0 };
     heli = null;
     heliCool = 0;
     bullets = [];
@@ -780,6 +784,7 @@
     roadItems = [];
     nextPothole = 500;
     nextRamp = 900;
+    nextNitro = 700;
     rampTipShown = false;
     traffic = [];
     cops = [];
@@ -805,6 +810,7 @@
     endReason = 'wreck';
     particles = [];
     popups = [];
+    banners = [];
     score = 0;
     dist = 0;
     spawnTimer = 0.8;
@@ -826,8 +832,17 @@
     popup('GO GO GO!', W / 2, 80, '#ffd34d', 1.2);
   }
 
+  // Messages stay out of the driving view. Announcements (no points, centred)
+  // queue up in a slim banner under the top bar; everything else (points and
+  // callouts about your car) goes to a short feed in the bottom-right corner.
+  // x and y are kept for callers but only decide which of the two it is.
   function popup(text, x, y, color = '#fff', life = 1) {
-    popups.push({ text, x, y, color, life, max: life });
+    if (/\+\d/.test(text) || x !== W / 2) {
+      popups.push({ text, color, life: Math.max(life, 1.2), max: Math.max(life, 1.2) });
+      if (popups.length > 3) popups.shift();
+    } else if (!banners.some((b) => b.text === text)) {
+      banners.push({ text, color, life: Math.min(life, 1.6) });
+    }
   }
 
   function particle(x, y, vx, vy, life, color, size = 1, ground = false) {
@@ -1365,6 +1380,9 @@
         if (it.used) continue;
         if (it.kind === 'ramp') {
           if (p.air <= 0 && overlaps(p.x + 1, PLAYER_Y, CAR_W - 2, CAR_H, it.x, it.y, it.w, it.h)) launch(it);
+        } else if (it.kind === 'nitro') {
+          // Grab it on the ground or in the air.
+          if (overlaps(p.x - 1, PLAYER_Y, CAR_W + 2, CAR_H, it.x, it.y, it.w, it.h)) collectNitro(it);
         } else if (p.air <= 0 && !abilityOn('ghost') &&
           overlaps(p.x + 1, PLAYER_Y + 2, CAR_W - 2, CAR_H - 4, it.x + 2, it.y + 1, it.w - 4, it.h - 2)) {
           hitPothole(it);
@@ -1394,6 +1412,12 @@
 
   // Potholes and ramps are bolted to the road, spaced out by distance travelled.
   function spawnRoadItems() {
+    if (dist >= nextNitro) {
+      const lane = randInt(0, LANES - 1);
+      const w = NITRO_CAN[0].length;
+      roadItems.push({ kind: 'nitro', x: laneX(lane, w), y: -NITRO_CAN.length - 2, w, h: NITRO_CAN.length, used: false });
+      nextNitro = dist + rand(700, 1300);
+    }
     if (dist >= nextPothole) {
       const lane = randInt(0, LANES - 1);
       roadItems.push({ kind: 'pothole', x: laneX(lane, POTHOLE[0].length) + randInt(-4, 4), y: -8,
@@ -1412,6 +1436,19 @@
         popup('RAMP AHEAD! JUMP THE CARS', W / 2, 46, '#f2c200', 2);
       }
     }
+  }
+
+  function collectNitro(it) {
+    it.used = true;
+    it.y = H + 100; // gone from the road
+    player.boost = 2.5;
+    shake = Math.max(shake, 2);
+    for (let i = 0; i < 14; i++) {
+      particle(player.x + CAR_W / 2, PLAYER_Y + CAR_H / 2, rand(-50, 50), rand(-50, 50), 0.4, pick(['#9fd0ff', '#2f6fe0', '#ffffff']));
+    }
+    popup('NITRO! +' + addScore(100), player.x + CAR_W / 2, PLAYER_Y, '#9fd0ff');
+    sfx.noise(0.5, 0.3);
+    sfx.tone(160, 0.5, 'sawtooth', 0.1, 520);
   }
 
   function hitPothole(it) {
@@ -1754,14 +1791,15 @@
 
     p.gas = keys.has('gas');
     p.braking = keys.has('brake') && !p.gas;
-    const nitro = abilityOn('nitro');
+    p.boost = Math.max(0, p.boost - dt);
+    const nitro = abilityOn('nitro') || p.boost > 0;
     const top = maxSpeed() + (nitro ? 80 : 0);
     const airborne = p.air > 0;
     p.wobble = Math.max(0, p.wobble - dt);
 
     if (airborne) {
       // No grip in the air: speed holds steady.
-    } else if (nitro) p.speed += 220 * dt;
+    } else if (nitro) p.speed = Math.max(p.speed, Math.min(top, p.speed + 220 * dt));
     else if (p.gas) p.speed += 85 * dt;
     else if (p.braking) p.speed -= 170 * dt;
     else p.speed += (CRUISE - p.speed) * Math.min(1, 0.6 * dt);
@@ -2005,11 +2043,14 @@
       p.life -= dt;
     }
     particles = particles.filter((p) => p.life > 0);
-    for (const p of popups) {
-      p.y -= 12 * dt;
-      p.life -= dt;
-    }
+    for (const p of popups) p.life -= dt;
     popups = popups.filter((p) => p.life > 0);
+    if (banners.length) {
+      // Hurry the current banner along when others are waiting.
+      if (banners.length > 2) banners[0].life = Math.min(banners[0].life, 0.6);
+      banners[0].life -= dt;
+      if (banners[0].life <= 0) banners.shift();
+    }
     shake = Math.max(0, shake - dt * 12);
     pressed.clear();
   }
@@ -2114,7 +2155,15 @@
     const inMenu = state === 'title' || state === 'shop';
     if (!inMenu) {
       for (const it of roadItems) {
-        ctx.drawImage(it.kind === 'ramp' ? rampSprite : potholeSprite, sx(it.x, it.y + it.h / 2), Math.round(it.y));
+        if (it.kind === 'nitro') {
+          // Bob and glow so it stands out on the asphalt.
+          const nx = sx(it.x, it.y + it.h / 2), ny = Math.round(it.y + Math.sin(time * 6) * 1.5);
+          ctx.fillStyle = 'rgba(80,160,255,' + (0.25 + 0.15 * Math.sin(time * 8)).toFixed(2) + ')';
+          ctx.fillRect(nx - 2, ny - 1, it.w + 4, it.h + 2);
+          ctx.drawImage(nitroSprite, nx, ny);
+        } else {
+          ctx.drawImage(it.kind === 'ramp' ? rampSprite : potholeSprite, sx(it.x, it.y + it.h / 2), Math.round(it.y));
+        }
       }
       for (const s of slicks) {
         for (let i = 0; i < 3; i++) ctx.drawImage(oilSprite, sx(s.x, s.y) + i * 11, Math.round(s.y) + (i === 1 ? 1 : 0));
@@ -2181,10 +2230,19 @@
   }
 
   function drawPopups() {
-    for (const p of popups) {
-      if (p.life < 0.25 && Math.floor(time * 20) % 2) continue;
-      drawText(p.text, p.x, p.y, p.color, 1, 'center');
+    const b = banners[0];
+    if (b) {
+      const y = state === 'title' || state === 'shop' ? H - 22 : 31;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0, y - 2, W, 9);
+      if (b.life > 0.2 || Math.floor(time * 20) % 2) drawText(b.text, W / 2, y, b.color, 1, 'center');
     }
+    popups.forEach((p, i) => {
+      const y = H - 12 - (popups.length - 1 - i) * 7;
+      ctx.globalAlpha = clamp(p.life / 0.4, 0, 1);
+      drawText(p.text, W - 2, y, p.color, 1, 'right');
+      ctx.globalAlpha = 1;
+    });
   }
 
   function drawHUD() {
@@ -2288,7 +2346,7 @@
     const sf = clamp((player.speed - MIN_SPEED) / span, 0, 1);
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(0, H - 3, W, 3);
-    ctx.fillStyle = abilityOn('nitro') ? (flip ? '#3a7bff' : '#ffffff') : reckless ? '#ff4d4d' : sf > 0.6 ? '#ffd34d' : '#57c062';
+    ctx.fillStyle = abilityOn('nitro') || player.boost > 0 ? (flip ? '#3a7bff' : '#ffffff') : reckless ? '#ff4d4d' : sf > 0.6 ? '#ffd34d' : '#57c062';
     ctx.fillRect(1, H - 2, Math.round((W - 2) * sf), 1);
     ctx.fillStyle = '#6fa8ff';
     ctx.fillRect(1 + Math.round((W - 2) * (policeSpeed() - MIN_SPEED) / span), H - 3, 1, 3);
