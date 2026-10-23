@@ -17,6 +17,8 @@
   const POLICE_MPH = 100, POLICE_SPEED = POLICE_MPH / MPH;
   const MAX_COPS = 4, MAX_WANTED = 5, WANTED_STEP = 6;
   const COP_ESCAPE_Y = H + 140;
+  const MAX_HP = 5;
+  const HELI_FUEL = 25, HELI_COOLDOWN = 15;
   const ONCOMING_LANES = 2; // lanes 0-1 drive toward you, lanes 2-3 go your way
   const PAD = 48; // extra road tile width on each side so curves never show an edge
   const SHIFT_OFF = 60;
@@ -331,6 +333,30 @@
     'cccccccccccc',
     'kkkkkkkkkkkk',
   ];
+  // Police helicopter, nose pointing down at you. Rotors are drawn spinning on top.
+  const HELI = [
+    '.......kk.......',
+    '......kTTk......',
+    '.......kk.......',
+    '.......BB.......',
+    '.......BB.......',
+    '.......WW.......',
+    '.......BB.......',
+    '.......BB.......',
+    '.....kBBBBk.....',
+    '....kBBBBBBk....',
+    '...kBBBBBBBBk...',
+    '...kWWWWWWWWk...',
+    'kk.kBBBBBBBBk.kk',
+    'kk.kBBBBBBBBk.kk',
+    'kk.kBBwwwwBBk.kk',
+    'kk.kBwwwwwwBk.kk',
+    'kk.kBwwggwwBk.kk',
+    '....kwwwwwwk....',
+    '.....kwwwwk.....',
+    '......kyyk......',
+  ];
+  const HELI_PAL = { B: '#2a3346', W: '#e8e8e8', w: '#4a6aa5', g: '#b0c8f0', T: '#555a66', k: '#0e0e12', y: '#fff3a0' };
   const HAZARD_PAL = { r: '#5a5a62', k: '#16161a', q: '#2c2c36', C: '#9aa0a8', c: '#6a707a', Y: '#f2c200' };
 
   function buildSprite(map, pal) {
@@ -389,6 +415,8 @@
   for (const k in DECOR_MAPS) decorSprites[k] = buildSprite(DECOR_MAPS[k], DECOR_PAL);
   const policeSprite = buildSprite(POLICE, POLICE_PAL);
   const potholeSprite = buildSprite(POTHOLE, HAZARD_PAL);
+  const heliSprite = buildSprite(HELI, HELI_PAL);
+  const HELI_W = HELI[0].length, HELI_H = HELI.length;
   const rampSprite = buildSprite(RAMP, HAZARD_PAL);
   const policeWreckSprite = buildSprite(POLICE, Object.fromEntries(
     Object.entries(POLICE_PAL).map(([k, v]) => [k, mix(v, '#000000', 0.6)])));
@@ -559,6 +587,9 @@
       for (let i = 0; i < 4; i++) this.tone(i % 2 ? 720 : 960, 0.14, 'square', 0.07, null, i * 0.14);
     },
     bump() { this.noise(0.15, 0.25); },
+    gunshot() { this.noise(0.06, 0.18); this.tone(180, 0.05, 'square', 0.05, 90); },
+    lockOn() { this.tone(1200, 0.06, 'square', 0.05); this.tone(1200, 0.06, 'square', 0.05, null, 0.12); },
+    hurt() { this.noise(0.2, 0.4); this.tone(300, 0.2, 'sawtooth', 0.1, 80); },
     busted() {
       this.tone(960, 0.25, 'triangle', 0.12);
       this.tone(720, 0.25, 'triangle', 0.12, null, 0.25);
@@ -651,6 +682,7 @@
   let abilityCd, abilityTime;
   let driftPts, driftCurve, skidTimer, driftTipShown, crashCause;
   let roadItems, nextPothole, nextRamp, rampTipShown;
+  let heli, heliCool, bullets, hp, hurtTimer, rotorTimer, heliTipShown;
   let curves = [], curveEnd = 0;
   const shiftRows = new Float32Array(H + SHIFT_OFF * 2);
   let newUnlocks = [], isNewBest = false;
@@ -674,6 +706,13 @@
 
   function reset() {
     player = { x: laneX(2), vx: 0, speed: CRUISE, braking: false, gas: false, angle: 0, air: 0, airMax: 1, wobble: 0 };
+    heli = null;
+    heliCool = 0;
+    bullets = [];
+    hp = MAX_HP;
+    hurtTimer = 0;
+    rotorTimer = 0;
+    heliTipShown = false;
     roadItems = [];
     nextPothole = 500;
     nextRamp = 900;
@@ -1038,6 +1077,10 @@
         heat = 0;
         calm = 0;
         popup("HEAT'S OFF", W / 2, 70, '#57c062', 1.4);
+        if (hp < MAX_HP) {
+          hp = MAX_HP;
+          popup('CAR PATCHED UP', W / 2, 80, '#57c062', 1.4);
+        }
       }
     }
 
@@ -1352,6 +1395,139 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Helicopter boss
+  // ---------------------------------------------------------------------------
+  // At max heat a police chopper hovers ahead of you. It locks a red target on
+  // where you're headed, then sprays a burst of bullets at that spot. Get out
+  // of the target before the burst lands. Too many hits and the car blows up.
+  // It runs out of fuel and leaves after a while, then comes back if you're
+  // still at max heat.
+  function updateHeli(dt) {
+    heliCool = Math.max(0, heliCool - dt);
+    if (!heli && state === 'play' && wanted >= MAX_WANTED && heliCool <= 0) {
+      heli = { x: player.x + CAR_W / 2 - HELI_W / 2, y: -HELI_H - 10, fuel: HELI_FUEL, fireTimer: 2.5,
+        target: null, aim: 0, leaving: false, spin: 0 };
+      popup('CHOPPER INBOUND!', W / 2, 60, '#ff4d4d', 2);
+      if (!heliTipShown) {
+        heliTipShown = true;
+        popup('DODGE THE RED TARGETS', W / 2, 70, '#ffd34d', 2.4);
+      }
+      sfx.copAlert();
+    }
+
+    if (state !== 'play') {
+      bullets = [];
+      if (heli) heli.target = null;
+    } else {
+      updateBullets(dt);
+    }
+    if (!heli) return;
+
+    heli.spin += dt;
+    rotorTimer -= dt;
+    if (rotorTimer <= 0) {
+      rotorTimer = 0.11;
+      sfx.tone(55, 0.07, 'square', heli.leaving ? 0.015 : 0.03);
+    }
+
+    if (!heli.leaving) {
+      heli.fuel -= dt;
+      if (wanted < MAX_WANTED || heli.fuel <= 0) {
+        heli.leaving = true;
+        heli.target = null;
+        heliCool = HELI_COOLDOWN;
+        if (state === 'play') popup('CHOPPER BUGGING OUT', W / 2, 60, '#57c062', 1.6);
+      }
+    }
+    if (heli.leaving) {
+      heli.y -= 70 * dt;
+      if (heli.y < -HELI_H - 30) heli = null;
+      return;
+    }
+
+    // Hover ahead of you, drifting side to side.
+    const tx = player.x + CAR_W / 2 - HELI_W / 2 + Math.sin(time * 0.9) * 18;
+    const ty = 46 + Math.sin(time * 1.3) * 10;
+    heli.x = clamp(heli.x + clamp(tx - heli.x, -75 * dt, 75 * dt), 0, W - HELI_W);
+    heli.y += (ty - heli.y) * Math.min(1, 1.5 * dt);
+
+    if (state !== 'play') return;
+    if (heli.target) {
+      heli.aim -= dt;
+      if (heli.aim <= 0) fireBurst();
+    } else if (!abilityOn('smoke')) {
+      // Smoke hides you from the chopper too.
+      heli.fireTimer -= dt;
+      if (heli.fireTimer <= 0) {
+        heli.target = {
+          x: clamp(player.x + CAR_W / 2 + player.vx * 0.5, ROAD_X - 4, ROAD_R + 4),
+          y: PLAYER_Y + CAR_H / 2,
+        };
+        heli.aim = 0.75;
+        sfx.lockOn();
+      }
+    }
+  }
+
+  function fireBurst() {
+    const gx = heli.x + HELI_W / 2, gy = heli.y + HELI_H;
+    const n = 5;
+    for (let i = 0; i < n; i++) {
+      const tx = heli.target.x + rand(-9, 9), ty = heli.target.y + rand(-7, 7);
+      const d = Math.hypot(tx - gx, ty - gy) || 1;
+      const speed = 240;
+      bullets.push({ x: gx, y: gy, vx: (tx - gx) / d * speed, vy: (ty - gy) / d * speed,
+        left: d / speed, delay: i * 0.07, tx, ty });
+    }
+    heli.target = null;
+    heli.fireTimer = rand(1.4, 2.3);
+  }
+
+  // Bullets fly to their target spot and hit whatever is there when they land.
+  function updateBullets(dt) {
+    for (const b of bullets) {
+      if (b.delay > 0) {
+        b.delay -= dt;
+        if (b.delay <= 0) sfx.gunshot();
+        continue;
+      }
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      b.left -= dt;
+      if (b.left <= 0) {
+        b.dead = true;
+        for (let i = 0; i < 3; i++) {
+          particle(b.tx, b.ty, rand(-25, 25), rand(-25, 25), 0.25, pick(['#fff3a0', '#ffb000', '#8a8a90']), 1, true);
+        }
+        const hitbox = overlaps(b.tx - 1, b.ty - 1, 2, 2, player.x - 1, PLAYER_Y - 1, CAR_W + 2, CAR_H + 2);
+        if (hitbox && hurtTimer <= 0 && !abilityOn('ghost') && state === 'play') hitPlayer();
+      }
+    }
+    bullets = bullets.filter((b) => !b.dead);
+  }
+
+  function hitPlayer() {
+    hp--;
+    hurtTimer = 0.8;
+    shake = Math.max(shake, 3);
+    for (let i = 0; i < 12; i++) {
+      particle(player.x + rand(0, CAR_W), PLAYER_Y + rand(0, CAR_H), rand(-50, 50), rand(-50, 50), 0.4,
+        pick(['#ffffff', '#fff3a0', '#ffb000']), 1);
+    }
+    sfx.hurt();
+    if (hp <= 0) {
+      crashCause = 'heli';
+      for (let i = 0; i < 40; i++) {
+        particle(player.x + CAR_W / 2, PLAYER_Y + CAR_H / 2, rand(-90, 90), rand(-90, 90), rand(0.5, 1.2),
+          pick(['#fff3a0', '#ffb000', '#ff6a00', '#d02000']), randInt(1, 3));
+      }
+      crash({ x: player.x, y: PLAYER_Y, w: CAR_W, h: CAR_H });
+    } else {
+      popup(hp === 1 ? 'ONE HIT LEFT!' : 'HIT! ' + hp + ' LEFT', player.x + CAR_W / 2, PLAYER_Y - 10, '#ff4d4d', 0.9);
+    }
+  }
+
   function bust() {
     state = 'crash';
     endReason = 'busted';
@@ -1622,6 +1798,12 @@
     updateHazards(wdt);
     if (state === 'play') checkPlayerVsTraffic();
     if (state === 'play') updatePolice(wdt);
+    updateHeli(wdt);
+    hurtTimer = Math.max(0, hurtTimer - dt);
+    if (hp <= 2 && state === 'play' && Math.random() < (hp === 1 ? 0.6 : 0.3)) {
+      particle(p.x + rand(2, 8), PLAYER_Y + rand(0, 6), rand(-6, 6), rand(-25, -10), rand(0.4, 0.8),
+        hp === 1 ? pick(['#555555', '#ff6a00']) : '#777777', randInt(1, 2), true);
+    }
     sfx.engineSet(p.speed * (abilityOn('slowmo') ? 0.6 : 1));
   }
 
@@ -1641,6 +1823,7 @@
     updateTraffic(dt);
     updateCops(dt);
     updateHazards(dt);
+    updateHeli(dt);
     if (endReason === 'wreck') burnParticles(0.9);
     crashTimer -= dt;
     if (crashTimer <= 0) gameOver();
@@ -1651,6 +1834,7 @@
     updateTraffic(dt);
     updateCops(dt);
     updateHazards(dt);
+    updateHeli(dt);
     if (endReason === 'wreck') burnParticles(0.5);
     if (overTimer < 0.7) return;
     if (startPressed()) startGame();
@@ -1727,6 +1911,7 @@
     const x = Math.round(player.x), y = PLAYER_Y;
     const wrecked = (state === 'crash' || state === 'over') && endReason === 'wreck';
     if (abilityOn('ghost')) ctx.globalAlpha = Math.floor(time * 12) % 2 ? 0.35 : 0.6;
+    else if (hurtTimer > 0 && Math.floor(time * 20) % 2) ctx.globalAlpha = 0.3;
     const spr = vehicleSprite('car', paint().color, undefined, wrecked);
     const hgt = player.air > 0 ? Math.sin(Math.PI * (1 - player.air / player.airMax)) : 0;
     if (hgt > 0) {
@@ -1794,6 +1979,24 @@
       for (const s of slicks) {
         for (let i = 0; i < 3; i++) ctx.drawImage(oilSprite, sx(s.x, s.y) + i * 11, Math.round(s.y) + (i === 1 ? 1 : 0));
       }
+      if (heli) {
+        // Chopper shadow on the road.
+        ctx.fillStyle = 'rgba(0,0,0,0.28)';
+        ctx.fillRect(Math.round(heli.x) + 9, Math.round(heli.y) + 44, HELI_W - 4, HELI_H - 6);
+      }
+      if (heli && heli.target) {
+        // Red lock-on reticle; blinks faster just before the burst.
+        const t = heli.target;
+        if (heli.aim > 0.3 || Math.floor(time * 16) % 2) {
+          const rx = Math.round(t.x), ry = Math.round(t.y);
+          ctx.fillStyle = '#ff2a2a';
+          for (const [dx, dy] of [[-7, -7], [4, -7], [-7, 4], [4, 4]]) {
+            ctx.fillRect(rx + dx, ry + dy, 3, 1);
+            ctx.fillRect(rx + dx + (dx < 0 ? 0 : 2), ry + dy + (dy < 0 ? 0 : -2), 1, 3);
+          }
+          ctx.fillRect(rx, ry, 1, 1);
+        }
+      }
       for (const w of copWrecks) drawVehicle(policeWreckSprite, sx(w.x, w.y + w.h / 2), Math.round(w.y), w.w, w.h);
       for (const c of traffic) drawTrafficCar(c);
       for (const cop of cops) drawCop(cop);
@@ -1805,6 +2008,36 @@
       ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
     }
     ctx.globalAlpha = 1;
+    if (state !== 'title') {
+      for (const b of bullets) {
+        if (b.delay > 0) continue;
+        ctx.fillStyle = 'rgba(255,200,60,0.5)';
+        ctx.fillRect(Math.round(b.x - b.vx * 0.02), Math.round(b.y - b.vy * 0.02), 1, 1);
+        ctx.fillStyle = '#fff3a0';
+        ctx.fillRect(Math.round(b.x), Math.round(b.y), 2, 2);
+      }
+      if (heli) drawHeli();
+    }
+  }
+
+  function drawHeli() {
+    const x = Math.round(heli.x), y = Math.round(heli.y);
+    ctx.drawImage(heliSprite, x, y);
+    // Main rotor: two long blades spinning around the cabin.
+    const cx = x + HELI_W / 2, cy = y + 12;
+    const a = heli.spin * 22;
+    ctx.fillStyle = 'rgba(210,215,225,0.75)';
+    for (const off of [0, Math.PI / 2]) {
+      const c = Math.cos(a + off), s = Math.sin(a + off);
+      for (let t = -14; t <= 14; t++) ctx.fillRect(Math.round(cx + c * t), Math.round(cy + s * t), 1, 1);
+    }
+    // Tail rotor flicker.
+    ctx.fillStyle = '#cfd3da';
+    if (Math.floor(time * 30) % 2) ctx.fillRect(cx - 3, y + 1, 6, 1);
+    else ctx.fillRect(cx - 1, y - 2, 1, 6);
+    // Police light on the nose.
+    ctx.fillStyle = lightsOn() ? '#ff2a2a' : '#3a7bff';
+    ctx.fillRect(cx - 1, y + 8, 2, 1);
   }
 
   function drawPopups() {
@@ -1828,6 +2061,17 @@
 
     // Active ability: name plus a cooldown bar (yellow while it's running).
     const a = paint();
+    if (heli || hp < MAX_HP) {
+      // Armor: one block per hit you can still take.
+      const bx = W - 2 - MAX_HP * 5 + 1;
+      drawText('HP', bx - 2, 20, hp <= 1 && lightsOn() ? '#ff4d4d' : '#ffffff', 1, 'right');
+      for (let i = 0; i < MAX_HP; i++) {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(bx + i * 5, 20, 4, 5);
+        ctx.fillStyle = i < hp ? (hp <= 2 ? '#ff4d4d' : '#57c062') : '#3a3a3a';
+        ctx.fillRect(bx + i * 5, 21, 4, 3);
+      }
+    }
     const label = 'B ' + a.activeName;
     const ready = abilityCd <= 0;
     const running = abilityTime > 0;
@@ -1987,7 +2231,7 @@
       drawText('WRECKED!', W / 2, 26, '#ff4d4d', 2, 'center', '#5a0000');
       const why = {
         traffic: 'TOTALED IN TRAFFIC', barrier: 'SPUN INTO THE BARRIERS',
-        wreck: 'PLOWED INTO A WRECK', landing: 'LANDED ON A CAR',
+        wreck: 'PLOWED INTO A WRECK', landing: 'LANDED ON A CAR', heli: 'SHOT DOWN BY THE CHOPPER',
       };
       drawText(why[crashCause] || why.traffic, W / 2, 42, '#aaaaaa', 1, 'center');
     }

@@ -55,7 +55,15 @@ On phones and tablets, on-screen buttons appear (including **DFT** for drift), a
 - To get away you have to go faster than the cops. Each cop you leave behind is worth +250, and losing all of them is a bonus.
 - To pull you over, a cop has to pull up right beside you and hold there. A **PULL OVER** meter fills above your car. If it fills, you're **BUSTED!** Swerve away or speed off to drain it.
 - While a cop lines up beside you it locks on to you and won't swerve. Ram it sideways, or lead it into another car or the barriers, to wreck it (**COP DOWN! +500**).
-- Stay under the limit with no cops on your tail for a few seconds and the heat dies down.
+- Stay under the limit with no cops on your tail for a few seconds and the heat dies down. That also patches your car back to full HP.
+
+## The chopper
+
+- At **max heat (5 stars)** a police helicopter flies in and hovers ahead of you.
+- It locks a **red target** on where you're heading, then sprays a burst of bullets at that spot. Get out of the target before the burst lands.
+- Each hit costs 1 **HP**; you have 5, shown at the top right. Your car smokes when it's badly damaged. At 0 HP it blows up and the run is over.
+- The chopper runs out of fuel after 25 seconds and leaves. It comes back 15 seconds later if you're still at max heat.
+- Black's **Smoke** hides you from the chopper, and White's **Ghost** lets bullets pass straight through.
 
 ## Paint jobs and abilities
 
