@@ -1,6 +1,6 @@
 # Reckless Driver
 
-A pixelated, top-down arcade game where you're a reckless driver weaving through highway traffic to get ahead of the other cars. Your car starts out **white**. Beat high scores to unlock new paint colors.
+A pixelated, top-down arcade game where you're a reckless driver weaving through traffic in a highway construction zone to get ahead of the other cars. Your car starts out **white**. Beat high scores to unlock new paint colors.
 
 ## Play
 
@@ -26,6 +26,15 @@ On phones and tablets, on-screen buttons appear, and you tap the screen to start
 - Traffic gets heavier the farther you go, and cars signal before they change lanes. Watch for the blinkers!
 - Driving on the grass slows you down.
 - One crash and you're wrecked.
+
+## Police
+
+- Go over **100 MPH** and a police cruiser starts chasing you. A blue tick on the speed bar marks the limit.
+- Keep speeding and your wanted level (the stars) goes up every few seconds. Each level sends another, faster cruiser after you, up to 5 stars.
+- To get away you have to go faster than the cops. Each cop you leave behind is worth +250, and losing all of them is a bonus.
+- If a cop catches up and touches you, you get pulled over: **BUSTED!** That means slowing down for traffic is risky while you're being chased.
+- Cops swerve around traffic but slow down when they clip a car, which gives you a chance to pull away.
+- Stay under the limit with no cops on your tail for a few seconds and the heat dies down.
 
 ## Unlockable paint
 
