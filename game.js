@@ -316,6 +316,23 @@
   ];
   const STAR = ['..1..', '.111.', '11111', '.111.', '.1.1.'];
 
+  // Road hazards: a pothole to avoid and a launch ramp (chevrons point the way up).
+  const POTHOLE = ['..rrrrr...', '.rkkkkkrr.', 'rkkqkkkkkr', 'rkkkkkkqkr', '.rkkkkkkr.', '...rrrr...'];
+  const RAMP = [
+    'CCCCCCCCCCCC',
+    'CCCCCYYCCCCC',
+    'CCCCYYYYCCCC',
+    'CCCYYCCYYCCC',
+    'CCYYCCCCYYCC',
+    'CCCCCYYCCCCC',
+    'CCCCYYYYCCCC',
+    'CCCYYCCYYCCC',
+    'CCYYCCCCYYCC',
+    'cccccccccccc',
+    'kkkkkkkkkkkk',
+  ];
+  const HAZARD_PAL = { r: '#5a5a62', k: '#16161a', q: '#2c2c36', C: '#9aa0a8', c: '#6a707a', Y: '#f2c200' };
+
   function buildSprite(map, pal) {
     const c = document.createElement('canvas');
     c.width = map[0].length;
@@ -371,6 +388,8 @@
   const decorSprites = {};
   for (const k in DECOR_MAPS) decorSprites[k] = buildSprite(DECOR_MAPS[k], DECOR_PAL);
   const policeSprite = buildSprite(POLICE, POLICE_PAL);
+  const potholeSprite = buildSprite(POTHOLE, HAZARD_PAL);
+  const rampSprite = buildSprite(RAMP, HAZARD_PAL);
   const policeWreckSprite = buildSprite(POLICE, Object.fromEntries(
     Object.entries(POLICE_PAL).map(([k, v]) => [k, mix(v, '#000000', 0.6)])));
   const oilSprite = buildSprite(
@@ -631,6 +650,7 @@
   let wanted, heat, calm, copCool, copsShaken, copsWrecked, sirenTimer, sirenHigh, endReason;
   let abilityCd, abilityTime;
   let driftPts, driftCurve, skidTimer, driftTipShown, crashCause;
+  let roadItems, nextPothole, nextRamp, rampTipShown;
   let curves = [], curveEnd = 0;
   const shiftRows = new Float32Array(H + SHIFT_OFF * 2);
   let newUnlocks = [], isNewBest = false;
@@ -653,7 +673,11 @@
   }
 
   function reset() {
-    player = { x: laneX(2), vx: 0, speed: CRUISE, braking: false, gas: false, angle: 0 };
+    player = { x: laneX(2), vx: 0, speed: CRUISE, braking: false, gas: false, angle: 0, air: 0, airMax: 1, wobble: 0 };
+    roadItems = [];
+    nextPothole = 500;
+    nextRamp = 900;
+    rampTipShown = false;
     traffic = [];
     cops = [];
     copWrecks = [];
@@ -911,16 +935,28 @@
   function checkPlayerVsTraffic() {
     const px = player.x, py = PLAYER_Y;
     const ghost = abilityOn('ghost');
+    const airborne = player.air > 0;
     for (const c of traffic) {
-      if (!ghost && overlaps(px + 1, py + 1, CAR_W - 2, CAR_H - 2, c.x + 1, c.y + 1, c.w - 2, c.h - 2)) {
-        crash(c);
-        return;
+      if (overlaps(px + 1, py + 1, CAR_W - 2, CAR_H - 2, c.x + 1, c.y + 1, c.w - 2, c.h - 2)) {
+        if (airborne) {
+          c.jumped = true;
+        } else if (!ghost) {
+          crash(c);
+          return;
+        }
       }
       const gap = Math.max(c.x - (px + CAR_W), px - (c.x + c.w));
       if (c.y < py + CAR_H && c.y + c.h > py) c.minGap = Math.min(c.minGap, gap);
       if (!c.passed && c.y > py + CAR_H) {
         c.passed = true;
-        if (c.minGap <= NEAR_MISS_GAP && player.speed >= 90 && !c.wrecked) nearMiss(c);
+        if (c.jumped) {
+          const bonus = addScore(c.dir < 0 ? 300 : 200);
+          popup('JUMPED IT! +' + bonus, W / 2, PLAYER_Y - 30, '#f2c200', 1.1);
+          sfx.tone(880, 0.08, 'square', 0.08);
+          sfx.tone(1320, 0.12, 'square', 0.08, null, 0.08);
+        } else if (c.minGap <= NEAR_MISS_GAP && player.speed >= 90 && !c.wrecked) {
+          nearMiss(c);
+        }
       }
     }
   }
@@ -1141,7 +1177,7 @@
       }
 
       // Contact with the player.
-      if (!ghost && overlaps(player.x, PLAYER_Y, CAR_W, CAR_H, cop.x, cop.y, cop.w, cop.h)) {
+      if (!ghost && player.air <= 0 && overlaps(player.x, PLAYER_Y, CAR_W, CAR_H, cop.x, cop.y, cop.w, cop.h)) {
         const dir = Math.sign(cop.x + cop.w / 2 - (player.x + CAR_W / 2)) || 1;
         if (Math.abs(dy) < CAR_H - 5) {
           // Side contact: swerving into a cop rams it sideways.
@@ -1169,7 +1205,7 @@
       // Holding position right beside you fills the pull-over meter.
       const gap = Math.max(cop.x - (player.x + CAR_W), player.x - (cop.x + cop.w));
       const beside = Math.abs(cop.y - PLAYER_Y) < 8 && gap >= -1 && gap <= 5;
-      if (beside && !lost && cop.stun <= 0 && !ghost) {
+      if (beside && !lost && cop.stun <= 0 && !ghost && player.air <= 0) {
         cop.pull += dt;
         if (cop.pull >= pullTime()) {
           bust();
@@ -1213,12 +1249,106 @@
     copWrecks = copWrecks.filter((w) => w.y < H + 40);
     for (const s of slicks) s.y += player.speed * dt;
     slicks = slicks.filter((s) => s.y < H + 10);
-    if (state === 'play' && !abilityOn('ghost')) {
+    for (const it of roadItems) it.y += player.speed * dt;
+    roadItems = roadItems.filter((it) => it.y < H + 20);
+
+    if (state === 'play') {
+      const p = player;
+      for (const it of roadItems) {
+        if (it.used) continue;
+        if (it.kind === 'ramp') {
+          if (p.air <= 0 && overlaps(p.x + 1, PLAYER_Y, CAR_W - 2, CAR_H, it.x, it.y, it.w, it.h)) launch(it);
+        } else if (p.air <= 0 && !abilityOn('ghost') &&
+          overlaps(p.x + 1, PLAYER_Y + 2, CAR_W - 2, CAR_H - 4, it.x + 2, it.y + 1, it.w - 4, it.h - 2)) {
+          hitPothole(it);
+        }
+      }
+      for (const cop of cops) {
+        if (cop.stun > 0) continue;
+        const hole = roadItems.find((it) => it.kind === 'pothole' &&
+          overlaps(cop.x + 1, cop.y + 2, cop.w - 2, cop.h - 4, it.x + 2, it.y + 1, it.w - 4, it.h - 2));
+        if (hole) {
+          cop.stun = 0.6;
+          cop.pull = 0;
+          cop.shove = (Math.random() < 0.5 ? -1 : 1) * 60;
+          sfx.bump();
+        }
+      }
+    }
+
+    if (state === 'play' && !abilityOn('ghost') && player.air <= 0) {
       const w = copWrecks.find((w) => overlaps(player.x + 1, PLAYER_Y + 1, CAR_W - 2, CAR_H - 2, w.x + 1, w.y + 1, w.w - 2, w.h - 2));
       if (w) {
         crashCause = 'wreck';
         crash(w);
       }
+    }
+  }
+
+  // Potholes and ramps are bolted to the road, spaced out by distance travelled.
+  function spawnRoadItems() {
+    if (dist >= nextPothole) {
+      const lane = randInt(0, LANES - 1);
+      roadItems.push({ kind: 'pothole', x: laneX(lane, POTHOLE[0].length) + randInt(-4, 4), y: -8,
+        w: POTHOLE[0].length, h: POTHOLE.length, used: false });
+      nextPothole = dist + rand(300, 650) / (1 + level * 0.1);
+    }
+    if (dist >= nextRamp) {
+      const lane = randInt(0, LANES - 1);
+      const w = RAMP[0].length;
+      // Keep the ramp clear of potholes so the run-up is fair.
+      roadItems = roadItems.filter((it) => !(it.kind === 'pothole' && it.y < 40 && Math.abs(it.x - laneX(lane, w)) < 14));
+      roadItems.push({ kind: 'ramp', x: laneX(lane, w), y: -RAMP.length - 2, w, h: RAMP.length, used: false });
+      nextRamp = dist + rand(1100, 1900);
+      if (!rampTipShown) {
+        rampTipShown = true;
+        popup('RAMP AHEAD! JUMP THE CARS', W / 2, 46, '#f2c200', 2);
+      }
+    }
+  }
+
+  function hitPothole(it) {
+    const p = player;
+    it.used = true;
+    p.speed = Math.max(MIN_SPEED, p.speed * 0.65);
+    p.vx += (Math.random() < 0.5 ? -1 : 1) * 90;
+    p.wobble = 0.5;
+    shake = Math.max(shake, 4);
+    combo = 0;
+    comboTimer = 0;
+    driftPts = 0;
+    for (let i = 0; i < 12; i++) {
+      particle(p.x + rand(0, CAR_W), PLAYER_Y + rand(4, CAR_H), rand(-40, 40), rand(-40, 20), 0.4,
+        pick(['#5a5a62', '#8a8a90', '#2c2c36']), 1, true);
+    }
+    popup('POTHOLE!', p.x + CAR_W / 2, PLAYER_Y - 10, '#ff9d3d', 0.9);
+    sfx.noise(0.25, 0.45);
+    sfx.tone(90, 0.25, 'square', 0.12, 50);
+  }
+
+  function launch(ramp) {
+    const p = player;
+    ramp.used = true;
+    p.airMax = p.air = 0.8 + p.speed / 300;
+    p.wobble = 0;
+    popup('AIRBORNE!', p.x + CAR_W / 2, PLAYER_Y - 12, '#f2c200', 0.9);
+    sfx.tone(200, 0.5, 'square', 0.09, 700);
+  }
+
+  function land() {
+    const p = player;
+    shake = Math.max(shake, 2);
+    for (let i = 0; i < 10; i++) {
+      particle(p.x + rand(0, CAR_W), PLAYER_Y + CAR_H - 2, rand(-30, 30), rand(-10, 10), 0.4, pick(['#bdbdbd', '#8a8a8a']), 1, true);
+    }
+    sfx.noise(0.15, 0.3);
+    if (abilityOn('ghost')) return;
+    const on = traffic.find((c) => !c.wrecked &&
+      overlaps(p.x + 1, PLAYER_Y + 1, CAR_W - 2, CAR_H - 2, c.x + 1, c.y + 1, c.w - 2, c.h - 2)) ||
+      cops.find((c) => overlaps(p.x + 1, PLAYER_Y + 1, CAR_W - 2, CAR_H - 2, c.x + 1, c.y + 1, c.w - 2, c.h - 2));
+    if (on) {
+      crashCause = 'landing';
+      crash(on);
     }
   }
 
@@ -1337,13 +1467,17 @@
     p.braking = keys.has('brake') && !p.gas;
     const nitro = abilityOn('nitro');
     const top = maxSpeed() + (nitro ? 80 : 0);
+    const airborne = p.air > 0;
+    p.wobble = Math.max(0, p.wobble - dt);
 
-    if (nitro) p.speed += 220 * dt;
+    if (airborne) {
+      // No grip in the air: speed holds steady.
+    } else if (nitro) p.speed += 220 * dt;
     else if (p.gas) p.speed += 85 * dt;
     else if (p.braking) p.speed -= 170 * dt;
     else p.speed += (CRUISE - p.speed) * Math.min(1, 0.6 * dt);
 
-    const offroad = p.x < ROAD_X - 2 || p.x + CAR_W > ROAD_R + 2;
+    const offroad = !airborne && (p.x < ROAD_X - 2 || p.x + CAR_W > ROAD_R + 2);
     if (offroad) {
       if (!hasPassive('offroad')) {
         p.speed -= (p.speed - 55) * Math.min(1, 2.5 * dt);
@@ -1364,8 +1498,13 @@
     const k = curvAt(dist);
     const dir = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0);
     const steer = 55 + Math.min(p.speed, MAX_SPEED) * 0.15;
-    const drifting = keys.has('drift') && p.speed > 90;
-    if (drifting) {
+    const drifting = keys.has('drift') && p.speed > 90 && !airborne;
+    if (airborne) {
+      p.vx += (dir * steer * 0.6 - p.vx) * Math.min(1, 3 * dt);
+    } else if (p.wobble > 0) {
+      // Knocked off line by a pothole: the wheel is out of your hands for a moment.
+      p.vx -= p.vx * Math.min(1, 2 * dt);
+    } else if (drifting) {
       p.vx += (dir * steer * 1.6 - p.vx) * Math.min(1, 5 * dt);
       p.speed -= 25 * dt;
       const targetAngle = dir !== 0 ? dir * 0.4 : p.angle;
@@ -1374,7 +1513,7 @@
       p.vx += (dir * steer - p.vx) * Math.min(1, 12 * dt);
       p.angle -= p.angle * Math.min(1, 10 * dt);
     }
-    const push = k * p.speed * p.speed * 0.55 * (drifting ? 0.35 : 1);
+    const push = airborne ? 0 : k * p.speed * p.speed * 0.55 * (drifting ? 0.35 : 1);
     const lateral = p.vx - push;
     const minX = ROAD_X - 8, maxX = ROAD_R + 8 - CAR_W;
     p.x += lateral * dt;
@@ -1445,8 +1584,18 @@
       }
     }
 
+    if (p.air > 0) {
+      p.air -= wdt;
+      if (p.air <= 0) {
+        p.air = 0;
+        land();
+        if (state !== 'play') return;
+      }
+    }
+
     const moved = p.speed * wdt;
     dist += moved;
+    spawnRoadItems();
     addScore(moved * 0.1 * (p.speed >= RECKLESS_SPEED ? 2 : 1));
     scrollWorld(moved);
 
@@ -1579,7 +1728,18 @@
     const wrecked = (state === 'crash' || state === 'over') && endReason === 'wreck';
     if (abilityOn('ghost')) ctx.globalAlpha = Math.floor(time * 12) % 2 ? 0.35 : 0.6;
     const spr = vehicleSprite('car', paint().color, undefined, wrecked);
-    if (Math.abs(player.angle) > 0.02) {
+    const hgt = player.air > 0 ? Math.sin(Math.PI * (1 - player.air / player.airMax)) : 0;
+    if (hgt > 0) {
+      // In the air: the shadow falls away and the car looms bigger.
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(x + 2 + Math.round(hgt * 5), y + 2 + Math.round(hgt * 8), CAR_W, CAR_H);
+      ctx.save();
+      ctx.translate(x + CAR_W / 2, y + CAR_H / 2);
+      ctx.scale(1 + 0.55 * hgt, 1 + 0.55 * hgt);
+      ctx.rotate(player.angle);
+      ctx.drawImage(spr, -CAR_W / 2, -CAR_H / 2);
+      ctx.restore();
+    } else if (Math.abs(player.angle) > 0.02) {
       ctx.save();
       ctx.translate(x + CAR_W / 2, y + CAR_H / 2);
       ctx.rotate(player.angle);
@@ -1628,6 +1788,9 @@
       ctx.drawImage(spr, sx(d.x, d.y + spr.height / 2), Math.round(d.y));
     }
     if (state !== 'title') {
+      for (const it of roadItems) {
+        ctx.drawImage(it.kind === 'ramp' ? rampSprite : potholeSprite, sx(it.x, it.y + it.h / 2), Math.round(it.y));
+      }
       for (const s of slicks) {
         for (let i = 0; i < 3; i++) ctx.drawImage(oilSprite, sx(s.x, s.y) + i * 11, Math.round(s.y) + (i === 1 ? 1 : 0));
       }
@@ -1822,7 +1985,10 @@
       drawText('PULLED OVER BY THE COPS', W / 2, 42, '#aaaaaa', 1, 'center');
     } else {
       drawText('WRECKED!', W / 2, 26, '#ff4d4d', 2, 'center', '#5a0000');
-      const why = { traffic: 'TOTALED IN TRAFFIC', barrier: 'SPUN INTO THE BARRIERS', wreck: 'PLOWED INTO A WRECK' };
+      const why = {
+        traffic: 'TOTALED IN TRAFFIC', barrier: 'SPUN INTO THE BARRIERS',
+        wreck: 'PLOWED INTO A WRECK', landing: 'LANDED ON A CAR',
+      };
       drawText(why[crashCause] || why.traffic, W / 2, 42, '#aaaaaa', 1, 'center');
     }
     drawText('SCORE', W / 2, 54, '#aaaaaa', 1, 'center');

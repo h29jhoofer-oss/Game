@@ -27,6 +27,14 @@ On phones and tablets, on-screen buttons appear (including **DFT** for drift), a
 - Every so often the road **curves**. A warning pops up just before each one, and chevrons (`>>>` / `<<<`) show which way to steer while you're in it.
 - A curve pushes your car toward the outside, harder the faster you go. At high speed, normal steering can't hold the line. If the curve throws you into the barriers, you're wrecked.
 
+## Potholes and ramps
+
+- **Potholes** are dark holes in the road. Hitting one costs a big chunk of speed, knocks your car sideways, and takes the wheel out of your hands for a moment. It also breaks your combo and any drift in progress. Cops that hit one get thrown off line too.
+- **Launch ramps** have yellow chevrons. Drive over one to jump; the faster you hit it, the longer you fly.
+  - In the air you sail over cars, potholes and cops, and you can't be pulled over. Steering is lighter and your speed holds steady.
+  - Each car you clear is worth **JUMPED IT! +200**, or +300 for an oncoming car.
+  - Watch where you come down: **landing on a car wrecks you.**
+
 ## Drifting
 
 - Hold **Space** (or Shift) while steering to drift. The car slides sideways much harder, shrugs off most of a curve's push, and bleeds a little speed.
