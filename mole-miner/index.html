@@ -1,0 +1,1360 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Mole Miner</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #111;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #game {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      display: block;
+      background: #000;
+    }
+    #touch {
+      display: none;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+      padding: 0 12px;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+    body.touch #touch { display: flex; }
+    #touch .pad { display: flex; gap: 8px; }
+    #touch button {
+      pointer-events: auto;
+      width: 50px;
+      height: 50px;
+      border: 3px solid rgba(255, 255, 255, 0.6);
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.35);
+      color: #fff;
+      font: bold 16px monospace;
+      touch-action: none;
+    }
+    #touch button.active { background: rgba(255, 255, 255, 0.35); }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="touch">
+    <div class="pad">
+      <button data-act="left">&#9664;</button>
+      <button data-act="right">&#9654;</button>
+    </div>
+    <div class="pad">
+      <button data-act="rope">B</button>
+      <button data-act="up">&#9650;</button>
+      <button data-act="down">&#9660;</button>
+    </div>
+  </div>
+  <script>
+// Mole Miner — a pixelated, turn-by-turn dig down a mine shaft. Every dig
+// costs stamina; sell gems at the surface for better gear.
+(() => {
+  'use strict';
+
+  // ---------------------------------------------------------------------------
+  // Constants
+  // ---------------------------------------------------------------------------
+  const W = 128, H = 192;
+  const TS = 8, COLS = 16;
+  const TOP_ROWS = 5; // sky rows above the ground
+  const START_COL = 7;
+  const MOVE_TIME = 0.13, CLIMB_TIME = 0.2;
+  const BASE_STAMINA = 50, BASE_HP = 3, BASE_BAG = 6;
+
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const randInt = (a, b) => Math.floor(rand(a, b + 1));
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  function pickWeighted(list) {
+    let r = Math.random() * list.reduce((s, e) => s + e.w, 0);
+    for (const e of list) {
+      r -= e.w;
+      if (r < 0) return e;
+    }
+    return list[list.length - 1];
+  }
+  // Stable per-tile noise so textures don't flicker.
+  const hash = (a, b) => {
+    let h = (Math.imul(a, 374761393) + Math.imul(b, 668265263)) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+
+  // Rock types. Hardness decides which drill can get through it; cost is the
+  // stamina one dig takes before drill upgrades.
+  const MATS = {
+    dirt: { name: 'DIRT', hard: 1, cost: 1, base: '#7a5236', spots: ['#5e3e28', '#8e6444', '#6a4630'] },
+    clay: { name: 'CLAY', hard: 1, cost: 2, base: '#a0603a', spots: ['#8a4e2e', '#b8744a', '#94583a'] },
+    stone: { name: 'STONE', hard: 2, cost: 3, base: '#6a6a72', spots: ['#55555c', '#82828a', '#5e5e66'] },
+    granite: { name: 'GRANITE', hard: 3, cost: 5, base: '#4a4458', spots: ['#3a3446', '#6a6280', '#a07080'] },
+    boulder: { name: 'BOULDER', hard: 2, cost: 3 },
+    bedrock: { name: 'BEDROCK', hard: 99, cost: 0, base: '#1e1a22', spots: ['#2c2632', '#16121a'] },
+  };
+
+  const GEMS = [
+    { name: 'COAL', value: 10, min: 0, color: '#2a2a2e', hi: '#6a6a72' },
+    { name: 'COPPER', value: 25, min: 4, color: '#c8743a', hi: '#f0a060' },
+    { name: 'SILVER', value: 60, min: 14, color: '#b8c0cc', hi: '#ffffff' },
+    { name: 'GOLD', value: 140, min: 26, color: '#f2c200', hi: '#fff3a0' },
+    { name: 'RUBY', value: 300, min: 40, color: '#d01838', hi: '#ff7a8a' },
+    { name: 'EMERALD', value: 650, min: 58, color: '#1fae5f', hi: '#8af0b0' },
+    { name: 'DIAMOND', value: 1500, min: 80, color: '#9fe0ff', hi: '#ffffff' },
+  ];
+
+  const UPGRADES = [
+    { id: 'drill', name: 'DRILL', desc: 'CHEAPER DIGS. LV1 CUTS GRANITE', prices: [250, 1000, 3500] },
+    { id: 'bag', name: 'BIG BAG', desc: '+4 GEM SLOTS', prices: [150, 600, 2000] },
+    { id: 'lantern', name: 'LANTERN', desc: 'SEE FARTHER. SPOTS GAS POCKETS', prices: [200, 800, 2500] },
+    { id: 'lunch', name: 'LUNCHBOX', desc: 'MORE STAMINA PER DIG', prices: [150, 600, 2000] },
+    { id: 'helmet', name: 'HARD HAT', desc: '+1 HP', prices: [300, 1200] },
+  ];
+
+  // Banners the first time you reach each layer in a run.
+  const LAYERS = [
+    { depth: 12, text: 'CLAY: WATCH FOR LOOSE ROCKS', color: '#d8a070' },
+    { depth: 22, text: 'GAS POCKETS DOWN HERE', color: '#8af07a' },
+    { depth: 30, text: 'STONE LAYER', color: '#b8c0cc' },
+    { depth: 42, text: 'LAVA ZONE: STAY SHARP', color: '#ff7a3a' },
+    { depth: 55, text: 'DEEP GRANITE', color: '#a08ac0' },
+  ];
+
+  // ---------------------------------------------------------------------------
+  // Canvas
+  // ---------------------------------------------------------------------------
+  const canvas = document.getElementById('game');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  function resize() {
+    const s = Math.min(innerWidth / W, innerHeight / H);
+    const scale = s >= 1 ? Math.floor(s) : s;
+    canvas.style.width = W * scale + 'px';
+    canvas.style.height = H * scale + 'px';
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  // ---------------------------------------------------------------------------
+  // Storage (cash, gear and best depth survive reloads when the browser allows it)
+  // ---------------------------------------------------------------------------
+  const store = {
+    get(key, fallback) {
+      try {
+        const v = localStorage.getItem('moleMiner.' + key);
+        return v === null ? fallback : JSON.parse(v);
+      } catch (e) {
+        return fallback;
+      }
+    },
+    set(key, value) {
+      try {
+        localStorage.setItem('moleMiner.' + key, JSON.stringify(value));
+      } catch (e) { /* storage unavailable */ }
+    },
+  };
+
+  // ---------------------------------------------------------------------------
+  // Pixel font (3x5)
+  // ---------------------------------------------------------------------------
+  const FONT = {
+    A: '010101111101101', B: '110101110101110', C: '011100100100011', D: '110101101101110',
+    E: '111100110100111', F: '111100110100100', G: '011100101101011', H: '101101111101101',
+    I: '111010010010111', J: '001001001101010', K: '101101110101101', L: '100100100100111',
+    M: '101111111101101', N: '110101101101101', O: '010101101101010', P: '110101110100100',
+    Q: '010101101110011', R: '110101110101101', S: '011100010001110', T: '111010010010010',
+    U: '101101101101111', V: '101101101101010', W: '101101111111101', X: '101101010101101',
+    Y: '101101010010010', Z: '111001010100111',
+    0: '111101101101111', 1: '010110010010111', 2: '110001010100111', 3: '110001010001110',
+    4: '101101111001001', 5: '111100110001110', 6: '011100111101111', 7: '111001010010010',
+    8: '111101111101111', 9: '111101111001110',
+    '!': '010010010000010', '.': '000000000000010', ':': '000010000010000', '-': '000000111000000',
+    '+': '000010111010000', '/': '001001010100100', "'": '010010000000000', '?': '110001010000010',
+    '<': '001010100010001', '>': '100010001010100', '=': '000111000111000',
+  };
+
+  const textWidth = (str, scale = 1) => (str.length ? str.length * 4 * scale - scale : 0);
+
+  function drawTextRaw(str, x, y, color, scale) {
+    ctx.fillStyle = color;
+    for (let i = 0; i < str.length; i++) {
+      const glyph = FONT[str[i]];
+      if (!glyph) continue;
+      for (let r = 0; r < 5; r++) {
+        for (let c = 0; c < 3; c++) {
+          if (glyph[r * 3 + c] === '1') {
+            ctx.fillRect(x + i * 4 * scale + c * scale, y + r * scale, scale, scale);
+          }
+        }
+      }
+    }
+  }
+
+  function drawText(str, x, y, color = '#fff', scale = 1, align = 'left', shadow = '#000') {
+    str = String(str).toUpperCase();
+    const w = textWidth(str, scale);
+    if (align === 'center') x -= Math.floor(w / 2);
+    else if (align === 'right') x -= w;
+    x = Math.round(x);
+    y = Math.round(y);
+    if (shadow) drawTextRaw(str, x + 1, y + 1, shadow, scale);
+    drawTextRaw(str, x, y, color, scale);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sprites
+  // ---------------------------------------------------------------------------
+  // Y hard hat, L lamp, b fur, B fur shade, p pink nose and claws, k outline.
+  const MOLE = [
+    '..kLLk..',
+    '.kYYYYk.',
+    'kbbbbbbk',
+    'kbkbbkbk',
+    'kBbppbBk',
+    '.kbbbbk.',
+    'pkBbbBkp',
+    '.k.kk.k.',
+  ];
+  const MOLE_PAL = { Y: '#f2c200', L: '#fff3a0', b: '#7a5a3a', B: '#5a4028', p: '#ff9db0', k: '#1a120c' };
+  const GEM_SHAPE = [
+    '........',
+    '...hh...',
+    '..hcch..',
+    '.hccccd.',
+    '.cccccd.',
+    '..cccd..',
+    '...cd...',
+    '........',
+  ];
+  const COAL_SHAPE = [
+    '........',
+    '..cc....',
+    '.chcc.c.',
+    '.cccc.cc',
+    '...cchc.',
+    '.cc.ccc.',
+    '.ccc....',
+    '........',
+  ];
+  const BOULDER = [
+    '..kkkk..',
+    '.kHhhhk.',
+    'kHhhhhgk',
+    'khhkhhgk',
+    'khhhkhgk',
+    'khhhhggk',
+    '.kgggk..',
+    '..kkkk..',
+  ];
+
+  function buildSprite(map, pal) {
+    const c = document.createElement('canvas');
+    c.width = map[0].length;
+    c.height = map.length;
+    const g = c.getContext('2d');
+    for (let y = 0; y < map.length; y++) {
+      for (let x = 0; x < map[y].length; x++) {
+        const col = pal[map[y][x]];
+        if (col) {
+          g.fillStyle = col;
+          g.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+    return c;
+  }
+
+  function flipped(src) {
+    const c = document.createElement('canvas');
+    c.width = src.width;
+    c.height = src.height;
+    const g = c.getContext('2d');
+    g.translate(src.width, 0);
+    g.scale(-1, 1);
+    g.drawImage(src, 0, 0);
+    return c;
+  }
+
+  const moleSprite = buildSprite(MOLE, MOLE_PAL);
+  const moleSpriteL = flipped(moleSprite);
+  const moleHurtSprite = buildSprite(MOLE, { ...MOLE_PAL, b: '#ff6a6a', B: '#c84a4a' });
+  const boulderSprite = buildSprite(BOULDER, { k: '#2a2a30', H: '#b0b0b8', h: '#8a8a92', g: '#64646c' });
+  const gemSprites = GEMS.map((g, i) => buildSprite(i === 0 ? COAL_SHAPE : GEM_SHAPE,
+    { c: g.color, h: g.hi, d: i === 0 ? g.color : '#00000055' }));
+
+  // A few speckled variants of each rock so the walls don't look tiled.
+  const tileSprites = {};
+  for (const id in MATS) {
+    const m = MATS[id];
+    if (!m.base) continue;
+    tileSprites[id] = [0, 1, 2].map(() => {
+      const c = document.createElement('canvas');
+      c.width = TS;
+      c.height = TS;
+      const g = c.getContext('2d');
+      g.fillStyle = m.base;
+      g.fillRect(0, 0, TS, TS);
+      for (let i = 0; i < 9; i++) {
+        g.fillStyle = pick(m.spots);
+        g.fillRect(randInt(0, TS - 1), randInt(0, TS - 1), id === 'clay' ? 2 : 1, 1);
+      }
+      return c;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Audio (tiny WebAudio synth; created on first input)
+  // ---------------------------------------------------------------------------
+  const sfx = {
+    ctx: null,
+    master: null,
+    muted: store.get('muted', false),
+
+    init() {
+      if (this.ctx) {
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        return;
+      }
+      try {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = this.muted ? 0 : 0.5;
+        this.master.connect(this.ctx.destination);
+      } catch (e) {
+        this.ctx = null;
+      }
+    },
+
+    setMuted(m) {
+      this.muted = m;
+      store.set('muted', m);
+      if (this.master) this.master.gain.value = m ? 0 : 0.5;
+    },
+
+    tone(freq, dur, type = 'square', vol = 0.12, slideTo = null, delay = 0) {
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime + delay;
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t);
+      if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      o.connect(g);
+      g.connect(this.master);
+      o.start(t);
+      o.stop(t + dur + 0.02);
+    },
+
+    noise(dur, vol = 0.4, freq = 1200) {
+      if (!this.ctx) return;
+      const n = Math.floor(this.ctx.sampleRate * dur);
+      const buf = this.ctx.createBuffer(1, n, this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      const f = this.ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = freq;
+      const g = this.ctx.createGain();
+      g.gain.value = vol;
+      src.connect(f);
+      f.connect(g);
+      g.connect(this.master);
+      src.start();
+    },
+
+    blip() { this.tone(660, 0.08, 'square', 0.08); },
+    buzz() { this.tone(110, 0.2, 'square', 0.1); },
+    step() { this.tone(220, 0.04, 'triangle', 0.05); },
+    dig(hard) { this.noise(0.12, 0.25, 500 + hard * 500); this.tone(90 + hard * 40, 0.08, 'square', 0.05); },
+    gem(i) {
+      const base = 660 + i * 80;
+      this.tone(base, 0.07, 'square', 0.08);
+      this.tone(base * 1.5, 0.12, 'square', 0.08, null, 0.06);
+    },
+    rumble() { this.noise(0.5, 0.35, 220); },
+    thud() { this.noise(0.25, 0.5, 400); this.tone(70, 0.2, 'square', 0.1, 40); },
+    hiss() { this.noise(0.4, 0.2, 3000); },
+    hurt() { this.noise(0.2, 0.4); this.tone(300, 0.2, 'sawtooth', 0.1, 80); },
+    rope() { this.tone(300, 0.6, 'triangle', 0.06, 900); },
+    coins() { [988, 1319, 1568, 1976].forEach((f, i) => this.tone(f, 0.08, 'square', 0.06, null, i * 0.07)); },
+    unlock() { [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.15, 'square', 0.08, null, i * 0.1)); },
+  };
+
+  // ---------------------------------------------------------------------------
+  // Input
+  // ---------------------------------------------------------------------------
+  const keys = new Set();
+  const pressed = new Set();
+  const KEYMAP = {
+    ArrowLeft: 'left', KeyA: 'left',
+    ArrowRight: 'right', KeyD: 'right',
+    ArrowUp: 'up', KeyW: 'up',
+    ArrowDown: 'down', KeyS: 'down',
+    KeyB: 'rope',
+    Enter: 'start', Space: 'start',
+    KeyP: 'pause', Escape: 'back',
+    KeyM: 'mute',
+  };
+
+  function actDown(a) {
+    if (!keys.has(a)) pressed.add(a);
+    keys.add(a);
+  }
+  function actUp(a) { keys.delete(a); }
+
+  addEventListener('keydown', (e) => {
+    const a = KEYMAP[e.code];
+    if (!a) return;
+    e.preventDefault();
+    sfx.init();
+    actDown(a);
+  });
+  addEventListener('keyup', (e) => {
+    const a = KEYMAP[e.code];
+    if (a) actUp(a);
+  });
+
+  function autoPause() {
+    keys.clear();
+    if (state === 'play') state = 'paused';
+  }
+  addEventListener('blur', autoPause);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
+
+  const isTouch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+  if (isTouch) document.body.classList.add('touch');
+
+  for (const btn of document.querySelectorAll('#touch button')) {
+    const act = btn.dataset.act;
+    const release = () => { btn.classList.remove('active'); actUp(act); };
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      sfx.init();
+      btn.classList.add('active');
+      actDown(act);
+    });
+    btn.addEventListener('pointerup', release);
+    btn.addEventListener('pointercancel', release);
+    btn.addEventListener('pointerleave', release);
+    btn.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    sfx.init();
+    if (state !== 'play') pressed.add('start');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Game state
+  // ---------------------------------------------------------------------------
+  let state = 'title';
+  let cash = store.get('cash', 0);
+  let bestDepth = store.get('best', 0);
+  const upgrades = store.get('upgrades', {});
+  const lvl = (id) => upgrades[id] || 0;
+  const maxStamina = () => BASE_STAMINA + [0, 20, 45, 75][lvl('lunch')];
+  const maxHp = () => BASE_HP + lvl('helmet');
+  const bagSize = () => BASE_BAG + 4 * lvl('bag');
+  const lightRadius = () => [2, 3, 4.5, 6][lvl('lantern')];
+  const maxHard = () => 2 + Math.min(1, lvl('drill'));
+  const digCost = (m) => Math.max(1, Math.round(MATS[m].cost * (1 - 0.2 * lvl('drill'))));
+  const digTime = (m) => 0.14 + MATS[m].cost * 0.07 * (1 - 0.2 * lvl('drill'));
+  function saveAll() {
+    store.set('cash', cash);
+    store.set('best', bestDepth);
+    store.set('upgrades', upgrades);
+  }
+
+  let grid, mole, anim, stamina, hp, bag, maxDepth, gasClouds, layerShown;
+  let particles, popups, banners, shake, hurtTimer, camY, lowWarned;
+  let endReason, deathCause, endTimer, rope, summary, isNewRecord;
+  let shopSel = 0, shopMsg = null, time = 0;
+
+  function reset() {
+    grid = [];
+    mole = { c: START_COL, r: -1, face: 1 };
+    anim = null;
+    stamina = maxStamina();
+    hp = maxHp();
+    bag = [];
+    maxDepth = 0;
+    gasClouds = new Map();
+    layerShown = 0;
+    particles = [];
+    popups = [];
+    banners = [];
+    shake = 0;
+    hurtTimer = 0;
+    camY = 0;
+    lowWarned = false;
+    endReason = null;
+    deathCause = null;
+    endTimer = 0;
+    rope = null;
+    summary = null;
+    isNewRecord = false;
+  }
+
+  function startRun() {
+    reset();
+    state = 'play';
+    popup('DIG DOWN! B: ROPE UP', W / 2, 60, '#ffd34d', 1.6);
+  }
+
+  // Messages stay out of the way. Announcements (no points, centred) queue
+  // up in a slim banner under the top bar; everything else (points and
+  // callouts about the mole, passed with x = -1) goes to a short feed in the
+  // bottom-right corner.
+  function popup(text, x, y, color = '#fff', life = 1) {
+    if (/\+\d/.test(text) || x !== W / 2) {
+      popups.push({ text, color, life: Math.max(life, 1.2), max: Math.max(life, 1.2) });
+      if (popups.length > 3) popups.shift();
+    } else if (!banners.some((b) => b.text === text)) {
+      banners.push({ text, color, life: Math.min(life, 1.8) });
+    }
+  }
+
+  function particle(x, y, vx, vy, life, color, size = 1, gravity = 0) {
+    particles.push({ x, y, vx, vy, life, max: life, color, size, gravity });
+  }
+
+  // ---------------------------------------------------------------------------
+  // The shaft
+  // ---------------------------------------------------------------------------
+  // Rows are numbered from the ground down (row 0 is the grass); rows above
+  // ground are open sky. Each cell: { m: material, gem, gas, seen, wob }.
+  function matFor(r) {
+    const mix = r < 12 ? [['dirt', 85], ['clay', 15]]
+      : r < 30 ? [['dirt', 25], ['clay', 55], ['stone', 20]]
+        : r < 55 ? [['clay', 15], ['stone', 72], ['granite', 13]]
+          : [['stone', 55], ['granite', 45]];
+    return pickWeighted(mix.map(([id, w]) => ({ id, w }))).id;
+  }
+
+  function gemFor(r) {
+    const avail = GEMS.map((g, i) => i).filter((i) => GEMS[i].min <= r);
+    const last = avail[avail.length - 1];
+    return pickWeighted(avail.map((i) => ({ i, w: Math.max(0.4, 4 - (last - i)) }))).i;
+  }
+
+  function genRow(r) {
+    const row = [];
+    for (let c = 0; c < COLS; c++) {
+      const edge = c === 0 || c === COLS - 1;
+      const cell = { m: edge ? 'bedrock' : matFor(r), gem: -1, gas: false, seen: false, wob: 0 };
+      if (!edge) {
+        if (r >= 10 && Math.random() < 0.03 + Math.min(0.03, r * 0.0005)) cell.m = 'boulder';
+        else if (Math.random() < 0.13 + Math.min(0.05, r * 0.0008)) cell.gem = gemFor(r);
+      }
+      row.push(cell);
+    }
+    if (r >= 22 && Math.random() < 0.2) {
+      // A hidden pocket of gas inside the rock.
+      const c0 = randInt(1, COLS - 4);
+      for (let c = c0; c < c0 + randInt(2, 3); c++) {
+        if (row[c].m !== 'boulder') Object.assign(row[c], { gas: true, gem: -1 });
+      }
+    }
+    if (r >= 42 && Math.random() < 0.14 + Math.min(0.15, (r - 42) * 0.003)) {
+      const c0 = randInt(1, COLS - 6);
+      for (let c = c0; c < c0 + randInt(2, 5); c++) Object.assign(row[c], { m: 'lava', gem: -1, gas: false });
+    }
+    return row;
+  }
+
+  function cellAt(c, r) {
+    if (r < 0) return null; // sky
+    while (grid.length <= r) grid.push(genRow(grid.length));
+    return grid[r][c];
+  }
+
+  const isMole = (c, r) => mole.c === c && mole.r === r;
+  // Open space: sky, dug-out tunnel, or wherever the mole is standing.
+  function isOpen(c, r) {
+    if (c < 1 || c > COLS - 2) return false;
+    const cell = cellAt(c, r);
+    return !cell || cell.m === 'empty';
+  }
+
+  const depth = () => Math.max(0, mole.r + 1);
+  const worldY = (r) => (r + TOP_ROWS) * TS;
+
+  // ---------------------------------------------------------------------------
+  // Turns
+  // ---------------------------------------------------------------------------
+  // Nothing in the mine moves until you do. Each step or dig is one turn; when
+  // it finishes, loose rocks fall, lava creeps, and gas spreads.
+  function tryAct(dx, dy) {
+    const nc = mole.c + dx, nr = mole.r + dy;
+    if (dx) mole.face = dx;
+    if (nr < -1 || nc < 1 || nc > COLS - 2) return;
+    const cell = cellAt(nc, nr);
+    const climb = dy < 0 ? 1 : 0;
+    if (!cell || cell.m === 'empty') {
+      if (climb && stamina < 1) {
+        popup('TOO TIRED TO CLIMB', -1, 0, '#ff7a7a', 1);
+        sfx.buzz();
+        return;
+      }
+      stamina -= climb;
+      anim = { type: 'move', fc: mole.c, fr: mole.r, t: 0, dur: climb ? CLIMB_TIME : MOVE_TIME };
+      mole.c = nc;
+      mole.r = nr;
+      sfx.step();
+      return;
+    }
+    if (cell.m === 'lava') {
+      popup('TOO HOT!', -1, 0, '#ff7a3a', 1);
+      sfx.buzz();
+      return;
+    }
+    const mat = MATS[cell.m];
+    if (mat.hard > maxHard()) {
+      popup(mat.hard >= 99 ? 'SOLID BEDROCK' : 'TOO HARD! UPGRADE DRILL', W / 2, 60, '#ff7a7a', 1.2);
+      sfx.buzz();
+      return;
+    }
+    const cost = digCost(cell.m) + climb;
+    if (stamina < cost) {
+      popup('TOO TIRED! B TO ROPE UP', W / 2, 60, '#ff7a7a', 1.4);
+      sfx.buzz();
+      return;
+    }
+    anim = { type: 'dig', dx, dy, nc, nr, t: 0, dur: digTime(cell.m), cost, mat: cell.m };
+    sfx.dig(mat.hard);
+  }
+
+  function finishDig(a) {
+    const cell = cellAt(a.nc, a.nr);
+    stamina -= a.cost;
+    const cx = a.nc * TS + 4, cy = worldY(a.nr) + 4;
+    const colors = cell.m === 'boulder' ? ['#8a8a92', '#b0b0b8'] : MATS[cell.m].spots;
+    for (let i = 0; i < 10; i++) particle(cx, cy, rand(-30, 30), rand(-40, 10), rand(0.3, 0.6), pick(colors), 1, 120);
+    if (cell.gem >= 0) {
+      const g = GEMS[cell.gem];
+      if (bag.length < bagSize()) {
+        bag.push(cell.gem);
+        popup(g.name + ' +' + g.value, -1, 0, g.hi, 1.2);
+        sfx.gem(cell.gem);
+        for (let i = 0; i < 8; i++) particle(cx, cy, rand(-25, 25), rand(-25, 25), 0.5, pick([g.color, g.hi, '#ffffff']), 1);
+        if (bag.length === bagSize()) popup('BAG FULL! ROPE UP TO SELL', W / 2, 60, '#ffd34d', 1.6);
+      } else {
+        popup(g.name + ' CRUMBLED: BAG FULL', -1, 0, '#aaaaaa', 1.2);
+      }
+    }
+    const wasGas = cell.gas;
+    Object.assign(cell, { m: 'empty', gem: -1, gas: false, wob: 0 });
+    if (wasGas) {
+      gasClouds.set(a.nr * COLS + a.nc, 7);
+      popup('GAS POCKET! GET OUT!', W / 2, 60, '#8af07a', 1.6);
+      sfx.hiss();
+    }
+    anim = { type: 'move', fc: mole.c, fr: mole.r, t: 0, dur: MOVE_TIME };
+    mole.c = a.nc;
+    mole.r = a.nr;
+    anim.dug = true;
+  }
+
+  function endTurn(dug) {
+    worldTick(dug);
+    if (state !== 'play') return;
+    maxDepth = Math.max(maxDepth, depth());
+    while (layerShown < LAYERS.length && maxDepth >= LAYERS[layerShown].depth) {
+      popup(LAYERS[layerShown].text, W / 2, 60, LAYERS[layerShown].color, 1.8);
+      layerShown++;
+    }
+    if (!lowWarned && stamina <= maxStamina() * 0.25 && mole.r >= 0) {
+      lowWarned = true;
+      popup('LOW STAMINA! B TO ROPE UP', W / 2, 60, '#ff9d3d', 1.8);
+    }
+    if (stamina <= 0 && mole.r >= 0) {
+      popup('OUT OF STAMINA!', W / 2, 60, '#ff4d4d', 1.6);
+      startRope('exhausted');
+    }
+  }
+
+  function worldTick(dug) {
+    const lo = Math.max(0, mole.r - 14), hi = mole.r + 16;
+
+    // Rocks that were shaking last turn fall now.
+    for (let r = hi; r >= lo; r--) {
+      for (let c = 1; c < COLS - 1; c++) {
+        const cell = cellAt(c, r);
+        if (cell.m === 'boulder' && cell.wob > 0) dropBoulder(c, r);
+        if (state !== 'play') return;
+      }
+    }
+    // Rocks with nothing under them start to shake.
+    let rumble = false;
+    for (let r = lo; r <= hi; r++) {
+      for (let c = 1; c < COLS - 1; c++) {
+        const cell = cellAt(c, r);
+        if (cell.m === 'boulder' && !cell.wob && isOpen(c, r + 1)) {
+          cell.wob = 1;
+          rumble = true;
+        }
+      }
+    }
+    // Digging deep can bring the ceiling down.
+    if (dug && mole.r >= 15 && Math.random() < 0.035 + Math.min(0.05, (mole.r - 15) * 0.001)) {
+      for (let r = mole.r - 1; r >= Math.max(0, mole.r - 4); r--) {
+        const cell = cellAt(mole.c, r);
+        if (cell.m === 'empty') continue;
+        if (['dirt', 'clay', 'stone'].includes(cell.m)) {
+          Object.assign(cell, { m: 'boulder', gem: -1, gas: false, wob: 1 });
+          popup('CAVE-IN! GET CLEAR!', W / 2, 60, '#ff9d3d', 1.6);
+          shake = 3;
+          rumble = true;
+        }
+        break;
+      }
+    }
+    if (rumble) sfx.rumble();
+
+    flowLava(lo, hi);
+    spreadGas();
+
+    // Hazards where the mole is standing.
+    const here = cellAt(mole.c, mole.r);
+    if (here && here.m === 'lava') {
+      damage(2, 'lava', 'BURNED!');
+      if (state !== 'play') return;
+    }
+    if (gasClouds.has(mole.r * COLS + mole.c)) damage(1, 'gas', 'CHOKING ON GAS!');
+  }
+
+  function dropBoulder(c, r) {
+    const cell = cellAt(c, r);
+    let to = r;
+    while (isOpen(c, to + 1) && !isMole(c, to + 1)) to++;
+    cell.wob = 0;
+    const px = c * TS + 4;
+    if (isMole(c, to + 1)) {
+      // Landed on the mole: it shatters on your hard hat.
+      Object.assign(cell, { m: 'empty' });
+      for (let i = 0; i < 14; i++) particle(px, worldY(to + 1), rand(-40, 40), rand(-50, 0), 0.6, pick(['#8a8a92', '#b0b0b8', '#64646c']), 1, 120);
+      sfx.thud();
+      damage(2, 'rock', 'BONK! FALLING ROCK');
+      return;
+    }
+    if (to === r) return;
+    const below = cellAt(c, to + 1);
+    Object.assign(cell, { m: 'empty' });
+    if (below && below.m === 'lava') {
+      // Swallowed by the lava.
+      for (let i = 0; i < 8; i++) particle(px, worldY(to + 1), rand(-20, 20), rand(-40, -10), 0.5, pick(['#ffb020', '#e04a10']), 1, 80);
+      sfx.hiss();
+      return;
+    }
+    Object.assign(cellAt(c, to), { m: 'boulder', gem: -1, gas: false, wob: 0 });
+    for (let i = 0; i < 8; i++) particle(px, worldY(to) + 8, rand(-30, 30), rand(-20, 0), 0.5, pick(['#8a8a92', '#5a4a3a']), 1, 60);
+    shake = Math.max(shake, 2);
+    sfx.thud();
+  }
+
+  // Lava creeps one tile per turn into open space: mostly down, sometimes sideways.
+  function flowLava(lo, hi) {
+    const spread = [];
+    for (let r = lo; r <= hi; r++) {
+      for (let c = 1; c < COLS - 1; c++) {
+        if (cellAt(c, r).m !== 'lava') continue;
+        if (isOpen(c, r + 1)) {
+          if (Math.random() < 0.6) spread.push([c, r + 1]);
+        } else if (Math.random() < 0.3) {
+          const sides = [-1, 1].filter((d) => isOpen(c + d, r));
+          if (sides.length) spread.push([c + pick(sides), r]);
+        }
+      }
+    }
+    for (const [c, r] of spread) {
+      Object.assign(cellAt(c, r), { m: 'lava', gem: -1, wob: 0 });
+      gasClouds.delete(r * COLS + c);
+    }
+    if (spread.length && spread.some(([c, r]) => Math.abs(r - mole.r) < 6)) sfx.hiss();
+  }
+
+  // Released gas spreads into open tunnels, then thins out.
+  function spreadGas() {
+    const next = new Map();
+    for (const [k, t] of gasClouds) {
+      if (t - 1 > 0) next.set(k, Math.max(next.get(k) || 0, t - 1));
+      if (t < 4) continue;
+      const r = Math.floor(k / COLS), c = k % COLS;
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (r + dr < 0 || !isOpen(c + dc, r + dr)) continue;
+        const nk = (r + dr) * COLS + c + dc;
+        next.set(nk, Math.max(next.get(nk) || 0, gasClouds.get(nk) || 0, t - 2));
+      }
+    }
+    gasClouds = next;
+  }
+
+  function damage(n, cause, text) {
+    hp -= n;
+    hurtTimer = 0.6;
+    shake = Math.max(shake, 4);
+    sfx.hurt();
+    if (hp <= 0) {
+      hp = 0;
+      die(cause);
+      return;
+    }
+    popup(text, -1, 0, '#ff4d4d', 1.2);
+  }
+
+  function die(cause) {
+    state = 'dead';
+    deathCause = cause;
+    endTimer = 1.6;
+    const cx = mole.c * TS + 4, cy = worldY(mole.r) + 4;
+    const colors = cause === 'lava' ? ['#ffb020', '#e04a10', '#ff6a00', '#555555']
+      : cause === 'gas' ? ['#8af07a', '#5ac04a', '#ffffff'] : ['#8a8a92', '#b0b0b8', '#7a5a3a'];
+    for (let i = 0; i < 40; i++) particle(cx, cy, rand(-50, 50), rand(-60, 20), rand(0.4, 1), pick(colors), randInt(1, 2), 80);
+  }
+
+  // B pulls you up on the rope. Running out of stamina does too, but the
+  // haul up shakes half your gems loose.
+  function startRope(reason) {
+    state = 'rope';
+    endReason = reason;
+    rope = { fr: mole.r, t: 0, dur: clamp(0.5 + (mole.r + 1) * 0.04, 0.5, 2.6) };
+    anim = null;
+    sfx.rope();
+  }
+
+  function endRun(reason) {
+    endReason = reason;
+    let lost = 0;
+    if (reason === 'exhausted') {
+      lost = Math.floor(bag.length / 2);
+      for (let i = 0; i < lost; i++) bag.splice(randInt(0, bag.length - 1), 1);
+    } else if (reason === 'dead') {
+      lost = bag.length;
+      bag = [];
+    }
+    const counts = GEMS.map(() => 0);
+    for (const g of bag) counts[g]++;
+    const earned = bag.reduce((s, g) => s + GEMS[g].value, 0);
+    cash += earned;
+    isNewRecord = maxDepth > bestDepth;
+    bestDepth = Math.max(bestDepth, maxDepth);
+    saveAll();
+    summary = { counts, earned, lost };
+    state = 'over';
+    endTimer = 0;
+    if (earned > 0) sfx.coins();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Update
+  // ---------------------------------------------------------------------------
+  function update(dt) {
+    time += dt;
+    if (pressed.has('mute')) sfx.setMuted(!sfx.muted);
+    banners.forEach((b) => { b.life -= dt; });
+    if (banners.length && banners[0].life <= 0) banners.shift();
+    popups.forEach((p) => { p.life -= dt; });
+    popups = popups.filter((p) => p.life > 0);
+    hurtTimer = Math.max(0, hurtTimer - dt);
+
+    if (state === 'title') {
+      if (pressed.has('start')) startRun();
+      else if (pressed.has('down')) { state = 'shop'; shopSel = 0; sfx.blip(); }
+    } else if (state === 'shop') {
+      updateShop(dt);
+    } else if (state === 'paused') {
+      if (pressed.has('pause') || pressed.has('start')) state = 'play';
+    } else if (state === 'play') {
+      if (pressed.has('pause')) state = 'paused';
+      else updatePlay(dt);
+    } else if (state === 'rope') {
+      rope.t += dt;
+      if (Math.random() < 0.3) particle(mole.c * TS + rand(2, 6), moleDrawY() + 8, rand(-10, 10), rand(10, 30), 0.4, '#7a5236', 1, 60);
+      if (rope.t >= rope.dur) {
+        mole.r = -1;
+        endRun(endReason);
+      }
+    } else if (state === 'dead') {
+      endTimer -= dt;
+      if (endTimer <= 0) endRun('dead');
+    } else if (state === 'over') {
+      endTimer += dt;
+      if (endTimer >= 0.6) {
+        if (pressed.has('start') || pressed.has('down')) { state = 'shop'; shopSel = UPGRADES.length; sfx.blip(); }
+        else if (pressed.has('back')) { state = 'title'; reset(); }
+      }
+    }
+
+    for (const p of particles) {
+      p.vy += p.gravity * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.life -= dt;
+    }
+    particles = particles.filter((p) => p.life > 0);
+    shake = Math.max(0, shake - dt * 10);
+
+    const target = Math.max(0, moleDrawY() - 84);
+    camY += (target - camY) * Math.min(1, 8 * dt);
+    pressed.clear();
+  }
+
+  function updatePlay(dt) {
+    if (anim) {
+      anim.t += dt;
+      if (anim.t >= anim.dur) {
+        const a = anim;
+        anim = null;
+        if (a.type === 'dig') finishDig(a);
+        else endTurn(a.dug);
+      } else {
+        if (anim.type === 'dig' && Math.random() < 0.5) {
+          const cx = anim.nc * TS + 4, cy = worldY(anim.nr) + 4;
+          particle(cx - anim.dx * 3, cy - anim.dy * 3, rand(-20, 20), rand(-30, 0), 0.3,
+            pick(anim.mat === 'boulder' ? ['#8a8a92'] : MATS[anim.mat].spots), 1, 120);
+        }
+      }
+      return;
+    }
+    if (pressed.has('rope')) {
+      if (mole.r >= 0) popup('HAULING UP...', W / 2, 60, '#ffd34d', 1);
+      startRope('surface');
+      return;
+    }
+    // One action per turn; holding a direction keeps going once each finishes.
+    const held = (a) => pressed.has(a) || keys.has(a);
+    if (held('down')) tryAct(0, 1);
+    else if (held('left')) tryAct(-1, 0);
+    else if (held('right')) tryAct(1, 0);
+    else if (held('up')) tryAct(0, -1);
+  }
+
+  function updateShop(dt) {
+    if (shopMsg && (shopMsg.life -= dt) <= 0) shopMsg = null;
+    const n = UPGRADES.length + 1;
+    if (pressed.has('up')) { shopSel = (shopSel - 1 + n) % n; sfx.blip(); }
+    if (pressed.has('down')) { shopSel = (shopSel + 1) % n; sfx.blip(); }
+    if (pressed.has('back')) { state = 'title'; sfx.blip(); return; }
+    if (pressed.has('start') || pressed.has('rope')) {
+      if (shopSel === UPGRADES.length) {
+        startRun();
+        return;
+      }
+      const it = UPGRADES[shopSel];
+      const say = (text, color) => { shopMsg = { text, color, life: 1.4 }; };
+      const l = lvl(it.id);
+      if (l >= it.prices.length) { say('ALREADY MAXED', '#aaaaaa'); sfx.buzz(); return; }
+      const price = it.prices[l];
+      if (cash < price) { say('NEED ' + (price - cash) + ' MORE CASH', '#ff4d4d'); sfx.buzz(); return; }
+      cash -= price;
+      upgrades[it.id] = l + 1;
+      saveAll();
+      say(it.name + ' LEVEL ' + (l + 1) + '!', '#57c062');
+      sfx.unlock();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Draw
+  // ---------------------------------------------------------------------------
+  function moleDrawPos() {
+    let c = mole.c, r = mole.r;
+    if (state === 'rope') {
+      const t = clamp(rope.t / rope.dur, 0, 1);
+      return { x: c * TS, y: worldY(rope.fr + (-1 - rope.fr) * (t * t * (3 - 2 * t))) };
+    }
+    if (anim && anim.type === 'move') {
+      const t = clamp(anim.t / anim.dur, 0, 1);
+      return { x: (anim.fc + (c - anim.fc) * t) * TS, y: worldY(anim.fr + (r - anim.fr) * t) };
+    }
+    let x = c * TS, y = worldY(r);
+    if (anim && anim.type === 'dig') {
+      // Chew at the rock: jab toward it.
+      const j = Math.sin(anim.t * 50) > 0 ? 1 : 0;
+      x += anim.dx * j;
+      y += anim.dy * j;
+    }
+    return { x, y };
+  }
+  const moleDrawY = () => moleDrawPos().y;
+
+  function tunnelColor(r) {
+    return r < 12 ? '#2e2016' : r < 30 ? '#33201a' : r < 55 ? '#24222a' : '#1c1824';
+  }
+
+  function drawSurface(oy) {
+    // Sky down to the grass.
+    const groundY = worldY(0) - oy;
+    if (groundY <= 0) return;
+    const bands = ['#5a8ac8', '#6a9ad4', '#7aaade', '#8ab8e6', '#9ac6ec'];
+    for (let i = 0; i < bands.length; i++) {
+      ctx.fillStyle = bands[i];
+      ctx.fillRect(0, i * 8 - oy, W, 8);
+    }
+    ctx.fillStyle = '#fff3a0';
+    ctx.fillRect(104, 6 - oy, 8, 8);
+    ctx.fillStyle = '#ffd34d';
+    ctx.fillRect(105, 7 - oy, 6, 6);
+    // Hills.
+    ctx.fillStyle = '#4a8a4a';
+    for (let x = 0; x < W; x++) {
+      const h = 5 + Math.round(Math.sin(x * 0.07) * 3 + Math.sin(x * 0.19) * 2);
+      ctx.fillRect(x, groundY - h, 1, h);
+    }
+    // Headframe over the shaft: two posts, a beam and a pulley.
+    const hx = START_COL * TS;
+    ctx.fillStyle = '#5a3a1e';
+    ctx.fillRect(hx - 5, groundY - 22, 2, 22);
+    ctx.fillRect(hx + 11, groundY - 22, 2, 22);
+    ctx.fillStyle = '#7a5230';
+    ctx.fillRect(hx - 6, groundY - 24, 20, 3);
+    ctx.fillStyle = '#c8c8d0';
+    ctx.fillRect(hx + 2, groundY - 22, 4, 3);
+    // The trading post where gems are sold.
+    const sx0 = 96, sy0 = groundY - 20;
+    ctx.fillStyle = '#8a5a30';
+    ctx.fillRect(sx0, sy0 + 6, 24, 14);
+    ctx.fillStyle = '#b03a2a';
+    ctx.fillRect(sx0 - 2, sy0 + 2, 28, 5);
+    ctx.fillStyle = '#5a3a1e';
+    ctx.fillRect(sx0 + 9, sy0 + 12, 6, 8);
+    ctx.fillStyle = '#ffe9a0';
+    ctx.fillRect(sx0 + 3, sy0 + 10, 4, 4);
+    drawText('GEMS', sx0 + 12, sy0 - 5, '#ffd34d', 1, 'center');
+  }
+
+  function drawWorld() {
+    const oy = Math.round(camY);
+    drawSurface(oy);
+    const r0 = Math.floor(oy / TS) - TOP_ROWS, r1 = r0 + Math.ceil(H / TS) + 1;
+    const pos = moleDrawPos();
+    const mc = pos.x / TS, mr = pos.y / TS - TOP_ROWS;
+    const R = lightRadius();
+    const lavaLights = [];
+
+    for (let r = Math.max(0, r0); r <= r1; r++) {
+      const y = worldY(r) - oy;
+      for (let c = 0; c < COLS; c++) {
+        const cell = cellAt(c, r);
+        const x = c * TS;
+        if (cell.m === 'empty' || cell.m === 'boulder' || cell.m === 'lava') {
+          ctx.fillStyle = tunnelColor(r);
+          ctx.fillRect(x, y, TS, TS);
+        }
+        if (cell.m === 'lava') {
+          lavaLights.push([c, r]);
+          drawLava(x, y, c, r);
+        } else if (cell.m === 'boulder') {
+          const j = cell.wob ? (Math.floor(time * 24) % 2 ? 1 : -1) : 0;
+          ctx.drawImage(boulderSprite, x + j, y);
+        } else if (cell.m !== 'empty') {
+          ctx.drawImage(tileSprites[cell.m][Math.floor(hash(c, r) * 3)], x, y);
+          if (r === 0) {
+            ctx.fillStyle = '#3a8a3a';
+            ctx.fillRect(x, y, TS, 2);
+            ctx.fillStyle = '#5ab04a';
+            ctx.fillRect(x + Math.floor(hash(r, c) * 6), y, 2, 1);
+          }
+          if (cell.gem >= 0) ctx.drawImage(gemSprites[cell.gem], x, y);
+        }
+        const gas = gasClouds.get(r * COLS + c);
+        if (gas) {
+          ctx.fillStyle = 'rgba(138,240,122,' + (0.18 + gas * 0.04 + Math.sin(time * 4 + c + r) * 0.05).toFixed(2) + ')';
+          ctx.fillRect(x, y, TS, TS);
+          ctx.fillStyle = 'rgba(200,255,180,0.5)';
+          ctx.fillRect(x + Math.floor((time * 6 + c * 3) % 7), y + Math.floor((r * 5 + time * 3) % 7), 1, 1);
+        }
+      }
+    }
+
+    // Darkness: your lantern, the glow of lava, and sunlight near the top.
+    for (let r = Math.max(0, r0); r <= r1; r++) {
+      const y = worldY(r) - oy;
+      const sun = clamp(1 - (r + 1) / 7, 0, 1);
+      for (let c = 0; c < COLS; c++) {
+        const cell = cellAt(c, r);
+        const d = Math.hypot(c - mc, r - mr);
+        let light = Math.max(sun, clamp((R + 1 - d) / 1.5, 0, 1));
+        for (const [lc, lr] of lavaLights) {
+          if (Math.abs(lc - c) > 3 || Math.abs(lr - r) > 3) continue;
+          light = Math.max(light, clamp((3 - Math.hypot(lc - c, lr - r)) / 2.5, 0, 0.75));
+        }
+        if (light > 0.45) cell.seen = true;
+        // Gas pockets show as a faint green shimmer once your lantern is good enough.
+        if (cell.gas && lvl('lantern') >= 1 && light > 0.5 && Math.floor(time * 3 + c + r) % 3 === 0) {
+          ctx.fillStyle = '#8af07a';
+          ctx.fillRect(c * TS + 2 + Math.floor(hash(c, r) * 4), y + 2 + Math.floor(hash(r, c) * 4), 1, 1);
+          ctx.fillRect(c * TS + 5, y + 5, 1, 1);
+        }
+        let dark = 1 - light;
+        dark = Math.min(dark, cell.seen ? 0.7 : 0.96);
+        if (dark > 0.02) {
+          ctx.fillStyle = 'rgba(6,4,10,' + dark.toFixed(2) + ')';
+          ctx.fillRect(c * TS, y, TS, TS);
+        }
+      }
+    }
+
+    if (state === 'rope') {
+      ctx.fillStyle = '#c8a870';
+      ctx.fillRect(Math.round(pos.x) + 3, worldY(-3) - oy, 1, Math.round(pos.y - worldY(-3)));
+    }
+    if (state !== 'over' && !(state === 'dead' && endTimer < 1.2)) drawMole(pos, oy);
+
+    for (const p of particles) {
+      ctx.globalAlpha = clamp(p.life / p.max + 0.3, 0, 1);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(Math.round(p.x), Math.round(p.y - oy), p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawLava(x, y, c, r) {
+    const f = Math.sin(time * 3 + c * 1.7 + r * 2.3);
+    ctx.fillStyle = f > 0 ? '#e04a10' : '#d03a0a';
+    ctx.fillRect(x, y, TS, TS);
+    ctx.fillStyle = '#ff8a20';
+    ctx.fillRect(x, y + 2 + Math.round(f), TS, 2);
+    ctx.fillStyle = '#ffd34d';
+    const bx = Math.floor((time * 4 + hash(c, r) * 8) % 7), by = 7 - Math.floor((time * 5 + c) % 8);
+    ctx.fillRect(x + bx, y + by, 1, 1);
+  }
+
+  function drawMole(pos, oy) {
+    const x = Math.round(pos.x), y = Math.round(pos.y - oy);
+    // A soft pool of lantern light.
+    ctx.fillStyle = 'rgba(255,230,140,0.08)';
+    ctx.fillRect(x - 4, y - 4, 16, 16);
+    let spr = mole.face < 0 ? moleSpriteL : moleSprite;
+    if (hurtTimer > 0 && Math.floor(time * 20) % 2) spr = moleHurtSprite;
+    ctx.drawImage(spr, x, y);
+  }
+
+  function drawPopups() {
+    const b = banners[0];
+    if (b) {
+      const y = state === 'title' || state === 'shop' ? H - 22 : 31;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0, y - 2, W, 9);
+      if (b.life > 0.2 || Math.floor(time * 20) % 2) drawText(b.text, W / 2, y, b.color, 1, 'center');
+    }
+    popups.forEach((p, i) => {
+      const y = H - 12 - (popups.length - 1 - i) * 7;
+      ctx.globalAlpha = clamp(p.life / 0.4, 0, 1);
+      drawText(p.text, W - 2, y, p.color, 1, 'right');
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  function drawHUD() {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, W, 9);
+    drawText('DEPTH ' + depth() + 'M', 2, 2, '#ffffff');
+    const full = bag.length >= bagSize();
+    drawText('BAG ' + bag.length + '/' + bagSize(), W - 2, 2, full ? '#ffd34d' : '#ffffff', 1, 'right');
+
+    // Stamina: a number plus a bar that turns orange, then red, as it runs low.
+    const frac = stamina / maxStamina();
+    const col = frac > 0.5 ? '#57c062' : frac > 0.25 ? '#ffd34d' : '#ff4d4d';
+    drawText('STAMINA ' + Math.max(0, Math.ceil(stamina)), 2, 12, frac <= 0.25 && Math.floor(time * 4) % 2 ? '#ff4d4d' : '#ffffff');
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(2, 18, 46, 2);
+    ctx.fillStyle = col;
+    ctx.fillRect(2, 18, Math.round(46 * clamp(frac, 0, 1)), 2);
+
+    const bx = W - 2 - maxHp() * 5 + 1;
+    drawText('HP', bx - 2, 12, hp <= 1 && Math.floor(time * 4) % 2 ? '#ff4d4d' : '#ffffff', 1, 'right');
+    for (let i = 0; i < maxHp(); i++) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(bx + i * 5, 12, 4, 5);
+      ctx.fillStyle = i < hp ? (hp <= 1 ? '#ff4d4d' : '#57c062') : '#3a3a3a';
+      ctx.fillRect(bx + i * 5, 13, 4, 3);
+    }
+    const value = bag.reduce((s, g) => s + GEMS[g].value, 0);
+    drawText('WORTH ' + value, W - 2, 20, '#ffd34d', 1, 'right');
+  }
+
+  function dim(alpha) {
+    ctx.fillStyle = 'rgba(0,0,0,' + alpha + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  function drawTitle() {
+    dim(0.45);
+    drawText('MOLE', W / 2, 14, '#d8a070', 3, 'center', '#3a2010');
+    drawText('MINER', W / 2, 33, '#ffffff', 3, 'center', '#333333');
+    drawText('DIG DEEP. GET RICH.', W / 2, 54, '#ffd34d', 1, 'center');
+    drawText('BEST ' + bestDepth + 'M   CASH ' + cash, W / 2, 64, '#ffffff', 1, 'center');
+
+    const bob = Math.round(Math.sin(time * 3) * 1.5);
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(W / 2 - 10, 100, 24, 4);
+    ctx.drawImage(moleSprite, W / 2 - 12, 76 + bob, 24, 24);
+    GEMS.forEach((g, i) => ctx.drawImage(gemSprites[i], W / 2 - 34 + i * 9, 110));
+
+    drawText('EVERY DIG COSTS STAMINA', W / 2, 124, '#cfcfcf', 1, 'center');
+    drawText('B: ROPE UP AND SELL GEMS', W / 2, 132, '#57c062', 1, 'center');
+    if (Math.floor(time * 2) % 2 === 0) {
+      drawText(isTouch ? 'TAP TO DIG' : 'PRESS ENTER TO DIG', W / 2, 150, '#ffd34d', 1, 'center');
+    }
+    drawText('ARROWS: DIG AND MOVE', W / 2, 162, '#ffffff', 1, 'center');
+    drawText(isTouch ? 'DOWN ARROW: SHOP' : 'DOWN: SHOP', W / 2, 170, Math.floor(time * 2) % 2 ? '#57c062' : '#aaaaaa', 1, 'center');
+  }
+
+  function drawShop() {
+    dim(0.72);
+    drawText('SHOP', W / 2, 4, '#ffd34d', 2, 'center', '#5a3a00');
+    drawText('CASH ' + cash, W / 2, 18, '#57c062', 1, 'center');
+    const rows = [...UPGRADES, { name: 'START DIGGING' }];
+    rows.forEach((it, i) => {
+      const y = 32 + i * 10;
+      if (i === shopSel) {
+        ctx.fillStyle = 'rgba(255,255,255,0.14)';
+        ctx.fillRect(1, y - 2, W - 2, 9);
+        drawText('>', 2, y, '#ffd34d');
+      }
+      if (!it.id) {
+        drawText(it.name, 7, y, '#57c062');
+        return;
+      }
+      const l = lvl(it.id);
+      for (let k = 0; k < it.prices.length; k++) {
+        ctx.fillStyle = k < l ? '#57c062' : '#444444';
+        ctx.fillRect(62 + k * 4, y + 1, 3, 3);
+      }
+      let right, rightColor;
+      if (l >= it.prices.length) { right = 'MAX'; rightColor = '#57c062'; }
+      else { right = String(it.prices[l]); rightColor = cash >= it.prices[l] ? '#ffd34d' : '#aa5555'; }
+      drawText(it.name, 7, y, '#ffffff');
+      drawText(right, W - 2, y, rightColor, 1, 'right');
+    });
+
+    const sel = rows[shopSel];
+    const msgY = 100;
+    if (shopMsg) drawText(shopMsg.text, W / 2, msgY, shopMsg.color, 1, 'center');
+    else drawText(sel.id ? sel.desc : 'HEAD BACK DOWN THE SHAFT', W / 2, msgY, '#cfcfcf', 1, 'center');
+
+    // What your gear does right now.
+    const stats = [
+      ['STAMINA', maxStamina()],
+      ['HP', maxHp()],
+      ['BAG SLOTS', bagSize()],
+      ['LIGHT', lightRadius() + ' TILES'],
+      ['DIRT/CLAY/STONE', digCost('dirt') + '/' + digCost('clay') + '/' + digCost('stone')],
+      ['GRANITE', maxHard() >= 3 ? String(digCost('granite')) : 'NEED DRILL'],
+    ];
+    drawText('YOUR GEAR', W / 2, 114, '#ffd34d', 1, 'center');
+    stats.forEach(([k, v], i) => {
+      drawText(k, 8, 124 + i * 8, '#aaaaaa');
+      drawText(v, W - 8, 124 + i * 8, '#ffffff', 1, 'right');
+    });
+
+    drawText(isTouch ? 'UP/DOWN PICK  B: BUY' : 'UP/DOWN PICK  ENTER: BUY', W / 2, 176, '#aaaaaa', 1, 'center');
+    drawText(isTouch ? 'TAP ALSO BUYS' : 'ESC: BACK', W / 2, 184, '#aaaaaa', 1, 'center');
+  }
+
+  function drawOver() {
+    dim(0.6);
+    const s = summary;
+    let title, color, sub;
+    if (endReason === 'surface') { title = 'MADE IT UP!'; color = '#57c062'; sub = 'SOLD YOUR WHOLE HAUL'; }
+    else if (endReason === 'exhausted') { title = 'PASSED OUT!'; color = '#ff9d3d'; sub = 'LOST ' + s.lost + ' GEMS ON THE WAY UP'; }
+    else {
+      title = { lava: 'BURNED UP!', gas: 'GASSED!', rock: 'CRUSHED!' }[deathCause] || 'CRUSHED!';
+      color = '#ff4d4d';
+      sub = s.lost ? 'LOST ALL ' + s.lost + ' GEMS' : 'NOTHING TO LOSE, AT LEAST';
+    }
+    drawText(title, W / 2, 18, color, 2, 'center', '#000000');
+    drawText(sub, W / 2, 34, '#aaaaaa', 1, 'center');
+    drawText('DEPTH ' + maxDepth + 'M', W / 2, 46, '#ffffff', 1, 'center');
+    if (isNewRecord) {
+      if (Math.floor(time * 4) % 2 === 0) drawText('NEW RECORD!', W / 2, 54, '#ffd34d', 1, 'center');
+    } else {
+      drawText('BEST ' + bestDepth + 'M', W / 2, 54, '#aaaaaa', 1, 'center');
+    }
+    let y = 68;
+    GEMS.forEach((g, i) => {
+      if (!s.counts[i]) return;
+      ctx.drawImage(gemSprites[i], 18, y - 2);
+      drawText(g.name + ' X' + s.counts[i], 28, y, g.hi);
+      drawText(String(s.counts[i] * g.value), W - 18, y, '#ffffff', 1, 'right');
+      y += 9;
+    });
+    if (y === 68) {
+      drawText('NO GEMS SOLD', W / 2, y, '#888888', 1, 'center');
+      y += 9;
+    }
+    drawText('EARNED +' + s.earned, W / 2, y + 6, '#57c062', 1, 'center');
+    drawText('CASH ' + cash, W / 2, y + 15, '#ffffff', 1, 'center');
+    if (endTimer >= 0.6) {
+      if (Math.floor(time * 2) % 2 === 0) drawText(isTouch ? 'TAP: SHOP' : 'ENTER: SHOP', W / 2, 160, '#ffd34d', 1, 'center');
+      if (!isTouch) drawText('ESC: TITLE', W / 2, 170, '#aaaaaa', 1, 'center');
+    }
+  }
+
+  function drawPaused() {
+    dim(0.5);
+    drawText('PAUSED', W / 2, 80, '#ffffff', 2, 'center');
+    drawText(isTouch ? 'TAP TO RESUME' : 'P TO RESUME', W / 2, 100, '#ffd34d', 1, 'center');
+  }
+
+  function draw() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    if (shake > 0) ctx.translate(Math.round(rand(-shake, shake)), Math.round(rand(-shake, shake)));
+    drawWorld();
+    ctx.restore();
+
+    if (state === 'title') drawTitle();
+    else if (state === 'shop') drawShop();
+    else {
+      drawHUD();
+      if (state === 'paused') drawPaused();
+      else if (state === 'over') drawOver();
+    }
+    drawPopups();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Main loop
+  // ---------------------------------------------------------------------------
+  reset();
+  let last = performance.now();
+  function frame(t) {
+    const dt = Math.min(0.05, (t - last) / 1000);
+    last = t;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+  </script>
+</body>
+</html>
