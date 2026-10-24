@@ -1,0 +1,2076 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Lighthouse Keeper</title>
+<style>
+:root{color-scheme:dark;--page:#111}
+html{height:100%;box-sizing:border-box;background:var(--page)}
+body{margin:0;height:100%;background:var(--page);overflow:hidden;display:flex;align-items:center;justify-content:center;
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none;outline:none}
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Lighthouse Keeper game"></canvas>
+<script>
+'use strict';
+(function(){
+
+// =====================================================================
+// CONSTANTS
+// =====================================================================
+const W = 128, H = 192;
+const HORIZON = 24;
+const LAMP_X = 64, LAMP_Y = 155;
+const LH_X = 57, LH_Y = 150;
+const CELL = 4, GW = W / CELL, GH = H / CELL;
+const COAST_Y = 183, DOCK_Y = 186;
+const CHANNELS = [{ x0: 31, x1: 41, cx: 36 }, { x0: 87, x1: 97, cx: 92 }];
+const DEG = Math.PI / 180;
+const TAU = Math.PI * 2;
+const BEAM_LIMIT = 93 * DEG;
+const BEAM_HALF = 15 * DEG, FOCUS_HALF = 6 * DEG;
+const BASE_REACH = 140;
+const STEP = 1 / 60;
+const LIGHT_ROWS = 176;
+
+const TYPES = {
+  fishing: { name: 'FISHING BOAT', spr: 'fishing', speed: 6,  turn: 1.6,  fill: 1 / 24, drain: 0.45, wind: 0.25, pts: 10,  len: 8,  friendly: true },
+  sail:    { name: 'SAILBOAT',     spr: 'sail',    speed: 6,  turn: 1.3,  fill: 1 / 17, drain: 0.42, wind: 0.65, pts: 20,  len: 10, friendly: true },
+  cargo:   { name: 'CARGO SHIP',   spr: 'cargo',   speed: 4,  turn: 0.45, fill: 1 / 19, drain: 0.38, wind: 0.1,  pts: 40,  len: 18, friendly: true },
+  speed:   { name: 'SPEEDBOAT',    spr: 'speed',   speed: 11, turn: 2.6,  fill: 1 / 8,  drain: 0.6,  wind: 0.15, pts: 30,  len: 9,  friendly: true },
+  pirate:  { name: 'PIRATE SHIP',  spr: 'pirate',  speed: 7,  turn: 1.2,  fill: 0,      drain: 0,    wind: 0.2,  pts: 0,   len: 12, friendly: false },
+  ghost:   { name: 'GHOST SHIP',   spr: 'sail',    speed: 5,  turn: 1.3,  fill: 1 / 20, drain: 0.38, wind: 0.2,  pts: 150, len: 10, friendly: true }
+};
+
+const UPGRADES = [
+  { id: 'lens',  name: 'BRIGHTER LENS', desc: 'BEAM REACHES FARTHER', prices: [40, 90, 160] },
+  { id: 'gears', name: 'FASTER GEARS',  desc: 'BEAM TURNS FASTER',    prices: [30, 70, 130] },
+  { id: 'tank',  name: 'BIGGER TANK',   desc: 'MORE LAMP OIL',        prices: [30, 70, 130] },
+  { id: 'flare', name: 'EXTRA FLARE',   desc: '+1 FLARE EACH NIGHT',  prices: [60, 140] },
+  { id: 'lamp2', name: 'SECOND LAMP',   desc: 'AUTO-SWEEPING BEAM',   prices: [300] }
+];
+const PAINTS = [
+  { name: 'RED/WHITE',    a: '#d83c3c', as: '#962626', b: '#ececec', bs: '#a6a8b2' },
+  { name: 'BLUE/WHITE',   a: '#3c66d8', as: '#24408e', b: '#ececec', bs: '#a6a8b2' },
+  { name: 'BLACK/YELLOW', a: '#26262c', as: '#101014', b: '#f0c838', bs: '#ae8a1a' },
+  { name: 'ALL GOLD',     a: '#e0a828', as: '#98680e', b: '#f8dc70', bs: '#c49e3c' }
+];
+const BEAMS = [
+  { name: 'WARM YELLOW', c: [255, 214, 110] },
+  { name: 'COOL WHITE',  c: [214, 232, 255] },
+  { name: 'GREEN',       c: [130, 255, 150] },
+  { name: 'PINK',        c: [255, 140, 205] }
+];
+const PAINT_PRICE = 60, BEAM_PRICE = 50;
+const WEATHER = {
+  CLEAR: { name: 'CLEAR SKIES', col: '#a8d8ff', tip: 'A CALM NIGHT... FOR NOW' },
+  WINDY: { name: 'WINDY',       col: '#b8f0b8', tip: 'WATCH THE WIND ARROW' },
+  FOG:   { name: 'FOG',         col: '#b8c0d0', tip: 'FOCUS CUTS THROUGH FOG' },
+  STORM: { name: 'STORM',       col: '#ffd060', tip: 'LIGHTNING REVEALS ROCKS' }
+};
+
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
+
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (a, b) => a + Math.random() * (b - a);
+const randi = (a, b) => Math.floor(rand(a, b + 1));
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const wrapA = a => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
+const hash = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+
+function rgb(r, g, b) { return ((255 << 24) | ((b & 255) << 16) | ((g & 255) << 8) | (r & 255)) >>> 0; }
+function hex(h) { const n = parseInt(h.slice(1), 16); return rgb((n >> 16) & 255, (n >> 8) & 255, n & 255); }
+function mix(c1, c2, t) {
+  t = clamp(t, 0, 1);
+  const r = (c1 & 255) + ((c2 & 255) - (c1 & 255)) * t;
+  const g = ((c1 >> 8) & 255) + (((c2 >> 8) & 255) - ((c1 >> 8) & 255)) * t;
+  const b = ((c1 >> 16) & 255) + (((c2 >> 16) & 255) - ((c1 >> 16) & 255)) * t;
+  return rgb(r | 0, g | 0, b | 0);
+}
+
+const C = {
+  black: hex('#000000'), white: hex('#ffffff'), dim: hex('#8890a8'), faint: hex('#4a5270'),
+  gold: hex('#ffd24a'), red: hex('#ff4a4a'), green: hex('#5ae06a'), yellow: hex('#ffd84a'),
+  orange: hex('#ff9a40'), cyan: hex('#8ae8ff'), clock: hex('#b8d0ff'), oil: hex('#ffb040'),
+  panel: hex('#0a0e20'), shadow: hex('#02030a'),
+  skyNT: hex('#03050f'), skyNB: hex('#0c1430'), skyPT: hex('#1e1440'), skyPB: hex('#6a3468'),
+  skyOT: hex('#3a3a78'), skyOB: hex('#f09050'),
+  seaHor: hex('#132650'), seaDeep: hex('#0a1634'), seaDawn: hex('#2c3c68'),
+  wave: hex('#1d3a6c'), waveLit: hex('#6a8ab8'), waveStorm: hex('#4a6a98'),
+  foam: hex('#f0f6ff'), foamDim: hex('#36507a'),
+  land: hex('#16181e'), land2: hex('#1e2129'), grass: hex('#16241a'), landGlow: hex('#4a4640'),
+  plank: hex('#6a4a2a'), post: hex('#3a2818'), lantern: hex('#ffd070'),
+  sil: hex('#03060e'), fog: hex('#76849a'), rain: hex('#9ab0d0'),
+  moon: hex('#f0ecc8'), star: hex('#f4f4ff'), wake: hex('#e8f0ff'),
+  splinter: hex('#8a5a2a'), splinter2: hex('#c08a50')
+};
+const ROCK_LIT = [hex('#595d67'), hex('#8e929c'), hex('#33363e'), hex('#6c707a')];
+const ROCK_DARK = [hex('#070d1f'), hex('#0d152b'), hex('#050917'), hex('#091023')];
+
+// =====================================================================
+// CANVAS
+// =====================================================================
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+const off = document.createElement('canvas');
+off.width = W; off.height = H;
+const octx = off.getContext('2d');
+const img = octx.createImageData(W, H);
+const fb = new Uint32Array(img.data.buffer);
+const LM = new Float32Array(W * H);
+
+function resize() {
+  const vw = document.body.clientWidth || innerWidth, vh = document.body.clientHeight || innerHeight;
+  let s = Math.min(vw / W, vh / H);
+  if (s >= 1) s = Math.floor(s);
+  const cw = Math.max(1, Math.round(W * s)), ch = Math.max(1, Math.round(H * s));
+  const dpr = window.devicePixelRatio || 1;
+  cv.style.width = cw + 'px'; cv.style.height = ch + 'px';
+  cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+  ctx.imageSmoothingEnabled = false;
+}
+addEventListener('resize', resize);
+
+function present(sx, sy) {
+  octx.putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  const k = cv.width / W;
+  ctx.drawImage(off, Math.round(sx * k), Math.round(sy * k), cv.width, cv.height);
+}
+
+function pset(x, y, c) { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= W || y >= H) return; fb[y * W + x] = c; }
+function blendI(i, c, a) {
+  if (a >= 1) { fb[i] = c; return; }
+  const d = fb[i], ia = 1 - a;
+  const r = (d & 255) * ia + (c & 255) * a;
+  const g = ((d >> 8) & 255) * ia + ((c >> 8) & 255) * a;
+  const b = ((d >> 16) & 255) * ia + ((c >> 16) & 255) * a;
+  fb[i] = rgb(r | 0, g | 0, b | 0);
+}
+function pblend(x, y, c, a) { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= W || y >= H || a <= 0) return; blendI(y * W + x, c, a); }
+function padd(x, y, c, a) {
+  x |= 0; y |= 0; if (x < 0 || y < 0 || x >= W || y >= H || a <= 0) return;
+  const i = y * W + x, d = fb[i];
+  fb[i] = rgb(Math.min(255, (d & 255) + (c & 255) * a) | 0, Math.min(255, ((d >> 8) & 255) + ((c >> 8) & 255) * a) | 0, Math.min(255, ((d >> 16) & 255) + ((c >> 16) & 255) * a) | 0);
+}
+function rect(x, y, w, h, c) {
+  x |= 0; y |= 0;
+  const x0 = Math.max(0, x), y0 = Math.max(0, y), x1 = Math.min(W, x + w), y1 = Math.min(H, y + h);
+  for (let yy = y0; yy < y1; yy++) fb.fill(c, yy * W + x0, yy * W + x1);
+}
+function rectA(x, y, w, h, c, a) {
+  x |= 0; y |= 0;
+  const x0 = Math.max(0, x), y0 = Math.max(0, y), x1 = Math.min(W, x + w), y1 = Math.min(H, y + h);
+  for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) blendI(yy * W + xx, c, a);
+}
+function outline(x, y, w, h, c, a) {
+  a = a == null ? 1 : a;
+  for (let i = 0; i < w; i++) { pblend(x + i, y, c, a); pblend(x + i, y + h - 1, c, a); }
+  for (let i = 1; i < h - 1; i++) { pblend(x, y + i, c, a); pblend(x + w - 1, y + i, c, a); }
+}
+function line(x0, y0, x1, y1, c, a) {
+  x0 |= 0; y0 |= 0; x1 |= 0; y1 |= 0;
+  const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy, n = 0;
+  while (n++ < 400) {
+    pblend(x0, y0, c, a == null ? 1 : a);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+  }
+}
+function disc(cx, cy, r, c, a) {
+  for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++)
+    for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+      if (dx * dx + dy * dy <= r * r) pblend(x, y, c, a == null ? 1 : a);
+    }
+}
+function ring(cx, cy, r, c, a) {
+  const n = Math.max(8, Math.floor(r * 6));
+  for (let i = 0; i < n; i++) { const t = i / n * TAU; pblend(cx + Math.cos(t) * r, cy + Math.sin(t) * r, c, a); }
+}
+function glow(cx, cy, r, c, a) {
+  for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++)
+    for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy, d = Math.sqrt(dx * dx + dy * dy);
+      if (d < r) padd(x, y, c, a * (1 - d / r) * (1 - d / r));
+    }
+}
+
+// =====================================================================
+// STORAGE
+// =====================================================================
+const SAVE_KEY = 'lighthouseKeeper.save.v1';
+function defaultSave() {
+  return { best: 0, bestNight: 0, coins: 0, up: { lens: 0, gears: 0, tank: 0, flare: 0, lamp2: 0 }, paints: [0], paint: 0, beams: [0], beam: 0, muted: false };
+}
+function loadSave() {
+  const s = defaultSave();
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d && typeof d === 'object') {
+        s.best = +d.best || 0; s.bestNight = +d.bestNight || 0; s.coins = +d.coins || 0;
+        if (d.up) for (const k in s.up) s.up[k] = clamp(+d.up[k] || 0, 0, (UPGRADES.find(u => u.id === k) || { prices: [] }).prices.length);
+        if (Array.isArray(d.paints)) s.paints = d.paints.filter(v => v >= 0 && v < PAINTS.length);
+        if (Array.isArray(d.beams)) s.beams = d.beams.filter(v => v >= 0 && v < BEAMS.length);
+        if (!s.paints.includes(0)) s.paints.push(0);
+        if (!s.beams.includes(0)) s.beams.push(0);
+        s.paint = s.paints.includes(d.paint) ? d.paint : 0;
+        s.beam = s.beams.includes(d.beam) ? d.beam : 0;
+        s.muted = !!d.muted;
+      }
+    }
+  } catch (e) { /* storage blocked: play without saving */ }
+  return s;
+}
+function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } }
+
+// =====================================================================
+// PIXEL FONT
+// =====================================================================
+const FONT = {
+  'A': '010101111101101', 'B': '110101110101110', 'C': '011100100100011', 'D': '110101101101110',
+  'E': '111100110100111', 'F': '111100110100100', 'G': '011100101101011', 'H': '101101111101101',
+  'I': '111010010010111', 'J': '001001001101010', 'K': '101101110101101', 'L': '100100100100111',
+  'M': '101111111101101', 'N': '110101101101101', 'O': '010101101101010', 'P': '110101110100100',
+  'Q': '010101101110011', 'R': '110101110101101', 'S': '011100010001110', 'T': '111010010010010',
+  'U': '101101101101111', 'V': '101101101101010', 'W': '101101111111101', 'X': '101101010101101',
+  'Y': '101101010010010', 'Z': '111001010100111',
+  '0': '111101101101111', '1': '010110010010111', '2': '110001010100111', '3': '110001010001110',
+  '4': '101101111001001', '5': '111100110001110', '6': '011100111101111', '7': '111001010010010',
+  '8': '111101111101111', '9': '111101111001110',
+  '!': '010010010000010', '.': '000000000000010', ':': '000010000010000', '-': '000000111000000',
+  '+': '000010111010000', '/': '001001010100100', "'": '010010000000000', '?': '110001010000010',
+  '<': '001010100010001', '>': '100010001010100', '=': '000111000111000', ',': '000000000010100',
+  '%': '101001010100101', '(': '010100100100010', ')': '010001001001010', '*': '000101010101000',
+  ' ': '000000000000000'
+};
+function textW(s, sc) { sc = sc || 1; s = String(s); return s.length ? s.length * 4 * sc - sc : 0; }
+function glyphs(s, x, y, c, sc, a) {
+  for (let n = 0; n < s.length; n++) {
+    const g = FONT[s[n]];
+    if (g) for (let i = 0; i < 15; i++) {
+      if (g[i] !== '1') continue;
+      const px = x + n * 4 * sc + (i % 3) * sc, py = y + Math.floor(i / 3) * sc;
+      if (a < 1) rectA(px, py, sc, sc, c, a); else rect(px, py, sc, sc, c);
+    }
+  }
+}
+function drawText(s, x, y, c, o) {
+  o = o || {};
+  const sc = o.scale || 1, a = o.alpha == null ? 1 : o.alpha;
+  s = String(s).toUpperCase();
+  const w = textW(s, sc);
+  if (o.align === 'center') x = Math.round(x - w / 2);
+  else if (o.align === 'right') x = Math.round(x - w);
+  if (o.shadow !== false) glyphs(s, x + 1, y + 1, o.shadowColor || C.shadow, sc, a);
+  glyphs(s, x, y, c == null ? C.white : c, sc, a);
+  return w;
+}
+
+// =====================================================================
+// SPRITES
+// =====================================================================
+const SPR = {
+  lighthouse: [
+    '.......R.......',
+    '......rRr......',
+    '.....rrRrr.....',
+    '....GGGGGGG....',
+    '....GyyLyyG....',
+    '....GyLLLyG....',
+    '....GyyLyyG....',
+    '...GGGGGGGGG...',
+    '...G.G.G.G.G...',
+    '....AAAAAAa....',
+    '....AAAAAAa....',
+    '....BBBwwBb....',
+    '....BBBwwBb....',
+    '....AAAAAAa....',
+    '...AAAAAAAaa...',
+    '...BBBBBBBbb...',
+    '...BBBBBBBbb...',
+    '...AAAAwAAaa...',
+    '...AAAAAAAaa...',
+    '..BBBBBBBBBbb..',
+    '..BBBBBBBBBbb..',
+    '..AAAAAAAAAaa..',
+    '..AAAAoAAAAaa..',
+    '.DDDDDoDDDDDdd.',
+    'DDDDDDDDDDDDDdd'
+  ],
+  fishing: [
+    '..H..',
+    '.HBS.',
+    '.BDS.',
+    '.BwS.',
+    '.BwS.',
+    '.ByS.',
+    '.BBS.',
+    '..S..'
+  ],
+  sail: [
+    '...H...',
+    '..HBS..',
+    '..BDs..',
+    '..BDss.',
+    '..BDsss',
+    '..BysS.',
+    '..BDS..',
+    '..BDS..',
+    '..BBS..',
+    '...S...'
+  ],
+  cargo: [
+    '..H..',
+    '.HBS.',
+    '.BBS.',
+    'HDDDS',
+    'HcCcS',
+    'HCcCS',
+    'HcCcS',
+    'HDDDS',
+    'HCcCS',
+    'HcCcS',
+    'HCcCS',
+    'HDDDS',
+    'HwwwS',
+    'HwywS',
+    'HBBBS',
+    '.BBS.',
+    '.BBS.',
+    '..S..'
+  ],
+  speed: [
+    '..H..',
+    '..HS.',
+    '.HBS.',
+    '.HBS.',
+    '.BwS.',
+    '.wwS.',
+    '.ByS.',
+    '.BBS.',
+    '.S.S.'
+  ],
+  pirate: [
+    '....H....',
+    '...HBS...',
+    '...BDSff.',
+    '.sssssss.',
+    'sssssssss',
+    '...BDS...',
+    '..sssss..',
+    '.sssssss.',
+    '...BDS...',
+    '...BDS...',
+    '...BBS...',
+    '....S....'
+  ],
+  barrel: [
+    '.BB.',
+    'BHBS',
+    'DDDD',
+    'BHBS',
+    '.BB.'
+  ],
+  gull1: [
+    'W...W',
+    '.W.W.',
+    '..W..'
+  ],
+  gull2: [
+    '.....',
+    'WW.WW',
+    '..W..'
+  ],
+  drop: ['.o.', '.o.', 'ooo', 'ooo', '.o.'],
+  boatIcon: ['..o..', '..oo.', 'ooooo', '.ooo.'],
+  flareIcon: ['o.o.o', '.ooo.', 'ooooo', '.ooo.', 'o.o.o'],
+  hornIcon: ['....o', '..ooo', 'ooooo', '..ooo', '....o'],
+  coin: ['.ooo.', 'ohhoo', 'ohooo', 'oooso', '.ooo.'],
+  arrow: ['...o..', '...oo.', 'oooooo', '...oo.', '...o..']
+};
+
+const PAL = {
+  fishing: { H: hex('#e8a858'), B: hex('#c87830'), S: hex('#7a4418'), D: hex('#a06030'), w: hex('#e8e0c0'), y: hex('#ffe070') },
+  sail:    { H: hex('#ffffff'), B: hex('#d8dce8'), S: hex('#8a8ea8'), D: hex('#b08850'), s: hex('#f4f4f0'), y: hex('#ffe070') },
+  cargo:   { H: hex('#68a0e0'), B: hex('#3870b8'), S: hex('#1e3c6c'), D: hex('#5c6470'), c: hex('#c84040'), C: hex('#e0b030'), w: hex('#e8e8e8'), y: hex('#ffe070') },
+  speed:   { H: hex('#ff9a9a'), B: hex('#e04848'), S: hex('#8e1e1e'), w: hex('#88d8ff'), y: hex('#ffe070') },
+  pirate:  { H: hex('#6a4c34'), B: hex('#3e2c20'), S: hex('#1a1210'), D: hex('#4c3828'), s: hex('#141418'), f: hex('#e82020') },
+  ghost:   { H: hex('#e0fff8'), B: hex('#a0f0e0'), S: hex('#5aa8a0'), D: hex('#80d0c8'), s: hex('#d0fff4'), y: hex('#d0fff4') },
+  barrel:  { H: hex('#c08a50'), B: hex('#8a5a2a'), S: hex('#5a3818'), D: hex('#3a3a40') },
+  gull:    { W: hex('#f4f4f4') }
+};
+function darkPal(pal, keep) {
+  const p = {};
+  for (const k in pal) p[k] = C.sil;
+  for (const k in keep) p[k] = keep[k];
+  return p;
+}
+const DARK_PAL = {
+  fishing: darkPal(PAL.fishing, { y: PAL.fishing.y }),
+  sail: darkPal(PAL.sail, { y: PAL.sail.y }),
+  cargo: darkPal(PAL.cargo, { y: PAL.cargo.y }),
+  speed: darkPal(PAL.speed, { y: PAL.speed.y }),
+  pirate: darkPal(PAL.pirate, { f: hex('#4a0c0c') }),
+  barrel: darkPal(PAL.barrel, {})
+};
+// lantern offsets relative to sprite centre (for glow)
+const LANTERN = {};
+for (const k of ['fishing', 'sail', 'cargo', 'speed']) {
+  const m = SPR[k];
+  for (let r = 0; r < m.length; r++) { const c = m[r].indexOf('y'); if (c >= 0) LANTERN[k] = { x: c + 0.5 - m[0].length / 2, y: r + 0.5 - m.length / 2 }; }
+}
+
+// Draw any sprite map with a palette. o.rot rotates around (x,y) as the centre;
+// otherwise (x,y) is the top-left corner.
+function drawSprite(map, pal, x, y, o) {
+  o = o || {};
+  const h = map.length, w = map[0].length;
+  const a = o.alpha == null ? 1 : o.alpha;
+  if (o.rot == null) {
+    x = Math.round(x); y = Math.round(y);
+    for (let r = 0; r < h; r++) {
+      const row = map[r];
+      for (let i = 0; i < w; i++) {
+        const ch = row[i];
+        if (ch === '.') continue;
+        const c = pal[ch];
+        if (c == null) continue;
+        const px = x + (o.flip ? w - 1 - i : i);
+        if (a < 1) pblend(px, y + r, c, a); else pset(px, y + r, c);
+      }
+    }
+    return;
+  }
+  const ang = Math.round(o.rot / (TAU / 32)) * (TAU / 32);
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const R = Math.ceil(Math.max(w, h) * 0.75) + 1;
+  const cx = Math.round(x), cy = Math.round(y);
+  for (let oy = -R; oy <= R; oy++) {
+    for (let ox = -R; ox <= R; ox++) {
+      const fx = ox + 0.5, fy = oy + 0.5;
+      const ix = Math.floor(ca * fx + sa * fy + w / 2 + 1e-6);
+      const iy = Math.floor(-sa * fx + ca * fy + h / 2 + 1e-6);
+      if (ix < 0 || iy < 0 || ix >= w || iy >= h) continue;
+      const ch = map[iy][ix];
+      if (ch === '.') continue;
+      const c = pal[ch];
+      if (c == null) continue;
+      if (a < 1) pblend(cx + ox, cy + oy, c, a); else pset(cx + ox, cy + oy, c);
+    }
+  }
+}
+function icon(name, x, y, c, o) { drawSprite(SPR[name], { o: c, h: o && o.h, s: o && o.s }, x, y, o); }
+
+function paintPal(idx) {
+  const p = PAINTS[idx] || PAINTS[0];
+  return {
+    R: hex('#a83030'), r: hex('#5e1818'), G: hex('#2a2c34'),
+    A: hex(p.a), a: hex(p.as), B: hex(p.b), b: hex(p.bs),
+    D: hex('#4a4c56'), d: hex('#2c2e36'), o: hex('#2a1a10'),
+    y: C.lantern, L: C.white, w: hex('#ffd890')
+  };
+}
+function beamCol(idx) { const b = (BEAMS[idx == null ? S.beam : idx] || BEAMS[0]).c; return rgb(b[0], b[1], b[2]); }
+
+// =====================================================================
+// INPUT
+// =====================================================================
+const keys = {};
+const pressed = new Set();
+const pointers = new Map();
+let taps = [];
+let hover = null, hoverMoved = false;
+let isTouch = false;
+try { isTouch = matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window && navigator.maxTouchPoints > 0); } catch (e) { /* ignore */ }
+
+const BLOCK_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Enter', 'Escape', 'ShiftLeft', 'ShiftRight'];
+addEventListener('keydown', e => {
+  audioInit();
+  if (!keys[e.code]) pressed.add(e.code);
+  keys[e.code] = true;
+  if (BLOCK_KEYS.includes(e.code)) e.preventDefault();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; pointers.clear(); if (screen === 'play') setScreen('pause'); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && screen === 'play') setScreen('pause'); });
+
+function toGame(e) {
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+}
+const TBTNS = [
+  { id: 'left',  x: 1,  y: 177, w: 13, h: 14, label: '<' },
+  { id: 'right', x: 15, y: 177, w: 13, h: 14, label: '>' },
+  { id: 'flare', x: 99, y: 151, w: 28, h: 11, label: 'FLARE' },
+  { id: 'horn',  x: 99, y: 163, w: 28, h: 11, label: 'HORN' },
+  { id: 'focus', x: 99, y: 177, w: 28, h: 14, label: 'FOCUS' }
+];
+const PAUSE_BTN = { id: 'pause', x: 118, y: 0, w: 10, h: 8 };
+const inside = (p, r) => p.x >= r.x && p.y >= r.y && p.x < r.x + r.w && p.y < r.y + r.h;
+function playBtnAt(p) {
+  if (inside(p, PAUSE_BTN)) return 'pause';
+  if (isTouch) for (const b of TBTNS) if (inside(p, b)) return b.id;
+  return null;
+}
+cv.addEventListener('pointerdown', e => {
+  audioInit();
+  if (e.pointerType === 'touch') isTouch = true;
+  const p = toGame(e);
+  p.btn = screen === 'play' ? playBtnAt(p) : null;
+  pointers.set(e.pointerId, p);
+  taps.push({ x: p.x, y: p.y });
+  try { cv.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  e.preventDefault();
+});
+cv.addEventListener('pointermove', e => {
+  const p = toGame(e);
+  const q = pointers.get(e.pointerId);
+  if (q) { q.x = p.x; q.y = p.y; }
+  if (e.pointerType === 'mouse') { hover = p; hoverMoved = true; }
+});
+const endPtr = e => { pointers.delete(e.pointerId); };
+cv.addEventListener('pointerup', endPtr);
+cv.addEventListener('pointercancel', endPtr);
+cv.addEventListener('contextmenu', e => e.preventDefault());
+
+const hit = (...codes) => codes.some(c => pressed.has(c));
+const confirmKey = () => hit('Enter', 'Space', 'NumpadEnter');
+function touchHeld(id) {
+  const b = TBTNS.find(t => t.id === id);
+  for (const p of pointers.values()) if (p.btn && inside(p, b)) return true;
+  return false;
+}
+function aimPoint() {
+  let a = null;
+  for (const p of pointers.values()) if (!p.btn && p.y > HORIZON - 8 && p.y < 176) a = p;
+  return a;
+}
+
+// UI regions are rebuilt each draw; taps are tested against them on the next update.
+let regions = [];
+function tapId() {
+  for (const t of taps) for (let i = regions.length - 1; i >= 0; i--) if (inside(t, regions[i])) return regions[i].id;
+  return null;
+}
+function hoverId() {
+  if (!hover || !hoverMoved) return null;
+  hoverMoved = false;
+  for (let i = regions.length - 1; i >= 0; i--) if (inside(hover, regions[i])) return regions[i].id;
+  return null;
+}
+function menuNav(ids, st, key) {
+  if (hit('ArrowUp', 'KeyW')) { st[key] = (st[key] + ids.length - 1) % ids.length; sfx('sel'); }
+  if (hit('ArrowDown', 'KeyS')) { st[key] = (st[key] + 1) % ids.length; sfx('sel'); }
+  const hv = hoverId();
+  if (hv && ids.includes(hv) && ids.indexOf(hv) !== st[key]) { st[key] = ids.indexOf(hv); }
+  const tp = tapId();
+  if (tp && ids.includes(tp)) { st[key] = ids.indexOf(tp); return tp; }
+  if (confirmKey()) return ids[st[key]];
+  return null;
+}
+
+// --- tiny synth (sound only starts after the first key or tap) ---
+let AC = null, noiseBuf = null;
+function audioInit() {
+  try {
+    if (!AC) {
+      const A = window.AudioContext || window.webkitAudioContext;
+      if (!A) return;
+      AC = new A();
+      noiseBuf = AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (AC.state === 'suspended') AC.resume();
+  } catch (e) { AC = null; }
+}
+function tone(f, dur, type, vol, f2, delay) {
+  if (!AC || S.muted) return;
+  try {
+    const t = AC.currentTime + (delay || 0);
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    g.gain.setValueAtTime(vol || 0.04, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(AC.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  } catch (e) { /* ignore */ }
+}
+function noise(dur, vol, freq, delay) {
+  if (!AC || S.muted || !noiseBuf) return;
+  try {
+    const t = AC.currentTime + (delay || 0);
+    const src = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+    src.buffer = noiseBuf; src.loop = true;
+    f.type = 'lowpass'; f.frequency.value = freq || 1000;
+    g.gain.setValueAtTime(vol || 0.08, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f); f.connect(g); g.connect(AC.destination);
+    src.start(t); src.stop(t + dur + 0.05);
+  } catch (e) { /* ignore */ }
+}
+const SFX = {
+  sel() { tone(440, 0.04, 'square', 0.025); },
+  ok() { tone(660, 0.06, 'square', 0.035); tone(990, 0.08, 'square', 0.035, null, 0.05); },
+  no() { tone(150, 0.16, 'square', 0.04); },
+  dock() { tone(660, 0.08, 'square', 0.035); tone(990, 0.14, 'square', 0.035, null, 0.08); },
+  perfect() { tone(1320, 0.12, 'triangle', 0.04, null, 0.18); },
+  wreck() { noise(0.6, 0.18, 600); tone(130, 0.45, 'sawtooth', 0.05, 40); },
+  horn() { tone(98, 1.1, 'sawtooth', 0.045); tone(147, 1.1, 'sawtooth', 0.025); },
+  flare() { noise(0.5, 0.06, 3000); tone(400, 0.5, 'triangle', 0.04, 1400); },
+  cannon() { noise(0.4, 0.18, 350); },
+  crack() { noise(0.25, 0.12, 5000); tone(1800, 0.18, 'square', 0.03, 500); },
+  oil() { tone(520, 0.06, 'triangle', 0.05); tone(780, 0.1, 'triangle', 0.05, null, 0.06); },
+  thunder() { noise(1.4, 0.13, 220); },
+  alarm() { tone(880, 0.08, 'square', 0.035); tone(660, 0.08, 'square', 0.035, null, 0.1); tone(880, 0.08, 'square', 0.035, null, 0.2); },
+  dawn() { [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.35, 'triangle', 0.04, null, i * 0.12)); },
+  over() { [392, 330, 262, 196].forEach((f, i) => tone(f, 0.4, 'triangle', 0.05, null, i * 0.18)); },
+  sputter() { noise(0.2, 0.07, 900); },
+  lost() { tone(300, 0.15, 'square', 0.025, 200); }
+};
+function sfx(n) { if (SFX[n]) SFX[n](); }
+
+// =====================================================================
+// GAME STATE
+// =====================================================================
+let S = loadSave();
+let RUN = null;   // { night, score, coins, startBest }
+let G = null;     // the current night's world
+let DEMO = null;  // the title screen's world
+let screen = 'title', scrT = 0;
+const UI = {
+  titleSel: 0, howPage: 0, howSel: 1, shopSel: 0, paintView: 0, beamView: 0, shopMsg: '', shopMsgT: 0, shopFrom: 'title',
+  sumSel: 0, overSel: 0, pauseSel: 0, newBest: false, overCoins: 0, sumCoins: 0, quit: false
+};
+
+function weatherFor(n) {
+  const fixed = ['CLEAR', 'WINDY', 'CLEAR', 'FOG', 'WINDY', 'STORM'];
+  if (n <= fixed.length) return fixed[n - 1];
+  return pick(['CLEAR', 'WINDY', 'WINDY', 'FOG', 'FOG', 'STORM', 'STORM']);
+}
+function nightConfig(n) {
+  const types = [['fishing', 1]];
+  if (n >= 2) types.push(['sail', n === 2 ? 0.8 : 1]);
+  if (n >= 3) types.push(['cargo', n === 3 ? 0.8 : 0.9]);
+  if (n >= 4) types.push(['speed', n === 4 ? 0.9 : 1]);
+  if (n >= 5) types[0][1] = 0.6;
+  return {
+    n,
+    duration: Math.min(90 + (n - 1) * 6, 120),
+    maxShips: Math.min(3 + Math.floor((n - 1) * 0.7), 8),
+    interval: Math.max(3.2, 7.5 - (n - 1) * 0.7),
+    rocks: Math.min(7 + n * 2, 24),
+    weather: weatherFor(n),
+    types,
+    pirates: n >= 5, pirateMax: n >= 9 ? 2 : 1, pirateInterval: Math.max(16, 32 - n * 1.5),
+    ghost: n >= 6,
+    fillMul: Math.min(1 + (n - 1) * 0.06, 1.5),
+    speedMul: Math.min(1 + (n - 1) * 0.03, 1.3)
+  };
+}
+function nightHint(n, weather) {
+  const fixed = {
+    1: ['GUIDE FISHING BOATS HOME', 'KEEP THEM IN YOUR LIGHT'],
+    2: ['NEW: SAILBOAT', 'IT DRIFTS WITH THE WIND'],
+    3: ['NEW: CARGO SHIP', 'SLOW TO TURN. LIGHT IT EARLY'],
+    4: ['NEW: SPEEDBOAT', 'FAST AND IMPATIENT'],
+    5: ['NEW: PIRATE SHIP', "DON'T LIGHT IT!"],
+    6: ['BEWARE: GHOST SHIPS', 'ONLY SEEN IN THE BEAM']
+  };
+  return fixed[n] || ['THE SEA GROWS ROUGHER', WEATHER[weather].tip];
+}
+
+function makeWorld(n, demo) {
+  const cfg = nightConfig(n);
+  if (demo) cfg.weather = 'CLEAR';
+  const g = {
+    n, cfg, demo: !!demo, t: 0, dur: cfg.duration, weather: cfg.weather,
+    ships: [], barrels: [], parts: [], texts: [], balls: [], gulls: [], rain: [], beams: [],
+    beamAngle: 0, aimTo: null, focus: false, oilMax: 100 + 35 * S.up.tank, oil: 0, flares: 1 + S.up.flare,
+    flareT: 0, flareShot: null, flarePos: null, hornCD: 0, hornT: 0, crackT: 0,
+    flick: 1, flickT: 0, flashT: 0, bolt: null, lightningT: rand(4, 8),
+    wind: { x: 0, y: 0 }, windDir: Math.random() < 0.5 ? -1 : 1, gust: { x: 0, y: 0 }, gustTo: { x: 0, y: 0 }, gustT: 0,
+    breeze: (Math.random() < 0.5 ? -1 : 1) * 1.5,
+    spawnT: 1.5, pirateT: rand(12, 20), barrelT: rand(9, 14),
+    docked: 0, wrecks: 0, perfect: 0, close: 0, safe: 0, score: 0, ghosts: 0,
+    shakeT: 0, shakeM: 0, dockFlash: [0, 0], keeperT: rand(3, 7), keeperOn: 0, overT: -1, dawnT: -1
+  };
+  g.oil = g.oilMax;
+  genMap(g);
+  g.waves = [];
+  const nw = g.weather === 'STORM' ? 120 : 75;
+  for (let i = 0; i < nw; i++) g.waves.push({ x: rand(0, W), y: randi(HORIZON + 2, H - 10), len: randi(2, g.weather === 'STORM' ? 6 : 4), spd: rand(0.8, 2.5) * (Math.random() < 0.5 ? -1 : 1), ph: rand(0, TAU) });
+  g.stars = [];
+  for (let i = 0; i < 26; i++) g.stars.push({ x: randi(0, W - 1), y: randi(0, HORIZON - 3), ph: rand(0, TAU), sp: rand(1, 3) });
+  g.fogBlobs = [];
+  for (let i = 0; i < 9; i++) g.fogBlobs.push({ x: rand(-20, W + 20), y: rand(HORIZON, H - 20), rx: rand(18, 36), ry: rand(7, 14), vx: rand(1.5, 4) * (Math.random() < 0.5 ? -1 : 1) });
+  if (g.weather === 'WINDY') g.wind.x = g.windDir * (3 + Math.min(n, 12) * 0.12);
+  if (g.weather === 'STORM') { g.wind.x = g.windDir * 2.5; for (let i = 0; i < 90; i++) g.rain.push({ x: rand(0, W), y: rand(0, H), s: rand(0.8, 1.2) }); }
+  return g;
+}
+
+// ---- map generation: rocks, coast and the navigation flow fields ----
+function inChannel(x) { for (const c of CHANNELS) if (x >= c.x0 && x <= c.x1) return true; return false; }
+function computeBlocked(mask, r) {
+  const b = new Uint8Array(GW * GH);
+  for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+    const i = cy * GW + cx;
+    if (cy < HORIZON / CELL) { b[i] = 1; continue; }
+    const px = cx * CELL + 1.5, py = cy * CELL + 1.5;
+    let hitp = false;
+    for (let y = Math.ceil(py - r); y <= Math.floor(py + r) && !hitp; y++) {
+      if (y < 0 || y >= H) continue;
+      for (let x = Math.ceil(px - r); x <= Math.floor(px + r); x++) {
+        if (x < 0 || x >= W) continue;
+        if (mask[y * W + x]) { hitp = true; break; }
+      }
+    }
+    b[i] = hitp ? 1 : 0;
+  }
+  return b;
+}
+function channelCells(e) {
+  const ch = CHANNELS[e], out = [];
+  for (let cy = 46; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) if (cx * CELL >= ch.x0 && cx * CELL + 3 <= ch.x1) out.push(cy * GW + cx);
+  return out;
+}
+const CH_CELLS = [channelCells(0), channelCells(1)];
+function flowField(blocked, e, blockCost) {
+  const N = GW * GH, d = new Float32Array(N).fill(1e9), cost = new Float32Array(N);
+  for (let i = 0; i < N; i++) cost[i] = blocked[i] ? blockCost : 1;
+  for (const i of CH_CELLS[e]) { d[i] = 0; cost[i] = 1; }
+  const D = 1.4142;
+  let changed = true, it = 0;
+  while (changed && it++ < 400) {
+    changed = false;
+    for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+      const i = y * GW + x, c = cost[i];
+      let best = d[i];
+      if (x > 0 && d[i - 1] + c < best) best = d[i - 1] + c;
+      if (y > 0) {
+        if (d[i - GW] + c < best) best = d[i - GW] + c;
+        if (x > 0 && d[i - GW - 1] + c * D < best) best = d[i - GW - 1] + c * D;
+        if (x < GW - 1 && d[i - GW + 1] + c * D < best) best = d[i - GW + 1] + c * D;
+      }
+      if (best < d[i]) { d[i] = best; changed = true; }
+    }
+    for (let y = GH - 1; y >= 0; y--) for (let x = GW - 1; x >= 0; x--) {
+      const i = y * GW + x, c = cost[i];
+      let best = d[i];
+      if (x < GW - 1 && d[i + 1] + c < best) best = d[i + 1] + c;
+      if (y < GH - 1) {
+        if (d[i + GW] + c < best) best = d[i + GW] + c;
+        if (x < GW - 1 && d[i + GW + 1] + c * D < best) best = d[i + GW + 1] + c * D;
+        if (x > 0 && d[i + GW - 1] + c * D < best) best = d[i + GW - 1] + c * D;
+      }
+      if (best < d[i]) { d[i] = best; changed = true; }
+    }
+  }
+  return d;
+}
+const SAMPLE_CELLS = [[3, 7], [16, 7], [28, 7], [0, 9], [0, 13], [GW - 1, 9], [GW - 1, 13]];
+function pathsOk(mask) {
+  const b = computeBlocked(mask, 3);
+  for (let e = 0; e < 2; e++) {
+    const f = flowField(b, e, 1e6);
+    for (const [cx, cy] of SAMPLE_CELLS) if (f[cy * GW + cx] > 1e5) return false;
+  }
+  return true;
+}
+function genMap(g) {
+  const mask = new Uint8Array(W * H);
+  // coast with two harbour channels
+  for (let x = 0; x < W; x++) {
+    const top = COAST_Y + Math.round(Math.sin(x * 0.7) * 0.8 + Math.sin(x * 0.23 + 1) * 1.1);
+    for (let y = top; y < H; y++) if (!inChannel(x)) mask[y * W + x] = 2;
+  }
+  // lighthouse outcrop
+  for (let y = 160; y < H; y++) for (let x = 44; x < 85; x++) {
+    const dx = (x + 0.5 - 64) / 15, dy = (y + 0.5 - 184) / 14;
+    if (dx * dx + dy * dy < 1 + (hash(x, y) - 0.5) * 0.25 && !inChannel(x)) mask[y * W + x] = 2;
+  }
+  for (let y = LH_Y; y < LH_Y + 25; y++) for (let x = LH_X + 1; x < LH_X + 14; x++) mask[y * W + x] = 2;
+  // reefs
+  const centers = [];
+  let placed = 0, tries = 0;
+  const bigger = Math.min(g.n, 8) * 0.18;
+  while (placed < g.cfg.rocks && tries++ < 160) {
+    const cx = rand(6, 122), cy = rand(64, 150);
+    if (Math.hypot(cx - 64, cy - 168) < 28) continue;
+    if (Math.hypot(cx - 36, cy - 182) < 18 || Math.hypot(cx - 92, cy - 182) < 18) continue;
+    if (centers.some(c => Math.hypot(c.x - cx, c.y - cy) < 11)) continue;
+    const added = [];
+    const blobs = randi(1, 3 + (g.n > 4 ? 1 : 0));
+    for (let b = 0; b < blobs; b++) {
+      const bx = cx + rand(-5, 5), by = cy + rand(-3.5, 3.5), r = rand(1.4, 3.2 + bigger);
+      for (let y = Math.floor(by - r - 1); y <= Math.ceil(by + r + 1); y++) for (let x = Math.floor(bx - r - 1); x <= Math.ceil(bx + r + 1); x++) {
+        if (x < 0 || x >= W || y < HORIZON + 30 || y >= H) continue;
+        const d = Math.hypot(x + 0.5 - bx, y + 0.5 - by);
+        if (d < r + (hash(x * 3 + b, y * 7) - 0.5) * 1.5 && mask[y * W + x] === 0) { mask[y * W + x] = 1; added.push(y * W + x); }
+      }
+    }
+    if (!added.length) continue;
+    if (!pathsOk(mask)) { for (const i of added) mask[i] = 0; continue; }
+    centers.push({ x: cx, y: cy });
+    placed++;
+  }
+  g.mask = mask;
+  const blocked = computeBlocked(mask, 3);
+  g.fields = [flowField(blocked, 0, 30), flowField(blocked, 1, 30)];
+  // drawing caches
+  g.rockPix = []; g.foam = []; g.landPix = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x, m = mask[i];
+    const at = (xx, yy) => (xx < 0 || yy < 0 || xx >= W || yy >= H) ? 0 : mask[yy * W + xx];
+    if (m === 1) {
+      let s = 0;
+      if (at(x, y - 1) !== 1 || at(x - 1, y) !== 1) s = 1;
+      else if (at(x, y + 1) !== 1 || at(x + 1, y) !== 1) s = 2;
+      else if (hash(x, y) < 0.25) s = 3;
+      g.rockPix.push({ i, s });
+    } else if (m === 2) {
+      const h = hash(x * 5, y * 3);
+      let c = h < 0.5 ? C.land : C.land2;
+      if (at(x, y - 1) === 0 && y < H - 1) c = hex('#2a2e38');
+      else if (h > 0.86 && y > COAST_Y) c = C.grass;
+      g.landPix.push({ i, c, x, y });
+    } else if (y >= HORIZON) {
+      const n4 = (at(x - 1, y) ? 1 : 0) | (at(x + 1, y) ? 1 : 0) | (at(x, y - 1) ? 1 : 0) | (at(x, y + 1) ? 1 : 0);
+      if (n4) g.foam.push({ i, x, y, ph: rand(0, TAU), sp: rand(1.5, 3), o: 0 });
+      else if ((at(x - 2, y) || at(x + 2, y) || at(x, y - 2) || at(x, y + 2)) && Math.random() < 0.45) g.foam.push({ i, x, y, ph: rand(0, TAU), sp: rand(1, 2), o: 1 });
+    }
+  }
+}
+
+function solidAt(g, x, y) {
+  x = Math.floor(x); y = Math.floor(y);
+  if (x < 0 || y < 0 || x >= W || y >= H) return false;
+  return g.mask[y * W + x] > 0;
+}
+function flowAngle(f, x, y) {
+  const cx = clamp(Math.floor(x / CELL), 0, GW - 1), cy = clamp(Math.floor(y / CELL), 0, GH - 1);
+  const v0 = f[cy * GW + cx];
+  let vx = 0, vy = 0;
+  for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+    if (!ox && !oy) continue;
+    const nx = cx + ox, ny = cy + oy;
+    if (nx < 0 || ny < 0 || nx >= GW || ny >= GH) continue;
+    const v = f[ny * GW + nx];
+    if (v < v0) {
+      const len = (ox && oy) ? 1.4142 : 1, w = (v0 - v) / len;
+      vx += ox / len * w; vy += oy / len * w;
+    }
+  }
+  if (vx === 0 && vy === 0) return Math.PI;
+  return Math.atan2(vx, -vy);
+}
+
+// ---- light ----
+function computeBeams(g) {
+  const noOil = g.oil <= 0, crack = g.crackT > 0, fog = g.weather === 'FOG';
+  g.flickT -= STEP;
+  if (g.flickT <= 0) {
+    g.flickT = rand(0.04, 0.12);
+    g.flick = noOil ? (Math.random() < 0.55 ? rand(0.25, 0.6) : 0.06) : crack ? (Math.random() < 0.78 ? rand(0.55, 1) : 0.12) : 1;
+  }
+  const reach = (BASE_REACH + 15 * S.up.lens) * (g.focus ? 1.3 : 1) * (fog ? 0.6 : 1) * (crack ? 0.65 : 1) * (noOil ? 0.35 : 1);
+  const power = (g.focus ? 2 : 1) * (crack ? 0.6 : 1) * (noOil ? 0.4 : 1);
+  g.beams = [{ ang: g.beamAngle, half: g.focus ? FOCUS_HALF : BEAM_HALF, reach, power, vis: g.flick * (g.focus ? 1.2 : 1), main: true }];
+  if (S.up.lamp2) {
+    g.beams.push({
+      ang: Math.sin(g.t * 0.45 + 1) * 1.35, half: 10 * DEG,
+      reach: BASE_REACH * 0.62 * (fog ? 0.6 : 1) * (noOil ? 0.35 : 1), power: 0.55 * (noOil ? 0.4 : 1), vis: 0.5 * g.flick, main: false
+    });
+  }
+}
+let lastMain = 0;
+function lightAt(g, x, y, pad) {
+  let best = 0; lastMain = 0;
+  const dx = x - LAMP_X, dy = y - LAMP_Y, d = Math.hypot(dx, dy);
+  if (d < 2) return 0;
+  const a = Math.atan2(dx, -dy);
+  for (const b of g.beams) {
+    if (d > b.reach + pad) continue;
+    if (Math.abs(a - b.ang) <= b.half + Math.atan2(pad, d)) {
+      if (b.power > best) best = b.power;
+      if (b.main) lastMain = b.power;
+    }
+  }
+  return best;
+}
+const nearHarbor = (x, y) => y > 166 && (Math.abs(x - 36) < 14 || Math.abs(x - 92) < 14);
+function computeLight(g) {
+  LM.fill(0);
+  for (const b of g.beams) {
+    if (b.vis <= 0.02) continue;
+    const edge = b.half * 0.35, hmax = b.half + edge * 0.5, hin = b.half - edge * 0.5, r2 = b.reach * b.reach;
+    for (let y = 0; y < LIGHT_ROWS; y++) {
+      const dy = y + 0.5 - LAMP_Y;
+      for (let x = 0; x < W; x++) {
+        const dx = x + 0.5 - LAMP_X, d2 = dx * dx + dy * dy;
+        if (d2 > r2 || d2 < 4) continue;
+        const diff = Math.abs(Math.atan2(dx, -dy) - b.ang);
+        if (diff > hmax) continue;
+        const bt = BAYER[((y & 3) << 2) | (x & 3)];
+        if (diff > hin && bt > (hmax - diff) / edge) continue;
+        const fall = 1 - Math.sqrt(d2) / b.reach;
+        if (fall < 0.18 && bt > fall / 0.18) continue;
+        const v = (0.3 + 0.7 * fall * fall) * b.vis, i = y * W + x;
+        if (v > LM[i]) LM[i] = v;
+      }
+    }
+  }
+}
+
+// ---- spawning ----
+function pickType(g) {
+  if (g.cfg.ghost && g.ghosts < 1 && Math.random() < 0.07) { g.ghosts++; return 'ghost'; }
+  let tot = 0; for (const t of g.cfg.types) tot += t[1];
+  let r = Math.random() * tot;
+  for (const t of g.cfg.types) { r -= t[1]; if (r <= 0) return t[0]; }
+  return 'fishing';
+}
+function spawnShip(g, type) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    let x, y, h, side = false;
+    const r = Math.random();
+    if (r < 0.6 || type === 'cargo') { x = rand(14, 114); y = HORIZON + 1; h = Math.PI + rand(-0.3, 0.3); }
+    else if (r < 0.8) { x = -4; y = rand(28, 58); h = Math.PI / 2 + rand(0.1, 0.5); side = true; }
+    else { x = W + 4; y = rand(28, 58); h = -Math.PI / 2 - rand(0.1, 0.5); side = true; }
+    if (g.ships.some(s => Math.hypot(s.x - x, s.y - y) < 14)) continue;
+    const cx = clamp(Math.floor(x / CELL), 0, GW - 1), cy = clamp(Math.floor(y / CELL), 0, GH - 1);
+    let e = g.fields[0][cy * GW + cx] < g.fields[1][cy * GW + cx] ? 0 : 1;
+    if (Math.random() < 0.3) e = 1 - e;
+    g.ships.push({ type, x, y, h, m: 0, maxM: 0, lost: false, wander: 0, wake: [], wakeT: 0, entrance: e, age: 0, side, close: false, litVis: false, lostT: 0, spot: 0, state: 'sail', fade: 1, baseH: h });
+    return true;
+  }
+  return false;
+}
+function spawnPirate(g) {
+  const fromLeft = Math.random() < 0.5;
+  const h = (fromLeft ? Math.PI / 2 : -Math.PI / 2) + rand(-0.12, 0.12);
+  g.ships.push({ type: 'pirate', x: fromLeft ? -6 : W + 6, y: rand(30, 58), h, baseH: h, m: 0, maxM: 0, lost: false, wander: 0, wake: [], wakeT: 0, entrance: 0, age: 0, side: true, close: false, litVis: false, lostT: 0, spot: 0, state: 'sail', fade: 1 });
+}
+function spawnBarrel(g) {
+  const fromLeft = Math.random() < 0.5;
+  g.barrels.push({ x: fromLeft ? -4 : W + 4, y: rand(40, 140), vx: (fromLeft ? 1 : -1) * rand(3, 5), vy: rand(-0.4, 0.4), litT: 0, ph: rand(0, TAU) });
+}
+
+// ---- effects ----
+function part(g, x, y, vx, vy, life, c, o) {
+  if (g.parts.length > 600) return;
+  o = o || {};
+  g.parts.push({ x, y, vx, vy, life, max: life, c, g: o.g || 0, type: o.type || 'px', r: o.r || 0, dr: o.dr || 0, drag: o.drag || 0, a: o.a == null ? 1 : o.a });
+}
+function ftext(g, x, y, s, c, delay) { g.texts.push({ x, y, s, c, life: 1.5, max: 1.5, delay: delay || 0 }); }
+function shake(g, t, m) { g.shakeT = Math.max(g.shakeT, t); g.shakeM = Math.max(g.shakeM, m); }
+
+// =====================================================================
+// UPDATE
+// =====================================================================
+function tickAmbient(g, dt) {
+  const windX = g.wind.x + g.gust.x;
+  for (const w of g.waves) {
+    w.x += (w.spd + windX * 0.6) * dt;
+    if (w.x < -8) w.x += W + 16; else if (w.x > W + 8) w.x -= W + 16;
+  }
+  if (g.weather === 'FOG') for (const b of g.fogBlobs) {
+    b.x += b.vx * dt;
+    if (b.x < -b.rx - 10) b.x = W + b.rx; else if (b.x > W + b.rx + 10) b.x = -b.rx;
+  }
+  if (g.weather === 'STORM') for (const r of g.rain) {
+    r.y += 150 * r.s * dt; r.x += (windX * 7 - 20) * dt;
+    if (r.y > H) { r.y -= H + 4; r.x = rand(0, W + 30); if (Math.random() < 0.3) part(g, rand(0, W), rand(HORIZON + 4, 175), 0, 0, 0.25, C.rain, { type: 'ring', r: 0.5, dr: 5, a: 0.5 }); }
+    if (r.x < -4) r.x += W + 8; else if (r.x > W + 30) r.x -= W + 30;
+  }
+  g.keeperT -= dt;
+  if (g.keeperT <= 0) { g.keeperOn = rand(2, 3.5); g.keeperT = rand(7, 13); }
+  g.keeperOn = Math.max(0, g.keeperOn - dt);
+  g.dockFlash[0] = Math.max(0, g.dockFlash[0] - dt * 1.2);
+  g.dockFlash[1] = Math.max(0, g.dockFlash[1] - dt * 1.2);
+  g.flashT = Math.max(0, g.flashT - dt);
+  g.shakeT = Math.max(0, g.shakeT - dt);
+  if (g.shakeT <= 0) g.shakeM = 0;
+  for (let i = g.parts.length - 1; i >= 0; i--) {
+    const p = g.parts[i];
+    p.vy += p.g * dt;
+    if (p.drag) { p.vx *= 1 - p.drag * dt; p.vy *= 1 - p.drag * dt; }
+    p.x += p.vx * dt; p.y += p.vy * dt; p.r += p.dr * dt;
+    p.life -= dt;
+    if (p.life <= 0) g.parts.splice(i, 1);
+  }
+  for (let i = g.texts.length - 1; i >= 0; i--) {
+    const t = g.texts[i];
+    if (t.delay > 0) { t.delay -= dt; continue; }
+    t.y -= 7 * dt; t.life -= dt;
+    if (t.life <= 0) g.texts.splice(i, 1);
+  }
+  for (const gl of g.gulls) { gl.x += gl.vx * dt; gl.y += Math.sin(gl.x * 0.1 + gl.ph) * 4 * dt; gl.f += dt * 6; }
+}
+
+function updateWeather(g, dt) {
+  if (g.weather === 'WINDY') {
+    g.wind.x = g.windDir * (3 + Math.min(g.n, 12) * 0.12 + Math.sin(g.t * 0.25) * 0.8);
+    g.wind.y = Math.sin(g.t * 0.13) * 0.6;
+  } else if (g.weather === 'STORM') {
+    g.gustT -= dt;
+    if (g.gustT <= 0) { g.gustT = rand(1.5, 3); g.gustTo = { x: rand(-5, 5), y: rand(-2, 3) }; }
+    g.gust.x = lerp(g.gust.x, g.gustTo.x, dt * 1.2);
+    g.gust.y = lerp(g.gust.y, g.gustTo.y, dt * 1.2);
+    g.lightningT -= dt;
+    if (g.lightningT <= 0 && !g.demo) {
+      g.lightningT = rand(5, 10);
+      g.flashT = 0.4;
+      const pts = []; let x = rand(10, 118), y = 0;
+      while (y < HORIZON + rand(0, 30)) { pts.push([x, y]); x += rand(-4, 4); y += rand(2, 5); }
+      g.bolt = pts;
+      sfx('thunder');
+      for (const s of g.ships) if (TYPES[s.type].friendly) s.m = Math.max(0, s.m - 0.12);
+    }
+  }
+}
+
+function useFlare(g) {
+  if (g.flares <= 0) { sfx('no'); return; }
+  if (g.flareShot || g.flareT > 0) return;
+  g.flares--;
+  g.flareShot = { x: LAMP_X, y: LAMP_Y - 4, vy: -120 };
+  sfx('flare');
+}
+function useHorn(g) {
+  if (g.hornCD > 0) { sfx('no'); return; }
+  g.hornCD = 15; g.hornT = 4;
+  for (let k = 0; k < 3; k++) part(g, LAMP_X, LAMP_Y, 0, 0, 1.6 + k * 0.3, C.white, { type: 'ring', r: 2 + k * 6, dr: 45, a: 0.55 });
+  ftext(g, LAMP_X, LAMP_Y - 18, 'FOGHORN!', C.cyan);
+  sfx('horn');
+}
+
+function dock(g, s, e) {
+  const T = TYPES[s.type], mul = 1 + 0.1 * (RUN.night - 1);
+  const pts = Math.round(T.pts * mul);
+  let total = pts, k = 0;
+  const tx = s.x, ty = Math.min(s.y, 176) - 6;
+  ftext(g, tx, ty, '+' + pts, C.gold, 0);
+  if (s.maxM < 0.33) { const b = Math.round(10 * mul); total += b; g.perfect++; ftext(g, tx, ty - 7 * ++k, 'PERFECT! +' + b, C.green, 0.2); sfx('perfect'); }
+  if (s.close) { const b = Math.round(15 * mul); total += b; g.close++; ftext(g, tx, ty - 7 * ++k, 'CLOSE CALL! +' + b, C.orange, 0.35); }
+  if (s.type === 'ghost') ftext(g, tx, ty - 7 * ++k, 'GHOST SAVED!', C.cyan, 0.5);
+  g.score += total; RUN.score += total; g.docked++;
+  g.dockFlash[e] = 1;
+  for (let i = 0; i < 14; i++) { const a = rand(0, TAU), v = rand(8, 22); part(g, s.x, s.y, Math.cos(a) * v, Math.sin(a) * v, rand(0.4, 0.8), Math.random() < 0.5 ? C.gold : C.white, { drag: 3 }); }
+  sfx('dock');
+}
+function wreck(g, s) {
+  for (let i = 0; i < 16; i++) { const a = rand(0, TAU), v = rand(10, 30); part(g, s.x, s.y, Math.cos(a) * v, Math.sin(a) * v - 10, rand(0.5, 1.1), Math.random() < 0.5 ? C.splinter : C.splinter2, { g: 40, drag: 1 }); }
+  for (let i = 0; i < 14; i++) { const a = rand(-Math.PI, 0), v = rand(12, 30); part(g, s.x + rand(-2, 2), s.y, Math.cos(a) * v * 0.6, Math.sin(a) * v, rand(0.4, 0.8), Math.random() < 0.6 ? C.white : C.cyan, { g: 70 }); }
+  for (let i = 0; i < 6; i++) part(g, s.x + rand(-4, 4), s.y + rand(-3, 3), rand(-1.5, 1.5), rand(-1, 1), rand(2.5, 4), C.splinter, { a: 0.8 });
+  part(g, s.x, s.y, 0, 0, 0.6, C.white, { type: 'ring', r: 1, dr: 14, a: 0.7 });
+  shake(g, 0.35, 2);
+  g.wrecks++;
+  ftext(g, s.x, s.y - 10, 'WRECKED!', C.red);
+  sfx('wreck');
+  if (g.wrecks > 3 && g.overT < 0) g.overT = 1.8;
+}
+function fireCannon(g, s) {
+  const d = Math.hypot(LAMP_X - s.x, LAMP_Y - s.y);
+  g.balls.push({ x0: s.x, y0: s.y, x: s.x, y: s.y, u: 0, dur: d / 75 });
+  for (let i = 0; i < 8; i++) part(g, s.x, s.y, rand(-8, 8), rand(-8, 8), rand(0.4, 0.9), hex('#9098a8'), { drag: 2, a: 0.7 });
+  shake(g, 0.15, 1);
+  sfx('cannon');
+}
+
+function updateShips(g, dt) {
+  const horn = g.hornT > 0, flare = g.flareT > 0, flash = g.flashT > 0;
+  for (let i = g.ships.length - 1; i >= 0; i--) {
+    const s = g.ships[i], T = TYPES[s.type];
+    s.age += dt;
+    const L = lightAt(g, s.x, s.y, T.len > 12 ? 4 : 2), mainL = lastMain;
+    let desired = s.h, speed = T.speed * g.cfg.speedMul;
+    if (T.friendly) {
+      const harbor = nearHarbor(s.x, s.y);
+      let drain = L * T.drain;
+      if (flare) drain = Math.max(drain, T.drain * 1.2);
+      if (flash) drain = Math.max(drain, T.drain * 0.8);
+      if (harbor) drain = Math.max(drain, T.drain * 0.5);
+      s.litVis = L > 0 || flare || flash || harbor;
+      if (!g.demo) {
+        if (drain > 0) { if (s.m >= 0.66 && !s.close) s.close = true; s.m -= drain * dt; }
+        else s.m += T.fill * g.cfg.fillMul * dt;
+        s.m = clamp(s.m, 0, 1);
+        s.maxM = Math.max(s.maxM, s.m);
+        if (s.m >= 1) { if (!s.lost) { s.lost = true; ftext(g, s.x, s.y - 12, 'LOST!', C.red); sfx('lost'); } }
+        else if (s.m < 0.9) s.lost = false;
+      }
+      if (s.type === 'ghost') {
+        s.lostT = s.lost ? s.lostT + dt : 0;
+        if (s.lostT > 5) { for (let k = 0; k < 10; k++) part(g, s.x, s.y, rand(-6, 6), rand(-10, -2), rand(0.6, 1.2), PAL.ghost.B, { a: 0.6 }); ftext(g, s.x, s.y - 10, 'VANISHED', C.cyan); g.ships.splice(i, 1); continue; }
+      }
+      if (!s.lost && !(s.side && s.age < 1.6)) {
+        const f = flowAngle(g.fields[s.entrance], s.x, s.y);
+        const k = smooth(0.3, 1, s.m);
+        s.wander = clamp(s.wander + (Math.random() - 0.5) * 7 * dt, -1.6, 1.6);
+        if (k <= 0) s.wander *= 1 - dt;
+        // lean into the drift so lit ships hold their course
+        const dx = Math.sin(f) * speed - (g.wind.x * T.wind + g.gust.x * 0.4) * 0.6;
+        const dy = -Math.cos(f) * speed - (g.wind.y * T.wind + g.gust.y * 0.4) * 0.6;
+        desired = Math.atan2(dx, -dy) + s.wander * k * 1.6;
+      }
+      if (horn) speed *= 0.35;
+      if (s.lost) speed *= 0.85;
+    } else {
+      // pirate
+      s.litVis = L > 0 || flash || flare;
+      if (s.state === 'sail') {
+        if (mainL > 0 || L > 0) s.spot += dt * (g.focus && mainL > 0 ? 1.4 : (mainL > 0 ? 1 : 0.5));
+        else s.spot = Math.max(0, s.spot - dt * 0.6);
+        desired = s.baseH + Math.sin(s.age * 0.5) * 0.15;
+        if (s.spot >= 2) { s.state = 'aim'; s.aimT = 0.9; ftext(g, s.x, s.y - 12, 'SPOTTED!', C.red); sfx('alarm'); }
+      } else if (s.state === 'aim') {
+        desired = Math.atan2(LAMP_X - s.x, -(LAMP_Y - s.y));
+        speed *= 0.3;
+        s.aimT -= dt;
+        if (s.aimT <= 0) { fireCannon(g, s); s.state = 'flee'; s.baseH = s.x < W / 2 ? -Math.PI / 2 : Math.PI / 2; }
+      } else { desired = s.baseH; speed *= 1.3; }
+    }
+    // turn
+    const turn = T.turn * (s.state === 'aim' ? 2 : 1);
+    s.h = wrapA(s.h + clamp(wrapA(desired - s.h), -turn * dt, turn * dt));
+    // move
+    const hx = Math.sin(s.h), hy = -Math.cos(s.h);
+    let wx = g.wind.x * T.wind * (s.lost ? 1.6 : 1) + g.gust.x * 0.4, wy = g.wind.y * T.wind + g.gust.y * 0.4;
+    if (s.type === 'sail' && g.weather !== 'WINDY' && g.weather !== 'STORM') wx += g.breeze * T.wind;
+    if (g.weather === 'STORM') { wx += Math.sin(g.t * 1.7 + i) * 1.2; wy += Math.cos(g.t * 1.3 + i * 2) * 1.0; }
+    s.x += (hx * speed + wx) * dt;
+    s.y += (hy * speed + wy) * dt;
+    // keep inside the sea
+    if (T.friendly && s.age > 3) {
+      if ((s.x < 2 && hx < 0) || (s.x > W - 2 && hx > 0)) s.h = wrapA(-s.h);
+      if (s.y < HORIZON + 1 && hy < 0) s.h = wrapA(Math.PI - s.h);
+      s.x = clamp(s.x, 0, W); s.y = Math.max(s.y, HORIZON);
+    }
+    // wake
+    s.wakeT -= dt;
+    for (const w of s.wake) w.a += dt;
+    while (s.wake.length && s.wake[0].a > 1.2) s.wake.shift();
+    if (s.wakeT <= 0) { s.wakeT = 0.12; s.wake.push({ x: s.x - hx * T.len * 0.45, y: s.y - hy * T.len * 0.45, px: Math.cos(s.h), py: Math.sin(s.h), a: 0 }); }
+    if (g.dawnT >= 0) { s.fade -= dt * 0.5; if (s.fade <= 0) { g.ships.splice(i, 1); continue; } }
+    // leave screen (pirates)
+    if (!T.friendly) {
+      if (s.age > 3 && (s.x < -12 || s.x > W + 12 || s.y < HORIZON - 8 || s.y > H)) g.ships.splice(i, 1);
+      continue;
+    }
+    // dock
+    let docked = -1;
+    for (let e = 0; e < 2; e++) if (s.x > CHANNELS[e].x0 && s.x < CHANNELS[e].x1 + 1 && s.y >= DOCK_Y) docked = e;
+    if (docked >= 0) {
+      if (g.demo) { g.dockFlash[docked] = 1; for (let k = 0; k < 8; k++) part(g, s.x, s.y, rand(-15, 15), rand(-15, 15), 0.6, C.gold, { drag: 3 }); }
+      else if (g.dawnT < 0) dock(g, s, docked);
+      g.ships.splice(i, 1);
+      continue;
+    }
+    if (s.type === 'ghost' || g.dawnT >= 0) continue;
+    // rocks
+    const bow = T.len * 0.4;
+    if (solidAt(g, s.x + hx * bow, s.y + hy * bow) || solidAt(g, s.x, s.y) || (s.type === 'cargo' && solidAt(g, s.x - hx * bow, s.y - hy * bow))) {
+      if (g.demo) { g.ships.splice(i, 1); continue; }
+      wreck(g, s);
+      g.ships.splice(i, 1);
+    }
+  }
+}
+
+function updateBarrels(g, dt) {
+  for (let i = g.barrels.length - 1; i >= 0; i--) {
+    const b = g.barrels[i];
+    b.x += (b.vx + g.wind.x * 0.3 + g.gust.x * 0.3) * dt;
+    b.y += (b.vy + Math.sin(g.t + b.ph) * 0.5) * dt;
+    if (lightAt(g, b.x, b.y, 2) > 0) {
+      b.litT += dt;
+      if (b.litT > 0.5) {
+        const before = g.oil;
+        g.oil = Math.min(g.oilMax, g.oil + 35);
+        if (before <= 0) ftext(g, LAMP_X, LAMP_Y - 20, 'LAMP RELIT', C.gold, 0.3);
+        ftext(g, b.x, b.y - 6, '+OIL', C.oil);
+        for (let k = 0; k < 10; k++) { const a = rand(0, TAU); part(g, b.x, b.y, Math.cos(a) * 15, Math.sin(a) * 15, 0.5, C.oil, { drag: 3 }); }
+        sfx('oil');
+        g.barrels.splice(i, 1);
+        continue;
+      }
+    } else b.litT = Math.max(0, b.litT - dt * 0.5);
+    if (b.x < -10 || b.x > W + 10) g.barrels.splice(i, 1);
+  }
+}
+
+function updateFlareAndBalls(g, dt) {
+  if (g.flareShot) {
+    const f = g.flareShot;
+    f.y += f.vy * dt; f.vy += 70 * dt;
+    part(g, f.x + rand(-0.5, 0.5), f.y + 2, rand(-3, 3), rand(5, 15), 0.4, C.orange);
+    if (f.vy > -25 || f.y < 50) {
+      g.flareShot = null; g.flareT = 3; g.flarePos = { x: f.x, y: f.y };
+      for (const s of g.ships) if (TYPES[s.type].friendly) s.m *= 0.4;
+      for (let k = 0; k < 30; k++) { const a = rand(0, TAU), v = rand(10, 40); part(g, f.x, f.y, Math.cos(a) * v, Math.sin(a) * v, rand(0.6, 1.4), Math.random() < 0.5 ? hex('#ff6a8a') : C.white, { g: 20, drag: 1.5 }); }
+      ftext(g, f.x, f.y + 6, 'FLARE!', hex('#ff8aa0'));
+    }
+  }
+  if (g.flareT > 0) {
+    g.flareT -= dt;
+    if (g.flarePos) { g.flarePos.y += 4 * dt; if (Math.random() < 0.5) part(g, g.flarePos.x + rand(-1, 1), g.flarePos.y, rand(-3, 3), rand(4, 10), 0.6, hex('#ff8aa0')); }
+  }
+  for (let i = g.balls.length - 1; i >= 0; i--) {
+    const b = g.balls[i];
+    b.u += dt / b.dur;
+    const u = Math.min(1, b.u);
+    b.x = lerp(b.x0, LAMP_X, u); b.y = lerp(b.y0, LAMP_Y, u) - Math.sin(u * Math.PI) * 14;
+    if (Math.random() < 0.6) part(g, b.x, b.y, rand(-2, 2), rand(-2, 2), 0.5, hex('#7a8090'), { a: 0.6 });
+    if (b.u >= 1) {
+      g.balls.splice(i, 1);
+      g.crackT = 6;
+      shake(g, 0.45, 2);
+      for (let k = 0; k < 16; k++) { const a = rand(0, TAU), v = rand(10, 35); part(g, LAMP_X, LAMP_Y, Math.cos(a) * v, Math.sin(a) * v, rand(0.4, 0.9), Math.random() < 0.5 ? C.white : C.cyan, { g: 60 }); }
+      ftext(g, LAMP_X, LAMP_Y - 20, 'LAMP CRACKED!', C.red);
+      sfx('crack');
+    }
+  }
+}
+
+function spawner(g, dt) {
+  const friendly = g.ships.filter(s => TYPES[s.type].friendly).length;
+  g.spawnT -= dt;
+  if (g.spawnT <= 0 && g.t < g.dur - 10) {
+    if (friendly < g.cfg.maxShips && spawnShip(g, pickType(g))) g.spawnT = g.cfg.interval * rand(0.75, 1.25);
+    else g.spawnT = 1;
+  }
+  if (g.cfg.pirates) {
+    g.pirateT -= dt;
+    if (g.pirateT <= 0) {
+      if (g.ships.filter(s => s.type === 'pirate').length < g.cfg.pirateMax && g.t < g.dur - 8) spawnPirate(g);
+      g.pirateT = g.cfg.pirateInterval * rand(0.8, 1.2);
+    }
+  }
+  g.barrelT -= dt;
+  if (g.barrelT <= 0) { spawnBarrel(g); g.barrelT = rand(15, 24); }
+}
+
+function updatePlay(dt) {
+  const g = G;
+  const tp = tapId();
+  if (hit('Escape', 'KeyP') || tp === 'pause') { setScreen('pause'); return; }
+  if (hit('KeyM')) { S.muted = !S.muted; save(); }
+  g.t += dt;
+  // beam control
+  let dir = 0;
+  if (keys.ArrowLeft || keys.KeyA || touchHeld('left')) dir -= 1;
+  if (keys.ArrowRight || keys.KeyD || touchHeld('right')) dir += 1;
+  g.focus = !!(keys.ShiftLeft || keys.ShiftRight || keys.ArrowDown || keys.KeyS || touchHeld('focus'));
+  const rs = (1.4 + 0.4 * S.up.gears) * (g.focus ? 0.75 : 1);
+  const aim = aimPoint();
+  if (aim) g.aimTo = clamp(Math.atan2(aim.x - LAMP_X, -(aim.y - LAMP_Y)), -BEAM_LIMIT, BEAM_LIMIT);
+  else for (const t of taps) if (!playBtnAt(t) && t.y > HORIZON - 8 && t.y < 176) g.aimTo = clamp(Math.atan2(t.x - LAMP_X, -(t.y - LAMP_Y)), -BEAM_LIMIT, BEAM_LIMIT);
+  if (dir) { g.beamAngle += dir * rs * dt; g.aimTo = null; }
+  else if (g.aimTo != null) {
+    g.beamAngle += clamp(g.aimTo - g.beamAngle, -rs * 2.2 * dt, rs * 2.2 * dt);
+    if (!aim && Math.abs(g.aimTo - g.beamAngle) < 0.01) g.aimTo = null;
+  }
+  g.beamAngle = clamp(g.beamAngle, -BEAM_LIMIT, BEAM_LIMIT);
+  if (hit('Space') || tp === 'flare') useFlare(g);
+  if (hit('KeyH') || tp === 'horn') useHorn(g);
+  // oil
+  if (g.oil > 0) {
+    g.oil -= (g.focus ? 1.8 : 0.75) * dt;
+    if (g.oil <= 0) { g.oil = 0; ftext(g, LAMP_X, LAMP_Y - 20, 'OUT OF OIL!', C.oil); sfx('sputter'); }
+  }
+  g.crackT = Math.max(0, g.crackT - dt);
+  g.hornT = Math.max(0, g.hornT - dt);
+  g.hornCD = Math.max(0, g.hornCD - dt);
+  updateWeather(g, dt);
+  computeBeams(g);
+  spawner(g, dt);
+  updateShips(g, dt);
+  updateBarrels(g, dt);
+  updateFlareAndBalls(g, dt);
+  tickAmbient(g, dt);
+  if (g.overT >= 0) { g.overT -= dt; if (g.overT < 0) { endRun(false); return; } }
+  else if (g.t >= g.dur) startDawn();
+}
+
+function updateDemo(g, dt) {
+  g.t += dt;
+  g.beamAngle = Math.sin(g.t * 0.45) * 1.2;
+  computeBeams(g);
+  g.spawnT -= dt;
+  if (g.spawnT <= 0) { if (g.ships.length < 4) spawnShip(g, pick(['fishing', 'fishing', 'sail', 'cargo', 'speed'])); g.spawnT = rand(3, 6); }
+  updateShips(g, dt);
+  tickAmbient(g, dt);
+}
+
+function startRun() {
+  RUN = { night: 1, score: 0, coins: 0, startBest: S.best };
+  startNight(1);
+}
+function startNight(n) {
+  RUN.night = n;
+  G = makeWorld(n, false);
+  computeBeams(G);
+  setScreen('intro');
+}
+function startDawn() {
+  const g = G, mul = 1 + 0.1 * (RUN.night - 1);
+  g.dawnT = 0;
+  for (const s of g.ships) {
+    if (!TYPES[s.type].friendly) continue;
+    const b = Math.round(5 * mul);
+    g.safe++; g.score += b; RUN.score += b;
+    ftext(g, s.x, s.y - 8, 'SAFE +' + b, C.green, rand(0, 0.5));
+  }
+  for (let i = 0; i < 6; i++) { const fromLeft = Math.random() < 0.5; g.gulls.push({ x: fromLeft ? -rand(5, 60) : W + rand(5, 60), y: rand(30, 110), vx: (fromLeft ? 1 : -1) * rand(18, 28), f: rand(0, 6), ph: rand(0, TAU) }); }
+  sfx('dawn');
+  setScreen('dawn');
+}
+function finishNight() {
+  const g = G;
+  const coins = Math.floor(g.score / 4) + 5;
+  UI.sumCoins = coins;
+  RUN.coins += coins;
+  S.coins += coins;
+  S.best = Math.max(S.best, RUN.score);
+  S.bestNight = Math.max(S.bestNight, RUN.night);
+  save();
+  setScreen('summary');
+}
+function endRun(quit) {
+  const g = G;
+  const coins = Math.floor(g.score / 4);
+  UI.overCoins = RUN.coins + coins;
+  UI.quit = !!quit;
+  S.coins += coins;
+  UI.newBest = RUN.score > RUN.startBest && RUN.score > 0;
+  S.best = Math.max(S.best, RUN.score);
+  S.bestNight = Math.max(S.bestNight, RUN.night - 1);
+  save();
+  if (!quit) sfx('over');
+  setScreen('gameover');
+}
+
+// =====================================================================
+// DRAW
+// =====================================================================
+function dawnAmount(g) {
+  if (g.demo) return 0;
+  if (g.dawnT >= 0) return clamp(0.9 + g.dawnT * 0.1, 0, 1);
+  return smooth(0.62, 1, g.t / g.dur) * 0.9;
+}
+function drawSky(g, dawn) {
+  for (let y = 0; y < HORIZON; y++) {
+    const t = y / (HORIZON - 1);
+    let c = mix(C.skyNT, C.skyNB, t);
+    if (dawn > 0) {
+      const p = mix(C.skyPT, C.skyPB, t), o = mix(C.skyOT, C.skyOB, t);
+      c = dawn < 0.5 ? mix(c, p, dawn * 2) : mix(p, o, (dawn - 0.5) * 2);
+    }
+    fb.fill(c, y * W, y * W + W);
+  }
+  const sv = 1 - dawn * 1.1;
+  if (sv > 0) for (const s of g.stars) {
+    const tw = 0.5 + 0.5 * Math.sin(g.t * s.sp + s.ph);
+    pblend(s.x, s.y, C.star, sv * (0.25 + 0.75 * tw * tw));
+  }
+  // crescent moon
+  const mx = 112, my = 17;
+  for (let y = my - 4; y <= my + 4; y++) for (let x = mx - 4; x <= mx + 4; x++) {
+    const a = (x + 0.5 - mx) ** 2 + (y + 0.5 - my) ** 2, b = (x + 0.5 - mx - 2) ** 2 + (y + 0.5 - my + 1) ** 2;
+    if (a < 13 && b > 9) pblend(x, y, C.moon, 1 - dawn * 0.6);
+  }
+  glow(mx, my, 8, C.moon, 0.08 * (1 - dawn));
+}
+function drawSea(g, dawn) {
+  for (let y = HORIZON; y < H; y++) {
+    let c = mix(C.seaHor, C.seaDeep, Math.min(1, (y - HORIZON) / 50));
+    if (dawn > 0) c = mix(c, C.seaDawn, dawn * 0.6);
+    fb.fill(c, y * W, y * W + W);
+  }
+  for (let x = 0; x < W; x++) pblend(x, HORIZON, mix(C.seaHor, C.skyOB, dawn), 0.5);
+  const storm = g.weather === 'STORM';
+  const wc = storm ? C.waveStorm : C.wave;
+  for (const w of g.waves) {
+    const v = Math.sin(g.t * (storm ? 2.2 : 1.3) + w.ph);
+    if (v < 0.1) continue;
+    for (let k = 0; k < w.len; k++) {
+      const x = Math.floor(w.x) + k, y = w.y;
+      if (x < 0 || x >= W) continue;
+      const i = y * W + x;
+      if (g.mask[i]) continue;
+      const lit = y < LIGHT_ROWS && LM[i] > 0;
+      pblend(x, y, lit ? C.waveLit : wc, v * (lit ? 0.9 : 0.7) * (k === 0 || k === w.len - 1 ? 0.6 : 1));
+    }
+    if (storm && v > 0.85) pblend(Math.floor(w.x) + 1, w.y - 1, C.foamDim, 0.7);
+  }
+}
+function drawRocks(g, dawn) {
+  const all = g.flashT > 0 ? 1 : g.flareT > 0 ? 0.85 : 0;
+  const base = Math.max(all, dawn * 0.9);
+  for (const r of g.rockPix) {
+    const l = r.i < W * LIGHT_ROWS && LM[r.i] > 0 ? 1 : 0;
+    const v = Math.max(l, base);
+    fb[r.i] = v >= 1 ? ROCK_LIT[r.s] : v <= 0 ? ROCK_DARK[r.s] : mix(ROCK_DARK[r.s], ROCK_LIT[r.s], v);
+  }
+  for (const f of g.foam) {
+    const v = Math.sin(g.t * f.sp + f.ph);
+    if (v < (f.o ? 0.75 : 0.3)) continue;
+    const lit = (f.i < W * LIGHT_ROWS && LM[f.i] > 0) || all > 0;
+    const a = (lit ? 0.9 : 0.4) * (f.o ? 0.6 : 1) * Math.min(1, (v - 0.2) * 2);
+    blendI(f.i, lit ? C.foam : C.foamDim, Math.max(a, dawn * 0.5));
+  }
+}
+function drawBeam(g) {
+  const bc = beamCol();
+  const n = W * LIGHT_ROWS;
+  for (let i = 0; i < n; i++) {
+    const l = LM[i];
+    if (l <= 0 || g.mask[i] === 2) continue;
+    const x = i % W, y = (i / W) | 0;
+    const q = Math.floor(l * 0.55 * 6 + BAYER[((y & 3) << 2) | (x & 3)]) / 6;
+    if (q > 0) { blendI(i, bc, q * 0.85); padd(x, y, bc, q * 0.25); }
+  }
+}
+function drawLand(g, dawn) {
+  for (const p of g.landPix) {
+    const d = Math.hypot(p.x - LAMP_X, p.y - LAMP_Y);
+    const k = Math.max(0, 1 - d / 36) * 0.55 + dawn * 0.35 + (g.flashT > 0 ? 0.4 : 0);
+    fb[p.i] = k > 0 ? mix(p.c, C.landGlow, k) : p.c;
+  }
+  // docks and dock lanterns
+  const posts = [[27, 0], [42, 0], [83, 1], [98, 1]];
+  for (const [x0, e] of posts) {
+    for (let y = 184; y < H; y += 2) { pset(x0, y, C.plank); pset(x0 + 1, y, C.plank); pset(x0 + 2, y, C.plank); pset(x0, y + 1, C.post); }
+    pset(x0 + 1, 182, C.post); pset(x0 + 1, 183, C.post);
+    const fl = g.dockFlash[e];
+    const pulse = 0.7 + 0.3 * Math.sin(g.t * 3 + x0);
+    pset(x0 + 1, 181, mix(C.lantern, C.white, fl));
+    glow(x0 + 1.5, 181.5, 4 + fl * 8, C.lantern, 0.25 * pulse + fl * 0.6);
+  }
+}
+function drawLighthouse(g, x, y, paint, bcol) {
+  const pal = paintPal(paint);
+  const noOil = !g.demo && g.oil <= 0;
+  const pulse = 0.5 + 0.5 * Math.sin(g.t * 3);
+  const lampC = noOil ? mix(hex('#3a3020'), bcol, g.flick) : mix(bcol, C.white, 0.25 + 0.2 * pulse);
+  pal.y = lampC;
+  pal.L = noOil ? mix(hex('#5a4a30'), C.white, g.flick * 0.6) : C.white;
+  if (g.keeperOn > 0) pal.w = hex('#2a3060');
+  drawSprite(SPR.lighthouse, pal, x, y);
+  if (g.keeperOn > 0) { pset(x + 7, y + 12, hex('#e8b890')); pset(x + 8, y + 12, hex('#e8b890')); pset(x + 8, y + 11, hex('#1a1e40')); }
+  if (g.crackT > 0) { pset(x + 5, y + 4, C.sil); pset(x + 6, y + 5, C.sil); pset(x + 6, y + 6, C.sil); pset(x + 9, y + 4, C.sil); }
+  glow(x + 7.5, y + 5.5, 8 + pulse * 2, bcol, (noOil ? 0.15 * g.flick : 0.35) * (g.crackT > 0 ? g.flick : 1));
+}
+function drawFog(g) {
+  const fc = C.fog, bc = beamCol();
+  for (let y = HORIZON - 6; y < H; y++) {
+    if (y < 0) continue;
+    for (let x = 0; x < W; x++) {
+      let dens = 0;
+      for (const b of g.fogBlobs) {
+        const dx = (x - b.x) / b.rx, dy = (y - b.y) / b.ry, v = 1 - (dx * dx + dy * dy);
+        if (v > 0) dens += v;
+      }
+      dens = Math.min(1, dens);
+      const i = y * W + x;
+      const l = y < LIGHT_ROWS ? LM[i] : 0;
+      let a = 0.1;
+      if (BAYER[((y & 3) << 2) | (x & 3)] < dens * 0.95) a += 0.3 + dens * 0.15;
+      blendI(i, l > 0 ? mix(fc, bc, 0.5) : fc, a + l * 0.15);
+    }
+  }
+}
+function drawRain(g) {
+  const wx = g.wind.x + g.gust.x;
+  const dx = (wx * 7 - 20) / 150;
+  for (const r of g.rain) line(r.x, r.y, r.x + dx * 3, r.y + 3, C.rain, 0.45);
+}
+function drawShips(g) {
+  const dawn = dawnAmount(g);
+  for (const s of g.ships) {
+    if (s.type === 'ghost' && !s.litVis) continue;
+    const vis = s.litVis || dawn > 0.7;
+    const fa = s.fade * (s.type === 'ghost' ? 0.6 : 1);
+    for (const w of s.wake) {
+      const a = (1 - w.a / 1.2) * (vis ? 0.6 : 0.22) * fa;
+      pblend(w.x, w.y, C.wake, a);
+      if (w.a > 0.25) { const sp = w.a * 2.6; pblend(w.x + w.px * sp, w.y + w.py * sp, C.wake, a * 0.6); pblend(w.x - w.px * sp, w.y - w.py * sp, C.wake, a * 0.6); }
+    }
+  }
+  for (const s of g.ships) {
+    const T = TYPES[s.type];
+    const vis = s.litVis || dawn > 0.7;
+    if (s.type === 'ghost') {
+      if (!s.litVis && dawn < 0.7) continue;
+      drawSprite(SPR.sail, PAL.ghost, s.x, s.y, { rot: s.h, alpha: (0.45 + 0.15 * Math.sin(g.t * 5)) * s.fade });
+    } else {
+      const pal = vis ? PAL[s.type] : DARK_PAL[s.type];
+      drawSprite(SPR[T.spr], pal, s.x, s.y, { rot: s.h, alpha: s.fade });
+      const lo = LANTERN[T.spr];
+      if (lo && T.friendly) {
+        const ang = Math.round(s.h / (TAU / 32)) * (TAU / 32), ca = Math.cos(ang), sa = Math.sin(ang);
+        const lx = Math.round(s.x) + ca * lo.x - sa * lo.y, ly = Math.round(s.y) + sa * lo.x + ca * lo.y;
+        glow(lx, ly, 3, C.lantern, 0.3 * s.fade);
+      }
+    }
+    if (g.demo || g.dawnT >= 0) continue;
+    if (T.friendly) {
+      if (s.type === 'ghost' && !s.litVis) continue;
+      const mx = Math.round(s.x) - 4, my = Math.round(s.y) - (s.type === 'cargo' ? 13 : 9);
+      const col = s.m < 0.33 ? C.green : s.m < 0.66 ? C.yellow : C.red;
+      const blink = s.lost && Math.floor(g.t * 6) % 2 === 0;
+      rectA(mx - 1, my - 1, 10, 4, C.black, 0.75);
+      rect(mx, my, Math.max(1, Math.round(8 * s.m)), 2, blink ? C.white : col);
+      if (s.lost) drawText('!', mx + 10, my - 2, C.red, { shadow: true });
+    } else if (s.spot > 0 && s.state === 'sail') {
+      const mx = Math.round(s.x) - 4, my = Math.round(s.y) - 10;
+      rectA(mx - 1, my - 1, 10, 4, C.black, 0.75);
+      rect(mx, my, Math.max(1, Math.round(8 * s.spot / 2)), 2, Math.floor(g.t * 8) % 2 ? C.red : hex('#ff9a9a'));
+    } else if (s.state === 'aim') {
+      if (Math.floor(g.t * 8) % 2) drawText('!', s.x, s.y - 13, C.red, { align: 'center' });
+    }
+  }
+}
+function drawBarrels(g) {
+  for (const b of g.barrels) {
+    const lit = (b.y < LIGHT_ROWS && LM[Math.floor(b.y) * W + Math.floor(clamp(b.x, 0, W - 1))] > 0) || g.flareT > 0 || g.flashT > 0;
+    drawSprite(SPR.barrel, lit ? PAL.barrel : DARK_PAL.barrel, b.x - 2, b.y - 2);
+    if (!lit && Math.sin(g.t * 2.5 + b.ph) > 0.85) pset(b.x - 1, b.y - 1, C.oil);
+    if (b.litT > 0) rect(b.x - 3, b.y - 6, Math.ceil(7 * Math.min(1, b.litT / 0.5)), 1, C.oil);
+  }
+}
+function drawFx(g) {
+  for (const p of g.parts) {
+    const a = Math.min(1, p.life / p.max * 1.5) * p.a;
+    if (p.type === 'ring') ring(p.x, p.y, p.r, p.c, a * 0.8);
+    else pblend(p.x, p.y, p.c, a);
+  }
+  for (const b of g.balls) { disc(b.x, b.y, 1.3, hex('#20222a')); pset(b.x, b.y - 1, hex('#8088a0')); }
+  if (g.flareShot) { pset(g.flareShot.x, g.flareShot.y, C.white); glow(g.flareShot.x, g.flareShot.y, 5, hex('#ff6a8a'), 0.6); }
+  if (g.flareT > 0 && g.flarePos) { pset(g.flarePos.x, g.flarePos.y, C.white); glow(g.flarePos.x, g.flarePos.y, 10, hex('#ff8aa0'), 0.7 * Math.min(1, g.flareT)); }
+  for (const gl of g.gulls) drawSprite(Math.floor(gl.f) % 2 ? SPR.gull1 : SPR.gull2, PAL.gull, gl.x, gl.y, { flip: gl.vx < 0 });
+  for (const t of g.texts) {
+    if (t.delay > 0) continue;
+    const w = textW(t.s);
+    const x = clamp(t.x, w / 2 + 1, W - w / 2 - 1);
+    drawText(t.s, x, Math.round(t.y), t.c, { align: 'center', alpha: Math.min(1, t.life / t.max * 2) });
+  }
+}
+function drawOverlays(g) {
+  if (g.flareT > 0) rectA(0, 0, W, H, hex('#ffd0d8'), 0.12 * Math.min(1, g.flareT));
+  if (g.flashT > 0) {
+    rectA(0, 0, W, H, C.white, 0.5 * (g.flashT / 0.4));
+    if (g.bolt && g.flashT > 0.2) for (let k = 1; k < g.bolt.length; k++) line(g.bolt[k - 1][0], g.bolt[k - 1][1], g.bolt[k][0], g.bolt[k][1], C.white, 1);
+  }
+  if (g.hornT > 0 && Math.floor(g.t * 4) % 2) drawText('SLOW', LAMP_X, 140, C.cyan, { align: 'center', alpha: 0.6 });
+}
+
+function drawWorld(g) {
+  const dawn = dawnAmount(g);
+  computeLight(g);
+  drawSky(g, dawn);
+  drawSea(g, dawn);
+  drawRocks(g, dawn);
+  drawBarrels(g);
+  drawBeam(g);
+  drawLand(g, dawn);
+  drawLighthouse(g, LH_X, LH_Y, S.paint, beamCol());
+  if (g.weather === 'FOG') drawFog(g);
+  drawShips(g);
+  if (g.weather === 'STORM') drawRain(g);
+  drawFx(g);
+  drawOverlays(g);
+}
+
+function clockStr(g) {
+  const mins = Math.min(540, Math.floor(clamp(g.t / g.dur, 0, 1) * 54) * 10);
+  const h24 = 21 + Math.floor(mins / 60);
+  const h12 = ((h24 + 11) % 12) + 1;
+  const mm = String(mins % 60).padStart(2, '0');
+  return h12 + ':' + mm + ((h24 % 24) >= 12 ? 'PM' : 'AM');
+}
+function drawHUD(g) {
+  rectA(0, 0, W, 15, C.black, 0.35);
+  drawText('N' + RUN.night, 2, 1, C.white);
+  drawText(clockStr(g), 64, 1, C.clock, { align: 'center' });
+  drawText(String(RUN.score), 116, 1, C.gold, { align: 'right' });
+  rect(120, 1, 2, 5, C.dim); rect(123, 1, 2, 5, C.dim);
+  regions.push(PAUSE_BTN);
+  // oil
+  const low = g.oil / g.oilMax < 0.2;
+  const oilC = low && Math.floor(g.t * 4) % 2 ? C.red : C.oil;
+  icon('drop', 2, 8, oilC);
+  outline(6, 8, 22, 5, C.dim, 0.8);
+  rect(7, 9, Math.round(20 * g.oil / g.oilMax), 3, oilC);
+  // wrecks allowed
+  for (let i = 0; i < 3; i++) icon('boatIcon', 31 + i * 6, 9, i < g.wrecks ? C.red : C.white);
+  // wind
+  if (g.weather === 'WINDY' || g.weather === 'STORM') {
+    const wx = g.wind.x + g.gust.x;
+    icon('arrow', 53, 8, C.cyan, { flip: wx < 0 });
+    const strength = clamp(Math.round(Math.abs(wx) / 2), 1, 3);
+    for (let k = 0; k < strength; k++) pset(60 + k * 2, 12, C.cyan);
+  } else if (g.weather === 'FOG') drawText('FOG', 58, 8, C.dim, { align: 'center' });
+  // flares
+  icon('flareIcon', 74, 8, g.flares > 0 ? hex('#ff8aa0') : C.faint);
+  drawText(String(g.flares), 80, 8, g.flares > 0 ? C.white : C.faint);
+  // foghorn cooldown
+  const ready = g.hornCD <= 0;
+  icon('hornIcon', 88, 8, ready ? C.cyan : C.faint);
+  outline(94, 8, 24, 5, C.dim, 0.8);
+  rect(95, 9, Math.round(22 * (1 - g.hornCD / 15)), 3, ready ? (Math.floor(g.t * 2) % 2 ? C.cyan : C.green) : C.faint);
+  if (g.oil <= 0 && Math.floor(g.t * 3) % 2) drawText('NO OIL', 64, 17, C.red, { align: 'center' });
+  else if (g.crackT > 0 && Math.floor(g.t * 3) % 2) drawText('LAMP CRACKED', 64, 17, C.red, { align: 'center' });
+}
+function drawTouchButtons(g) {
+  if (!isTouch) return;
+  for (const b of TBTNS) {
+    regions.push(b);
+    const held = (b.id === 'left' || b.id === 'right' || b.id === 'focus') && touchHeld(b.id);
+    const off = (b.id === 'flare' && g.flares <= 0) || (b.id === 'horn' && g.hornCD > 0);
+    rectA(b.x, b.y, b.w, b.h, held ? C.white : C.black, held ? 0.3 : 0.35);
+    outline(b.x, b.y, b.w, b.h, C.white, off ? 0.3 : 0.75);
+    drawText(b.label, b.x + b.w / 2, b.y + Math.floor((b.h - 5) / 2), off ? C.dim : C.white, { align: 'center' });
+    if (b.id === 'horn' && g.hornCD > 0) rect(b.x + 1, b.y + b.h - 2, Math.round((b.w - 2) * (1 - g.hornCD / 15)), 1, C.cyan);
+  }
+}
+
+// --- UI helpers ---
+function panel(x, y, w, h, a) { rectA(x, y, w, h, C.panel, a == null ? 0.88 : a); outline(x, y, w, h, C.white, 0.5); }
+function button(id, label, x, y, w, h, sel, col) {
+  regions.push({ id, x, y, w, h });
+  rectA(x, y, w, h, sel ? hex('#2a2010') : C.black, 0.7);
+  outline(x, y, w, h, sel ? C.gold : C.white, sel ? 1 : 0.45);
+  drawText(label, x + w / 2, y + Math.floor((h - 5) / 2), sel ? C.gold : (col || C.white), { align: 'center' });
+  if (sel && Math.floor(scrT * 3) % 2 === 0) { drawText('>', x - 5, y + Math.floor((h - 5) / 2), C.gold); drawText('<', x + w + 2, y + Math.floor((h - 5) / 2), C.gold); }
+}
+function coinText(n, x, y, align) {
+  const s = String(n), w = textW(s) + 7;
+  let x0 = align === 'center' ? Math.round(x - w / 2) : align === 'right' ? x - w : x;
+  icon('coin', x0, y, C.gold, { h: hex('#fff2a0'), s: hex('#b08010') });
+  drawText(s, x0 + 7, y, C.gold);
+}
+function dim(a) { rectA(0, 0, W, H, C.black, a); }
+
+// =====================================================================
+// SCREENS
+// =====================================================================
+function setScreen(s) {
+  screen = s; scrT = 0;
+  pointers.forEach(p => { p.btn = s === 'play' ? playBtnAt(p) : 'menu'; });
+  if (s === 'title') { UI.titleSel = 0; if (!DEMO) { DEMO = makeWorld(4, true); } }
+  if (s === 'summary') UI.sumSel = 0;
+  if (s === 'gameover') UI.overSel = 0;
+  if (s === 'pause') UI.pauseSel = 0;
+  if (s === 'howto') { UI.howPage = 0; UI.howSel = 1; }
+  if (s === 'shop') { UI.shopSel = 0; UI.paintView = S.paint; UI.beamView = S.beam; UI.shopMsg = ''; }
+}
+
+const SCREENS = {
+  title: {
+    update(dt) {
+      updateDemo(DEMO, dt);
+      if (hit('KeyM')) { S.muted = !S.muted; save(); }
+      const id = menuNav(['play', 'shop', 'howto'], UI, 'titleSel');
+      if (id === 'play') { sfx('ok'); startRun(); }
+      else if (id === 'shop') { sfx('ok'); UI.shopFrom = 'title'; setScreen('shop'); }
+      else if (id === 'howto') { sfx('ok'); setScreen('howto'); }
+    },
+    draw() {
+      drawWorld(DEMO);
+      rectA(0, 0, W, 90, C.black, 0.25);
+      drawText('LIGHTHOUSE', 64, 30, C.white, { scale: 2, align: 'center' });
+      const bc = beamCol();
+      drawText('KEEPER', 64, 44, bc, { scale: 3, align: 'center' });
+      for (let x = 30; x < 98; x++) if ((x + Math.floor(scrT * 8)) % 6 === 0) pset(x, 62, bc);
+      button('play', 'PLAY', 34, 84, 60, 12, UI.titleSel === 0);
+      button('shop', 'SHOP', 34, 99, 60, 12, UI.titleSel === 1);
+      button('howto', 'HOW TO PLAY', 34, 114, 60, 12, UI.titleSel === 2);
+      rectA(20, 131, 88, 18, C.black, 0.5);
+      drawText('BEST ' + S.best, 64, 133, C.white, { align: 'center' });
+      coinText(S.coins, 64, 141, 'center');
+      drawText(S.muted ? 'M: SOUND OFF' : 'M: SOUND ON', 2, 2, C.faint, { shadow: false });
+    }
+  },
+
+  howto: {
+    update(dt) {
+      updateDemo(DEMO, dt);
+      if (hit('Escape')) { setScreen('title'); return; }
+      if (hit('ArrowLeft', 'KeyA')) { UI.howSel = 0; sfx('sel'); }
+      if (hit('ArrowRight', 'KeyD')) { UI.howSel = 1; sfx('sel'); }
+      const ids = ['back', 'next'];
+      const hv = hoverId(); if (hv && ids.includes(hv)) UI.howSel = ids.indexOf(hv);
+      let id = tapId();
+      if (!id && confirmKey()) id = ids[UI.howSel];
+      if (id === 'back') { sfx('sel'); if (UI.howPage === 0) setScreen('title'); else { UI.howPage = 0; UI.howSel = 1; } }
+      else if (id === 'next') { sfx('sel'); if (UI.howPage === 1) setScreen('title'); else UI.howPage = 1; }
+    },
+    draw() {
+      drawWorld(DEMO);
+      dim(0.75);
+      drawText('HOW TO PLAY', 64, 4, C.white, { scale: 2, align: 'center' });
+      drawText((UI.howPage + 1) + '/2', 124, 18, C.dim, { align: 'right' });
+      if (UI.howPage === 0) drawHowPage1(); else drawHowPage2();
+      button('back', UI.howPage === 0 ? 'MENU' : 'BACK', 8, 176, 44, 12, UI.howSel === 0);
+      button('next', UI.howPage === 0 ? 'NEXT' : 'DONE', 76, 176, 44, 12, UI.howSel === 1);
+    }
+  },
+
+  shop: {
+    update(dt) {
+      if (DEMO) updateDemo(DEMO, dt);
+      UI.shopMsgT = Math.max(0, UI.shopMsgT - dt);
+      if (hit('Escape')) { shopDone(); return; }
+      const rows = 8;
+      if (hit('ArrowUp', 'KeyW')) { UI.shopSel = (UI.shopSel + rows - 1) % rows; sfx('sel'); }
+      if (hit('ArrowDown', 'KeyS')) { UI.shopSel = (UI.shopSel + 1) % rows; sfx('sel'); }
+      if (hit('ArrowLeft', 'KeyA')) shopCycle(UI.shopSel, -1);
+      if (hit('ArrowRight', 'KeyD')) shopCycle(UI.shopSel, 1);
+      const hv = hoverId();
+      if (hv && hv.startsWith('row')) UI.shopSel = +hv.slice(3);
+      const tp = tapId();
+      if (tp) {
+        if (tp === 'done') { shopDone(); return; }
+        if (tp === 'pl') { UI.shopSel = 5; shopCycle(5, -1); }
+        else if (tp === 'pr') { UI.shopSel = 5; shopCycle(5, 1); }
+        else if (tp === 'bl') { UI.shopSel = 6; shopCycle(6, -1); }
+        else if (tp === 'br') { UI.shopSel = 6; shopCycle(6, 1); }
+        else if (tp.startsWith('row')) {
+          const r = +tp.slice(3);
+          if (r === UI.shopSel || !isTouch) shopActivate(r); else { UI.shopSel = r; sfx('sel'); }
+        }
+      } else if (confirmKey()) { if (UI.shopSel === 7) shopDone(); else shopActivate(UI.shopSel); }
+    },
+    draw() { drawShop(); }
+  },
+
+  intro: {
+    update(dt) {
+      tickAmbient(G, dt);
+      if (confirmKey() || taps.length || scrT > 6) { sfx('ok'); setScreen('play'); }
+    },
+    draw() {
+      drawWorld(G);
+      drawHUD(G);
+      dim(0.45);
+      const hint = nightHint(RUN.night, G.weather);
+      panel(4, 46, 120, 82);
+      drawText('NIGHT ' + RUN.night, 64, 54, C.white, { scale: 3, align: 'center' });
+      drawText(WEATHER[G.weather].name, 64, 76, hex(WEATHER[G.weather].col), { align: 'center' });
+      drawText(hint[0], 64, 90, C.gold, { align: 'center' });
+      drawText(hint[1], 64, 98, C.white, { align: 'center' });
+      if (Math.floor(scrT * 2.5) % 2 === 0) drawText(isTouch ? 'TAP TO START' : 'PRESS ENTER', 64, 116, C.dim, { align: 'center' });
+    }
+  },
+
+  play: {
+    update(dt) { updatePlay(dt); },
+    draw() { drawWorld(G); drawHUD(G); drawTouchButtons(G); }
+  },
+
+  pause: {
+    update(dt) {
+      if (hit('Escape', 'KeyP')) { setScreen('play'); return; }
+      if (hit('KeyM')) { S.muted = !S.muted; save(); }
+      const id = menuNav(['resume', 'sound', 'quit'], UI, 'pauseSel');
+      if (id === 'resume') { sfx('ok'); setScreen('play'); }
+      else if (id === 'sound') { S.muted = !S.muted; save(); sfx('sel'); }
+      else if (id === 'quit') { sfx('sel'); endRun(true); }
+    },
+    draw() {
+      drawWorld(G); drawHUD(G);
+      dim(0.6);
+      drawText('PAUSED', 64, 56, C.white, { scale: 2, align: 'center' });
+      button('resume', 'RESUME', 32, 80, 64, 12, UI.pauseSel === 0);
+      button('sound', S.muted ? 'SOUND: OFF' : 'SOUND: ON', 32, 95, 64, 12, UI.pauseSel === 1);
+      button('quit', 'QUIT RUN', 32, 110, 64, 12, UI.pauseSel === 2);
+    }
+  },
+
+  dawn: {
+    update(dt) {
+      const g = G;
+      g.t = g.dur;
+      g.dawnT += dt;
+      g.flareT = 0;
+      computeBeams(g);
+      updateShips(g, dt);
+      tickAmbient(g, dt);
+      if (g.dawnT > 4.5) finishNight();
+    },
+    draw() {
+      drawWorld(G); drawHUD(G);
+      const a = Math.min(1, G.dawnT / 1);
+      drawText('6:00 AM', 64, 50, C.white, { scale: 2, align: 'center', alpha: a });
+      drawText('DAWN BREAKS', 64, 66, C.gold, { align: 'center', alpha: a });
+    }
+  },
+
+  summary: {
+    update(dt) {
+      tickAmbient(G, dt);
+      const id = menuNav(['next', 'shop'], UI, 'sumSel');
+      if (id === 'next') { sfx('ok'); startNight(RUN.night + 1); }
+      else if (id === 'shop') { sfx('ok'); UI.shopFrom = 'summary'; setScreen('shop'); }
+    },
+    draw() {
+      const g = G;
+      drawWorld(g);
+      dim(0.55);
+      panel(8, 14, 112, 168);
+      drawText('NIGHT ' + RUN.night, 64, 20, C.white, { scale: 2, align: 'center' });
+      drawText('SURVIVED!', 64, 36, C.gold, { align: 'center' });
+      const rows = [
+        ['SHIPS DOCKED', g.docked, C.white], ['WRECKS', g.wrecks, g.wrecks ? C.red : C.white],
+        ['PERFECT', g.perfect, C.green], ['CLOSE CALLS', g.close, C.orange], ['SAFE AT SEA', g.safe, C.cyan]
+      ];
+      rows.forEach((r, i) => { drawText(r[0], 16, 50 + i * 9, C.dim); drawText(String(r[1]), 112, 50 + i * 9, r[2], { align: 'right' }); });
+      line(16, 97, 111, 97, C.faint);
+      drawText('NIGHT SCORE', 16, 102, C.dim); drawText(String(g.score), 112, 102, C.white, { align: 'right' });
+      drawText('TOTAL SCORE', 16, 111, C.dim); drawText(String(RUN.score), 112, 111, C.gold, { align: 'right' });
+      drawText('COINS', 16, 122, C.dim); coinText('+' + UI.sumCoins, 112, 122, 'right');
+      drawText('BANK', 16, 131, C.dim); coinText(S.coins, 112, 131, 'right');
+      button('next', 'NEXT NIGHT', 26, 146, 76, 12, UI.sumSel === 0);
+      button('shop', 'SHOP', 26, 162, 76, 12, UI.sumSel === 1);
+    }
+  },
+
+  gameover: {
+    update(dt) {
+      if (G) tickAmbient(G, dt);
+      const id = menuNav(['retry', 'menu'], UI, 'overSel');
+      if (id === 'retry') { sfx('ok'); startRun(); }
+      else if (id === 'menu') { sfx('sel'); setScreen('title'); }
+    },
+    draw() {
+      if (G) drawWorld(G);
+      dim(0.7);
+      panel(8, 22, 112, 156);
+      drawText(UI.quit ? 'RUN ENDED' : 'GAME OVER', 64, 30, UI.quit ? C.white : C.red, { scale: 2, align: 'center' });
+      drawText(UI.quit ? 'THE KEEPER RESTS' : 'THE ROCKS CLAIMED', 64, 48, C.dim, { align: 'center' });
+      drawText(UI.quit ? 'FOR NOW' : 'TOO MANY SHIPS', 64, 56, C.dim, { align: 'center' });
+      drawText('SCORE', 64, 70, C.dim, { align: 'center' });
+      drawText(String(RUN.score), 64, 78, C.gold, { scale: 2, align: 'center' });
+      drawText('NIGHTS SURVIVED: ' + (RUN.night - 1), 64, 96, C.white, { align: 'center' });
+      if (UI.newBest && Math.floor(scrT * 3) % 2 === 0) drawText('NEW BEST!', 64, 106, C.green, { align: 'center' });
+      else if (!UI.newBest) drawText('BEST ' + S.best, 64, 106, C.dim, { align: 'center' });
+      drawText('COINS EARNED', 64, 117, C.dim, { align: 'center' });
+      coinText('+' + UI.overCoins, 64, 125, 'center');
+      button('retry', 'RETRY', 28, 142, 72, 12, UI.overSel === 0);
+      button('menu', 'MENU', 28, 158, 72, 12, UI.overSel === 1);
+    }
+  }
+};
+
+// --- how to play pages ---
+function miniBeam(x0, y0, ang, half, reach, clip) {
+  const bc = beamCol();
+  for (let y = clip.y; y < clip.y + clip.h; y++) for (let x = clip.x; x < clip.x + clip.w; x++) {
+    const dx = x + 0.5 - x0, dy = y + 0.5 - y0, d = Math.hypot(dx, dy);
+    if (d > reach || d < 1) continue;
+    const diff = Math.abs(Math.atan2(dx, -dy) - ang);
+    if (diff > half) continue;
+    const bt = BAYER[((y & 3) << 2) | (x & 3)];
+    if (diff > half * 0.7 && bt > (half - diff) / (half * 0.3)) continue;
+    const q = Math.floor((1 - d / reach) * 0.5 * 6 + bt) / 6;
+    if (q > 0) pblend(x, y, bc, q);
+  }
+}
+function drawHowPage1() {
+  drawText('KEEP SHIPS IN YOUR LIGHT', 64, 24, C.gold, { align: 'center' });
+  // dark example
+  rect(10, 33, 50, 30, C.seaDeep); outline(10, 33, 50, 30, C.faint);
+  for (let x = 20; x < 30; x++) if (hash(x, 1) > 0.4) pset(x, 54, ROCK_DARK[0]);
+  drawSprite(SPR.fishing, DARK_PAL.fishing, 35, 46, { rot: 0.6 });
+  glow(35, 47, 3, C.lantern, 0.3);
+  drawText('DARK', 35, 65, C.dim, { align: 'center' });
+  // lit example
+  rect(68, 33, 50, 30, C.seaDeep); outline(68, 33, 50, 30, C.faint);
+  miniBeam(93, 62, 0, 0.45, 32, { x: 69, y: 34, w: 48, h: 28 });
+  drawSprite(SPR.fishing, PAL.fishing, 93, 44, { rot: 0.6 });
+  rect(89, 35, 8, 2, C.green);
+  drawText('LIT', 93, 65, C.gold, { align: 'center' });
+  drawText("DARKNESS FILLS A SHIP'S METER", 64, 76, C.white, { align: 'center' });
+  const ms = [[C.green, 2, 'ON COURSE'], [C.yellow, 5, 'WANDERING'], [C.red, 8, 'LOST! DRIFTING']];
+  ms.forEach((m, i) => { const y = 86 + i * 8; rectA(19, y - 1, 10, 4, C.black, 0.9); rect(20, y, m[1], 2, m[0]); drawText(m[2], 34, y - 1, m[0]); });
+  drawText('LIGHT DRAINS THE METER.', 64, 114, C.white, { align: 'center' });
+  drawText('LOST SHIPS WRECK ON ROCKS.', 64, 123, C.white, { align: 'center' });
+  drawText('GUIDE THEM TO THE HARBOR', 64, 135, C.dim, { align: 'center' });
+  drawText('LEFT OR RIGHT OF THE TOWER.', 64, 143, C.dim, { align: 'center' });
+  drawText('A 4TH WRECK ENDS THE RUN.', 64, 155, C.red, { align: 'center' });
+  drawText('SURVIVE UNTIL 6 AM!', 64, 164, C.gold, { align: 'center' });
+}
+function drawHowPage2() {
+  drawSprite(SPR.pirate, PAL.pirate, 10, 30, { rot: Math.PI / 2 });
+  drawText("PIRATES: DON'T LIGHT", 22, 25, C.red);
+  drawText('THEM! THEY FIRE AT', 22, 32, C.white);
+  drawText('YOUR LAMP.', 22, 39, C.white);
+  drawSprite(SPR.barrel, PAL.barrel, 8, 50);
+  drawText('LIGHT OIL BARRELS', 22, 49, C.oil);
+  drawText('TO REFILL THE LAMP.', 22, 56, C.white);
+  icon('flareIcon', 8, 67, hex('#ff8aa0'));
+  drawText('FLARE: LIGHTS EVERY', 22, 66, hex('#ff8aa0'));
+  drawText('SHIP FOR A MOMENT.', 22, 73, C.white);
+  icon('hornIcon', 8, 84, C.cyan);
+  drawText('HORN: SLOWS ALL SHIPS.', 22, 85, C.cyan);
+  drawText('FOCUS: NARROW, LONGER', 22, 95, C.gold);
+  drawText('BEAM. BURNS MORE OIL.', 22, 102, C.white);
+  line(8, 112, 119, 112, C.faint);
+  drawText('CONTROLS', 64, 116, C.gold, { align: 'center' });
+  const rows = [['< > OR A D', 'ROTATE'], ['SHIFT / DOWN', 'FOCUS'], ['SPACE', 'FLARE'], ['H', 'HORN'], ['ESC', 'PAUSE']];
+  rows.forEach((r, i) => { drawText(r[0], 8, 126 + i * 8, C.white); drawText(r[1], 120, 126 + i * 8, C.dim, { align: 'right' }); });
+  drawText('TOUCH: DRAG ON THE SEA TO AIM', 64, 167, C.cyan, { align: 'center' });
+}
+
+// --- shop ---
+function shopDone() {
+  sfx('sel');
+  if (UI.shopFrom === 'summary') startNight(RUN.night + 1);
+  else setScreen('title');
+}
+function shopMsg(m) { UI.shopMsg = m; UI.shopMsgT = 2; }
+function shopCycle(row, d) {
+  if (row === 5) { UI.paintView = (UI.paintView + PAINTS.length + d) % PAINTS.length; sfx('sel'); }
+  else if (row === 6) { UI.beamView = (UI.beamView + BEAMS.length + d) % BEAMS.length; sfx('sel'); }
+}
+function shopActivate(row) {
+  if (row < 5) {
+    const u = UPGRADES[row], lvl = S.up[u.id];
+    if (lvl >= u.prices.length) { shopMsg('ALREADY MAXED'); sfx('no'); return; }
+    const price = u.prices[lvl];
+    if (S.coins < price) { shopMsg('NOT ENOUGH COINS'); sfx('no'); return; }
+    S.coins -= price; S.up[u.id]++; save();
+    shopMsg('BOUGHT!'); sfx('ok');
+  } else if (row === 5 || row === 6) {
+    const isPaint = row === 5;
+    const v = isPaint ? UI.paintView : UI.beamView;
+    const owned = isPaint ? S.paints : S.beams;
+    if (owned.includes(v)) {
+      if (isPaint) S.paint = v; else S.beam = v;
+      save(); shopMsg('EQUIPPED'); sfx('ok');
+      return;
+    }
+    const price = isPaint ? PAINT_PRICE : BEAM_PRICE;
+    if (S.coins < price) { shopMsg('NOT ENOUGH COINS'); sfx('no'); return; }
+    S.coins -= price; owned.push(v);
+    if (isPaint) S.paint = v; else S.beam = v;
+    save(); shopMsg('BOUGHT!'); sfx('ok');
+  } else shopDone();
+}
+function drawShop() {
+  rect(0, 0, W, H, hex('#070b1a'));
+  for (let y = 0; y < H; y += 4) for (let x = (y / 4) % 2 ? 2 : 0; x < W; x += 4) pset(x, y, hex('#0c1228'));
+  drawText('SHOP', 64, 3, C.white, { scale: 2, align: 'center' });
+  coinText(S.coins, 64, 18, 'center');
+  for (let r = 0; r < 7; r++) {
+    const y = 27 + r * 17, sel = UI.shopSel === r;
+    regions.push({ id: 'row' + r, x: 2, y, w: 124, h: 16 });
+    rectA(2, y, 124, 16, sel ? hex('#2a2010') : C.black, 0.6);
+    outline(2, y, 124, 16, sel ? C.gold : C.white, sel ? 1 : 0.2);
+    if (r < 5) {
+      const u = UPGRADES[r], lvl = S.up[u.id], max = lvl >= u.prices.length;
+      drawText(u.name, 6, y + 3, sel ? C.gold : C.white);
+      if (max) drawText('MAX', 122, y + 3, C.green, { align: 'right' });
+      else coinText(u.prices[lvl], 122, y + 3, 'right');
+      drawText(u.desc, 6, y + 10, C.dim, { shadow: false });
+      for (let j = 0; j < u.prices.length; j++) {
+        const px = 122 - (u.prices.length - j) * 4 + 1;
+        if (j < lvl) rect(px, y + 10, 3, 3, C.green); else outline(px, y + 10, 3, 3, C.dim);
+      }
+    } else {
+      const isPaint = r === 5;
+      const v = isPaint ? UI.paintView : UI.beamView;
+      const owned = (isPaint ? S.paints : S.beams).includes(v);
+      const equipped = (isPaint ? S.paint : S.beam) === v;
+      drawText(isPaint ? 'LIGHTHOUSE PAINT' : 'BEAM COLOR', 6, y + 3, sel ? C.gold : C.white);
+      if (equipped) drawText('IN USE', 122, y + 3, C.green, { align: 'right' });
+      else if (owned) drawText('OWNED', 122, y + 3, C.cyan, { align: 'right' });
+      else coinText(isPaint ? PAINT_PRICE : BEAM_PRICE, 122, y + 3, 'right');
+      const name = isPaint ? PAINTS[v].name : BEAMS[v].name;
+      regions.push({ id: isPaint ? 'pl' : 'bl', x: 2, y: y + 8, w: 10, h: 8 });
+      drawText('<', 6, y + 10, C.white);
+      const nw = drawText(name, 12, y + 10, C.dim, { shadow: false });
+      regions.push({ id: isPaint ? 'pr' : 'br', x: 12 + nw, y: y + 8, w: 12, h: 8 });
+      drawText('>', 14 + nw, y + 10, C.white);
+      if (isPaint) { rect(112, y + 10, 4, 4, hex(PAINTS[v].a)); rect(117, y + 10, 4, 4, hex(PAINTS[v].b)); }
+      else rect(112, y + 10, 9, 4, beamCol(v));
+    }
+  }
+  // preview
+  rect(4, 148, 54, 42, C.seaDeep); outline(4, 148, 54, 42, C.faint);
+  const pv = UI.shopSel === 5 ? UI.paintView : S.paint;
+  const bv = UI.shopSel === 6 ? UI.beamView : S.beam;
+  const bc = beamCol(bv);
+  for (let y = 149; y < 172; y++) for (let x = 5; x < 57; x++) {
+    const dx = x + 0.5 - 24, dy = y + 0.5 - 159, d = Math.hypot(dx, dy);
+    const diff = Math.abs(Math.atan2(dx, -dy) - 0.75 - Math.sin(scrT) * 0.2);
+    if (diff > 0.26 || d > 40 || d < 2) continue;
+    const bt = BAYER[((y & 3) << 2) | (x & 3)];
+    if (diff > 0.18 && bt > (0.26 - diff) / 0.08) continue;
+    const q = Math.floor((1 - d / 40) * 0.5 * 6 + bt) / 6;
+    if (q > 0) pblend(x, y, bc, q);
+  }
+  rect(5, 182, 52, 7, C.land);
+  const pg = { demo: true, t: scrT, oil: 1, flick: 1, keeperOn: 0, crackT: 0 };
+  drawLighthouse(pg, 17, 154, pv, bc);
+  drawText(UI.shopMsgT > 0 ? UI.shopMsg : (UI.shopSel < 7 ? (isTouch ? 'TAP AGAIN TO BUY' : 'ENTER TO BUY') : ''), 92, 154, UI.shopMsg === 'NOT ENOUGH COINS' && UI.shopMsgT > 0 ? C.red : C.dim, { align: 'center' });
+  button('done', UI.shopFrom === 'summary' ? 'NEXT NIGHT' : 'DONE', 64, 172, 58, 14, UI.shopSel === 7);
+}
+
+// =====================================================================
+// MAIN LOOP
+// =====================================================================
+function update(dt) {
+  SCREENS[screen].update(dt);
+  scrT += dt;
+}
+function draw() {
+  regions = [];
+  SCREENS[screen].draw();
+  let sx = 0, sy = 0;
+  const g = screen === 'title' || screen === 'howto' ? DEMO : G;
+  if (g && g.shakeT > 0 && screen !== 'pause') { sx = Math.round(rand(-g.shakeM, g.shakeM)); sy = Math.round(rand(-g.shakeM, g.shakeM)); }
+  present(sx, sy);
+}
+let last = performance.now(), acc = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = (now - last) / 1000;
+  last = now;
+  if (dt > 0.25) dt = 0.25;
+  acc += dt;
+  let steps = 0;
+  while (acc >= STEP && steps < 8) {
+    update(STEP);
+    acc -= STEP; steps++;
+    pressed.clear(); taps = [];
+  }
+  if (steps >= 8) acc = 0;
+  draw();
+}
+
+resize();
+setScreen('title');
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
