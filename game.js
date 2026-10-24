@@ -30,12 +30,13 @@
   const laneX = (lane, w = CAR_W) => ROAD_X + LANE_W * lane + (LANE_W - w) / 2;
   const laneDir = (lane) => (lane < ONCOMING_LANES ? -1 : 1);
 
-  // Levels cycle through three roads: the four-lane construction zone (two
+  // Levels cycle through four roads: the four-lane construction zone (two
   // lanes each way), a three-lane bridge (all one way, no railings, so you
-  // can drive right off the edge), and a snowy pass laid out like the
-  // construction zone but with icy steering.
-  const THEMES = ['construction', 'bridge', 'snow'];
-  const LEVEL_NAMES = { construction: 'CONSTRUCTION ZONE', bridge: 'THE BRIDGE', snow: 'SNOWY PASS' };
+  // can drive right off the edge), a snowy pass laid out like the
+  // construction zone but with icy steering, and a desert highway with sand
+  // drifts, tumbleweeds and sandstorms.
+  const THEMES = ['construction', 'bridge', 'snow', 'desert'];
+  const LEVEL_NAMES = { construction: 'CONSTRUCTION ZONE', bridge: 'THE BRIDGE', snow: 'SNOWY PASS', desert: 'DESERT HIGHWAY' };
   const themeFor = (n) => THEMES[(n - 1) % THEMES.length];
   let theme = 'construction', bridge = false;
   const roadLayout = (isBridge) => {
@@ -360,6 +361,7 @@
     c: '#a9a9a2', C: '#c9c9c2', Y: '#f2b705', S: '#b07f08', b: '#1c2541',
     t: '#5a4a3a', d: '#8a7a62', D: '#a89880', l: '#6e5c40',
     g: '#2f5a3a', G: '#1f3f2a', W: '#f4f8fc', s: '#b8c6d4',
+    v: '#4a8a3a', V: '#2f6a2a', x: '#a8704a', X: '#7a4e30', e: '#f0e6cc',
   };
   const DECOR_MAPS = {
     cone: ['.ooo.', 'owwwo', 'owOwo', 'owwwo', '.ooo.'],
@@ -447,6 +449,25 @@
       'kooooooook',
       '.oooooooo.',
     ],
+    // Desert highway.
+    cactus: [
+      '...vV...',
+      '...vV...',
+      'v..vV...',
+      'vV.vV..v',
+      'vV.vV.vV',
+      'vVvvV.vV',
+      '.vvvVvvV',
+      '...vVvV.',
+      '...vV...',
+      '...vV...',
+      '...vV...',
+      '..dddd..',
+    ],
+    shrub: ['.v.v.', 'vVvVv', '.vVv.', '..d..'],
+    mesa: ['..xxxx....', '.xxxxxxx..', 'xxXxxxxxx.', 'xXXxxXxxxx', 'XXXXXXXXXX'],
+    skull: ['.eee.', 'ekeke', 'eeeee', '.e.e.'],
+    deadbush: ['t.t.t', '.ttt.', 't.t.t', '..t..'],
     boat: ['..c..', '.cwc.', 'cwwwc', 'cwbwc', 'cwwwc', 'cwwwc', '.ccc.'],
     gravel: ['..ddddd..', '.dDDDDDd.', 'dDDDDDDDd', 'dDDDDDDDd', '.dDDDDDd.', '..ddddd..'],
   };
@@ -458,6 +479,15 @@
   const SNOW_DECOR_WEIGHTS = [
     { kind: 'pine', w: 34 }, { kind: 'snowbank', w: 26 }, { kind: 'snowman', w: 7 },
     { kind: 'plow', w: 8 }, { kind: 'sign', w: 6 }, { kind: 'barrel', w: 6 },
+  ];
+  const DESERT_DECOR_WEIGHTS = [
+    { kind: 'cactus', w: 26 }, { kind: 'shrub', w: 20 }, { kind: 'mesa', w: 14 },
+    { kind: 'deadbush', w: 16 }, { kind: 'skull', w: 6 }, { kind: 'sign', w: 5 }, { kind: 'cone', w: 4 },
+  ];
+  // Tumbleweed: two frames so it looks like it's rolling.
+  const WEED = [
+    ['.t.tt.', 't.tdtt', '.tdt.t', 'tt.dt.', 't.tt.t', '.tt.t.'],
+    ['.tt.t.', 'tdt.t.', 't.tdtt', '.tt.dt', 'tdt.t.', '.t.tt.'],
   ];
   const STAR = ['..1..', '.111.', '11111', '.111.', '.1.1.'];
 
@@ -580,6 +610,7 @@
     return s;
   }
 
+  const weedSprites = WEED.map((m) => buildSprite(m, { t: '#9a7a4a', d: '#6a5030' }));
   const decorSprites = {};
   for (const k in DECOR_MAPS) decorSprites[k] = buildSprite(DECOR_MAPS[k], DECOR_PAL);
   const policeSprite = buildSprite(POLICE, POLICE_PAL);
@@ -596,7 +627,7 @@
   // markings. Bridge: a bare deck over open water. Every pattern period
   // divides TILE_H so the tiles loop seamlessly.
   function makeRoadTile(t) {
-    const isBridge = t === 'bridge', snow = t === 'snow';
+    const isBridge = t === 'bridge', snow = t === 'snow', desert = t === 'desert';
     const L = roadLayout(isBridge);
     const c = document.createElement('canvas');
     c.width = W + PAD * 2;
@@ -648,13 +679,16 @@
       for (let y = 0; y < TILE_H; y++) {
         g.fillStyle = snow
           ? (Math.floor(y / 12) % 2 ? '#e6edf4' : '#dde6ef')
-          : (Math.floor(y / 12) % 2 ? '#7d6b4f' : '#776549');
+          : desert ? (Math.floor(y / 8) % 2 ? '#dcbc7c' : '#d6b574')
+            : (Math.floor(y / 12) % 2 ? '#7d6b4f' : '#776549');
         g.fillRect(0, y, c.width, 1);
       }
       for (let i = 0; i < 520; i++) {
         const left = Math.random() < 0.5;
         const x = left ? randInt(0, rx - 4) : randInt(rr + 3, c.width - 1);
-        g.fillStyle = pick(snow ? ['#c8d4e0', '#ffffff', '#b8c6d4', '#f8fbff'] : ['#6a5a40', '#8f7d5f', '#9a9a90', '#5f5038']);
+        g.fillStyle = pick(snow ? ['#c8d4e0', '#ffffff', '#b8c6d4', '#f8fbff']
+          : desert ? ['#c8a060', '#ecd29a', '#b89050', '#e4c88a']
+            : ['#6a5a40', '#8f7d5f', '#9a9a90', '#5f5038']);
         g.fillRect(x, randInt(0, TILE_H - 1), 1, 1);
       }
       if (snow) {
@@ -665,6 +699,14 @@
         g.fillStyle = '#9fb0c2';
         g.fillRect(rx - 2, 0, 1, TILE_H);
         g.fillRect(rr + 1, 0, 1, TILE_H);
+      } else if (desert) {
+        // Wind ripples in the sand; no curbs, just sand spilling onto the road.
+        g.fillStyle = '#c4a264';
+        for (let y = 0; y < TILE_H; y += 8) {
+          for (let x = (y / 8) % 2 ? 0 : 6; x < c.width; x += 12) {
+            if (x < rx - 4 || x > rr + 4) g.fillRect(x, y, 4, 1);
+          }
+        }
       } else {
         for (let y = 0; y < TILE_H; y += 6) {
           g.fillStyle = (y / 6) % 2 ? '#eeeeee' : '#f07a1a';
@@ -672,11 +714,25 @@
           g.fillRect(rr + 1, y, 2, 6);
         }
       }
-      g.fillStyle = snow ? '#4a4e58' : '#45454f';
+      g.fillStyle = snow ? '#4a4e58' : desert ? '#5a5650' : '#45454f';
       g.fillRect(rx - 1, 0, L.w + 2, TILE_H);
       for (let i = 0; i < 500; i++) {
-        g.fillStyle = snow ? (Math.random() < 0.5 ? '#42464f' : '#585d68') : (Math.random() < 0.5 ? '#3d3d46' : '#50505a');
+        g.fillStyle = snow ? (Math.random() < 0.5 ? '#42464f' : '#585d68')
+          : desert ? (Math.random() < 0.5 ? '#514d47' : '#67625a')
+            : (Math.random() < 0.5 ? '#3d3d46' : '#50505a');
         g.fillRect(randInt(rx - 1, rr), randInt(0, TILE_H - 1), 1, 1);
+      }
+      if (desert) {
+        // Sun-bleached asphalt with sand blown in over the edges.
+        for (let i = 0; i < 300; i++) {
+          const edge = Math.random() < 0.5 ? rx - 1 + randInt(0, 5) : rr - randInt(0, 5);
+          g.fillStyle = pick(['#d6b574', '#c8a060', '#b89a68']);
+          g.fillRect(edge, randInt(0, TILE_H - 1), randInt(1, 2), 1);
+        }
+        for (let i = 0; i < 90; i++) {
+          g.fillStyle = 'rgba(214,181,116,0.45)';
+          g.fillRect(randInt(rx + 2, rr - 6), randInt(0, TILE_H - 1), randInt(2, 5), 1);
+        }
       }
       if (snow) {
         // Slush along the edges and patches of ice and packed snow.
@@ -935,6 +991,18 @@
   // growing while you're out of the zone.
   let zoneMult, zoneTipShown;
   let stage = 1, stageFade = 0;
+  // Desert hazards: sand drifts on the road, tumbleweeds rolling across it,
+  // and sandstorms that hide the road ahead and shove you with crosswind.
+  let sands = [], weeds = [], nextSand = 0, nextWeed = 0, desertTips = {};
+  let storm = { phase: 'off', t: 0, s: 0, dir: 1 };
+  function resetDesert() {
+    sands = [];
+    weeds = [];
+    nextSand = dist + 300;
+    nextWeed = dist + 200;
+    desertTips = {};
+    storm = { phase: 'off', t: 10, s: 0, dir: 1 };
+  }
   const ZONE_RATE = 0.01; // +0.1x for every 10 seconds in the zone
   let curves = [], curveEnd = 0;
   const shiftRows = new Float32Array(H + SHIFT_OFF * 2);
@@ -1002,6 +1070,7 @@
     zoneTipShown = false;
     stage = 1;
     stageFade = 0;
+    resetDesert();
     if (theme !== 'construction') {
       setLayout('construction');
       initDecor();
@@ -1104,7 +1173,7 @@
       decorNext[side] = bottom - rand(8, 20);
       return;
     }
-    const kind = pickWeighted(theme === 'snow' ? SNOW_DECOR_WEIGHTS : DECOR_WEIGHTS).kind;
+    const kind = pickWeighted(theme === 'snow' ? SNOW_DECOR_WEIGHTS : theme === 'desert' ? DESERT_DECOR_WEIGHTS : DECOR_WEIGHTS).kind;
     const spr = decorSprites[kind];
     const x = side === 'left'
       ? randInt(0, Math.max(0, ROAD_X - 8 - spr.width))
@@ -1623,6 +1692,7 @@
     slicks = slicks.filter((s) => s.y < H + 10);
     for (const it of roadItems) it.y += player.speed * dt;
     roadItems = roadItems.filter((it) => it.y < H + 20);
+    if (theme === 'desert') updateDesert(dt);
 
     if (state === 'play') {
       const p = player;
@@ -1643,6 +1713,7 @@
 
   // Ramps are bolted to the road, spaced out by distance travelled.
   function spawnRoadItems() {
+    if (theme === 'desert') spawnDesert();
     if (dist >= nextRamp) {
       const lane = randInt(0, LANES - 1);
       const w = RAMP[0].length;
@@ -1653,6 +1724,91 @@
         popup('RAMP AHEAD! JUMP THE CARS', W / 2, 46, '#f2c200', 2);
       }
     }
+  }
+
+  function spawnDesert() {
+    if (dist >= nextSand) {
+      // A drift of sand blown across one or two lanes.
+      const lane = randInt(0, LANES - 2), wide = Math.random() < 0.4;
+      const w = wide ? LANE_W * 2 - 4 : LANE_W - 4;
+      const h = randInt(18, 30);
+      sands.push({ x: ROAD_X + lane * LANE_W + 2, y: -h - 2, w, h, seed: Math.random() * 100 });
+      nextSand = dist + rand(320, 650);
+    }
+    if (dist >= nextWeed) {
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      weeds.push({ x: dir > 0 ? ROAD_X - 14 : ROAD_R + 8, y: rand(-20, 50), vx: dir * rand(35, 60), w: 6, h: 6, hit: false, bounce: 0 });
+      nextWeed = dist + rand(220, 480);
+    }
+  }
+
+  function updateDesert(dt) {
+    const p = player;
+    const play = state === 'play';
+    for (const sd of sands) sd.y += p.speed * dt;
+    sands = sands.filter((sd) => sd.y < H + 10);
+    for (const w of weeds) {
+      w.y += p.speed * dt;
+      w.x += w.vx * dt;
+      w.bounce += dt * 9;
+    }
+    weeds = weeds.filter((w) => w.y < H + 10 && w.x > ROAD_X - 60 && w.x < ROAD_R + 60);
+
+    // Sandstorms come and go: a warning, then a few seconds of blowing sand.
+    storm.t -= dt;
+    if (storm.phase === 'off' && storm.t <= 0 && play) {
+      storm.phase = 'warn';
+      storm.t = 2;
+      storm.dir = Math.random() < 0.5 ? -1 : 1;
+      popup('SANDSTORM COMING!', W / 2, 60, '#f2c26a', 1.8);
+    } else if (storm.phase === 'warn' && storm.t <= 0) {
+      storm.phase = 'on';
+      storm.t = rand(7, 10);
+      sfx.noise(1.5, 0.25);
+    } else if (storm.phase === 'on' && storm.t <= 0) {
+      storm.phase = 'off';
+      storm.t = rand(18, 30);
+      if (play) popup('STORM PASSED', W / 2, 60, '#57c062', 1.4);
+    }
+    const target = storm.phase === 'on' ? 1 : 0;
+    storm.s += clamp(target - storm.s, -dt * 0.8, dt * 0.8);
+
+    if (!play || p.air > 0) return;
+    // Crosswind shoves you sideways while the storm blows.
+    if (storm.s > 0) p.x += storm.dir * 24 * storm.s * dt;
+    p.knock = (p.knock || 0) * Math.exp(-5 * dt);
+    p.x += p.knock * dt;
+
+    const sd = sands.find((sd) => overlaps(p.x + 1, PLAYER_Y + 2, CAR_W - 2, CAR_H - 4, sd.x, sd.y, sd.w, sd.h));
+    if (sd) {
+      // Bogged down and squirrelly. Green's Off-Roader shrugs it off.
+      if (!hasPassive('offroad')) {
+        p.speed -= Math.max(0, p.speed - 70) * Math.min(1, 2.2 * stat('dirt', 1) * dt);
+        p.knock += rand(-1, 1) * 260 * dt;
+        shake = Math.max(shake, 1);
+      }
+      if (Math.random() < 0.8) {
+        particle(p.x + rand(0, CAR_W), PLAYER_Y + CAR_H, rand(-20, 20), rand(0, 25), 0.5, pick(['#d6b574', '#ecd29a', '#c8a060']), 1, true);
+      }
+      if (!desertTips.sand) {
+        desertTips.sand = true;
+        popup('SAND DRIFT! BOGGED DOWN', p.x, PLAYER_Y, '#f2c26a', 1.2);
+      }
+    }
+    if (invuln()) return;
+    for (const w of weeds) {
+      if (w.hit || !overlaps(p.x, PLAYER_Y, CAR_W, CAR_H, w.x, w.y, w.w, w.h)) continue;
+      // Tumbleweeds won't wreck you, but they knock you off your line.
+      w.hit = true;
+      p.knock += Math.sign(w.vx) * 110;
+      p.speed = Math.max(MIN_SPEED, p.speed - 12);
+      for (let i = 0; i < 12; i++) {
+        particle(w.x + 3, w.y + 3, rand(-40, 40), rand(-40, 40), 0.5, pick(['#9a7a4a', '#6a5030', '#c8a060']), 1);
+      }
+      sfx.bump();
+      popup('TUMBLEWEED!', p.x, PLAYER_Y, '#c8a060', 1);
+    }
+    weeds = weeds.filter((w) => !w.hit);
   }
 
   function launch(ramp) {
@@ -2033,6 +2189,7 @@
     curves = [];
     curveEnd = dist + 1400;
     nextRamp = dist + 450;
+    resetDesert();
     spawnTimer = 1;
     hp = maxHp();
     Object.assign(player, { x: laneX(Math.floor(LANES / 2)), vx: 0, angle: 0, air: 0 });
@@ -2041,6 +2198,7 @@
     initDecor();
     if (bridge) popup("NO RAILINGS: DON'T FALL OFF!", W / 2, 60, '#ff9d3d', 1.8);
     if (theme === 'snow') popup('ICY ROAD: STEERING IS SLIPPERY', W / 2, 60, '#9fd0ff', 1.8);
+    if (theme === 'desert') popup('SAND, TUMBLEWEEDS AND STORMS!', W / 2, 60, '#f2c26a', 1.8);
   }
 
   function gameOver() {
@@ -2573,6 +2731,7 @@
     }
     const inMenu = state === 'title' || state === 'shop';
     if (!inMenu) {
+      if (theme === 'desert') drawSands();
       for (const it of roadItems) {
         ctx.drawImage(rampSprite, sx(it.x, it.y + it.h / 2), Math.round(it.y));
       }
@@ -2609,6 +2768,14 @@
         }
       }
       drawPlayer();
+      if (theme === 'desert') {
+        for (const w of weeds) {
+          const bob = Math.abs(Math.sin(w.bounce)) * 2;
+          ctx.fillStyle = 'rgba(0,0,0,0.25)';
+          ctx.fillRect(sx(w.x, w.y) + 1, Math.round(w.y) + 5, 5, 2);
+          ctx.drawImage(weedSprites[Math.floor(w.bounce / 2) % 2], sx(w.x, w.y), Math.round(w.y - bob));
+        }
+      }
     }
     for (const p of particles) {
       ctx.globalAlpha = clamp(p.life / p.max + 0.3, 0, 1);
@@ -2627,6 +2794,38 @@
       if (heli) drawHeli();
     }
     if (theme === 'snow') drawSnowfall();
+    if (theme === 'desert' && storm.s > 0 && !inMenu) drawSandstorm();
+  }
+
+  function drawSands() {
+    for (const sd of sands) {
+      const x = sx(sd.x, sd.y + sd.h / 2), y = Math.round(sd.y);
+      // A rounded drift with darker wind ripples across it.
+      for (let r = 0; r < sd.h; r++) {
+        const edge = Math.round(Math.sin((r / sd.h) * Math.PI) * 4);
+        const inset = 4 - edge + Math.round(Math.sin(r * 0.7 + sd.seed) * 1.5);
+        ctx.fillStyle = r % 5 === 2 ? '#c4a264' : '#d6b574';
+        ctx.fillRect(x + inset, y + r, sd.w - inset * 2, 1);
+      }
+    }
+  }
+
+  // Blowing sand thickens toward the top of the screen, so the road ahead
+  // disappears while your own car stays visible.
+  function drawSandstorm() {
+    const s = storm.s;
+    for (let y = 0; y < H; y += 4) {
+      const a = s * clamp(1 - (y / PLAYER_Y) * 0.85, 0.15, 0.95);
+      ctx.fillStyle = 'rgba(200,160,96,' + a.toFixed(2) + ')';
+      ctx.fillRect(0, y, W, 4);
+    }
+    ctx.fillStyle = 'rgba(240,214,160,' + (0.7 * s).toFixed(2) + ')';
+    for (let i = 0; i < 60; i++) {
+      const sp = 140 + (i % 4) * 40;
+      const x = ((((i * 47 + time * sp * storm.dir) % (W + 10)) + W + 10) % (W + 10)) - 5;
+      const y = (i * 29 + Math.sin(time * 2 + i) * 6 + time * 20) % H;
+      ctx.fillRect(Math.round(x), Math.round(y), 3 + (i % 3), 1);
+    }
   }
 
   // Flakes drift down and sideways; faster driving makes them stream past.

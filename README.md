@@ -99,9 +99,16 @@ Every new level starts fresh: heat back to zero, cops and the chopper gone, HP f
 
 | Level | Road |
 | --- | --- |
-| 1, 4, 7... | **Construction zone:** four lanes, two each way, with curves and barriers |
-| 2, 5, 8... | **The bridge:** three lanes, all going your way, dead straight, and **no railings** |
-| 3, 6, 9... | **Snowy pass:** the construction zone's layout (four lanes, two each way, curves) under snow, with pines, snowmen and snowplows on the shoulders. The road is **icy**, so your car is slower to respond to steering and keeps sliding a moment after you let go. |
+| 1, 5, 9... | **Construction zone:** four lanes, two each way, with curves and barriers |
+| 2, 6, 10... | **The bridge:** three lanes, all going your way, dead straight, and **no railings** |
+| 3, 7, 11... | **Snowy pass:** the construction zone's layout (four lanes, two each way, curves) under snow, with pines, snowmen and snowplows on the shoulders. The road is **icy**, so your car is slower to respond to steering and keeps sliding a moment after you let go. |
+| 4, 8, 12... | **Desert highway:** the construction zone's layout (four lanes, two each way, curves) through the desert, with cacti, mesas and skulls on the shoulders. It has three problems of its own (below). |
+
+In the desert:
+
+- **Sand drifts** are blown across one or two lanes. Driving through one bogs you down toward 40 MPH and makes the car squirm. Green's Off-Roader ignores them, and the Pickup Truck barely notices.
+- **Tumbleweeds** roll across the road. They won't wreck you, but hitting one knocks you sideways and costs a little speed.
+- **Sandstorms** blow through every half minute or so, after a **SANDSTORM COMING!** warning. For several seconds, blowing sand hides the road ahead, so traffic appears late, and a crosswind keeps pushing your car to one side.
 
 On the bridge:
 
