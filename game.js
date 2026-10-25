@@ -2997,18 +2997,18 @@
     const span = maxSpeed() - MIN_SPEED;
     const sf = clamp((player.speed - MIN_SPEED) / span, 0, 1);
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(0, H - 3, W, 3);
+    ctx.fillRect(0, H - 4, W, 4);
     ctx.fillStyle = abilityOn('nitro') ? (flip ? '#3a7bff' : '#ffffff') : reckless ? '#ff4d4d' : sf > 0.6 ? '#ffd34d' : '#57c062';
-    ctx.fillRect(1, H - 2, Math.round((W - 2) * sf), 1);
+    ctx.fillRect(1, H - 3, Math.round((W - 2) * sf), 2);
     const zx0 = 1 + Math.round((W - 2) * (SLOW_SPEED - MIN_SPEED) / span);
     const zx1 = 1 + Math.round((W - 2) * (policeSpeed() - MIN_SPEED) / span);
     // The multiplier zone between the two ticks lights up while you're in it.
     ctx.fillStyle = inZone() ? 'rgba(87,192,98,0.6)' : 'rgba(87,192,98,0.2)';
-    ctx.fillRect(zx0, H - 3, zx1 - zx0, 1);
+    ctx.fillRect(zx0, H - 4, zx1 - zx0, 1);
     ctx.fillStyle = '#6fa8ff';
-    ctx.fillRect(zx1, H - 3, 1, 3);
+    ctx.fillRect(zx1, H - 4, 1, 4);
     ctx.fillStyle = '#ff9d3d';
-    ctx.fillRect(1 + Math.round((W - 2) * (SLOW_SPEED - MIN_SPEED) / span), H - 3, 1, 3);
+    ctx.fillRect(1 + Math.round((W - 2) * (SLOW_SPEED - MIN_SPEED) / span), H - 4, 1, 4);
   }
 
   function dim(alpha) {
