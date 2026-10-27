@@ -960,6 +960,44 @@
     coin(i) { this.tone(988 + (i % 6) * 60, 0.06, 'square', 0.05); this.tone(1319 + (i % 6) * 60, 0.08, 'square', 0.05, null, 0.04); },
     coinTick() { this.tone(2093 + rand(0, 200), 0.03, 'square', 0.025); },
     meow() { this.tone(700, 0.18, 'triangle', 0.05, 1000); this.tone(1000, 0.15, 'triangle', 0.04, 600, 0.15); },
+    // The outboard: a yank of the cord, a sputter, then a roar that fades away.
+    engineStart() {
+      this.noise(0.22, 0.3, 300, 0, 'bandpass', 1400, 2);
+      this.noise(0.25, 0.3, 300, 0.32, 'bandpass', 1600, 2);
+      for (let i = 0; i < 5; i++) this.tone(65, 0.05, 'square', 0.06, 50, 0.58 + i * 0.06);
+      this.motor(0.8, 2.2, 60, 170, true);
+      this.noise(1.6, 0.12, 900, 0.9, 'lowpass', 2500);
+    },
+    engineArrive() {
+      this.motor(0, 1.9, 150, 48, false);
+      this.putter();
+    },
+    motor(delay, dur, f0, f1, rising) {
+      if (!this.ctx) return;
+      const c = this.ctx, t = c.currentTime + delay;
+      const o = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain();
+      const trem = c.createOscillator(), td = c.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.exponentialRampToValueAtTime(f1, t + dur * 0.8);
+      lp.type = 'lowpass';
+      lp.frequency.value = 650;
+      trem.frequency.value = 22;
+      td.gain.value = 0.02;
+      trem.connect(td);
+      td.connect(g.gain);
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.linearRampToValueAtTime(0.06, t + 0.15);
+      if (rising) g.gain.setValueAtTime(0.06, t + dur * 0.5);
+      g.gain.linearRampToValueAtTime(0.001, t + dur);
+      o.connect(lp);
+      lp.connect(g);
+      g.connect(this.master);
+      o.start(t);
+      trem.start(t);
+      o.stop(t + dur + 0.05);
+      trem.stop(t + dur + 0.05);
+    },
     cheer() { this.tone(392, 0.08, 'square', 0.05, 523); this.tone(523, 0.14, 'square', 0.05, 659, 0.09); },
     sad() { this.arp([392, 370, 349], 0.25, 'triangle', 0.07, 0.25); this.tone(330, 0.6, 'triangle', 0.07, 300, 0.75); },
     record() { this.arp([523, 659, 784, 1046, 1318], 0.07, 'pulse', 0.07, 0.15); this.tone(1046, 0.4, 'triangle', 0.06, null, 0.4); },
@@ -1455,9 +1493,9 @@
     ctx.fillRect(x + 1, y + 1, w, h);
     ctx.fillStyle = opts.bg || (sel ? '#2a5a8a' : '#123050');
     ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = sel ? '#3a6a9a' : '#1a4060';
+    ctx.fillStyle = opts.hi || (sel ? '#3a6a9a' : '#1a4060');
     ctx.fillRect(x + 1, y + 1, w - 2, 1);
-    ctx.fillStyle = sel ? '#ffe070' : '#5a8ab8';
+    ctx.fillStyle = sel ? '#ffe070' : (opts.border || '#5a8ab8');
     ctx.fillRect(x, y, w, 1);
     ctx.fillRect(x, y + h - 1, w, 1);
     ctx.fillRect(x, y, 1, h);
@@ -1499,6 +1537,16 @@
   let shopMsg = null;
   let moneyBump = 0;
   let lastCoinTick = 0;
+  // Sailing to the shop: the boat's offset from its mooring and its speed.
+  let boatDX = 0, boatV = 0;
+  let sail = null;
+  const boatX = () => BOAT_X + boatDX;
+  // Screen fade between scenes (0 clear, 1 black); `fadeThen` runs at full black.
+  let fadeA = 0, fadeDir = 0, fadeThen = null;
+  function fadeOut(then) {
+    fadeDir = 1;
+    fadeThen = then;
+  }
   let puffing = false;
 
   const hook = { x: 86, y: -8, vy: 0 };
@@ -1553,6 +1601,11 @@
       mood = run.catch.length ? 'cheer' : 'sad';
     } else if (st === 'report') {
       mood = report && report.total > 0 ? 'happy' : 'sad';
+    } else if (st === 'sail' || boatDX < -0.5) {
+      // Rod stowed upright, grinning into the wind
+      ang = -1.25 + Math.sin(time * 11) * 0.02;
+      bend = -1.5;
+      mood = 'happy';
     }
     return { ang, bend, mood };
   }
@@ -1561,7 +1614,7 @@
   function rodGeom() {
     const p = pose();
     const by = boatBob();
-    const px = BOAT_X + 26.5, py = -12.5 + by;
+    const px = boatX() + 26.5, py = -12.5 + by;
     const dx = Math.cos(p.ang), dy = Math.sin(p.ang);
     const nx = -dy, ny = dx;
     const butt = { x: px - dx * 5, y: py - dy * 5 };
@@ -1684,6 +1737,41 @@
     popups = [];
     coins = [];
     run.catch = [];
+  }
+
+  // Pressing SHOP: reel in, start the motor and speed off screen, then fade.
+  function startSail() {
+    state = 'sail';
+    sail = { t: 0, fading: false };
+    boatV = 0;
+    boatFx.cat = 0.5;
+    sfx.engineStart();
+  }
+
+  function updateSail(dt) {
+    sail.t += dt;
+    const g = rodGeom();
+    hook.x = g.tip.x;
+    hook.y = lerp(hook.y, g.tip.y + 3, Math.min(1, dt * 6));
+    if (sail.t < 0.7) return; // yanking the cord, engine catching
+    boatV += 150 * dt;
+    boatDX += boatV * dt;
+    if (Math.random() < dt * 45) {
+      bubbles.push({ x: boatX() - 4 + rand(-2, 2), y: -1, vx: -rand(20, 50) - boatV * 0.3, vy: -rand(20, 70), life: 0.5, drop: true });
+    }
+    if (Math.random() < dt * 20) {
+      bubbles.push({ x: boatX() + 42, y: -1, vx: rand(10, 40), vy: -rand(20, 50), life: 0.4, drop: true });
+    }
+    if (boatDX > W - BOAT_X + 10 && !sail.fading) {
+      sail.fading = true;
+      fadeOut(() => {
+        state = 'shop';
+        shopMsg = null;
+        sail = null;
+        boatDX = 0;
+        boatV = 0;
+      });
+    }
   }
 
   function startCast() {
@@ -1948,7 +2036,7 @@
     hook.x = lerp(hook.x, g.tip.x, Math.min(1, dt * 5));
     hook.y = lerp(hook.y, g.tip.y + 12, Math.min(1, dt * 5));
     report.timer += dt;
-    const crateX = BOAT_X + 7.5;
+    const crateX = boatX() + 7.5;
     let allDone = true;
     for (const fl of flyers) {
       if (fl.done) continue;
@@ -2070,11 +2158,14 @@
       puffing = puff;
       if (pressed.has('left') || pressed.has('up')) { menuSel = (menuSel + 2) % 3; sfx.blip(); }
       if (pressed.has('right') || pressed.has('down')) { menuSel = (menuSel + 1) % 3; sfx.blip(); }
-      let act = tap;
-      if (pressed.has('ok')) act = ['cast', 'shop', 'log'][menuSel];
+      const ready = !fadeDir && boatDX >= -8;
+      let act = ready ? tap : null;
+      if (pressed.has('ok') && ready) act = ['cast', 'shop', 'log'][menuSel];
       if (act === 'cast') startCast();
-      else if (act === 'shop') { state = 'shop'; shopMsg = null; sfx.select(); }
+      else if (act === 'shop') startSail();
       else if (act === 'log') { state = 'log'; logPage = 0; sfx.select(); }
+    } else if (state === 'sail') {
+      updateSail(dt);
     } else if (state === 'drop') {
       updateDrop(dt);
     } else if (state === 'reel') {
@@ -2089,10 +2180,16 @@
     } else if (state === 'shop') {
       if (pressed.has('up')) { shopSel = (shopSel + UPGRADES.length) % (UPGRADES.length + 1); sfx.blip(); }
       if (pressed.has('down')) { shopSel = (shopSel + 1) % (UPGRADES.length + 1); sfx.blip(); }
-      if (tap === 'back' || pressed.has('back') || (pressed.has('ok') && shopSel === UPGRADES.length)) {
-        state = 'title';
-        menuSel = 0;
+      if (fadeDir) {
+        // Ignore input while the scene changes
+      } else if (tap === 'back' || pressed.has('back') || (pressed.has('ok') && shopSel === UPGRADES.length)) {
         sfx.back();
+        fadeOut(() => {
+          state = 'title';
+          menuSel = 0;
+          boatDX = -75;
+          sfx.engineArrive();
+        });
       } else if (typeof tap === 'number') {
         shopSel = tap;
         buy(tap);
@@ -2105,6 +2202,28 @@
       if (pressed.has('left') || tap === 'prev') { logPage = (logPage + pages - 1) % pages; sfx.page(); }
       if (pressed.has('right') || tap === 'next') { logPage = (logPage + 1) % pages; sfx.page(); }
       if (pressed.has('back') || pressed.has('ok') || tap === 'back') { state = 'title'; menuSel = 2; sfx.back(); }
+    }
+
+    // Scene fades, and the boat coasting home to its mooring
+    if (fadeDir) {
+      fadeA += fadeDir * dt * 2.4;
+      if (fadeDir > 0 && fadeA >= 1) {
+        fadeA = 1;
+        fadeDir = -1;
+        const then = fadeThen;
+        fadeThen = null;
+        if (then) then();
+      } else if (fadeDir < 0 && fadeA <= 0) {
+        fadeA = 0;
+        fadeDir = 0;
+      }
+    }
+    if (boatDX < 0 && state !== 'sail' && state !== 'shop') {
+      boatDX = lerp(boatDX, 0, 1 - Math.exp(-dt * 1.6));
+      if (boatDX > -0.15) boatDX = 0;
+      if (boatDX < -6 && Math.random() < dt * 30) {
+        bubbles.push({ x: boatX() - 4, y: -1, vx: -rand(10, 30), vy: -rand(20, 50), life: 0.5, drop: true });
+      }
     }
 
     // Effects
@@ -2492,7 +2611,10 @@
   // The boat, the fisherman, the cat, and the rod. Coordinates inside are in
   // detail pixels from the hull's left end at the waterline.
   function drawBoat(cy, g) {
-    const ox = BOAT_X, oy = snap(-cy + boatBob());
+    const moving = (state === 'sail' && sail && sail.t > 0.7) || boatDX < -0.5;
+    const revving = state === 'sail' && sail && sail.t <= 0.7;
+    const ox = snap(boatX());
+    const oy = snap(-cy + boatBob() - (moving ? 0.5 : 0) + (revving && sail.t > 0.25 ? rand(-0.5, 0.5) : 0));
     if (oy > H + 30 || oy < -40) return;
     const R = (x, y, w, h, c) => {
       ctx.fillStyle = c;
@@ -2567,12 +2689,30 @@
     R(-9, -18, 10, 1, '#a0a0b0');
     R(1, -21, 5, 1, '#3a3a40');
     R(-5, -17, 3, 22, '#8a8a98');
-    const prop = Math.floor(time * 20) % 2;
+    const prop = Math.floor(time * (moving || revving ? 60 : 20)) % 2;
     R(-6, 4 - prop * 2, 1, 3 + prop * 2, '#c8c8d0');
     R(-2, 3 + prop, 1, 3 - prop, '#c8c8d0');
-    if (state === 'haul' || (state === 'title' && Math.sin(time * 0.8) > 0.9)) {
+    if (moving || revving) {
+      // Engine running: puffs of exhaust trail behind
+      for (let k = 0; k < 4; k++) {
+        const pt = (time * 2.5 + k / 4) % 1;
+        const size = 2 + Math.round(pt * 3);
+        R(Math.round(-8 - pt * (moving ? 30 : 6)), Math.round(-28 - pt * 10), size, size, `rgba(${revving && k === 0 ? '90,90,100' : '210,210,220'},${(0.8 - pt * 0.8).toFixed(2)})`);
+      }
+    } else if (state === 'haul' || (state === 'title' && Math.sin(time * 0.8) > 0.9)) {
       const pt = (time * 2) % 1;
       R(-8 - pt * 4, -28 - pt * 8, 2, 2, `rgba(200,200,210,${(1 - pt).toFixed(2)})`);
+    }
+    if (moving) {
+      // Foam wake behind the stern and a curl of spray at the bow
+      const speed = state === 'sail' ? boatV : Math.abs(boatDX) * 1.8;
+      const len = Math.min(120, speed * 0.8);
+      for (let x = 0; x < len; x += 1) {
+        if (hash(x + Math.floor(time * 30), 3) < 0.35 + x / len * 0.4) continue;
+        R(-10 - x, Math.round(Math.sin(x * 0.4 + time * 10) * (1 + x / 30)) - 1, 1, 2, '#ffffff');
+        if (x % 3 === 0) R(-10 - x, 2 + Math.round(x / 25), 1, 1, '#d6f6ff');
+      }
+      for (let i = 0; i < 5; i++) R(83 + i, -2 - Math.round(Math.abs(Math.sin(time * 14 + i)) * 3), 1, 1, '#ffffff');
     }
 
     drawCat(R);
@@ -2595,7 +2735,7 @@
 
     // Back arm (behind the body)
     const by0 = boatBob();
-    const toLocal = (pt) => ({ x: (pt.x - BOAT_X) * S, y: (pt.y - by0) * S });
+    const toLocal = (pt) => ({ x: (pt.x - boatX()) * S, y: (pt.y - by0) * S });
     const shoulderB = { x: fx + 3, y: -24 + by };
     let handB;
     if (mood === 'reel') {
@@ -2741,7 +2881,7 @@
     R(cx + 1, cy - 10, 3, 1, '#f8f0e0');
     if (boatFx.catMeow > 0) drawText('MEW!', ox2(cx + 14), -camY + boatBob() - 12, '#fff', 1, 'left', '#1c4a7a');
   }
-  const ox2 = (x) => BOAT_X + x / S;
+  const ox2 = (x) => boatX() + x / S;
 
   // Darkness: one cell per grid unit, with light pools around the hook and glowing fish.
   const darkCanvas = document.createElement('canvas');
@@ -2997,53 +3137,240 @@
     }
   }
 
+  // An old wooden tabletop for the shop, generated once at detail resolution:
+  // planks with wavy grain, knots, seams, nails, wear and a dark vignette.
+  let woodCanvas = null;
+  function buildWood() {
+    const cw = W * S, ch = H * S, PH = 46;
+    const c = document.createElement('canvas');
+    c.width = cw;
+    c.height = ch;
+    const g = c.getContext('2d');
+    const img = g.createImageData(cw, ch);
+    const d = img.data;
+    const tones = ['#8a5a32', '#7c5030', '#946238', '#83552e', '#8e5c34'].map(rgb);
+    const planks = [];
+    for (let i = 0; i * PH < ch; i++) {
+      const knots = [];
+      for (let k = 0; k < 2; k++) {
+        if (hash(i, 40 + k) < 0.7) knots.push({ x: hash(i, 50 + k) * cw, y: 10 + hash(i, 60 + k) * (PH - 20), r: 8 + hash(i, 70 + k) * 7 });
+      }
+      planks.push({ base: tones[i % tones.length], joint: 30 + hash(i, 9) * (cw - 60), knots, seed: hash(i, 3) * 10 });
+    }
+    for (let y = 0; y < ch; y++) {
+      const i = Math.floor(y / PH), yy = y - i * PH, pl = planks[i];
+      for (let x = 0; x < cw; x++) {
+        let n = Math.sin((yy + Math.sin(x * 0.03 + pl.seed) * 4 + Math.sin(x * 0.011 + pl.seed * 3) * 6) * 0.55);
+        let k = 1;
+        for (const kn of pl.knots) {
+          const dx = (x - kn.x) / 2.6, dy = yy - kn.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < kn.r) {
+            const w = 1 - dist / kn.r;
+            n = lerp(n, Math.sin(dist * 1.3), w);
+            if (dist < 2.5) k = 0.5;
+          }
+        }
+        if (n > 0.6) k *= 0.8;
+        else if (n > 0.2) k *= 0.92;
+        else if (n < -0.75) k *= 1.08;
+        k *= 0.96 + hash(x, y) * 0.08;
+        // Seams between planks, and the staggered end joint
+        if (yy === 0) k *= 0.35;
+        else if (yy === 1) k *= 1.15;
+        else if (yy === PH - 1) k *= 0.7;
+        const jd = Math.abs(x - pl.joint);
+        if (jd < 1) k *= 0.35;
+        else if (jd < 2) k *= x > pl.joint ? 1.12 : 0.75;
+        // Scratches and wear
+        if (hash(Math.floor(x / 3) + i * 7, Math.floor(yy / 2)) < 0.004) k *= 1.2;
+        // Vignette, stepped with a dither so it stays pixelly
+        const vx = (x / cw - 0.5) * 2, vy = (y / ch - 0.5) * 2;
+        const r = Math.sqrt(vx * vx * 0.8 + vy * vy * 0.6);
+        const v = Math.max(0, r - 0.45) * 0.75;
+        const steps = Math.floor(v * 8 + BAYER[(y & 3) * 4 + (x & 3)]) / 8;
+        k *= 1 - Math.min(0.6, steps);
+        const o = (y * cw + x) * 4;
+        d[o] = clamp(pl.base[0] * k, 0, 255);
+        d[o + 1] = clamp(pl.base[1] * k, 0, 255);
+        d[o + 2] = clamp(pl.base[2] * k, 0, 255);
+        d[o + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    // Nail heads beside each joint
+    for (let i = 0; i * PH < ch; i++) {
+      const pl = planks[i];
+      for (const nx of [pl.joint - 5, pl.joint + 4, 6, cw - 8]) {
+        for (const ny of [i * PH + 6, i * PH + PH - 8]) {
+          g.fillStyle = '#2a1a10';
+          g.fillRect(nx, ny + 1, 3, 3);
+          g.fillStyle = '#9a9aa4';
+          g.fillRect(nx, ny, 3, 3);
+          g.fillStyle = '#d8d8e0';
+          g.fillRect(nx, ny, 1, 1);
+        }
+      }
+    }
+    // An old ring stain from a coffee mug
+    for (let a = 0; a < 80; a++) {
+      const ang = a / 80 * Math.PI * 2;
+      if (hash(a, 5) < 0.25) continue;
+      g.fillStyle = 'rgba(40,20,8,0.25)';
+      g.fillRect(Math.round(222 + Math.cos(ang) * 13), Math.round(352 + Math.sin(ang) * 11), 2, 1);
+    }
+    return c;
+  }
+
+  // A paper card lying on the table, taped down at the top.
+  function drawCard(x, y, w, h, lifted) {
+    const lift = lifted ? 1 : 0;
+    y -= lift;
+    ctx.fillStyle = 'rgba(20,8,0,0.45)';
+    ctx.fillRect(x + 1 + lift, y + 1.5 + lift * 1.5, w, h);
+    ctx.fillStyle = '#efe2c0';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#e2d2a8';
+    ctx.fillRect(x, y + h - 1, w, 1);
+    ctx.fillRect(x + w - 0.5, y, 0.5, h);
+    ctx.fillStyle = '#fbf2da';
+    ctx.fillRect(x, y, w, 0.5);
+    // Paper fibres and age spots
+    for (let i = 0; i < 40; i++) {
+      const px = x + hash(i, x * 7 + y) * w, py = y + hash(i + 50, y * 3 + x) * h;
+      dot(px, py, i % 7 ? '#e6d6b0' : '#d8c49a');
+    }
+    // Dog-eared corner
+    ctx.fillStyle = '#d8c49a';
+    ctx.fillRect(x + w - 3, y + h - 1.5, 3, 1.5);
+    ctx.fillRect(x + w - 1.5, y + h - 3, 1.5, 1.5);
+    // Tape
+    ctx.fillStyle = 'rgba(250,246,226,0.75)';
+    ctx.fillRect(x + w / 2 - 6, y - 1.5, 12, 3.5);
+    ctx.fillStyle = 'rgba(200,190,160,0.5)';
+    ctx.fillRect(x + w / 2 - 6, y - 1.5, 0.5, 3.5);
+    ctx.fillRect(x + w / 2 + 5.5, y - 1.5, 0.5, 3.5);
+    return y;
+  }
+
+  // Little props scattered on the table.
+  function drawTableProps() {
+    // A stack of coins and one stray coin
+    for (let i = 0; i < 4; i++) {
+      const cy = 186 - i * 1.5;
+      ctx.fillStyle = '#8a6200';
+      ctx.fillRect(6, cy, 8, 2);
+      ctx.fillStyle = i === 3 ? '#f2c200' : '#c89200';
+      ctx.fillRect(6, cy - 0.5, 8, 1.5);
+    }
+    ctx.fillStyle = '#fff3a0';
+    ctx.fillRect(8, 180.5, 3, 0.5);
+    ctx.fillStyle = '#c89200';
+    ctx.fillRect(16, 187, 4, 3);
+    ctx.fillStyle = '#f2c200';
+    ctx.fillRect(16.5, 187, 3, 2.5);
+    // A red and white bobber that rocks gently
+    const rock = Math.round(Math.sin(time * 2) * 1) / S;
+    const bx = 114 + rock, by = 182;
+    ctx.fillStyle = 'rgba(20,8,0,0.4)';
+    ctx.fillRect(bx - 3, by + 4, 8, 2);
+    ctx.fillStyle = '#e04030';
+    ctx.fillRect(bx - 3, by - 3, 7, 3.5);
+    ctx.fillRect(bx - 2, by - 4, 5, 1);
+    ctx.fillStyle = '#f8f0e0';
+    ctx.fillRect(bx - 3, by + 0.5, 7, 3);
+    ctx.fillRect(bx - 2, by + 3.5, 5, 1);
+    ctx.fillStyle = '#ff7a60';
+    ctx.fillRect(bx - 2, by - 2.5, 1.5, 1.5);
+    ctx.fillStyle = '#3a2a1a';
+    ctx.fillRect(bx, by - 7, 1, 3);
+  }
+
   function drawShop() {
-    drawUnderwaterBg();
-    drawWavyText('TACKLE SHOP', W / 2, 4, '#ffe070', 1, '#000', 1, 5);
+    if (!woodCanvas) woodCanvas = buildWood();
+    ctx.drawImage(woodCanvas, 0, 0, W, H);
+    // Warm lamplight that flickers a touch
+    ctx.fillStyle = `rgba(255,190,110,${(0.04 + Math.sin(time * 7) * 0.012 + Math.sin(time * 13) * 0.008).toFixed(3)})`;
+    ctx.fillRect(0, 0, W, H);
+
+    // Hanging wooden sign
+    ctx.fillStyle = 'rgba(20,8,0,0.45)';
+    ctx.fillRect(15, 2, 100, 18);
+    ctx.fillStyle = '#4a2a12';
+    ctx.fillRect(14, 1, 100, 18);
+    ctx.fillStyle = '#5e3618';
+    ctx.fillRect(15, 2, 98, 16);
+    for (let i = 0; i < 6; i++) {
+      ctx.fillStyle = '#52301a';
+      ctx.fillRect(16 + hash(i, 1) * 60, 4 + i * 2.5, 20 + hash(i, 2) * 20, 0.5);
+    }
+    ctx.fillStyle = '#7a4a24';
+    ctx.fillRect(15, 2, 98, 0.5);
+    for (const nx of [16, 110]) {
+      ctx.fillStyle = '#c0c0c8';
+      ctx.fillRect(nx, 3, 1.5, 1.5);
+      ctx.fillRect(nx, 15, 1.5, 1.5);
+    }
+    drawWavyText('TACKLE SHOP', W / 2, 4, '#f2c200', 1, '#2a1406', 1, 5);
     const bump = moneyBump > 0 ? 1 : 0;
-    drawText('$' + fmt(save.money), W / 2, 12 - bump, '#a0f0a0', 1, 'center');
+    drawText('$' + fmt(save.money), W / 2, 12 - bump, '#a0f0a0', 1, 'center', '#1a0c04');
+
     UPGRADES.forEach((u, i) => {
-      const x = 4, y = 21 + i * 38, w = 120, h = 35;
+      const x = 4, w = 120, h = 35;
       const l = lv[u.id];
       const maxed = l >= u.prices.length;
       const sel = shopSel === i;
-      buttons.push({ x, y, w, h, act: i });
-      drawPanel(x, y, w, h);
+      buttons.push({ x, y: 22 + i * 38, w, h, act: i });
+      const y = drawCard(x, 22 + i * 38, w, h, sel);
       if (sel) {
-        ctx.fillStyle = Math.floor(time * 4) % 2 ? '#ffe070' : '#ffd040';
-        ctx.fillRect(x, y, w, 1);
-        ctx.fillRect(x, y + h - 1, w, 1);
-        ctx.fillRect(x, y, 1, h);
-        ctx.fillRect(x + w - 1, y, 1, h);
+        ctx.fillStyle = Math.floor(time * 4) % 2 ? '#c8901a' : '#e0a820';
+        ctx.fillRect(x, y, w, 0.5);
+        ctx.fillRect(x, y + h - 0.5, w, 0.5);
+        ctx.fillRect(x, y, 0.5, h);
+        ctx.fillRect(x + w - 0.5, y, 0.5, h);
       }
       const justBought = shopMsg && shopMsg.bought === i && shopMsg.t < 0.6;
       const iy = y + 4 + (sel ? Math.round(Math.sin(time * 5)) : 0) - (justBought ? 2 : 0);
       ctx.drawImage(iconSprites[u.icon], x + 4, iy);
-      drawText(u.name, x + 16, y + 5, sel ? '#ffe070' : '#fff');
-      // Level pips
+      drawText(u.name, x + 16, y + 5, sel ? '#a03a10' : '#3a2410', 1, 'left', null);
+      // Level pips, inked in like a stamp card
       const n = u.prices.length + 1;
       for (let k = 0; k < n; k++) {
         const pop = justBought && k === l ? -1 : 0;
-        ctx.fillStyle = k <= l ? '#a0f0a0' : '#2a3a50';
-        ctx.fillRect(x + w - 4 - (n - k) * 4, y + 5 + pop, 3, 4);
+        const px = x + w - 4 - (n - k) * 4, py = y + 5 + pop;
+        ctx.fillStyle = '#b8a47c';
+        ctx.fillRect(px, py, 3, 4);
+        ctx.fillStyle = k <= l ? '#2e7a3a' : '#efe2c0';
+        ctx.fillRect(px + 0.5, py + 0.5, 2, 3);
       }
-      drawText(u.now(l), x + 4, y + 15, '#8fe0ff');
+      drawText(u.now(l), x + 4, y + 15, '#1e4a7a', 1, 'left', null);
       if (maxed) {
-        drawText('FULLY UPGRADED', x + 4, y + 24, '#ffe070');
+        drawText('FULLY UPGRADED', x + 4, y + 24, '#a07010', 1, 'left', null);
       } else {
-        drawText(u.next(l), x + 4, y + 24, '#c0c8d8');
+        drawText(u.next(l), x + 4, y + 24, '#6a5a48', 1, 'left', null);
         const price = '$' + fmt(u.prices[l]);
-        drawText(price, x + w - 4, y + 15, save.money >= u.prices[l] ? '#a0f0a0' : '#ff7a7a', 1, 'right');
+        drawText(price, x + w - 4, y + 15, save.money >= u.prices[l] ? '#2a7a2a' : '#b03020', 1, 'right', null);
       }
       if (justBought) {
-        for (let k = 0; k < 6; k++) {
-          const a = k / 6 * Math.PI * 2 + shopMsg.t * 4;
+        // A "SOLD" stamp thumps onto the card
+        const k = Math.min(1, shopMsg.t / 0.15);
+        const sx = x + 86, sy = y + 22;
+        ctx.fillStyle = `rgba(190,40,30,${(0.9 * k).toFixed(2)})`;
+        ctx.fillRect(sx - 1, sy - 1, 26, 9);
+        ctx.fillStyle = '#efe2c0';
+        ctx.fillRect(sx, sy, 24, 7);
+        drawText('SOLD', sx + 12, sy + 1, `rgba(190,40,30,${k.toFixed(2)})`, 1, 'center', null);
+        for (let s2 = 0; s2 < 6; s2++) {
+          const a = s2 / 6 * Math.PI * 2 + shopMsg.t * 4;
           dot(x + 8 + Math.cos(a) * (6 + shopMsg.t * 12), y + 8 + Math.sin(a) * (6 + shopMsg.t * 12), '#ffe070');
         }
       }
     });
-    if (shopMsg && shopMsg.t < 1.6) drawText(shopMsg.text, W / 2, 174, shopMsg.color, 1, 'center');
-    button(44, 181, 40, 10, 'BACK', 'back', { selected: shopSel === UPGRADES.length });
+    drawTableProps();
+    if (shopMsg && shopMsg.t < 1.6) drawText(shopMsg.text, W / 2, 174, shopMsg.color, 1, 'center', '#1a0c04');
+    button(44, 181, 40, 10, 'BACK', 'back', {
+      selected: shopSel === UPGRADES.length, bg: '#5a3418', hi: '#7a4a24', border: '#c89050', color: '#f8e8c0',
+    });
   }
 
   function drawLog() {
@@ -3098,6 +3425,11 @@
     ctx.setTransform(S, 0, 0, S, 0, 0);
     ctx.imageSmoothingEnabled = false;
     buttons = [];
+    drawState();
+    drawFade();
+  }
+
+  function drawState() {
     if (state === 'shop') return drawShop();
     if (state === 'log') return drawLog();
     drawScene();
@@ -3111,6 +3443,17 @@
       const s = moneyBump > 0 ? 1 : 0;
       drawText('$' + fmt(report.total), W / 2, 4 - s, '#a0f0a0', 2, 'center');
     } else if (state === 'report') drawReport();
+  }
+
+  // A dithered fade to black.
+  function drawFade() {
+    if (fadeA <= 0) return;
+    ctx.fillStyle = '#05060a';
+    for (let cy = 0; cy < H / 2; cy++) {
+      for (let cx = 0; cx < W / 2; cx++) {
+        if (BAYER[(cy & 3) * 4 + (cx & 3)] < fadeA) ctx.fillRect(cx * 2, cy * 2, 2, 2);
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------

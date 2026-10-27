@@ -34,6 +34,8 @@ It gets darker as you go down, and rock walls start closing in from 160 m. Below
 
 ## Tackle shop
 
+Press SHOP and the fisherman starts the outboard and speeds off to town; the shop is a wooden table with each upgrade on a paper card. Head back and the boat motors home to its spot.
+
 | Upgrade | Levels | What it does |
 | --- | --- | --- |
 | Line | 11 | How deep the hook can go: 50 m up to the 1,700 m floor |
