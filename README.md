@@ -11,7 +11,7 @@ Open `index.html` in a browser. It's a single self-contained file.
 | Steer the hook | Left / Right (or A / D) | Drag (or move the mouse) |
 | Menus | Arrow keys, Enter or Space | Tap |
 | Pause | P or Esc | Tap the pause icon |
-| Mute | M | |
+| Music off / all sound off / sound on | M (cycles) | |
 
 ## How a cast works
 
@@ -42,3 +42,11 @@ It gets darker as you go down, and rock walls start closing in from 160 m. Below
 | Bait | 7 | Worm → Cricket → Shrimp → Minnow → Squid → Glow Lure → Gold Lure. Raises fish value (up to 3.2x), draws nearby fish toward the hook, lights up more of the dark, and makes golden fish more common |
 
 Cash, tackle, the fish log and your best depth are saved in the browser.
+
+## Sound
+
+Everything is synthesized in the browser, so there are no audio files.
+
+- **Music:** a chiptune song for each area, crossfading as you dive. There's a breezy harbour tune at the boat, a bouncy one in the shallows and kelp, a minor-key echo through the twilight zone, slow bells at midnight, a low drone in the abyss and trench, and a shuffle in the tackle shop. It ducks while paused.
+- **Ambience:** surf at the surface, a deep rumble that grows as you sink, seagulls, the boat motor, stray bubbles, and the occasional whale in the abyss.
+- **Effects:** the cast whoosh, the line ticking out and the reel clicking in, a sonar ping every 100 m, a swish when you narrowly dodge a fish, jingles for new species, golden fish and new zones, fish flopping into the crate, coins, the cat, the fisherman's cheer, a record fanfare, and a sad trombone for an empty hook.
