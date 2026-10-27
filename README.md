@@ -1,6 +1,6 @@
 # Little Lure Co.
 
-A pixelated drop-and-reel fishing game. Drop your hook, dodge fish on the way down, catch them on the way up, then sell the haul for better tackle so you can fish deeper.
+A pixel-art drop-and-reel fishing game, drawn at 256x384 for extra detail. Drop your hook, dodge fish on the way down, catch them on the way up, then sell the haul for better tackle so you can fish deeper.
 
 Open `index.html` in a browser. It's a single self-contained file.
 
