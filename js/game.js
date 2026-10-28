@@ -1016,6 +1016,7 @@ OMJ.Game = class {
     if (inRun) this.abilities.drawBehindPlayer(ctx, this);
 
     ctx.globalAlpha = inRun ? this.abilities.playerAlpha(this.time) : 1;
+    this.sword.drawBehind(ctx, this);     // a dragged sword trails out behind you
     this.player.draw(ctx, this.skin, this.time, this.scarf);
     this.sword.draw(ctx, this);
     ctx.globalAlpha = 1;

@@ -120,7 +120,8 @@ the next jump faster. It doesn't break obstacles or hurt the boss.
 
 ## Swords, scarves and the shop
 
-Every character carries a **sword** (`F` to swing) and wears a **scarf**. Both give you a power:
+Every character drags a slightly-too-big **sword** behind them, tip scraping the ground (`F` to
+swing; set `SWORD_POSE: 'raised'` in `js/config.js` to have them hold it up instead), and wears a **scarf**. Both give you a power:
 the sword's is on `Q`, the scarf's on `E`. Coins you collect also go into a **bank** that you
 spend in the **SHOP** on the start screen, on better swords and more scarves.
 

@@ -58,6 +58,12 @@ OMJ.CONFIG = {
   DEATH_TO_GAMEOVER: 0.8,   // seconds of death animation before the menu
   RESTART_LOCK_TIME: 0.35,  // SPACE can't restart instantly (prevents accidents)
 
+  // ---- Look --------------------------------------------------
+  // How the runner carries their (slightly too big) sword:
+  //   'drag'   = trailing behind, tip scraping the ground
+  //   'raised' = held up in front
+  SWORD_POSE: 'drag',
+
   // ---- Misc --------------------------------------------------
   DEBUG_HITBOXES: false,    // true = draw collision boxes (press H in game)
   STORAGE_KEY: 'oneMoreJump.save.v1',
