@@ -1,0 +1,279 @@
+/* =============================================================
+   style.css — Menus and layout. Every class starts with "omj-"
+   so these styles never clash with a website that embeds the game.
+
+   Sizes use var(--px): the size of ONE game pixel on screen.
+   That way the menus grow and shrink together with the game.
+   ============================================================= */
+
+/* ---- Stand-alone page (index.html) ---- */
+html, body.omj-page {
+  height: 100%;
+  margin: 0;
+  background: #0d0b1a;
+}
+
+/* ---- Game container ---- */
+.omj {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;          /* when embedded: height follows width */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #0d0b1a;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  font-family: "Courier New", ui-monospace, Menlo, Consolas, monospace;
+  font-weight: bold;
+  color: #fffdf4;
+}
+
+.omj--fullscreen {
+  height: 100vh;
+  aspect-ratio: auto;
+}
+
+.omj-stage {
+  --px: 2px;                     /* updated by ui.js on resize */
+  position: relative;
+  flex: none;
+  box-shadow: 0 0 0 calc(var(--px) * 2) #1d1a2f, 0 calc(var(--px) * 4) calc(var(--px) * 16) rgba(0, 0, 0, 0.6);
+}
+
+.omj-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;    /* crisp, blocky pixels */
+  image-rendering: crisp-edges;
+  cursor: pointer;
+}
+
+/* ---- Pixel titles drawn with the pixel font ---- */
+.omj-title {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  margin-bottom: calc(var(--px) * 6);
+}
+.omj-title.is-best {
+  animation: omj-pulse 0.6s steps(2) infinite;
+}
+
+/* ---- Screens (overlays) ---- */
+.omj-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: rgba(13, 11, 26, 0.55);
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(1.03);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s linear 0.15s;
+}
+.omj-screen.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.omj-screen--start {
+  background: linear-gradient(rgba(13, 11, 26, 0.15), rgba(13, 11, 26, 0.6));
+}
+
+.omj-text {
+  margin: 0 0 calc(var(--px) * 4);
+  font-size: calc(var(--px) * 8);
+  text-shadow: 0 calc(var(--px) * 1) 0 #1d1a2f;
+}
+.omj-funny { color: #ffd23f; max-width: 90%; }
+.omj-cause {
+  margin: 0 0 calc(var(--px) * 6);
+  font-size: calc(var(--px) * 6);
+  color: #c8ccd8;
+  text-shadow: 0 calc(var(--px) * 1) 0 #1d1a2f;
+}
+
+.omj kbd {
+  display: inline-block;
+  padding: 0 calc(var(--px) * 2);
+  font-family: inherit;
+  color: #1d1a2f;
+  background: #fffdf4;
+  box-shadow: 0 calc(var(--px) * 1) 0 #7d8299;
+}
+
+.omj-best {
+  margin: 0 0 calc(var(--px) * 6);
+  font-size: calc(var(--px) * 8);
+  color: #ffe98a;
+  text-shadow: 0 calc(var(--px) * 1) 0 #1d1a2f;
+}
+
+.omj-hint {
+  margin: calc(var(--px) * 6) 0 0;
+  font-size: calc(var(--px) * 5);
+  color: #c8ccd8;
+  text-shadow: 0 calc(var(--px) * 1) 0 #1d1a2f;
+}
+
+.omj-unlock {
+  min-height: calc(var(--px) * 6);
+  margin: 0 0 calc(var(--px) * 6);
+  font-size: calc(var(--px) * 6);
+  color: #7bd6ff;
+  text-shadow: 0 calc(var(--px) * 1) 0 #1d1a2f;
+}
+
+/* ---- Score boxes on the game-over screen ---- */
+.omj-scores {
+  display: flex;
+  gap: calc(var(--px) * 6);
+  margin-bottom: calc(var(--px) * 6);
+}
+.omj-scores div {
+  display: flex;
+  flex-direction: column;
+  min-width: calc(var(--px) * 48);
+  padding: calc(var(--px) * 3) calc(var(--px) * 4);
+  background: rgba(29, 26, 47, 0.85);
+  box-shadow: 0 0 0 calc(var(--px) * 1) #4a4570;
+}
+.omj-scores span {
+  font-size: calc(var(--px) * 5);
+  color: #c8ccd8;
+}
+.omj-scores strong {
+  font-size: calc(var(--px) * 12);
+  color: #fffdf4;
+}
+
+.omj-row {
+  display: flex;
+  gap: calc(var(--px) * 6);
+  align-items: center;
+}
+
+/* ---- Buttons ---- */
+.omj button {
+  font-family: inherit;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+.omj button:focus-visible {
+  box-shadow: 0 0 0 calc(var(--px) * 1) #fffdf4;
+}
+
+.omj-btn {
+  margin-top: calc(var(--px) * 2);
+  padding: calc(var(--px) * 3) calc(var(--px) * 12);
+  font-size: calc(var(--px) * 9);
+  letter-spacing: calc(var(--px) * 1);
+  color: #1d1a2f;
+  background: #ffd23f;
+  box-shadow:
+    0 calc(var(--px) * 3) 0 #c99a10,
+    0 0 0 calc(var(--px) * 1) #1d1a2f,
+    0 calc(var(--px) * 3) 0 calc(var(--px) * 1) #1d1a2f;
+  transition: transform 0.05s;
+}
+.omj-btn:hover { background: #ffe066; }
+.omj-btn:active {
+  transform: translateY(calc(var(--px) * 2));
+  box-shadow:
+    0 calc(var(--px) * 1) 0 #c99a10,
+    0 0 0 calc(var(--px) * 1) #1d1a2f,
+    0 calc(var(--px) * 1) 0 calc(var(--px) * 1) #1d1a2f;
+}
+.omj-btn--small {
+  padding: calc(var(--px) * 2) calc(var(--px) * 8);
+  font-size: calc(var(--px) * 6);
+  background: #c8ccd8;
+  box-shadow:
+    0 calc(var(--px) * 3) 0 #7d8299,
+    0 0 0 calc(var(--px) * 1) #1d1a2f,
+    0 calc(var(--px) * 3) 0 calc(var(--px) * 1) #1d1a2f;
+}
+.omj-btn--small:hover { background: #e2e5ee; }
+.omj-screen--pause .omj-btn--small { margin-top: calc(var(--px) * 6); }
+
+/* ---- Skin picker ---- */
+.omj-skins {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--px) * 4);
+  margin-bottom: calc(var(--px) * 6);
+}
+.omj-arrow {
+  width: calc(var(--px) * 12);
+  height: calc(var(--px) * 12);
+  font-size: calc(var(--px) * 8);
+  line-height: 1;
+  color: #fffdf4;
+  background: #4a4570;
+  box-shadow: 0 calc(var(--px) * 2) 0 #2a2540;
+}
+.omj-arrow:hover { background: #5d578a; }
+.omj-skin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: calc(var(--px) * 56);
+  padding: calc(var(--px) * 3);
+  background: rgba(29, 26, 47, 0.8);
+  box-shadow: 0 0 0 calc(var(--px) * 1) #4a4570;
+}
+.omj-skin-preview {
+  width: calc(var(--px) * 36);
+  height: calc(var(--px) * 26);
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+.omj-skin-name { font-size: calc(var(--px) * 6); }
+.omj-skin-lock { font-size: calc(var(--px) * 5); color: #e8384f; min-height: calc(var(--px) * 5); }
+
+/* ---- Corner icons (pause / mute) ---- */
+.omj-corner {
+  position: absolute;
+  top: calc(var(--px) * 6);
+  left: calc(var(--px) * 6);
+  display: flex;
+  gap: calc(var(--px) * 3);
+  z-index: 2;
+}
+.omj-icon {
+  position: relative;
+  width: calc(var(--px) * 14);
+  height: calc(var(--px) * 14);
+  padding: 0;
+  background: rgba(29, 26, 47, 0.75);
+  box-shadow: 0 0 0 calc(var(--px) * 1) #4a4570;
+}
+.omj-icon:hover { background: rgba(74, 69, 112, 0.9); }
+.omj-icon.is-hidden { visibility: hidden; }
+
+.omj-icon svg {
+  display: block;
+  width: calc(var(--px) * 10);
+  height: calc(var(--px) * 10);
+  margin: auto;
+  fill: #fffdf4;
+  shape-rendering: crispEdges;
+}
+.omj-icon .omj-icon-cross { display: none; fill: #e8384f; }
+.omj-icon.is-muted .omj-icon-waves { display: none; }
+.omj-icon.is-muted .omj-icon-cross { display: block; }
+
+@keyframes omj-pulse {
+  50% { filter: brightness(1.4); }
+}
