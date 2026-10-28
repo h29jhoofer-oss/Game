@@ -88,7 +88,7 @@ OMJ.Boss = class {
     this.stomp = 0;
     this.cooldown = 1;
     g.announce('WARNING: BOSS!', OMJ.PALETTE.danger);
-    if (this.level === 0) g.announce('SWING (F) TO HIT ATTACKS BACK!', OMJ.PALETTE.white);
+    if (this.level === 0) g.announce('SWING (SPACE) TO HIT ATTACKS BACK!', OMJ.PALETTE.white);
     g.sound.play('bossAlarm');
     g.music.play('boss');
   }

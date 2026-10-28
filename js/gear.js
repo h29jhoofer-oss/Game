@@ -1,7 +1,12 @@
 // =============================================================
 // gear.js — Swords and scarves (bought in the shop with coins).
 //
-// SWORD  (F to swing, Q for its power)
+// SWORD  (SPACE or F to swing, Q for its power)
+//   On the ground: a big OVERHEAD swing that hits above and in front.
+//   In the air: a PLUNGE: you drop like a ground smash with the sword
+//   pointing down, then slam the ground. It cuts one level tougher than
+//   a normal swing (so even a Wooden Sword plunge breaks spikes).
+//   Any swing or plunge defeats monsters (they have `enemy: true`).
 //   A swing cuts things in front of you if the sword is strong enough
 //   (each obstacle type has a `toughness`; the sword cuts if
 //   `cut` >= toughness). Barriers, saws, crushers and pits have no
@@ -34,7 +39,8 @@ OMJ.SWORDS = [
     sparkSize: 2, sparkColors: ['#ffd23f', '#ff8a3d', '#e8384f', '#ff8a3d'] },   // fiery sparks
   { id: 'thunder', name: 'Thunder Sword', price: 800, damage: 3, range: 18, cut: 2,
     edge: '#ffffff', blade: '#7bd6ff', dark: '#3b8bff', guard: '#3a3a4e', gem: '#ffd23f',
-    grip: '#22222e', pommel: '#3a3a4e', hilt: '#3a3a4e', power: 'thunderstorm' },
+    grip: '#22222e', pommel: '#3a3a4e', hilt: '#3a3a4e', power: 'thunderstorm',
+    sparkColors: ['#7bd6ff', '#3b8bff', '#ffffff', '#7bd6ff'] },   // crackling blue sparks
   { id: 'hero', name: 'Hero Sword', price: 1500, damage: 4, range: 20, cut: 2,
     edge: '#ffffff', blade: '#c8ccd8', dark: '#7d8299', guard: '#ffd23f', gem: '#3b8bff',
     grip: '#3b8bff', pommel: '#ffd23f', hilt: '#3b8bff', power: 'heroShield' },
@@ -150,16 +156,35 @@ OMJ.SwordSystem = class {
     this.swingTimer = 0;
     this.cooldown = 0;
     this.spinTimer = 0;
+    this.plunging = false;     // falling sword-first after a mid-air attack
+    this.slamTimer = 0;        // sword stuck in the ground after a plunge
     for (let i = 0; i < this.shots.length; i++) this.shots[i].active = false;
     for (let i = 0; i < this.strikes.length; i++) this.strikes[i].life = 0;
   }
 
   damage(g) { return this.sword.damage + g.mods.swordDamage; }
 
+  // SPACE / F: overhead swing on the ground, plunge attack in the air.
+  attack(g) {
+    if (g.player.grounded) this.swing(g);
+    else this.plunge(g);
+  }
+
   swing(g) {
     if (this.cooldown > 0 || g.player.dead) return;
     this.swingTimer = this.SWING_TIME;
     this.cooldown = this.SWING_COOLDOWN;
+    g.sound.play('swing');
+  }
+
+  plunge(g) {
+    const p = g.player;
+    if (this.plunging || p.dead) return;
+    this.plunging = true;
+    this.swingTimer = 0;
+    p.smashing = true;                                   // fall like a ground smash
+    p.vy = Math.max(p.vy, OMJ.CONFIG.SMASH_SPEED * 1.1);
+    p.squash = -1;
     g.sound.play('swing');
   }
 
@@ -209,29 +234,53 @@ OMJ.SwordSystem = class {
     if (this.cooldown > 0) this.cooldown -= dt;
     if (this.swingTimer > 0) this.swingTimer -= dt;
     if (this.spinTimer > 0) this.spinTimer -= dt;
+    if (this.slamTimer > 0) this.slamTimer -= dt;
     for (let i = 0; i < this.strikes.length; i++) if (this.strikes[i].life > 0) this.strikes[i].life -= dt;
 
     const p = g.player;
+    if (this.plunging) {
+      if (p.dead) {
+        this.plunging = false;
+      } else if (p.grounded) {
+        // SLAM: the sword hits the ground and everything close by.
+        this.plunging = false;
+        this.slamTimer = 0.18;
+        this.hitZone(g, p.x - 14, p.x + p.w + 18, p.bottom - 18, p.bottom + 1, 1);
+        g.shake = Math.max(g.shake, 3);
+        g.sound.play('slam');
+        g.particles.burst(p.x + 5, p.bottom - 1, 12, 50, 130, Math.PI * 1.05, Math.PI * 1.95, 0.4,
+          this.sword.sparkColors || OMJ.SPARK_COLORS, 400);
+      } else if (!p.smashing) {
+        this.plunging = false;                           // cancelled (e.g. a Double Jump)
+      } else {
+        this.hitZone(g, p.x - 2, p.x + p.w + 4, p.y + 4, p.bottom + 12, 1);   // the blade below you
+      }
+    }
     if (this.spinTimer > 0) {
       this.hitZone(g, p.x - 20, p.x + p.w + 22, p.y - 14, p.bottom + 4);
     } else if (this.swingTimer > 0) {
-      this.hitZone(g, p.x + p.w - 2, p.x + p.w + this.sword.range, p.y - 8, p.bottom + 2);
+      // Overhead: it hits above your head as well as in front of you.
+      this.hitZone(g, p.x - 4, p.x + p.w + this.sword.range, p.y - 16, p.bottom + 2);
     }
     this.updateShots(dt, g);
     this.dragSparks(g);
   }
 
-  // Cut or knock back everything inside this box.
-  hitZone(g, x1, x2, y1, y2) {
+  // Cut, knock back or defeat everything inside this box.
+  // `cutBonus` lets plunges cut one level tougher.
+  hitZone(g, x1, x2, y1, y2, cutBonus) {
     const pool = g.obstacles.pool;
+    const cut = this.sword.cut + (cutBonus || 0);
     for (let i = 0; i < pool.length; i++) {
       const o = pool[i];
       if (!o.active || o.type.isGap || o.type.harmless) continue;
       const left = o.x + o.bx;
       if (left > x2 || left + o.bw < x1 || o.y > y2 || o.y + o.h < y1) continue;
-      if (o.type.reflectable) {
+      if (o.type.enemy) {
+        g.defeatEnemy(o);
+      } else if (o.type.reflectable) {
         g.reflect(o, this.damage(g));
-      } else if (o.type.toughness && o.type.toughness <= this.sword.cut) {
+      } else if (o.type.toughness && o.type.toughness <= cut) {
         g.cut(o);
       }
     }
@@ -277,6 +326,7 @@ OMJ.SwordSystem = class {
   // Angles for the sword: 0 = pointing straight up, 90 = pointing forward.
   swordAngle(p, time) {
     if (this.spinTimer > 0) return (time * 1440) % 360;
+    if (this.plunging || this.slamTimer > 0) return 180;        // pointing straight down
     const drag = OMJ.CONFIG.SWORD_POSE === 'drag';
     if (this.swingTimer > 0) {
       // A big heave over the top, brought down in front. From the drag
@@ -296,13 +346,21 @@ OMJ.SwordSystem = class {
 
   // Resting in the drag pose (not mid-swing)?
   get dragging() {
-    return OMJ.CONFIG.SWORD_POSE === 'drag' && this.swingTimer <= 0 && this.spinTimer <= 0;
+    return OMJ.CONFIG.SWORD_POSE === 'drag' && this.swingTimer <= 0 && this.spinTimer <= 0 &&
+      !this.plunging && this.slamTimer <= 0;
   }
 
   // Where your little fist holds the sword: just behind you when
-  // dragging it, out in front otherwise.
-  gripX(p) { return Math.round(this.dragging ? p.x - 2 : p.x + 10); }
-  gripY(p) { return Math.round(this.dragging ? p.y + 7 : p.y + 9); }
+  // dragging it, under you when plunging, out in front otherwise.
+  gripX(p) {
+    if (this.plunging || this.slamTimer > 0) return Math.round(p.x + 6);
+    return Math.round(this.dragging ? p.x - 2 : p.x + 10);
+  }
+  gripY(p) {
+    if (this.slamTimer > 0) return Math.round(p.bottom - 8);      // blade buried in the ground
+    if (this.plunging) return Math.round(p.bottom - 3);
+    return Math.round(this.dragging ? p.y + 7 : p.y + 9);
+  }
 
   // Sparks where the tip scrapes along the ground. The faster you run,
   // the bigger, wilder and more frequent they get. A sword can set a

@@ -21,10 +21,11 @@ python3 -m http.server 8000
 
 | Key | Action |
 | --- | --- |
-| `SPACE`, `↑`, `W`, mouse click | Jump |
+| `↑`, `W`, mouse click | Jump |
+| `SPACE` | Overhead sword swing; in the air, a plunge attack (also starts and restarts the game) |
 | `↓` or `S` (in the air) | Ground smash: drop straight down |
 | `↓` or `S` (on a platform) | Drop down through the platform |
-| `F` or `J` | Swing your sword |
+| `F` or `J` | Same as `SPACE`: swing (or plunge in the air) |
 | `Q` | Your sword's power |
 | `E` | Your scarf's power |
 | `B`, `SHIFT`, right-click | Use your skin's ability |
@@ -113,6 +114,18 @@ Floating wooden planks show up over spikes, saws and pits. Jump up through one f
 you land on top; walk off the end or press `↓` to drop back down. They never hurt you, and
 whatever is under them can always be jumped the normal way, so they're an optional high road.
 
+## Monsters
+
+Any swing or plunge defeats a monster. Touching one any other way still ends your run.
+
+| Monster | What it does |
+| --- | --- |
+| Shellback | A grumpy little turtle that waddles toward you. Jump over it, **stomp on its head** (you bounce up), or hit it with your sword. Then it hides in its shell, which shoots forward and smashes what's ahead. |
+
+Like the crossbow, a monster only starts walking once nothing else is between you, so it
+never arrives at an unfair moment. Add your own in `js/obstacles.js` (see `shellback`): give
+it `enemy: true` and, if you can stomp it, `stompable: true`.
+
 ## Ground smash
 
 Press `↓` (or `S`) in the air to drop straight down. It lands you sooner, so you can set up
@@ -120,12 +133,19 @@ the next jump faster. It doesn't break obstacles or hurt the boss.
 
 ## Swords, scarves and the shop
 
-Every character drags a slightly-too-big **sword** behind them, tip scraping the ground (`F` to
-swing; set `SWORD_POSE: 'raised'` in `js/config.js` to have them hold it up instead), and wears a **scarf**. Both give you a power:
+Every character drags a slightly-too-big **sword** behind them, tip scraping the ground and
+throwing sparks (blue ones for the Thunder Sword, big fiery ones for the Flame Blade). Set
+`SWORD_POSE: 'raised'` in `js/config.js` to have them hold it up instead. They also wear a
+**scarf**. Both give you a power:
 the sword's is on `Q`, the scarf's on `E`. Coins you collect also go into a **bank** that you
 spend in the **SHOP** on the start screen, on better swords and more scarves.
 
-A swing cuts what's right in front of you, if the sword is strong enough. Crates and crossbow
+**SPACE on the ground** heaves the sword over your head and down in front: it hits things above
+you and ahead. **SPACE in the air** is a **plunge**: you drop fast with the sword pointing down,
+cutting what's below you, then slam the ground and hit everything close by. A plunge cuts one
+level tougher than a swing, so even a Wooden Sword plunge breaks spikes.
+
+A swing cuts what it hits, if the sword is strong enough. Crates and crossbow
 arrows can be cut by any sword; spikes and spiky balls need a stronger one. **Barriers, saws,
 crushers and pits can never be cut**, so you still jump those. Swing at a boss bomb or fireball
 and you knock it back into the boss.
@@ -301,7 +321,7 @@ belongs to.
 
 **Stage 1: canvas, player, ground, jumping, gravity**
 - The game fills the window without stretching. Resize the window: it stays 16:9.
-- `SPACE`, `↑`, `W` and clicking all jump. Holding the key gives exactly one jump.
+- `↑`, `W` and clicking jump. Holding the key gives exactly one jump. SPACE swings instead.
 - You can't jump in mid-air. You can jump again right after landing.
 - Pressing jump just before you land still jumps (the "jump buffer").
 
@@ -351,7 +371,7 @@ belongs to.
 - At 1500 points Big Bonk arrives with its own music. Swinging (`F`) as a bomb or fireball
   reaches you knocks it back into Big Bonk and shrinks its health bar; ground smash doesn't.
   Beating it gives +250 and coins, and normal obstacles return afterwards.
-- `F` swings the (slightly too big) sword: crates and arrows break; a Wooden Sword can't cut spikes, an Iron one
+- `SPACE` swings the (slightly too big) sword overhead; in the air it plunges and slams. Swings: crates and arrows break; a Wooden Sword can't cut spikes, an Iron one
   can; nothing cuts barriers. `Q` and `E` use the sword and scarf powers (their meters sit
   next to the skin ability's).
 - The SHOP shows your banked coins. Buying takes coins and equips the item; clicking an owned

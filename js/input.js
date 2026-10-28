@@ -49,11 +49,14 @@ OMJ.Input = class {
     g.sound.unlock(); // browsers allow sound only after a key press/click
 
     switch (code) {
-      case 'Space':
       case 'ArrowUp':
       case 'KeyW':
         e.preventDefault(); // stop the page from scrolling
-        if (firstPress) g.onJumpKey(code);
+        if (firstPress) g.onJumpKey();
+        break;
+      case 'Space':
+        e.preventDefault();
+        if (firstPress) g.onSpaceKey();  // swing (or plunge in the air); start/restart on menus
         break;
       case 'Enter':
         e.preventDefault();

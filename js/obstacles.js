@@ -102,6 +102,74 @@
       Math.random() < 0.5 ? P.gold : P.white, 300);
   }
 
+  // ---- Shellback colors and its shell -------------------------
+  const SHELL_GREEN = '#4caf50';
+  const SHELL_DARK = '#2e7d32';
+  const SHELL_LIGHT = '#8bd88f';
+  const SHELL_RIM = '#f3e3b5';
+  const SHELL_SKIN = '#e8b45c';
+  const SHELL_BEAK = '#c98a2e';
+
+  // The domed shell (11 x 11) with a hex pattern; `spin` shifts the pattern.
+  function drawShell(ctx, x, y, spin) {
+    ctx.fillStyle = P.ink;
+    ctx.fillRect(x + 2, y, 7, 1);
+    ctx.fillRect(x + 1, y + 1, 9, 1);
+    ctx.fillRect(x, y + 2, 11, 8);
+    ctx.fillStyle = SHELL_GREEN;
+    ctx.fillRect(x + 2, y + 1, 7, 1);
+    ctx.fillRect(x + 1, y + 2, 9, 6);
+    ctx.fillStyle = SHELL_LIGHT;
+    ctx.fillRect(x + 2, y + 2, 3, 1);
+    ctx.fillStyle = SHELL_DARK;                         // hex plates
+    const s = spin % 3;
+    for (let i = 0; i < 3; i++) {
+      const px = x + 1 + ((i * 3 + s) % 9);
+      ctx.fillRect(px, y + 4, 1, 3);
+      ctx.fillRect(px, y + 4, 2, 1);
+    }
+    ctx.fillStyle = SHELL_RIM;                          // cream rim along the bottom
+    ctx.fillRect(x + 1, y + 8, 9, 1);
+    ctx.fillStyle = P.ink;
+    ctx.fillRect(x + 1, y + 9, 9, 1);
+  }
+
+  // A defeated Shellback becomes this: a spinning shell sliding forward.
+  // Harmless to you; it smashes what it hits (and bonks the boss).
+  OMJ.SHELL = {
+    harmless: true,
+    debris: [SHELL_GREEN, SHELL_DARK, SHELL_RIM],
+    deathLines: [''],
+    update(o, dt, g, speed) {
+      o.x += (speed + 300) * dt;                       // zooms off to the right
+      o.timer += dt;
+      o.y = Math.min(C.GROUND_Y - 10, o.y + 120 * dt);
+      if (Math.random() < 0.4) g.particles.spawn(o.x, C.GROUND_Y - 1, -40, -20, 0.2, 1, P.dust, 200);
+      if (g.boss.fighting && o.x >= g.boss.leftEdge) { g.boss.hit(2, g); o.active = false; return; }
+      if (o.x > C.VIEW_W + 10) { o.active = false; return; }
+      const pool = g.obstacles.pool;
+      for (let i = 0; i < pool.length; i++) {
+        const t = pool[i];
+        if (t === o || !t.active || t.type.isGap || t.type.harmless) continue;
+        const left = t.x + t.bx;
+        if (o.x + 11 < left || o.x > left + t.bw || o.y + 10 < t.y || o.y > t.y + t.h) continue;
+        g.smash(t);                                    // knocks out whatever it hits...
+        if (!t.type.enemy && !(t.type.toughness <= 2)) { // ...but breaks on very tough things
+          g.smash(o);
+          return;
+        }
+      }
+    },
+    draw(ctx, o) {
+      const x = o.drawX;
+      const y = Math.round(o.y);
+      drawShell(ctx, x, y, Math.floor(o.timer * 30));
+      ctx.fillStyle = P.white;                          // speed lines
+      ctx.fillRect(x - 6, y + 3, 4, 1);
+      ctx.fillRect(x - 9, y + 6, 6, 1);
+    },
+  };
+
   // ---- Fire (for the crossbow's flaming arrows) --------------
   const FIRE_ORANGE = '#ff8a3d';
 
@@ -132,6 +200,8 @@
   // toughness      -> a sword with `cut` >= this can cut it (gear.js).
   //                   No toughness = a sword can never cut it.
   // reflectable    -> a sword swing knocks it back at the boss
+  // enemy          -> a monster: any sword hit (or a stomp, if `stompable`)
+  //                   defeats it. Touching it any other way still hurts.
   // debris         -> colors of the pieces when it gets smashed
   // init(o)        -> optional: set up a new obstacle's own values
   // update(o, dt, game, speed) -> optional: make it move or act
@@ -477,6 +547,58 @@
         ctx.fillStyle = P.metalLight;
         ctx.fillRect(x + 1, y + 2, 2, 1);
         drawFlame(ctx, x + 1, y + 2, g.time);
+      },
+    },
+
+    // ---- MONSTERS ----
+
+    // SHELLBACK: a grumpy little turtle that waddles toward you.
+    // Jump over it, stomp on its head, or hit it with your sword: then it
+    // hides in its shell, which shoots forward and smashes what's ahead.
+    // Like the crossbow, it only starts walking once nothing else is
+    // between you, so it never arrives at an unfair moment.
+    shellback: {
+      size: () => ({ w: 14, h: 13 }),
+      hitbox: { left: 2, right: 2, top: 3 },
+      enemy: true,
+      stompable: true,
+      debris: [SHELL_GREEN, SHELL_DARK, SHELL_SKIN],
+      deathLines: ['Turtled.', 'A Shellback got the jump on you.', 'Shell shocked!', 'Slow and steady... got you.'],
+      init(o) { o.phase = 0; o.timer = Math.random(); },
+      update(o, dt, g) {
+        if (g.frozen) return;                          // Time Freeze
+        o.timer += dt;
+        o.phase = 0;
+        if (o.x < C.VIEW_W - 4 && !g.hasDangerBefore(o.x)) {
+          o.x -= 40 * dt;                              // waddle toward you
+          o.phase = 1;
+        }
+      },
+      draw(ctx, o) {
+        const x = o.drawX;
+        const y = Math.round(o.y);
+        const step = o.phase ? Math.floor(o.timer * 10) % 2 : 0;
+        // Feet
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 4 - step, y + 10, 3, 3);
+        ctx.fillRect(x + 9 + step, y + 10, 3, 3);
+        ctx.fillStyle = SHELL_SKIN;
+        ctx.fillRect(x + 5 - step, y + 11, 1, 1);
+        ctx.fillRect(x + 10 + step, y + 11, 1, 1);
+        // Head (facing you, on the left), bobbing as it walks
+        const hy = y + 3 + step;
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x, hy, 6, 6);
+        ctx.fillStyle = SHELL_SKIN;
+        ctx.fillRect(x + 1, hy + 1, 4, 4);
+        ctx.fillStyle = P.white;
+        ctx.fillRect(x + 1, hy + 1, 2, 2);
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 1, hy + 2, 1, 1);             // pupil
+        ctx.fillRect(x + 1, hy, 3, 1);                  // angry brow
+        ctx.fillStyle = SHELL_BEAK;
+        ctx.fillRect(x, hy + 4, 2, 1);                  // beak
+        drawShell(ctx, x + 3, y, 0);
       },
     },
 

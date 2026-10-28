@@ -229,7 +229,22 @@ OMJ.Sound = class {
         this.tone(1400, 2800, 0.1, 'triangle', 0.03, 0.04);
         break;
 
+      // ---- Monsters ----
+      case 'stomp':                      // boing!
+        this.tone(300, 900, 0.12, 'square', 0.07);
+        this.noise(0.05, 0.1, 800);
+        break;
+      case 'kick':                       // the shell shooting off
+        this.tone(900, 300, 0.1, 'square', 0.05);
+        this.tone(1200, 1600, 0.06, 'triangle', 0.04, 0.05);
+        break;
+
       // ---- Sword & scarf ----
+      case 'slam':                       // plunge attack hitting the ground
+        this.noise(0.3, 0.35, 500);
+        this.tone(160, 40, 0.3, 'square', 0.12);
+        this.tone(2000, 1200, 0.08, 'triangle', 0.04);
+        break;
       case 'swing':
         this.noise(0.08, 0.08, 3500, 'highpass');
         this.tone(900, 500, 0.06, 'triangle', 0.03);

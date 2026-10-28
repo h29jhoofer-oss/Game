@@ -84,6 +84,10 @@ OMJ.PATTERNS = [
     build(api) { return api.place('sawLift', 0, 0); },
   },
   {
+    name: 'shellback', minDifficulty: 0.08, weight: 2.2,
+    build(api) { return api.place('shellback', 0, 0); },
+  },
+  {
     name: 'crusher', minDifficulty: 0.3, weight: 1.5,
     build(api) { return api.place('crusher', 0, 1); },
   },

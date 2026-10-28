@@ -237,10 +237,18 @@ OMJ.Game = class {
   // ---------------------------------------------------------------
   // Input (called by input.js and ui.js)
   // ---------------------------------------------------------------
-  onJumpKey(code) {
+  // UP / W / click: jump (and start the game from the menu).
+  onJumpKey() {
     if (this.state === 'menu') { if (!this.shopOpen) this.startRun(); }
     else if (this.state === 'playing') this.player.pressJump();
-    else if (this.state === 'over' && code === 'Space' && this.canRestart()) this.startRun();
+  }
+
+  // SPACE: start from the menu, restart after a crash, and in a run:
+  // overhead swing on the ground, plunge attack in the air.
+  onSpaceKey() {
+    if (this.state === 'menu') { if (!this.shopOpen) this.startRun(); }
+    else if (this.state === 'playing') { if (!this.holding()) this.sword.attack(this); }
+    else if (this.state === 'over' && this.canRestart()) this.startRun();
   }
 
   onPointerJump() {
@@ -256,7 +264,7 @@ OMJ.Game = class {
   }
 
   onSwordKey() {
-    if (this.state === 'playing' && !this.holding()) this.sword.swing(this);
+    if (this.state === 'playing' && !this.holding()) this.sword.attack(this);
   }
 
   onSwordPowerKey() {
@@ -439,7 +447,9 @@ OMJ.Game = class {
     } else {
       const hit = this.findCollision();
       if (hit) {
-        if (a.tryRescue(this)) this.smash(hit);
+        // Landing on a monster's head from above is a stomp, not a crash.
+        if (hit.type.stompable && p.vy > 0 && p.prevBottom <= hit.y + hit.type.hitbox.top + 4) this.stomp(hit);
+        else if (a.tryRescue(this)) this.smash(hit);
         else { this.die(hit.typeName); return; }
       }
     }
@@ -882,6 +892,32 @@ OMJ.Game = class {
     if (!o.passed) this.jumped++;
     this.sound.play('reflect');
     this.particles.burst(o.x + o.w / 2, o.y + o.h / 2, 8, 30, 90, -Math.PI / 2, Math.PI / 2, 0.3, [OMJ.PALETTE.white, OMJ.PALETTE.gold], 0);
+  }
+
+  // A sword hit (or a stomp, or a shell) beats a monster. A Shellback
+  // hides in its shell, which shoots forward and smashes what's ahead.
+  defeatEnemy(o) {
+    if (!o.passed) this.jumped++;
+    o.passed = true;
+    this.score += 10;
+    this.collectCoins(1);
+    this.sound.play('kick');
+    this.particles.burst(o.x + o.w / 2, o.y + o.h / 2, 8, 30, 90, -Math.PI, 0, 0.35, o.type.debris, 200);
+    o.origType = o.type;
+    o.type = OMJ.SHELL;
+    o.timer = 0;
+  }
+
+  // Bounce off a monster's head (like you'd expect).
+  stomp(o) {
+    const p = this.player;
+    this.defeatEnemy(o);
+    p.vy = -OMJ.Physics.jumpVelocity * 0.65;
+    p.grounded = false;
+    p.smashing = false;
+    p.squash = 1;
+    this.sound.play('stomp');
+    this.particles.burst(p.x + 5, p.bottom, 8, 30, 70, 0, Math.PI, 0.3, [OMJ.PALETTE.white, OMJ.PALETTE.dust], 100);
   }
 
   // A sword swing cut through an obstacle.
