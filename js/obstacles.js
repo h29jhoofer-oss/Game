@@ -46,6 +46,12 @@
   ], { O: P.ink, L: P.woodLight, D: P.woodDark, W: P.woodLight, '.': P.wood });
   // ('.' is normally transparent; here we map it to the crate's wood color.)
 
+  // Gunmetal colors for the crusher
+  const GUN = '#4a525e';
+  const GUN_LIGHT = '#6e7886';
+  const GUN_DARK = '#2f343d';
+  const SPIKE_STEEL = '#a3acb9';
+
   // ---- Obstacle types ----------------------------------------
   // size(variant)  -> { w, h }  how big this obstacle is
   // hitbox         -> how many pixels to shrink the deadly box on each side
@@ -132,14 +138,15 @@
       },
     },
 
-    // ---- CRUSHER: hangs high on a chain, slams down when you get close ----
-    // It is always out of reach while hanging, and slams while still ~90 px
+    // ---- CRUSHER: a gunmetal block floating high up that slams down ----
+    // Its yellow eyes turn red just before it drops. It is always out of
+    // reach while floating, and slams while still ~90 px
     // ahead of you, so it can never land on you. Once down, jump over it
     // (or stand on it, like a crate).
     crusher: {
       size: () => ({ w: 20, h: 26 }),
       hitbox: { left: 1, right: 1, top: 0 },
-      debris: [P.metal, P.metalDark, P.danger],
+      debris: [GUN, GUN_LIGHT, GUN_DARK, P.gold],
       deathLines: ['Flat as a pancake.', 'The crusher crushed it. You were "it".', 'Squish!'],
       init(o) {
         o.phase = 0;                       // 0 hanging, 1 slamming, 2 down
@@ -163,44 +170,56 @@
         }
       },
       draw(ctx, o, g) {
-        // Rattle a little when you're getting close (a warning).
-        const shaking = o.phase === 0 && o.x - g.player.x < 170;
+        const gapToPlayer = o.x - (g.player.x + g.player.w);
+        // Rattle a little when you're getting close (a warning)...
+        const shaking = o.phase === 0 && gapToPlayer < 160;
+        // ...and the eyes go red right before it falls.
+        const aboutToFall = (o.phase === 0 && gapToPlayer < 140) || o.phase === 1;
         const x = o.drawX + (shaking && Math.floor(g.time * 30) % 2 ? 1 : 0);
         const y = Math.round(o.y);
-        // Chain up to the top of the screen
-        for (let cy = y - 2; cy > -4; cy -= 4) {
-          ctx.fillStyle = P.ink;
-          ctx.fillRect(x + 9, cy - 3, 2, 3);
-          ctx.fillStyle = P.metalDark;
-          ctx.fillRect(x + 9, cy - 2, 2, 1);
-        }
-        // Block body
+
+        // Block body (gunmetal)
         ctx.fillStyle = P.ink;
         ctx.fillRect(x, y, 20, 22);
-        ctx.fillStyle = P.metal;
+        ctx.fillStyle = GUN;
         ctx.fillRect(x + 1, y + 1, 18, 20);
-        ctx.fillStyle = P.metalLight;
-        ctx.fillRect(x + 1, y + 1, 18, 2);
-        ctx.fillStyle = P.metalDark;
-        ctx.fillRect(x + 1, y + 17, 18, 4);
-        ctx.fillRect(x + 3, y + 5, 1, 1); ctx.fillRect(x + 16, y + 5, 1, 1);  // rivets
-        // Angry eyes
+        ctx.fillStyle = GUN_LIGHT;
+        ctx.fillRect(x + 1, y + 1, 18, 2);            // top edge catches the light
+        ctx.fillRect(x + 1, y + 3, 1, 14);            // left edge
+        ctx.fillStyle = GUN_DARK;
+        ctx.fillRect(x + 1, y + 17, 18, 4);           // heavy bottom plate
+        ctx.fillRect(x + 18, y + 3, 1, 14);           // right edge in shadow
+        ctx.fillStyle = GUN_LIGHT;                     // bolts
+        ctx.fillRect(x + 3, y + 4, 1, 1); ctx.fillRect(x + 16, y + 4, 1, 1);
+        ctx.fillRect(x + 3, y + 18, 1, 1); ctx.fillRect(x + 16, y + 18, 1, 1);
+
+        // Glowing eyes: yellow while waiting, red right before the drop.
+        const eye = aboutToFall ? P.danger : P.gold;
         ctx.fillStyle = P.ink;
         ctx.fillRect(x + 4, y + 8, 5, 4); ctx.fillRect(x + 11, y + 8, 5, 4);
-        ctx.fillStyle = o.phase === 2 ? P.white : P.danger;
-        ctx.fillRect(x + 5, y + 10, 3, 1); ctx.fillRect(x + 12, y + 10, 3, 1);
+        ctx.fillStyle = eye;
+        ctx.fillRect(x + 5, y + 9, 3, 2); ctx.fillRect(x + 12, y + 9, 3, 2);
+        ctx.fillStyle = aboutToFall ? '#ff9aa6' : '#fff2a8';   // bright glint
+        ctx.fillRect(x + 5, y + 9, 1, 1); ctx.fillRect(x + 12, y + 9, 1, 1);
+        // Brows tilt into a frown when it's about to drop.
         ctx.fillStyle = P.ink;
-        ctx.fillRect(x + 4, y + 7, 3, 1); ctx.fillRect(x + 13, y + 7, 3, 1);
-        // Teeth along the bottom
-        for (let i = 0; i < 5; i++) {
-          ctx.fillStyle = P.ink;
-          ctx.fillRect(x + i * 4, y + 22, 4, 3);
-          ctx.fillStyle = P.metalLight;
-          ctx.fillRect(x + i * 4 + 1, y + 22, 2, 2);
-          ctx.fillRect(x + i * 4 + 1, y + 24, 2, 1);
+        if (aboutToFall) {
+          ctx.fillRect(x + 4, y + 6, 2, 1); ctx.fillRect(x + 6, y + 7, 3, 1);
+          ctx.fillRect(x + 14, y + 6, 2, 1); ctx.fillRect(x + 11, y + 7, 3, 1);
+        } else {
+          ctx.fillRect(x + 4, y + 7, 5, 1); ctx.fillRect(x + 11, y + 7, 5, 1);
         }
-        ctx.fillStyle = P.ink;
-        ctx.fillRect(x, y + 25, 20, 1);
+
+        // Little spikes along the bottom
+        for (let i = 0; i < 5; i++) {
+          const sx = x + i * 4;
+          ctx.fillStyle = P.ink;
+          ctx.fillRect(sx, y + 22, 4, 1);
+          ctx.fillRect(sx + 1, y + 23, 2, 2);
+          ctx.fillStyle = SPIKE_STEEL;
+          ctx.fillRect(sx + 1, y + 22, 2, 1);
+          ctx.fillRect(sx + 1, y + 23, 1, 1);
+        }
       },
     },
 

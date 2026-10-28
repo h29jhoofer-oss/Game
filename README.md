@@ -59,7 +59,7 @@ bonuses don't make the game speed up faster: difficulty follows distance travell
 | Gap | Jump across. |
 | Barrier | Tall: jump at the right moment. |
 | Saw | A spinning blade sliding back and forth on a rail. Watch where it is and jump it. |
-| Crusher | Hangs on a chain, rattles as you approach, then slams down while still ahead of you. Jump it (or stand on it). |
+| Crusher | A spiked gunmetal block floating high up. It rattles as you approach, its yellow eyes turn red, then it slams down while still ahead of you. Jump it (or stand on it). |
 | Crossbow | The tower is scenery. When nothing else is in the way, it fires a bolt along the ground: jump the bolt. |
 
 Moving obstacles are still fair. The saw never moves faster than the world, so it can't chase
