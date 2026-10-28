@@ -102,6 +102,24 @@
       Math.random() < 0.5 ? P.gold : P.white, 300);
   }
 
+  // ---- Fire (for the crossbow's flaming arrows) --------------
+  const FIRE_ORANGE = '#ff8a3d';
+
+  // A small flickering flame centered on (x, y), leaning back as if moving.
+  function drawFlame(ctx, x, y, time) {
+    const f = Math.floor(time * 14) % 3;          // three flicker frames
+    ctx.fillStyle = P.danger;
+    ctx.fillRect(x - 1, y - 3 - (f === 1 ? 1 : 0), 5, 5);
+    ctx.fillRect(x + 3, y - 4 + f, 3, 3);
+    ctx.fillStyle = FIRE_ORANGE;
+    ctx.fillRect(x, y - 2 - (f === 2 ? 1 : 0), 4, 3);
+    ctx.fillRect(x + 3, y - 3 + (f === 0 ? 1 : 0), 2, 2);
+    ctx.fillStyle = P.gold;
+    ctx.fillRect(x, y - 1, 2, 2);
+    ctx.fillStyle = P.white;
+    ctx.fillRect(x, y, 1, 1);
+  }
+
   // ---- Obstacle types ----------------------------------------
   // size(variant)  -> { w, h }  how big this obstacle is
   // hitbox         -> how many pixels to shrink the deadly box on each side
@@ -320,19 +338,23 @@
       draw(ctx, o, g) { drawSaw(ctx, o, g); },
     },
 
-    // ---- CROSSBOW: a tower that fires a bolt along the ground at you ----
-    // The tower itself is harmless; jump the bolt. It only fires once
-    // nothing else is between you and it, and the bolt always gives you
+    // ---- CROSSBOW: a big tower that fires FLAMING arrows at you ----
+    // The tower itself is harmless; jump the arrow. It only fires once
+    // nothing else is between you and it, and the arrow always gives you
     // at least BOLT_WARNING seconds to react.
     crossbow: {
-      size: () => ({ w: 14, h: 34 }),
+      size: () => ({ w: 22, h: 48 }),
       hitbox: { left: 0, right: 0, top: 0 },
       harmless: true,
-      debris: [P.wood, P.woodDark, P.metal],
+      debris: [P.wood, P.woodDark, P.metal, P.gold],
       deathLines: ['Tower down. (You, not the tower.)'],
       init(o) { o.fired = false; },
       update(o, dt, g) {
         if (o.timer > 0) o.timer -= dt;    // recoil animation after firing
+        // Embers drift up from the loaded arrow's flame.
+        if (!o.fired && Math.random() < 0.12) {
+          g.particles.spawn(o.x - 1, o.y + 6, OMJ.rand(-10, 10), OMJ.rand(-40, -20), 0.4, 1, Math.random() < 0.5 ? P.gold : FIRE_ORANGE, -20);
+        }
         if (o.fired || o.x > C.VIEW_W - 16 || g.hasDangerBefore(o.x)) return;
         o.fired = true;
         const BOLT_WARNING = 0.75;
@@ -340,73 +362,108 @@
         // Extra speed so it arrives in BOLT_WARNING seconds, but never
         // sooner than a still obstacle at the tower's spot would.
         const extra = Math.max(0, distance / BOLT_WARNING - g.worldSpeed);
-        const bolt = g.obstacles.spawn('bolt', o.x - 6, 0);
+        const bolt = g.obstacles.spawn('bolt', o.x - 2, 0);
         if (bolt) bolt.extra = extra;
         o.timer = 0.15;
         g.sound.play('crossbow');
       },
       draw(ctx, o, g) {
         const x = o.drawX;
-        const top = C.GROUND_Y - 34;
+        const top = Math.round(o.y);
         // Tower legs (dark so they read as scenery, not something to jump)
         ctx.fillStyle = '#3d2a35';
-        ctx.fillRect(x + 2, top + 8, 2, 26);
-        ctx.fillRect(x + 10, top + 8, 2, 26);
-        ctx.fillRect(x + 3, top + 16, 8, 1);
-        ctx.fillRect(x + 3, top + 25, 8, 1);
+        ctx.fillRect(x + 3, top + 14, 2, 34);
+        ctx.fillRect(x + 17, top + 14, 2, 34);
+        ctx.fillRect(x + 4, top + 22, 14, 1);
+        ctx.fillRect(x + 4, top + 32, 14, 1);
+        ctx.fillRect(x + 4, top + 41, 14, 1);
         // Platform
         ctx.fillStyle = P.ink;
-        ctx.fillRect(x, top + 6, 14, 3);
+        ctx.fillRect(x, top + 12, 22, 4);
         ctx.fillStyle = P.woodDark;
-        ctx.fillRect(x + 1, top + 7, 12, 1);
-        // Crossbow (faces left, toward you)
-        const bx = x + (o.timer > 0 ? 1 : 0);   // kicks back when it fires
-        ctx.fillStyle = P.ink;
-        ctx.fillRect(bx + 3, top + 2, 10, 3);
+        ctx.fillRect(x + 1, top + 13, 20, 2);
+
+        // Crossbow (faces left, toward you); kicks back when it fires
+        const bx = x + (o.timer > 0 ? 2 : 0);
+        ctx.fillStyle = P.ink;                       // stock
+        ctx.fillRect(bx + 5, top + 5, 16, 5);
         ctx.fillStyle = P.wood;
-        ctx.fillRect(bx + 4, top + 3, 8, 1);
-        ctx.fillStyle = P.ink;                       // the bow
-        ctx.fillRect(bx + 2, top - 3, 2, 13);
+        ctx.fillRect(bx + 6, top + 6, 14, 3);
+        ctx.fillStyle = P.woodLight;
+        ctx.fillRect(bx + 6, top + 6, 14, 1);
+        ctx.fillStyle = P.ink;                       // grip
+        ctx.fillRect(bx + 15, top + 10, 3, 2);
+        // The bow: a tall steel arc with tips curving back
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(bx + 3, top - 3, 3, 19);
+        ctx.fillRect(bx + 6, top - 6, 2, 4);
+        ctx.fillRect(bx + 6, top + 15, 2, 4);
         ctx.fillStyle = P.metal;
-        ctx.fillRect(bx + 2, top - 2, 1, 11);
-        ctx.fillStyle = P.white;                     // the string
-        ctx.fillRect(o.fired ? bx + 4 : bx + 8, top - 2, 1, 1);
-        ctx.fillRect(o.fired ? bx + 4 : bx + 8, top + 8, 1, 1);
+        ctx.fillRect(bx + 4, top - 2, 1, 17);
+        ctx.fillStyle = P.metalLight;
+        ctx.fillRect(bx + 4, top - 2, 1, 3);
+        // The string: pulled back to the arrow when loaded, slack after firing
+        ctx.fillStyle = P.white;
+        const nock = o.fired ? bx + 7 : bx + 17;
+        for (let i = 0; i <= 10; i++) {
+          const sx = Math.round(bx + 7 + (nock - bx - 7) * (i / 10));
+          ctx.fillRect(sx, top - 4 + Math.round(i * 1.1), 1, 1);   // top half
+          ctx.fillRect(sx, top + 18 - Math.round(i * 1.1), 1, 1);  // bottom half
+        }
         if (!o.fired) {
-          // Loaded bolt, with a blinking red tip: "I'm about to shoot!"
+          // Loaded flaming arrow
           ctx.fillStyle = P.woodLight;
-          ctx.fillRect(bx + 1, top + 3, 8, 1);
-          ctx.fillStyle = Math.floor(g.time * 8) % 2 ? P.danger : P.white;
-          ctx.fillRect(bx, top + 3, 2, 1);
+          ctx.fillRect(bx + 2, top + 7, 16, 1);
+          ctx.fillStyle = P.danger;                  // fletching
+          ctx.fillRect(bx + 15, top + 6, 3, 1);
+          ctx.fillRect(bx + 15, top + 8, 3, 1);
+          drawFlame(ctx, bx - 1, top + 7, g.time);
         }
       },
     },
 
-    // The crossbow's bolt: fires from the tower and dips to ground level.
+    // The crossbow's flaming arrow: fires from the tower and dips to ground
+    // level. The deadly part is just the shaft and head; the flames are
+    // drawn mostly above and behind it.
     bolt: {
-      size: () => ({ w: 12, h: 3 }),
-      hitbox: { left: 1, right: 1, top: 0 },
-      debris: [P.woodLight, P.metal],
-      deathLines: ['Bullseye. Unfortunately, you were the bullseye.', 'Arrow-dynamic? Not quite.', 'You took an arrow to the... everything.'],
+      size: () => ({ w: 16, h: 4 }),
+      hitbox: { left: 1, right: 2, top: 0 },
+      debris: [P.woodLight, P.metal, P.gold, FIRE_ORANGE],
+      deathLines: [
+        'Bullseye. Unfortunately, you were the bullseye.',
+        'Roasted by a flaming arrow. Crispy!',
+        'Hot delivery! Signature required: yours.',
+        'You took a fire arrow to the... everything.',
+      ],
       init(o) {
-        o.y = C.GROUND_Y - 32;
+        o.y = C.GROUND_Y - 43;
         o.extra = 0;
       },
-      update(o, dt) {
+      update(o, dt, g) {
         o.x -= o.extra * dt;
-        o.y = Math.min(C.GROUND_Y - 8, o.y + 160 * dt);
+        o.y = Math.min(C.GROUND_Y - 9, o.y + 220 * dt);
+        // Fire and smoke trail
+        if (Math.random() < 0.6) {
+          const ember = Math.random();
+          g.particles.spawn(o.x + OMJ.rand(2, 8), o.y + OMJ.rand(-1, 3), OMJ.rand(20, 60), OMJ.rand(-30, -5), 0.3, ember < 0.3 ? 2 : 1,
+            ember < 0.4 ? P.gold : ember < 0.8 ? FIRE_ORANGE : '#5a4a5a', -30);
+        }
       },
-      draw(ctx, o) {
+      draw(ctx, o, g) {
         const x = o.drawX;
         const y = Math.round(o.y);
-        ctx.fillStyle = P.woodLight;
-        ctx.fillRect(x + 2, y + 1, 9, 1);
+        ctx.fillStyle = P.ink;                       // outline so it pops on any sky
+        ctx.fillRect(x + 3, y + 1, 12, 3);
+        ctx.fillStyle = P.woodLight;                 // shaft
+        ctx.fillRect(x + 3, y + 2, 11, 1);
+        ctx.fillStyle = P.danger;                    // fletching
+        ctx.fillRect(x + 12, y, 4, 1);
+        ctx.fillRect(x + 12, y + 4, 4, 1);
+        ctx.fillStyle = P.ink;                       // head
+        ctx.fillRect(x, y + 1, 4, 3);
         ctx.fillStyle = P.metalLight;
-        ctx.fillRect(x, y + 1, 2, 1);
-        ctx.fillRect(x + 1, y, 1, 3);
-        ctx.fillStyle = P.danger;
-        ctx.fillRect(x + 10, y, 2, 1);
-        ctx.fillRect(x + 10, y + 2, 2, 1);
+        ctx.fillRect(x + 1, y + 2, 2, 1);
+        drawFlame(ctx, x + 1, y + 2, g.time);
       },
     },
 

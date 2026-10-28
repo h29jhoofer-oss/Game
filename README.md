@@ -61,11 +61,11 @@ bonuses don't make the game speed up faster: difficulty follows distance travell
 | Saw | A big spinning blade half-sunk in the ground, sliding side to side. Watch where it is and jump it. |
 | Pop-up saw | A big blade that rises and sinks in the ground. Jump it, or time it and run over it while it's low. |
 | Crusher | A spiked gunmetal block floating high up. It rattles as you approach, its yellow eyes turn red, then it slams down while still ahead of you. Jump it (or stand on it). |
-| Crossbow | The tower is scenery. When nothing else is in the way, it fires a bolt along the ground: jump the bolt. |
+| Crossbow | A big tower with a flaming arrow loaded. The tower is scenery; when nothing else is in the way, it fires the arrow along the ground: jump the arrow. |
 
 Moving obstacles are still fair. The sliding saw never moves faster than the world, so it can't
 chase you. The pop-up saw never rises higher than a normal jump clears. The crusher always slams before you reach it. The crossbow waits until nothing else is
-between you, and its bolt always gives you at least ¾ of a second.
+between you, and its arrow always gives you at least ¾ of a second.
 
 ## Ground smash
 
@@ -215,7 +215,8 @@ belongs to.
 - Sliding saws appear after about 225 points, pop-up saws after 375, crushers after 450,
   crossbows after 600.
 - The crusher rattles, then slams down before you reach it. You can stand on it afterwards.
-- The crossbow only fires when nothing else is between you; its bolt dips to ground level.
+- The crossbow only fires when nothing else is between you; its flaming arrow dips to ground
+  level and leaves a trail of fire and smoke.
 - Nothing should ever be impossible. Press `H` to see hitboxes if a crash seems unfair.
 
 **Stage 4: visuals, animation, particles, sound**

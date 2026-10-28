@@ -140,9 +140,10 @@ OMJ.Sound = class {
         this.noise(0.3, 0.3, 300);
         this.tone(90, 30, 0.3, 'square', 0.1);
         break;
-      case 'crossbow':
+      case 'crossbow':                   // twang + a fiery whoosh
         this.tone(1400, 300, 0.08, 'triangle', 0.08);
         this.noise(0.05, 0.08, 3000, 'highpass');
+        this.noise(0.35, 0.1, 900, 'bandpass', 0.03);
         break;
 
       // ---- Boss ----
