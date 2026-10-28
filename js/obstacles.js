@@ -52,6 +52,56 @@
   const GUN_DARK = '#2f343d';
   const SPIKE_STEEL = '#a3acb9';
 
+  // ---- Saw blade (shared by both saw types) ------------------
+  const SAW_SIZE = 23;        // blade diameter in pixels
+  const SAW_R = 11;
+  const SAW_LINES = ['Sliced and diced.', 'You saw that coming. Right?', 'That blade had a schedule. You didn\'t.'];
+  // Tooth positions for two spin frames, worked out once.
+  const SAW_TEETH = [[], []];
+  for (let f = 0; f < 2; f++) {
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + f * (Math.PI / 8);
+      SAW_TEETH[f].push(Math.round(Math.cos(a) * (SAW_R - 1)), Math.round(Math.sin(a) * (SAW_R - 1)));
+    }
+  }
+
+  function drawSaw(ctx, o, g) {
+    const cx = Math.round(o.x + o.bx) + SAW_R;
+    const cy = Math.round(o.y) + SAW_R;
+    // Only the part above the ground shows (the rest is "inside" the ground).
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(cx - SAW_R - 2, 0, SAW_SIZE + 4, C.GROUND_Y);
+    ctx.clip();
+    const teeth = SAW_TEETH[Math.floor(g.time * 24) % 2];
+    ctx.fillStyle = P.ink;
+    for (let i = 0; i < teeth.length; i += 2) ctx.fillRect(cx + teeth[i] - 2, cy + teeth[i + 1] - 2, 4, 4);
+    OMJ.Sprites.circle(ctx, cx, cy, SAW_R - 1, P.ink);
+    ctx.fillStyle = P.metalLight;
+    for (let i = 0; i < teeth.length; i += 2) ctx.fillRect(cx + teeth[i] - 1, cy + teeth[i + 1] - 1, 2, 2);
+    OMJ.Sprites.circle(ctx, cx, cy, SAW_R - 2, P.metal);
+    OMJ.Sprites.circle(ctx, cx, cy, 6, P.metalDark);
+    OMJ.Sprites.circle(ctx, cx, cy, 5, P.metal);
+    ctx.fillStyle = P.metalLight;                       // shine
+    ctx.fillRect(cx - 6, cy - 6, 3, 1);
+    ctx.fillRect(cx - 7, cy - 5, 1, 2);
+    OMJ.Sprites.circle(ctx, cx, cy, 2, P.ink);          // hub
+    ctx.fillStyle = P.metalLight;
+    ctx.fillRect(cx, cy - 1, 1, 1);
+    ctx.restore();
+    // Thin slot in the ground where the blade comes out
+    ctx.fillStyle = P.ink;
+    ctx.fillRect(cx - SAW_R + 1, C.GROUND_Y, SAW_SIZE - 2, 2);
+  }
+
+  // A few sparks where the blade meets the ground.
+  function sawSparks(o, g) {
+    if (Math.random() > 0.08) return;
+    const cx = o.x + o.bx + SAW_R;
+    g.particles.spawn(cx + OMJ.rand(-8, 8), C.GROUND_Y - 1, OMJ.rand(-60, 60), OMJ.rand(-90, -40), 0.25, 1,
+      Math.random() < 0.5 ? P.gold : P.white, 300);
+  }
+
   // ---- Obstacle types ----------------------------------------
   // size(variant)  -> { w, h }  how big this obstacle is
   // hitbox         -> how many pixels to shrink the deadly box on each side
@@ -223,54 +273,51 @@
       },
     },
 
-    // ---- SAW: a spinning blade sliding back and forth on a rail ----
-    // variant = rail length. The blade never moves faster than the world
-    // scrolls, so it always comes toward you and can't chase you from behind.
+    // ---- SAWS: big spinning blades half-sunk in the ground ----
+    // Two kinds share the same blade drawing (drawSaw, below):
+    //   saw     slides side to side. variant = how far it slides.
+    //           It never moves faster than the world scrolls, so it
+    //           always comes toward you and can't chase you.
+    //   sawLift pops up and down out of the ground. Even at its highest
+    //           a normal jump clears it, so jumping is always safe.
     saw: {
-      size: (rail) => ({ w: rail + 15, h: 15 }),
-      hitbox: { left: 2, right: 2, top: 3 },
+      size: (range) => ({ w: range + SAW_SIZE, h: 17 }),
+      hitbox: { left: 4, right: 4, top: 2 },
       debris: [P.metal, P.metalLight, P.danger],
-      deathLines: ['Sliced and diced.', 'You saw that coming. Right?', 'That blade had a schedule. You didn\'t.'],
+      deathLines: SAW_LINES,
       init(o) {
-        o.bw = 15;
-        o.phase = Math.random() * Math.PI * 2;  // where on the rail it starts
-        o.y = C.GROUND_Y - 12;
+        o.bw = SAW_SIZE;
+        o.phase = Math.random() * Math.PI * 2;  // where in its slide it starts
+        o.y = C.GROUND_Y - 17;
         o.bx = 0;
       },
-      update(o, dt) {
+      update(o, dt, g) {
         o.timer += dt;
-        const rail = o.w - 15;
-        o.bx = (rail / 2) * (1 - Math.cos(o.timer * 2.6 + o.phase));
+        const range = o.w - SAW_SIZE;
+        o.bx = (range / 2) * (1 - Math.cos(o.timer * 2.6 + o.phase));
+        sawSparks(o, g);
       },
-      draw(ctx, o, g) {
-        const x = o.drawX;
-        // Rail with end posts
-        ctx.fillStyle = P.ink;
-        ctx.fillRect(x + 2, C.GROUND_Y - 1, o.w - 4, 3);
-        ctx.fillStyle = P.metalDark;
-        ctx.fillRect(x + 3, C.GROUND_Y, o.w - 6, 1);
-        ctx.fillStyle = P.ink;
-        ctx.fillRect(x, C.GROUND_Y - 4, 3, 5);
-        ctx.fillRect(x + o.w - 3, C.GROUND_Y - 4, 3, 5);
-        // Blade
-        const cx = Math.round(o.x + o.bx) + 7;
-        const cy = C.GROUND_Y - 5;
-        OMJ.Sprites.circle(ctx, cx, cy, 7, P.ink);
-        OMJ.Sprites.circle(ctx, cx, cy, 6, P.metal);
-        ctx.fillStyle = P.metalLight;
-        const spin = Math.floor(g.time * 24) % 2;
-        // Teeth flicker between two positions so it looks like it spins.
-        if (spin) {
-          ctx.fillRect(cx - 1, cy - 8, 2, 2); ctx.fillRect(cx - 1, cy + 6, 2, 2);
-          ctx.fillRect(cx - 8, cy - 1, 2, 2); ctx.fillRect(cx + 6, cy - 1, 2, 2);
-        } else {
-          ctx.fillRect(cx - 6, cy - 6, 2, 2); ctx.fillRect(cx + 4, cy - 6, 2, 2);
-          ctx.fillRect(cx - 6, cy + 4, 2, 2); ctx.fillRect(cx + 4, cy + 4, 2, 2);
-        }
-        OMJ.Sprites.circle(ctx, cx, cy, 2, P.metalDark);
-        ctx.fillStyle = P.ink;
-        ctx.fillRect(cx, cy, 1, 1);
+      draw(ctx, o, g) { drawSaw(ctx, o, g); },
+    },
+
+    sawLift: {
+      size: () => ({ w: SAW_SIZE, h: 26 }),
+      hitbox: { left: 4, right: 4, top: 2 },
+      debris: [P.metal, P.metalLight, P.danger],
+      deathLines: SAW_LINES,
+      init(o) {
+        o.bw = SAW_SIZE;
+        o.phase = Math.random() * Math.PI * 2;
       },
+      update(o, dt, g) {
+        o.timer += dt;
+        // Blade top goes from 7 px (mostly hidden) to 26 px above the ground.
+        const lift = (1 - Math.cos(o.timer * 3.4 + o.phase)) / 2;   // 0..1
+        o.y = C.GROUND_Y - 7 - Math.round(19 * lift);
+        o.h = C.GROUND_Y - o.y;
+        sawSparks(o, g);
+      },
+      draw(ctx, o, g) { drawSaw(ctx, o, g); },
     },
 
     // ---- CROSSBOW: a tower that fires a bolt along the ground at you ----

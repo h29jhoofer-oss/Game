@@ -70,9 +70,13 @@ OMJ.PATTERNS = [
   {
     name: 'saw', minDifficulty: 0.15, weight: 2,
     build(api, d) {
-      // Longer rails (a wider sliding range) as it gets harder.
+      // Slides further as it gets harder.
       return api.place('saw', 0, OMJ.randInt(24, 32 + Math.floor(24 * d)));
     },
+  },
+  {
+    name: 'sawLift', minDifficulty: 0.25, weight: 1.5,
+    build(api) { return api.place('sawLift', 0, 0); },
   },
   {
     name: 'crusher', minDifficulty: 0.3, weight: 1.5,
