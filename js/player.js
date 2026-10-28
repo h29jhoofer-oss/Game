@@ -28,9 +28,13 @@ OMJ.Player = class {
     this.blinkTimer = 2;
     this.blinking = false;
 
+    // Ground smash (DOWN in the air): drop fast until you land.
+    this.smashing = false;
+
     // One-step event flags the game reads for sounds/particles.
     this.justJumped = false;
     this.justLanded = false;
+    this.justSmashed = false;   // landed from a ground smash
     this.landSpeed = 0;
   }
 
@@ -45,6 +49,16 @@ OMJ.Player = class {
     this.jumpBufferTimer = this.jumpBufferTime;
   }
 
+  // Ground smash: only works in the air. Shoots you straight down.
+  // Returns true if it started.
+  groundSmash() {
+    if (this.grounded || this.dead || this.smashing) return false;
+    this.smashing = true;
+    this.vy = Math.max(this.vy, OMJ.CONFIG.SMASH_SPEED);
+    this.squash = -1;
+    return true;
+  }
+
   // Use a skin's passive perk for jump timing (null = keep the normal value).
   setTiming(passive) {
     if (passive.coyoteTime !== null) this.coyoteTime = passive.coyoteTime;
@@ -55,6 +69,7 @@ OMJ.Player = class {
     const C = OMJ.CONFIG;
     this.justJumped = false;
     this.justLanded = false;
+    this.justSmashed = false;
     this.prevBottom = this.bottom;
 
     if (!this.dead) {
@@ -69,6 +84,7 @@ OMJ.Player = class {
         this.coyoteTimer = 0;
         this.jumpBufferTimer = 0;
         this.justJumped = true;
+        this.smashing = false;
         this.squash = -1;
       }
     }
@@ -95,7 +111,9 @@ OMJ.Player = class {
       this.justLanded = true;
       this.landSpeed = this.vy;
       this.squash = OMJ.clamp(this.vy / 500, 0.3, 1);
+      if (this.smashing) this.justSmashed = true;
     }
+    this.smashing = false;
     this.y = floorY - OMJ.CONFIG.PLAYER_H;
     this.vy = 0;
     this.grounded = true;
@@ -105,6 +123,7 @@ OMJ.Player = class {
     if (this.dead) return;
     this.dead = true;
     this.grounded = false;
+    this.smashing = false;
     // Falling into a pit keeps falling; anything else gives a cartoon "pop".
     this.vy = cause === 'gap' ? Math.max(this.vy, 60) : -260;
   }

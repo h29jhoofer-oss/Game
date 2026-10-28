@@ -22,7 +22,8 @@ python3 -m http.server 8000
 | Key | Action |
 | --- | --- |
 | `SPACE`, `↑`, `W`, mouse click | Jump |
-| `S`, `↓`, `SHIFT`, right-click | Use your skin's ability |
+| `↓` or `S` (in the air) | Ground smash: drop straight down |
+| `B`, `SHIFT`, right-click | Use your skin's ability |
 | `ESC` or `P` | Pause / resume |
 | `R` | Restart after a crash |
 | `M` | Mute / unmute everything |
@@ -32,7 +33,7 @@ python3 -m http.server 8000
 
 ## Skins and their powers
 
-Every skin has a **passive** perk (always on) and an **active** ability (press `S`). The meter in
+Every skin has a **passive** perk (always on) and an **active** ability (press `B`). The meter in
 the bottom-left corner shows when the ability is ready. Every run starts with it charged.
 
 | Skin | Unlock at | Passive | Active (cooldown) |
@@ -48,6 +49,44 @@ the bottom-left corner shows when the ability is ready. Every run starts with it
 Abilities only ever help. Protection (Dash, Phase, Shield, Second Chance) never runs out while
 you're over a pit or about to touch an obstacle, so it can't end in an unfair crash. Score
 bonuses don't make the game speed up faster: difficulty follows distance travelled.
+
+## Obstacles
+
+| Obstacle | How to get past it |
+| --- | --- |
+| Spikes | Jump over. |
+| Crate (1 or 2 high) | Jump over, or land on top and jump off. |
+| Gap | Jump across. |
+| Barrier | Tall: jump at the right moment. |
+| Saw | A spinning blade sliding back and forth on a rail. Watch where it is and jump it. |
+| Crusher | Hangs on a chain, rattles as you approach, then slams down while still ahead of you. Jump it (or stand on it). |
+| Crossbow | The tower is scenery. When nothing else is in the way, it fires a bolt along the ground: jump the bolt. |
+
+Moving obstacles are still fair. The saw never moves faster than the world, so it can't chase
+you. The crusher always slams before you reach it. The crossbow waits until nothing else is
+between you, and its bolt always gives you at least ¾ of a second.
+
+## Ground smash
+
+Press `↓` (or `S`) in the air to drop straight down. It lands you sooner, so you can set up
+the next jump faster. It doesn't break obstacles. During a boss fight, each ground smash sends
+a shockwave along the ground that hurts the boss.
+
+## The boss: Big Bonk
+
+When the first night ends (score 1500), normal obstacles stop and **Big Bonk** flies in. It
+throws bombs that roll at you, spiky balls that drop and sit still, and fireballs that swoop
+down to ground level. Its eyes turn red and it shakes just before each throw.
+
+- **Hurt it** with ground smash shockwaves (6 hits the first time). Shuriken hits it, and
+  Supernova does double damage.
+- **Beat it** for +250 points. It comes back after every night (score 3000, 4500…) with
+  2 more health and a bigger reward.
+- **Run out the clock** (35 seconds, the thin bar under its health) and it leaves with no bonus.
+
+Fairness: the boss works out when each attack will reach you, and never lets two attacks
+arrive closer together than one full jump plus reaction time. If an attack would be too soon,
+it holds its wind-up and waits.
 
 ## Project layout
 
@@ -68,9 +107,10 @@ the top saying what it does.
 | `js/audio.js` | Sound effects, synthesized with the Web Audio API (no sound files) |
 | `js/music.js` | Background music: songs written as note lists, and a tiny sequencer |
 | `js/player.js` | The player: jumping, gravity, landing, and how it's drawn |
-| `js/obstacles.js` | Obstacle types (spike, crate, barrier, gap) and the obstacle pool |
+| `js/obstacles.js` | Obstacle types (spike, crate, barrier, gap, saw, crusher, crossbow, boss attacks) and the obstacle pool |
 | `js/spawner.js` | Obstacle patterns and when they appear |
 | `js/abilities.js` | Active abilities, cooldowns, invulnerability, the ability meter |
+| `js/boss.js` | Big Bonk: when it appears, its attacks, health and drawing |
 | `js/particles.js` | Dust and sparkle particles |
 | `js/background.js` | Parallax sky, mountains, hills, town, ground; day/sunset/night themes |
 | `js/input.js` | Keyboard and mouse |
@@ -120,9 +160,14 @@ Songs live at the top of `js/music.js`. Each word is one eighth-note step: a not
 
 ### Add an obstacle
 1. In `js/obstacles.js`, add an entry to `OMJ.ObstacleTypes` with `size`, `hitbox`, `draw` and
-   `deathLines`. Use `solidTop: true` if you can stand on it.
+   `deathLines`. Use `solidTop: true` if you can stand on it. For something that moves, add
+   `init(o)` and `update(o, dt, game, speed)`; the saw, crusher and crossbow are good examples.
 2. In `js/spawner.js`, add a pattern to `OMJ.PATTERNS` that uses it with `api.place(...)`.
    Give it a `minDifficulty` (0 = from the start, 1 = only at max difficulty) and a `weight`.
+
+### Tune the boss
+All of Big Bonk's numbers (when it appears, health, time limit, reward, warning time) are in
+`OMJ.BOSS` at the top of `js/boss.js`. Its music is the `boss` song in `js/music.js`.
 
 ### Add a background theme
 Add an entry to `THEMES` in `js/background.js` (copy one and change the colors). Themes switch
@@ -166,6 +211,9 @@ belongs to.
 **Stage 3: random spawning and difficulty**
 - Obstacles are different every run, and the game slowly speeds up.
 - Gaps show up after about 150 points, barriers after about 300, combos later.
+- Saws appear after about 225 points, crushers after 450, crossbows after 600.
+- The crusher rattles, then slams down before you reach it. You can stand on it afterwards.
+- The crossbow only fires when nothing else is between you; its bolt dips to ground level.
 - Nothing should ever be impossible. Press `H` to see hitboxes if a crash seems unfair.
 
 **Stage 4: visuals, animation, particles, sound**
@@ -187,7 +235,10 @@ belongs to.
 - Reload the page: your best score, skin and mute setting are still there.
 - Beating 100, 250, 500… unlocks new skins, announced mid-run.
 - Each skin's passive and active show on the start screen, even while it's locked.
-- `S` uses the ability; the meter fills while it recharges and says READY when it's charged.
+- `B` uses the ability; the meter fills while it recharges and says READY when it's charged.
+- `↓` in the air drops you fast with a thump and a dust cloud. On the ground it does nothing.
+- At 1500 points Big Bonk arrives with its own music. Ground smash shockwaves shrink its health
+  bar; beating it gives +250, and normal obstacles return afterwards.
   Double Jump and Shuriken buzz and stay charged if you press them when they can't work
   (on the ground, or with nothing to hit).
 

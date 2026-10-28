@@ -74,12 +74,16 @@ OMJ.Input = class {
       case 'KeyN':
         if (firstPress) g.toggleMusic();
         break;
-      case 'KeyS':
-      case 'ArrowDown':
+      case 'KeyB':
       case 'ShiftLeft':
       case 'ShiftRight':
         e.preventDefault();
         if (firstPress) g.onAbilityKey();
+        break;
+      case 'ArrowDown':
+      case 'KeyS':
+        e.preventDefault();
+        if (firstPress) g.onSmashKey();   // ground smash
         break;
       case 'ArrowLeft':
       case 'ArrowRight':

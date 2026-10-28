@@ -7,7 +7,7 @@
 //   rainbow: true        = scarf cycles through colors
 //   passive              = always-on perk (see OMJ.PASSIVE_DEFAULTS)
 //   active               = name of an ability in abilities.js,
-//                          used with S / DOWN / SHIFT / right-click
+//                          used with B / SHIFT / right-click
 //
 // To add a skin, copy one entry and change it.
 // =============================================================

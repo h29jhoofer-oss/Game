@@ -68,6 +68,21 @@ OMJ.PATTERNS = [
     },
   },
   {
+    name: 'saw', minDifficulty: 0.15, weight: 2,
+    build(api, d) {
+      // Longer rails (a wider sliding range) as it gets harder.
+      return api.place('saw', 0, OMJ.randInt(24, 32 + Math.floor(24 * d)));
+    },
+  },
+  {
+    name: 'crusher', minDifficulty: 0.3, weight: 1.5,
+    build(api) { return api.place('crusher', 0, 1); },
+  },
+  {
+    name: 'crossbow', minDifficulty: 0.4, weight: 1.5,
+    build(api) { return api.place('crossbow', 0, 1); },
+  },
+  {
     name: 'crateSpikes', minDifficulty: 0.65, weight: 1.5,
     build(api) {
       // A crate with spikes behind it: jump over both, or hop on the crate first.
@@ -91,7 +106,8 @@ OMJ.Spawner = class {
       speed: 0,
       airDistance: 0,
       place(typeName, offsetX, variant) {
-        return self.obstacles.spawn(typeName, this.startX + offsetX, variant);
+        const o = self.obstacles.spawn(typeName, this.startX + offsetX, variant);
+        return o ? o.w : 0;   // the width it takes up
       },
       clearDistance(height) {
         return OMJ.Physics.clearDistance(height, this.speed);

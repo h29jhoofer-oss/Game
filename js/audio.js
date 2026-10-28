@@ -127,6 +127,49 @@ OMJ.Sound = class {
       case 'fall':                       // dropping into a pit: falling whistle
         this.tone(900, 120, 0.6, 'triangle', 0.08);
         break;
+      case 'smashDown':                  // starting a ground smash
+        this.tone(700, 200, 0.12, 'square', 0.05);
+        break;
+      case 'groundSmash':                // landing a ground smash
+        this.noise(0.2, 0.25, 400);
+        this.tone(140, 40, 0.25, 'sine', 0.25);
+        break;
+
+      // ---- Obstacles ----
+      case 'crusher':
+        this.noise(0.3, 0.3, 300);
+        this.tone(90, 30, 0.3, 'square', 0.1);
+        break;
+      case 'crossbow':
+        this.tone(1400, 300, 0.08, 'triangle', 0.08);
+        this.noise(0.05, 0.08, 3000, 'highpass');
+        break;
+
+      // ---- Boss ----
+      case 'bossAlarm':
+        this.melody([880, 0.15, 660, 0.15, 880, 0.15, 660, 0.15], 'square', 0.06);
+        break;
+      case 'bossThrow':
+        this.tone(400, 200, 0.12, 'triangle', 0.07);
+        break;
+      case 'bombLand':
+        this.noise(0.08, 0.1, 600);
+        break;
+      case 'fireball':
+        this.noise(0.3, 0.12, 900, 'bandpass');
+        this.tone(300, 120, 0.3, 'sawtooth', 0.03);
+        break;
+      case 'bossHit':
+        this.tone(220, 110, 0.15, 'square', 0.1);
+        this.noise(0.12, 0.15, 2000);
+        break;
+      case 'bossDefeated':
+        this.noise(0.9, 0.3, 800);
+        this.melody([523, 0.1, 659, 0.1, 784, 0.1, 1047, 0.1, 784, 0.1, 1047, 0.3], 'square', 0.07);
+        break;
+      case 'bossEscape':
+        this.melody([784, 0.12, 659, 0.12, 523, 0.25], 'triangle', 0.07);
+        break;
 
       // ---- Progress ----
       case 'pass': {

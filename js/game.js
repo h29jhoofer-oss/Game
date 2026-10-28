@@ -33,6 +33,7 @@ OMJ.Game = class {
     this.obstacles = new OMJ.Obstacles(24);
     this.spawner = new OMJ.Spawner(this.obstacles);
     this.abilities = new OMJ.AbilitySystem();
+    this.boss = new OMJ.Boss();
     this.particles = new OMJ.Particles(200);
     this.background = new OMJ.Background();
     this.ui = new OMJ.UI(root, this);
@@ -108,6 +109,7 @@ OMJ.Game = class {
     this.particles.reset();
     this.background.reset();
     this.abilities.reset(this.skin);
+    this.boss.reset();
     this.passive = this.abilities.passive;
     this.player.setTiming(this.passive);
     for (let i = 0; i < this.announcements.length; i++) this.announcements[i].active = false;
@@ -214,6 +216,10 @@ OMJ.Game = class {
     if (this.state === 'playing') this.abilities.tryActivate(this);
   }
 
+  onSmashKey() {
+    if (this.state === 'playing' && this.player.groundSmash()) this.sound.play('smashDown');
+  }
+
   onConfirmKey() {
     if (this.state === 'menu') this.startRun();
     else if (this.state === 'paused') this.resume();
@@ -297,8 +303,10 @@ OMJ.Game = class {
     this.music.setTempoScale((1 + 0.18 * this.difficulty) * (a.timeScale < 1 ? 0.7 : 1));
 
     p.update(dt, speed);
-    this.obstacles.update(dt, speed);
-    this.spawner.update(dt, speed, this.difficulty);
+    this.obstacles.update(dt, speed, this);
+    // No new obstacles while the boss is around: it brings its own.
+    if (!this.boss.active) this.spawner.update(dt, speed, this.difficulty);
+    else this.boss.update(dt, this);
     this.background.update(dt, speed, this.score);
     this.particles.update(dt, speed);
     a.updateWorld(dt, this);
@@ -309,9 +317,20 @@ OMJ.Game = class {
       this.sound.play('jump');
       this.particles.burst(p.x + 4, p.bottom - 1, 5, 20, 50, Math.PI * 0.8, Math.PI * 1.1, 0.35, [OMJ.PALETTE.dust, OMJ.PALETTE.dustDark], 0);
     }
-    if (p.justLanded) {
+    if (p.justSmashed) {
+      // Ground smash landing: big dust cloud, a thump, and a shockwave
+      // that can hurt the boss. (It doesn't break obstacles.)
+      this.sound.play('groundSmash');
+      this.shake = Math.max(this.shake, 2);
+      this.particles.burst(p.x + 5, p.bottom - 1, 14, 40, 110, Math.PI, Math.PI * 2, 0.45, [OMJ.PALETTE.dust, OMJ.PALETTE.dustDark, OMJ.PALETTE.white], 150);
+      if (this.boss.fighting) this.boss.sendShockwave(p.x + p.w);
+    } else if (p.justLanded) {
       if (p.landSpeed > 150) this.sound.play('land');
       this.particles.burst(p.x + 5, p.bottom - 1, 6, 20, 55, Math.PI, Math.PI * 2, 0.3, [OMJ.PALETTE.dust, OMJ.PALETTE.dustDark], 80);
+    }
+    if (p.smashing) {
+      // Speed streaks above you while you plummet
+      this.particles.spawn(p.x + OMJ.randInt(1, 9), p.y - 2, 0, -40, 0.15, 1, OMJ.PALETTE.white, 0);
     }
     this.runningDust(dt);
 
@@ -340,7 +359,7 @@ OMJ.Game = class {
     const pool = this.obstacles.pool;
     for (let i = 0; i < pool.length; i++) {
       const o = pool[i];
-      if (o.active && !o.passed && o.x + o.w < p.x) {
+      if (o.active && !o.passed && !o.type.harmless && o.x + o.w < p.x) {
         o.passed = true;
         this.jumped++;
         this.sound.play('pass');
@@ -352,6 +371,9 @@ OMJ.Game = class {
     this.progress += gained;
     this.score += gained * this.passive.scoreRate;
     this.checkScoreEvents();
+
+    // The boss arrives when a night ends.
+    if (!this.boss.active && this.score >= this.boss.nextAt) this.boss.start(this);
   }
 
   // Milestones, new best and unlocks.
@@ -384,7 +406,7 @@ OMJ.Game = class {
     this.speed *= Math.pow(0.03, dt);          // world slows to a stop
     this.worldSpeed = this.speed;
     this.player.update(dt, 0);
-    this.obstacles.update(dt, this.speed);
+    this.obstacles.update(dt, this.speed, this);
     this.background.update(dt, this.speed, this.score);
     this.particles.update(dt, this.speed);
 
@@ -441,8 +463,8 @@ OMJ.Game = class {
 
     for (let i = 0; i < pool.length; i++) {
       const o = pool[i];
-      if (!o.active || !o.type.solidTop) continue;
-      const overlaps = footR > o.x + 1 && footL < o.x + o.w - 1;
+      if (!o.active || !o.solid) continue;
+      const overlaps = footR > o.x + o.bx + 1 && footL < o.x + o.bx + o.bw - 1;
       if (overlaps && p.prevBottom <= o.y + 4 && o.y < floor) floor = o.y;
     }
 
@@ -456,6 +478,7 @@ OMJ.Game = class {
   findCollision() {
     const C = OMJ.CONFIG;
     const p = this.player;
+    // (Obstacle "body" boxes: see the top of obstacles.js.)
     // The player's hitbox is 1px smaller than the sprite: near misses feel great.
     // Some skins shrink it even more.
     const shrink = 1 + this.passive.hitboxShrink;
@@ -467,16 +490,16 @@ OMJ.Game = class {
 
     for (let i = 0; i < pool.length; i++) {
       const o = pool[i];
-      if (!o.active || o.type.isGap) continue;
+      if (!o.active || o.type.isGap || o.type.harmless) continue;
       const hb = o.type.hitbox;
-      const ox1 = o.x + hb.left;
-      const ox2 = o.x + o.w - hb.right;
+      const ox1 = o.x + o.bx + hb.left;
+      const ox2 = o.x + o.bx + o.bw - hb.right;
       const oy1 = o.y + hb.top;
-      const oy2 = C.GROUND_Y;
+      const oy2 = Math.min(o.y + o.h, C.GROUND_Y);
       if (px2 > ox1 && px1 < ox2 && py2 > oy1 && py1 < oy2) {
         // Clipped the top corner of a crate? Be nice: keep rising if you're
         // already going up, or step onto it if you're coming down.
-        if (o.type.solidTop && p.bottom <= o.y + 3) {
+        if (o.solid && p.bottom <= o.y + 3) {
           if (p.vy >= 0) p.land(o.y);
           continue;
         }
@@ -494,7 +517,7 @@ OMJ.Game = class {
     const pool = this.obstacles.pool;
     for (let i = 0; i < pool.length; i++) {
       const o = pool[i];
-      if (o.active && o.x < reach && o.x + o.w > p.x - 2) return true;
+      if (o.active && !o.type.harmless && o.x < reach && o.x + o.w > p.x - 2) return true;
     }
     return p.bottom > OMJ.CONFIG.GROUND_Y + 1;
   }
@@ -506,22 +529,60 @@ OMJ.Game = class {
     const pool = this.obstacles.pool;
     for (let i = 0; i < pool.length; i++) {
       const o = pool[i];
-      if (!o.active || o.type.isGap || o.x + o.w < p.x + p.w || o.x > OMJ.CONFIG.VIEW_W) continue;
+      if (!o.active || o.type.isGap || o.type.harmless || o.x + o.w < p.x + p.w || o.x > OMJ.CONFIG.VIEW_W) continue;
       if (!best || o.x < best.x) best = o;
     }
     return best;
+  }
+
+  // Is anything dangerous between the player and screen position x?
+  // (The crossbow waits until nothing is, before it fires.)
+  hasDangerBefore(x) {
+    const p = this.player;
+    const pool = this.obstacles.pool;
+    for (let i = 0; i < pool.length; i++) {
+      const o = pool[i];
+      if (o.active && !o.type.harmless && o.x < x && o.x + o.w > p.x) return true;
+    }
+    return false;
+  }
+
+  // Seconds until every dangerous obstacle on screen has gone past you.
+  timeUntilClear() {
+    const p = this.player;
+    let t = 0;
+    const pool = this.obstacles.pool;
+    for (let i = 0; i < pool.length; i++) {
+      const o = pool[i];
+      if (o.active && !o.type.harmless) t = Math.max(t, (o.x + o.w - p.x) / this.worldSpeed);
+    }
+    return t;
+  }
+
+  onCrusherSlam(o) {
+    this.sound.play('crusher');
+    this.shake = Math.max(this.shake, 3);
+    this.particles.burst(o.x + 10, OMJ.CONFIG.GROUND_Y - 1, 12, 30, 90, Math.PI, Math.PI * 2, 0.4, [OMJ.PALETTE.dust, OMJ.PALETTE.dustDark], 150);
+  }
+
+  onBossEnd(defeated, reward) {
+    const B = OMJ.BOSS;
+    if (defeated) {
+      this.score += reward;
+      this.announce('BOSS DEFEATED! +' + reward, OMJ.PALETTE.gold);
+    }
+    // Next visit: after the next night.
+    this.boss.nextAt = Math.floor(this.score / B.every + 1) * B.every;
+    this.spawner.distanceUntilNext = OMJ.CONFIG.FIRST_OBSTACLE_DISTANCE;
+    this.music.play('run');
   }
 
   // Break an obstacle into pieces (Dash, Shuriken, Shield...).
   smash(o) {
     o.active = false;
     if (!o.passed) this.jumped++;
-    const colors = o.typeName === 'crate'
-      ? [OMJ.PALETTE.wood, OMJ.PALETTE.woodLight, OMJ.PALETTE.woodDark]
-      : o.typeName === 'barrier'
-        ? [OMJ.PALETTE.danger, OMJ.PALETTE.white]
-        : [OMJ.PALETTE.metal, OMJ.PALETTE.metalLight];
-    this.particles.burst(o.x + o.w / 2, o.y + o.h / 2, 14, 40, 130, 0, Math.PI * 2, 0.6, colors, 300);
+    const colors = o.type.debris || [OMJ.PALETTE.metal, OMJ.PALETTE.metalLight];
+    this.particles.burst(o.x + o.bx + o.bw / 2, o.y + o.h / 2, 14, 40, 130, 0, Math.PI * 2, 0.6, colors, 300);
     this.sound.play('smash');
     this.shake = Math.max(this.shake, 2);
     this.score += 5;
@@ -543,6 +604,7 @@ OMJ.Game = class {
         this.smash(o);
       }
     }
+    if (this.boss.fighting) this.boss.hit(2, this);
     this.flash = 0.15;
     this.shake = 4;
   }
@@ -648,7 +710,8 @@ OMJ.Game = class {
     this.background.draw(ctx);
     this.background.drawGround(ctx);
     this.background.drawGroundTint(ctx);
-    this.obstacles.draw(ctx);
+    this.boss.draw(ctx, this);
+    this.obstacles.draw(ctx, this);
     this.particles.draw(ctx);
     if (inRun) this.abilities.drawBehindPlayer(ctx, this);
 
@@ -674,6 +737,7 @@ OMJ.Game = class {
       this.ui.drawSkinPreview(this.time);
     } else {
       this.drawHud(ctx);
+      this.boss.drawHud(ctx);
       if (inRun) this.abilities.drawHud(ctx, this);
     }
   }
@@ -717,9 +781,10 @@ OMJ.Game = class {
     for (let i = 0; i < pool.length; i++) {
       const o = pool[i];
       if (!o.active) continue;
+      if (o.type.harmless) continue;
       if (o.type.isGap) { ctx.strokeRect(o.x + 0.5, OMJ.CONFIG.GROUND_Y + 0.5, o.w - 1, 6); continue; }
       const hb = o.type.hitbox;
-      ctx.strokeRect(o.x + hb.left + 0.5, o.y + hb.top + 0.5, o.w - hb.left - hb.right - 1, o.h - hb.top - 1);
+      ctx.strokeRect(o.x + o.bx + hb.left + 0.5, o.y + hb.top + 0.5, o.bw - hb.left - hb.right - 1, o.h - hb.top - 1);
     }
   }
 };

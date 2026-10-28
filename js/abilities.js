@@ -1,6 +1,6 @@
 // =============================================================
-// abilities.js — Each skin's ACTIVE ability (S / DOWN / SHIFT /
-// right-click) and the system that runs abilities during a run.
+// abilities.js — Each skin's ACTIVE ability (B / SHIFT / right-click)
+// and the system that runs abilities during a run.
 //
 // To add an ability, add an entry to OMJ.ABILITIES:
 //   name, desc        shown on the start screen
@@ -20,6 +20,7 @@ OMJ.ABILITIES = {
     canUse(g) { return !g.player.grounded; },
     activate(g) {
       const p = g.player;
+      p.smashing = false;
       p.vy = -OMJ.CONFIG.JUMP_VELOCITY * 0.9;
       p.squash = -1;
       g.particles.burst(p.x + 5, p.bottom, 10, 30, 70, 0, Math.PI * 2, 0.4, [g.skin.light, OMJ.PALETTE.white], 0);
@@ -50,7 +51,7 @@ OMJ.ABILITIES = {
 
   shuriken: {
     name: 'Shuriken', desc: 'Throw a star that breaks the next obstacle', cooldown: 6, duration: 0,
-    canUse(g) { return g.nextObstacleAhead() !== null; },
+    canUse(g) { return g.nextObstacleAhead() !== null || g.boss.fighting; },
     activate(g, a) {
       a.throwStar(g.player.x + g.player.w, g.player.y + 5);
       g.sound.play('throw');
@@ -174,11 +175,13 @@ OMJ.AbilitySystem = class {
       const targetY = OMJ.CONFIG.GROUND_Y - 6;
       s.y += OMJ.clamp(targetY - s.y, -200 * dt, 200 * dt);
       if (s.x > OMJ.CONFIG.VIEW_W + 8) { s.active = false; continue; }
+      if (g.boss.fighting && s.x >= g.boss.x - 16) { g.boss.hit(1, g); s.active = false; continue; }
       const pool = g.obstacles.pool;
       for (let j = 0; j < pool.length; j++) {
         const o = pool[j];
-        if (!o.active || o.type.isGap) continue;
-        if (s.x + 2 > o.x && s.x - 2 < o.x + o.w && s.y + 2 > o.y - 2 && s.y - 2 < OMJ.CONFIG.GROUND_Y) {
+        if (!o.active || o.type.isGap || o.type.harmless) continue;
+        const left = o.x + o.bx;
+        if (s.x + 2 > left && s.x - 2 < left + o.bw && s.y + 2 > o.y - 2 && s.y - 2 < o.y + o.h) {
           g.smash(o);
           s.active = false;
           break;
@@ -305,7 +308,7 @@ OMJ.AbilitySystem = class {
     // Key hint
     ctx.fillStyle = P.white;
     ctx.fillRect(x + 81, y + 4, 11, 11);
-    F.draw(ctx, 'S', x + 85, y + 7, 1, P.ink, 'left');
+    F.draw(ctx, 'B', x + 85, y + 7, 1, P.ink, 'left');
 
     // Ghost's spare life
     if (this.passive.secondChance && !this.secondChanceUsed) {

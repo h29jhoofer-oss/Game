@@ -29,6 +29,7 @@ OMJ.CONFIG = {
   GRAVITY: 1500,            // pixels per second², pulls you down
   JUMP_VELOCITY: 430,       // upward speed at the start of a jump
   MAX_FALL_SPEED: 900,
+  SMASH_SPEED: 650,         // ground smash (DOWN): instant downward speed
   COYOTE_TIME: 0.08,        // you can still jump this long after leaving a ledge
   JUMP_BUFFER_TIME: 0.12,   // a press this early before landing still counts
 

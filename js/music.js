@@ -35,6 +35,18 @@ OMJ.SONGS = {
     drums: `K h S h K K S h | K h S h K K S h | K h S h K K S h | K h S h K K S h
             K h S h K K S h | K h S h K K S h | K h S h K K S h | K h S h S S S S`,
   },
+
+  // Tense, driving tune for the Big Bonk boss fight.
+  boss: {
+    bpm: 150,
+    leadWave: 'square', leadVolume: 0.045,
+    lead: `A4 . C5 . E5 . A5 . | G5 - E5 . D5 . E5 . | F5 . E5 . D5 . C5 . | B4 - G#4 . E4 . B4 .
+           A5 . G5 . A5 . E5 . | G5 . F5 . G5 . D5 . | F5 . A5 . C6 . A5 . | G#5 - - - B5 - - -`,
+    bass: `A2 A2 A3 A2 A2 A3 A2 A3 | A2 A2 A3 A2 G2 G3 G2 G3 | F2 F2 F3 F2 F2 F3 F2 F3 | E2 E2 E3 E2 E2 E3 G#2 G#3
+           A2 A2 A3 A2 A2 A3 A2 A3 | A2 A2 A3 A2 G2 G3 G2 G3 | F2 F2 F3 F2 F2 F3 F2 F3 | E2 E2 E3 E2 E2 E3 G#2 G#3`,
+    drums: `K h S h K S S h | K h S h K S S h | K h S h K S S h | K h S h K S S h
+            K h S h K S S h | K h S h K S S h | K h S h K S S h | S S S S S S K K`,
+  },
 };
 
 OMJ.Music = class {
