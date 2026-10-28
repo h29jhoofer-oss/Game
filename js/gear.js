@@ -144,9 +144,9 @@ OMJ.SwordSystem = class {
   constructor() {
     // The sword is HEAVY: a swing is a slow heave over your head, then a
     // fast chop down. It only hits during the chop.
-    this.SWING_TIME = 0.6;        // whole swing, start to finish
-    this.SWING_LIFT = 0.55;       // first 55% = lifting it (can't hit yet)
-    this.SWING_CHOP = 0.8;        // chop ends here; the rest is recovering
+    this.SWING_TIME = 0.75;       // whole swing, start to finish
+    this.SWING_LIFT = 0.44;       // first 44% = lifting it (can't hit yet)
+    this.SWING_CHOP = 0.64;       // chop ends here; the rest is hoisting it back
     this.SWING_COOLDOWN = 1.1;    // seconds between swings (from the press)
     this.PLUNGE_COOLDOWN = 1.5;   // seconds between plunge attacks
     this.shots = [];           // beams and fire waves (fixed pool)
@@ -350,25 +350,13 @@ OMJ.SwordSystem = class {
   swordAngle(p, time) {
     if (this.spinTimer > 0) return (time * 1440) % 360;
     if (this.plunging || this.slamTimer > 0) return 180;        // pointing straight down
-    const drag = OMJ.CONFIG.SWORD_POSE === 'drag';
-    if (this.swingTimer > 0) {
-      // A slow, straining heave up over your head (wobbling a little, it's
-      // heavy!), then a fast chop down in front, then a short rest.
-      const t = this.swingT;
-      const start = drag ? -100 : -40;
-      const top = -15;                                            // held up, just behind your head
-      if (t < this.SWING_LIFT) {
-        const k = t / this.SWING_LIFT;
-        const wobble = k > 0.7 ? (Math.floor(time * 20) % 2 ? 4 : 0) : 0;
-        return start + (top - start) * (k * k * (3 - 2 * k)) + wobble;   // ease in and out
-      }
-      if (t < this.SWING_CHOP) {
-        const k = (t - this.SWING_LIFT) / (this.SWING_CHOP - this.SWING_LIFT);
-        return top + (130 - top) * (k * k);                         // gravity takes over
-      }
-      return 130;                                                   // blade resting in front
-    }
-    if (drag) {
+    if (this.swingTimer > 0) return this.swingPose(p, time).a;
+    return this.restAngle(p, time);
+  }
+
+  // The angle when you're not attacking.
+  restAngle(p, time) {
+    if (OMJ.CONFIG.SWORD_POSE === 'drag') {
       // Trailing behind you, tip on the ground. In the air it dangles.
       return p.grounded ? -110 : -150 + (Math.floor(time * 8) % 2 ? 6 : 0);
     }
@@ -377,22 +365,72 @@ OMJ.SwordSystem = class {
     return 18 + wobble;
   }
 
+  // Where your fist is when you're not attacking (relative to you).
+  restGrip() {
+    return OMJ.CONFIG.SWORD_POSE === 'drag' ? { x: -2, y: 7 } : { x: 10, y: 9 };
+  }
+
+  // The swing, as an angle plus where your fist is. The fist moves around
+  // your shoulder with the sword, so it never jumps from back to front:
+  //   1. a slow, straining heave up over your head (it's heavy!)
+  //   2. a fast chop down in front, tip into the ground
+  //   3. a short rest, then hoisting it back over your head to where it was
+  swingPose(p, time) {
+    const t = this.swingT;
+    const rest = this.restGrip();
+    const restA = this.restAngle(p, time);
+    const top = -15;            // held up, just behind your head
+    const down = 105;           // tip touching the ground in front of you
+    let a;
+    let blend = 0;              // 0 = fist on the shoulder arc, 1 = fist at the rest grip
+    if (t < this.SWING_LIFT) {
+      const k = t / this.SWING_LIFT;
+      const e = k * k * (3 - 2 * k);                                  // ease in and out
+      const wobble = k > 0.7 ? (Math.floor(time * 20) % 2 ? 4 : 0) : 0;
+      a = restA + (top - restA) * e + wobble;
+      blend = 1 - e;
+    } else if (t < this.SWING_CHOP) {
+      const k = (t - this.SWING_LIFT) / (this.SWING_CHOP - this.SWING_LIFT);
+      a = top + (down - top) * (k * k);                               // gravity takes over
+    } else {
+      const k = (t - this.SWING_CHOP) / (1 - this.SWING_CHOP);
+      const e = k < 0.3 ? 0 : ((k - 0.3) / 0.7) * ((k - 0.3) / 0.7);  // stuck a moment, then up
+      a = down + (restA - down) * e;                                  // back over the top
+      blend = e;
+    }
+    const r = (a * Math.PI) / 180;
+    const arcX = 4 + Math.sin(r) * 6;           // shoulder at (4, 6), arm 6 px long
+    const arcY = 6 - Math.cos(r) * 6;
+    return {
+      a: a,
+      x: p.x + arcX + (rest.x - arcX) * blend,
+      y: p.y + arcY + (rest.y - arcY) * blend,
+    };
+  }
+
   // Resting in the drag pose (not mid-swing)?
   get dragging() {
     return OMJ.CONFIG.SWORD_POSE === 'drag' && this.swingTimer <= 0 && this.spinTimer <= 0 &&
       !this.plunging && this.slamTimer <= 0;
   }
 
+  // Drawn behind your body? (Dragging, or the start/end of a swing.)
+  behind(p, time) {
+    return this.dragging || (this.swingTimer > 0 && this.swingPose(p, time).a < -60);
+  }
+
   // Where your little fist holds the sword: just behind you when
   // dragging it, under you when plunging, out in front otherwise.
-  gripX(p) {
+  gripX(p, time) {
     if (this.plunging || this.slamTimer > 0) return Math.round(p.x + 6);
-    return Math.round(this.dragging ? p.x - 2 : p.x + 10);
+    if (this.swingTimer > 0 && this.spinTimer <= 0) return Math.round(this.swingPose(p, time).x);
+    return Math.round(p.x + this.restGrip().x);
   }
-  gripY(p) {
+  gripY(p, time) {
     if (this.slamTimer > 0) return Math.round(p.bottom - 8);      // blade buried in the ground
     if (this.plunging) return Math.round(p.bottom - 3);
-    return Math.round(this.dragging ? p.y + 7 : p.y + 9);
+    if (this.swingTimer > 0 && this.spinTimer <= 0) return Math.round(this.swingPose(p, time).y);
+    return Math.round(p.y + this.restGrip().y);
   }
 
   // Sparks where the tip scrapes along the ground. The faster you run,
@@ -405,7 +443,7 @@ OMJ.SwordSystem = class {
     const fast = OMJ.clamp((g.worldSpeed - C.START_SPEED) / (C.MAX_SPEED - C.START_SPEED), 0, 1);
     if (Math.random() > 0.3 + 0.4 * fast) return;
     const a = (this.swordAngle(p, g.time) * Math.PI) / 180;
-    const tipX = this.gripX(p) + Math.sin(a) * OMJ.SwordArt.LENGTH;
+    const tipX = this.gripX(p, g.time) + Math.sin(a) * OMJ.SwordArt.LENGTH;
     const size = (this.sword.sparkSize || 1) + Math.round(fast * 2);       // 1 -> 3 px (fire: 2 -> 4)
     const colors = this.sword.sparkColors || OMJ.SPARK_COLORS;
     g.particles.spawn(tipX + OMJ.rand(-1, 1), p.bottom - size, OMJ.rand(-50, -10) * (1 + fast), OMJ.rand(-70, -25) * (1 + 0.5 * fast),
@@ -415,8 +453,8 @@ OMJ.SwordSystem = class {
   // Drawn BEFORE the player, so a dragged sword trails out from behind you.
   drawBehind(ctx, g) {
     const p = g.player;
-    if (p.dead || !this.dragging) return;
-    OMJ.SwordArt.draw(ctx, this.sword, this.swordAngle(p, g.time), this.gripX(p), this.gripY(p));
+    if (p.dead || !this.behind(p, g.time)) return;
+    OMJ.SwordArt.draw(ctx, this.sword, this.swordAngle(p, g.time), this.gripX(p, g.time), this.gripY(p, g.time));
   }
 
   // Drawn after the player: the sword, your fist, shots and lightning.
@@ -425,10 +463,10 @@ OMJ.SwordSystem = class {
     if (!p.dead) {
       const swinging = this.chopping || this.spinTimer > 0;
       const angle = this.swordAngle(p, g.time);
-      const hx = this.gripX(p);
-      const hy = this.gripY(p);
+      const hx = this.gripX(p, g.time);
+      const hy = this.gripY(p, g.time);
       if (swinging) this.drawTrail(ctx, angle, hx, hy);
-      if (!this.dragging) OMJ.SwordArt.draw(ctx, this.sword, angle, hx, hy);
+      if (!this.behind(p, g.time)) OMJ.SwordArt.draw(ctx, this.sword, angle, hx, hy);
       // The little fist wrapped around the handle
       ctx.fillStyle = OMJ.PALETTE.ink;
       ctx.fillRect(hx - 1, hy - 1, 3, 3);
