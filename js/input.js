@@ -19,6 +19,8 @@ OMJ.Input = class {
     document.addEventListener('keydown', this.onKeyDown);
     document.addEventListener('keyup', this.onKeyUp);
     root.addEventListener('pointerdown', this.onPointerDown);
+    // Right-click is the ability button, so don't open the browser menu.
+    root.addEventListener('contextmenu', (e) => e.preventDefault());
     // A key released while the window is in the background never sends
     // "keyup", so forget all held keys when the window loses focus.
     window.addEventListener('blur', () => { this.held = {}; });
@@ -69,12 +71,21 @@ OMJ.Input = class {
       case 'KeyM':
         if (firstPress) g.toggleMute();
         break;
+      case 'KeyN':
+        if (firstPress) g.toggleMusic();
+        break;
+      case 'KeyS':
+      case 'ArrowDown':
+      case 'ShiftLeft':
+      case 'ShiftRight':
+        e.preventDefault();
+        if (firstPress) g.onAbilityKey();
+        break;
       case 'ArrowLeft':
       case 'ArrowRight':
         e.preventDefault();
         if (firstPress) g.onArrowKey(code === 'ArrowLeft' ? -1 : 1);
         break;
-      case 'ArrowDown':
       case 'PageUp':
       case 'PageDown':
         e.preventDefault();
@@ -96,7 +107,8 @@ OMJ.Input = class {
       this.root.focus({ preventScroll: true });
     }
     // Clicks on buttons are handled by the buttons themselves.
-    if (e.button !== 0 || e.target.closest('button')) return;
-    this.game.onPointerJump();
+    if (e.target.closest('button')) return;
+    if (e.button === 0) this.game.onPointerJump();      // left click = jump
+    else if (e.button === 2) this.game.onAbilityKey();  // right click = ability
   }
 };

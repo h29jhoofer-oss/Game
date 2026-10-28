@@ -1,7 +1,8 @@
 # One More Jump
 
 A tiny pixel-art endless runner for the browser. Your little blob runs on its own — you just
-jump over spikes, crates, gaps and tall barriers for as long as you can.
+jump over spikes, crates, gaps and tall barriers for as long as you can. Unlock new skins, each
+with its own powers, while a chiptune soundtrack speeds up with you.
 
 Plain HTML, CSS and JavaScript. No libraries, no build step, nothing to install.
 
@@ -21,11 +22,32 @@ python3 -m http.server 8000
 | Key | Action |
 | --- | --- |
 | `SPACE`, `↑`, `W`, mouse click | Jump |
+| `S`, `↓`, `SHIFT`, right-click | Use your skin's ability |
 | `ESC` or `P` | Pause / resume |
 | `R` | Restart after a crash |
-| `M` | Mute / unmute |
+| `M` | Mute / unmute everything |
+| `N` | Music on / off |
 | `←` / `→` (start screen) | Change skin |
 | `H` | Show hitboxes (for debugging) |
+
+## Skins and their powers
+
+Every skin has a **passive** perk (always on) and an **active** ability (press `S`). The meter in
+the bottom-left corner shows when the ability is ready. Every run starts with it charged.
+
+| Skin | Unlock at | Passive | Active (cooldown) |
+| --- | --- | --- | --- |
+| Classic | 0 | **Lucky Streak**: milestone bonus doubled | **Double Jump**: jump again in mid-air (4 s) |
+| Minty | 100 | **Quick Feet**: extra-forgiving jump timing | **Dash**: zoom ahead, smashing obstacles (9 s) |
+| Berry | 250 | **Sugar Rush**: +10% score | **Slow-Mo**: time runs at half speed for 3 s (15 s) |
+| Ghost | 500 | **Second Chance**: survive one crash per run | **Phase**: float through anything for 1.2 s (10 s) |
+| Ninja | 750 | **Slippery**: smaller hitbox | **Shuriken**: throw a star that breaks the next obstacle (6 s) |
+| Golden | 1000 | **Midas Touch**: +25% score | **Shield**: a bubble that blocks one crash for 10 s (20 s) |
+| Cosmic | 2000 | **Stardust**: abilities recharge 50% faster, +15% score | **Supernova**: blast away everything on screen (25 s) |
+
+Abilities only ever help. Protection (Dash, Phase, Shield, Second Chance) never runs out while
+you're over a pit or about to touch an obstacle, so it can't end in an unfair crash. Score
+bonuses don't make the game speed up faster: difficulty follows distance travelled.
 
 ## Project layout
 
@@ -41,12 +63,14 @@ the top saying what it does.
 | `js/storage.js` | Saves best score, skin and mute setting in `localStorage` |
 | `js/sprites.js` | Turns text "pictures" into pixel art; the color palette |
 | `js/font.js` | The tiny pixel font used for the score and titles |
-| `js/skins.js` | Unlockable character colors |
+| `js/skins.js` | Unlockable characters: colors, passive perks, which ability they use |
 | `js/messages.js` | The funny game-over lines |
 | `js/audio.js` | Sound effects, synthesized with the Web Audio API (no sound files) |
+| `js/music.js` | Background music: songs written as note lists, and a tiny sequencer |
 | `js/player.js` | The player: jumping, gravity, landing, and how it's drawn |
 | `js/obstacles.js` | Obstacle types (spike, crate, barrier, gap) and the obstacle pool |
 | `js/spawner.js` | Obstacle patterns and when they appear |
+| `js/abilities.js` | Active abilities, cooldowns, invulnerability, the ability meter |
 | `js/particles.js` | Dust and sparkle particles |
 | `js/background.js` | Parallax sky, mountains, hills, town, ground; day/sunset/night themes |
 | `js/input.js` | Keyboard and mouse |
@@ -80,8 +104,19 @@ Edit `js/config.js`. Good ones to try: `JUMP_VELOCITY`, `GRAVITY`, `START_SPEED`
 > `OMJ.Physics.maxJumpHeight()` must stay well above that.
 
 ### Add a skin
-Copy a line in `js/skins.js`, give it a new `id`, `name`, `unlockAt` score and colors. Keep the
-list sorted by `unlockAt`.
+Copy an entry in `js/skins.js`, give it a new `id`, `name`, `unlockAt` score and colors. Keep the
+list sorted by `unlockAt`. Pick its `active` ability from `OMJ.ABILITIES`, and give it a
+`passive` that changes any of the values in `OMJ.PASSIVE_DEFAULTS`.
+
+### Add an ability
+Add an entry to `OMJ.ABILITIES` in `js/abilities.js` with `name`, `desc`, `cooldown`, `duration`
+and an `activate(game, a)` function (and `canUse(game)` if it only works sometimes). Look at the
+existing ones: most are a few lines that start a timer and play a sound.
+
+### Change the music
+Songs live at the top of `js/music.js`. Each word is one eighth-note step: a note like `C5` or
+`F#4`, `-` to hold the previous note, `.` for silence. Drums use `K` (kick), `S` (snare) and
+`h` (hi-hat). Keep the lead, bass and drum lines the same length (64 steps in the built-in songs).
 
 ### Add an obstacle
 1. In `js/obstacles.js`, add an entry to `OMJ.ObstacleTypes` with `size`, `hitbox`, `draw` and
@@ -139,8 +174,10 @@ belongs to.
   night at 1000.
 - Dust puffs when you jump and land. The character blinks, its scarf flaps, and it looks up
   while rising and down while falling.
-- Sounds play for jumping, landing, passing obstacles, milestones and crashing. `M` or the
-  speaker button mutes them, and the setting is remembered.
+- Sounds play for jumping, landing, passing obstacles, milestones, crashing, falling and every
+  ability. `M` or the speaker button mutes everything, and the setting is remembered.
+- Music plays on the start screen and during runs, speeds up as the game gets harder, slows during
+  Slow-Mo, and pauses with the game. `N` or the note button turns it off.
 
 **Stage 5: menus, pause, best score, unlocks, polish**
 - The start screen shows the title, instructions, best score, skin picker and Play button.
@@ -149,6 +186,10 @@ belongs to.
   restart by accident.
 - Reload the page: your best score, skin and mute setting are still there.
 - Beating 100, 250, 500… unlocks new skins, announced mid-run.
+- Each skin's passive and active show on the start screen, even while it's locked.
+- `S` uses the ability; the meter fills while it recharges and says READY when it's charged.
+  Double Jump and Shuriken buzz and stay charged if you press them when they can't work
+  (on the ground, or with nothing to hit).
 
 To reset your saved progress, open the browser console (F12) and run:
 

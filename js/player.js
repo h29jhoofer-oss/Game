@@ -18,6 +18,9 @@ OMJ.Player = class {
     this.coyoteTimer = 0;
     this.jumpBufferTimer = 0;
     this.dead = false;
+    // How forgiving jump timing is (some skins change these).
+    this.coyoteTime = C.COYOTE_TIME;
+    this.jumpBufferTime = C.JUMP_BUFFER_TIME;
 
     // Animation state
     this.runTime = 0;
@@ -39,7 +42,13 @@ OMJ.Player = class {
   // We remember the press for a moment ("jump buffer") so a press
   // slightly before landing still works — this makes controls feel tight.
   pressJump() {
-    this.jumpBufferTimer = OMJ.CONFIG.JUMP_BUFFER_TIME;
+    this.jumpBufferTimer = this.jumpBufferTime;
+  }
+
+  // Use a skin's passive perk for jump timing (null = keep the normal value).
+  setTiming(passive) {
+    if (passive.coyoteTime !== null) this.coyoteTime = passive.coyoteTime;
+    if (passive.jumpBufferTime !== null) this.jumpBufferTime = passive.jumpBufferTime;
   }
 
   update(dt, runSpeed) {
@@ -50,7 +59,7 @@ OMJ.Player = class {
 
     if (!this.dead) {
       // "Coyote time": a short grace period after walking off a ledge.
-      if (this.grounded) this.coyoteTimer = C.COYOTE_TIME;
+      if (this.grounded) this.coyoteTimer = this.coyoteTime;
       else this.coyoteTimer -= dt;
       this.jumpBufferTimer -= dt;
 

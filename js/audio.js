@@ -3,13 +3,20 @@
 // No sound files needed: every sound is a short synthesized beep.
 // Browsers only allow sound after the player clicks or presses a
 // key, so unlock() is called on the first input.
+//
+// Volume chain:   effects ─┐
+//                          ├─> master (mute button) ─> speakers
+//                 music  ──┘
 // =============================================================
 
 OMJ.Sound = class {
-  constructor(muted) {
+  constructor(muted, musicMuted) {
     this.muted = muted;
+    this.musicMuted = musicMuted;
     this.ctx = null;
     this.master = null;
+    this.sfxBus = null;
+    this.musicBus = null;
     this.noiseBuffer = null;
     this.lastPassTime = 0;
   }
@@ -24,10 +31,14 @@ OMJ.Sound = class {
         return;
       }
       this.master = this.ctx.createGain();
-      this.master.gain.value = this.muted ? 0 : 0.5;
       this.master.connect(this.ctx.destination);
+      this.sfxBus = this.ctx.createGain();
+      this.sfxBus.connect(this.master);
+      this.musicBus = this.ctx.createGain();
+      this.musicBus.connect(this.master);
+      this.applyVolumes();
 
-      // White noise, created once, for thuds and crashes.
+      // White noise, created once, for thuds, drums and crashes.
       const length = Math.floor(this.ctx.sampleRate * 0.5);
       this.noiseBuffer = this.ctx.createBuffer(1, length, this.ctx.sampleRate);
       const data = this.noiseBuffer.getChannelData(0);
@@ -36,53 +47,88 @@ OMJ.Sound = class {
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
 
+  get ready() {
+    return !!this.ctx && this.ctx.state === 'running';
+  }
+
+  applyVolumes() {
+    if (!this.master) return;
+    this.master.gain.value = this.muted ? 0 : 0.5;
+    this.sfxBus.gain.value = 1;
+    this.musicBus.gain.value = this.musicMuted ? 0 : 0.55;
+  }
+
   setMuted(muted) {
     this.muted = muted;
-    if (this.master) this.master.gain.value = muted ? 0 : 0.5;
+    this.applyVolumes();
+  }
+
+  setMusicMuted(muted) {
+    this.musicMuted = muted;
+    this.applyVolumes();
   }
 
   // A single beep that slides from freqStart to freqEnd.
-  tone(freqStart, freqEnd, duration, type, volume, delay) {
-    const t = this.ctx.currentTime + (delay || 0);
+  //   when: seconds from now (or an exact audio time if `absolute` is true)
+  //   bus:  where it goes (effects by default)
+  tone(freqStart, freqEnd, duration, type, volume, when, bus, absolute) {
+    const t = absolute ? when : this.ctx.currentTime + (when || 0);
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = type;
     osc.frequency.setValueAtTime(freqStart, t);
-    osc.frequency.exponentialRampToValueAtTime(freqEnd, t + duration);
-    gain.gain.setValueAtTime(volume, t);
+    if (freqEnd !== freqStart) osc.frequency.exponentialRampToValueAtTime(freqEnd, t + duration);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(volume, t + 0.005);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
     osc.connect(gain);
-    gain.connect(this.master);
+    gain.connect(bus || this.sfxBus);
     osc.start(t);
     osc.stop(t + duration + 0.02);
   }
 
-  noise(duration, volume, filterFreq) {
-    const t = this.ctx.currentTime;
+  // A burst of noise. filterType 'lowpass' = thud, 'highpass' = hiss.
+  noise(duration, volume, filterFreq, filterType, when, bus, absolute) {
+    const t = absolute ? when : this.ctx.currentTime + (when || 0);
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
     const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
+    filter.type = filterType || 'lowpass';
     filter.frequency.value = filterFreq;
     const gain = this.ctx.createGain();
     gain.gain.setValueAtTime(volume, t);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
     src.connect(filter);
     filter.connect(gain);
-    gain.connect(this.master);
+    gain.connect(bus || this.sfxBus);
     src.start(t);
     src.stop(t + duration);
   }
 
+  // Play several notes one after another: [frequency, length] pairs.
+  melody(notes, type, volume) {
+    let t = 0;
+    for (let i = 0; i < notes.length; i += 2) {
+      this.tone(notes[i], notes[i], notes[i + 1] * 1.3, type, volume, t);
+      t += notes[i + 1];
+    }
+  }
+
   play(name) {
-    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    if (this.muted || !this.ready) return;
     switch (name) {
+      // ---- Movement ----
       case 'jump':
         this.tone(260, 620, 0.12, 'square', 0.07);
         break;
       case 'land':
         this.noise(0.06, 0.12, 500);
         break;
+      case 'fall':                       // dropping into a pit: falling whistle
+        this.tone(900, 120, 0.6, 'triangle', 0.08);
+        break;
+
+      // ---- Progress ----
       case 'pass': {
         // Throttled so quick obstacle clusters don't machine-gun beeps.
         const now = this.ctx.currentTime;
@@ -92,22 +138,77 @@ OMJ.Sound = class {
         break;
       }
       case 'milestone':
-        this.tone(523, 523, 0.08, 'square', 0.05, 0);
-        this.tone(659, 659, 0.08, 'square', 0.05, 0.08);
-        this.tone(784, 784, 0.08, 'square', 0.05, 0.16);
-        this.tone(1047, 1047, 0.16, 'square', 0.05, 0.24);
+        this.melody([523, 0.08, 659, 0.08, 784, 0.08, 1047, 0.16], 'square', 0.05);
+        break;
+      case 'newBest':
+        this.melody([784, 0.07, 784, 0.07, 1047, 0.07, 1319, 0.2], 'triangle', 0.09);
         break;
       case 'unlock':
-        this.tone(784, 784, 0.1, 'triangle', 0.09, 0);
-        this.tone(988, 988, 0.1, 'triangle', 0.09, 0.1);
-        this.tone(1319, 1319, 0.25, 'triangle', 0.09, 0.2);
+        this.melody([784, 0.1, 988, 0.1, 1319, 0.25], 'triangle', 0.09);
         break;
       case 'hit':
         this.noise(0.25, 0.25, 1200);
         this.tone(420, 70, 0.45, 'square', 0.08);
         break;
+      case 'gameOver':                   // sad little jingle after a crash
+        this.melody([392, 0.16, 370, 0.16, 349, 0.16, 330, 0.4], 'triangle', 0.08);
+        break;
+
+      // ---- Abilities ----
+      case 'ready':                      // ability recharged
+        this.tone(1320, 1760, 0.08, 'sine', 0.06);
+        this.tone(1760, 1760, 0.12, 'sine', 0.04, 0.08);
+        break;
+      case 'denied':                     // can't use the ability right now
+        this.tone(160, 120, 0.1, 'square', 0.05);
+        break;
+      case 'doubleJump':
+        this.tone(500, 1100, 0.14, 'square', 0.06);
+        this.noise(0.08, 0.05, 3000, 'highpass');
+        break;
+      case 'dash':
+        this.noise(0.35, 0.18, 1800, 'bandpass');
+        this.tone(200, 800, 0.25, 'sawtooth', 0.04);
+        break;
+      case 'slowmo':
+        this.tone(700, 180, 0.6, 'sine', 0.1);
+        break;
+      case 'phase':
+        this.tone(300, 900, 0.3, 'sine', 0.07);
+        this.tone(310, 920, 0.3, 'sine', 0.05);
+        break;
+      case 'throw':
+        this.noise(0.12, 0.1, 4000, 'highpass');
+        this.tone(1200, 600, 0.1, 'triangle', 0.04);
+        break;
+      case 'smash':
+        this.noise(0.15, 0.2, 900);
+        this.tone(300, 90, 0.15, 'square', 0.05);
+        break;
+      case 'shield':
+        this.melody([523, 0.06, 784, 0.06, 1047, 0.12], 'sine', 0.08);
+        break;
+      case 'shieldBreak':
+        this.noise(0.3, 0.2, 2500, 'highpass');
+        this.tone(1400, 300, 0.3, 'triangle', 0.07);
+        break;
+      case 'secondChance':
+        this.melody([330, 0.1, 262, 0.1, 196, 0.2], 'sine', 0.1);   // "boo!"
+        break;
+      case 'nova':
+        this.noise(0.8, 0.25, 600);
+        this.tone(80, 1600, 0.5, 'sawtooth', 0.05);
+        break;
+
+      // ---- Menus ----
       case 'click':
         this.tone(600, 800, 0.04, 'square', 0.04);
+        break;
+      case 'pause':
+        this.tone(660, 440, 0.08, 'triangle', 0.06);
+        break;
+      case 'resume':
+        this.tone(440, 660, 0.08, 'triangle', 0.06);
         break;
     }
   }

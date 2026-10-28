@@ -7,7 +7,7 @@
 
 OMJ.Storage = {
   defaults() {
-    return { best: 0, skin: 'classic', muted: false };
+    return { best: 0, skin: 'classic', muted: false, musicMuted: false };
   },
 
   load() {
@@ -20,6 +20,7 @@ OMJ.Storage = {
       if (Number.isFinite(saved.best) && saved.best >= 0) data.best = Math.floor(saved.best);
       if (typeof saved.skin === 'string') data.skin = saved.skin;
       if (typeof saved.muted === 'boolean') data.muted = saved.muted;
+      if (typeof saved.musicMuted === 'boolean') data.musicMuted = saved.musicMuted;
     } catch (err) {
       // Storage unavailable or corrupted: use defaults.
     }

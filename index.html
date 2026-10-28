@@ -29,6 +29,14 @@
             <path class="omj-icon-cross" d="M6 3h1v1h1v1h-1v1h-1v-1h1v-1h-1zM8 3h1v1h-1zM8 5h1v1h-1z" transform="translate(1 1)"/>
           </svg>
         </button>
+        <button class="omj-icon" data-action="music" title="Music (N)" aria-label="Turn music off">
+          <svg viewBox="0 0 10 10" aria-hidden="true">
+            <path d="M4 1h5v6h-1v-4h-3v5h-1z"/>
+            <rect x="2" y="7" width="3" height="2"/>
+            <rect x="6" y="6" width="3" height="2"/>
+            <path class="omj-icon-cross" d="M0 9h1v1h-1zM1 8h1v1h-1zM2 7h1v1h-1zM3 6h1v1h-1zM4 5h1v1h-1zM5 4h1v1h-1zM6 3h1v1h-1zM7 2h1v1h-1zM8 1h1v1h-1zM9 0h1v1h-1z"/>
+          </svg>
+        </button>
       </div>
 
       <!-- START SCREEN -->
@@ -43,12 +51,19 @@
             <canvas class="omj-skin-preview" data-skin-preview></canvas>
             <span class="omj-skin-name" data-field="skin-name">Classic</span>
             <span class="omj-skin-lock" data-field="skin-lock"></span>
+            <dl class="omj-perks">
+              <dt>PASSIVE</dt><dd data-field="skin-passive"></dd>
+              <dt>ACTIVE</dt><dd data-field="skin-active"></dd>
+            </dl>
           </div>
           <button class="omj-arrow" data-action="skin-next" aria-label="Next skin">&gt;</button>
         </div>
 
         <button class="omj-btn" data-action="play">PLAY</button>
-        <p class="omj-hint">SPACE / &uarr; / W / CLICK = JUMP &nbsp;·&nbsp; ESC = PAUSE &nbsp;·&nbsp; M = MUTE</p>
+        <p class="omj-hint">
+          SPACE / &uarr; / W / CLICK = JUMP &nbsp;·&nbsp; S / &darr; / SHIFT / RIGHT-CLICK = ABILITY<br>
+          ESC = PAUSE &nbsp;·&nbsp; M = MUTE &nbsp;·&nbsp; N = MUSIC
+        </p>
       </div>
 
       <!-- PAUSE SCREEN -->
@@ -89,9 +104,11 @@
   <script src="js/skins.js"></script>
   <script src="js/messages.js"></script>
   <script src="js/audio.js"></script>
+  <script src="js/music.js"></script>
   <script src="js/player.js"></script>
   <script src="js/obstacles.js"></script>
   <script src="js/spawner.js"></script>
+  <script src="js/abilities.js"></script>
   <script src="js/particles.js"></script>
   <script src="js/background.js"></script>
   <script src="js/input.js"></script>

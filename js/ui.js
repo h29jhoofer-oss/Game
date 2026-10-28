@@ -21,6 +21,7 @@ OMJ.UI = class {
     this.skinPreview = root.querySelector('[data-skin-preview]');
     this.pauseButton = root.querySelector('[data-action="pause"]');
     this.muteButton = root.querySelector('[data-action="mute"]');
+    this.musicButton = root.querySelector('[data-action="music"]');
 
     // Draw the pixel-font titles.
     root.querySelectorAll('canvas[data-title]').forEach((canvas) => {
@@ -82,6 +83,11 @@ OMJ.UI = class {
     this.muteButton.setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
   }
 
+  setMusicMuted(muted) {
+    this.musicButton.classList.toggle('is-muted', muted);
+    this.musicButton.setAttribute('aria-label', muted ? 'Turn music on' : 'Turn music off');
+  }
+
   setBest(best) {
     this.fields.best.textContent = best;
   }
@@ -89,8 +95,19 @@ OMJ.UI = class {
   setSkin(skin, unlocked) {
     this.fields['skin-name'].textContent = unlocked ? skin.name : '???';
     this.fields['skin-lock'].textContent = unlocked ? '' : 'REACH ' + skin.unlockAt;
+    // Show the powers even for locked skins: something to play for!
+    const ability = OMJ.ABILITIES[skin.active];
+    this.setPerk(this.fields['skin-passive'], skin.passive.name, skin.passive.desc);
+    this.setPerk(this.fields['skin-active'], ability.name, ability.desc);
     this.skinLocked = !unlocked;
     this.skinShown = skin;
+  }
+
+  setPerk(el, name, desc) {
+    el.textContent = '';
+    const strong = document.createElement('strong');
+    strong.textContent = name;
+    el.append(strong, ': ' + desc);
   }
 
   drawSkinPreview(time) {
