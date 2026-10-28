@@ -137,7 +137,7 @@ OMJ.AbilitySystem = class {
     return 0;
   }
   get timeScale() { return this.isActive('slowmo') ? 0.5 : 1; }
-  get speedScale() { return this.isActive('dash') ? 2.2 : 1; }
+  get speedScale() { return this.isActive('dash') ? 2.2 : this.isActive('bulldozer') ? 1.6 : 1; }
   get smashing() { return this.isActive('dash') || this.isActive('bulldozer') || this.isActive('heroShield'); }
   get invulnerable() { return this.invulnTimer > 0; }
   isReady(slot) { return !!slot && slot.cooldown <= 0 && slot.timer <= 0; }
@@ -286,12 +286,21 @@ OMJ.AbilitySystem = class {
       }
       p.x = x0;
       ctx.globalAlpha = 1;
-      // Speed lines
-      ctx.fillStyle = OMJ.PALETTE.white;
+    }
+    // Speed lines across the screen and motion streaks behind you
+    // (white for Dash, fiery orange for Bulldozer).
+    const dash = this.isActive('dash');
+    if (dash || this.isActive('bulldozer')) {
+      const p = g.player;
+      ctx.fillStyle = dash ? OMJ.PALETTE.white : '#ff8a3d';
       for (let i = 0; i < 5; i++) {
         const y = 40 + ((i * 37 + Math.floor(g.time * 60) * 13) % 130);
         const x = (i * 97 + Math.floor(g.time * 900)) % OMJ.CONFIG.VIEW_W;
         ctx.fillRect(OMJ.CONFIG.VIEW_W - x, y, 18, 1);
+      }
+      for (let i = 0; i < 3; i++) {
+        const len = 8 + ((Math.floor(g.time * 30) + i * 5) % 3) * 4;   // flicker in length
+        ctx.fillRect(Math.round(p.x - 4 - len - i * 3), Math.round(p.y + 2 + i * 4), len, 1);
       }
     }
     // Shuriken stars (they spin between a + and an x shape)

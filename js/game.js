@@ -10,6 +10,9 @@
 //   'over'    game-over screen
 // =============================================================
 
+// Blink's teleport show (seconds since it started).
+OMJ.BLINK = { total: 0.42, hideAt: 0.12, jumpAt: 0.2, showAt: 0.3 };
+
 OMJ.Game = class {
   constructor(root) {
     const C = OMJ.CONFIG;
@@ -134,6 +137,8 @@ OMJ.Game = class {
     this.boostsTaken = 0;
     this.boostChoices = null;
     this.freezeTimer = 0;            // short "GO!" pause after picking a boost
+    this.blinkTimer = 0;             // Blink's teleport animation (counts down)
+    this.blinkShifted = false;
     this.coinText = '';
     this.shownCoins = -1;
     for (let i = 0; i < this.announcements.length; i++) this.announcements[i].active = false;
@@ -243,23 +248,23 @@ OMJ.Game = class {
   }
 
   onAbilityKey() {
-    if (this.state === 'playing' && this.freezeTimer <= 0) this.abilities.tryActivate(this);
+    if (this.state === 'playing' && !this.holding()) this.abilities.tryActivate(this);
   }
 
   onBonusKey() {
-    if (this.state === 'playing' && this.freezeTimer <= 0) this.abilities.tryActivateBonus(this);
+    if (this.state === 'playing' && !this.holding()) this.abilities.tryActivateBonus(this);
   }
 
   onSwordKey() {
-    if (this.state === 'playing' && this.freezeTimer <= 0) this.sword.swing(this);
+    if (this.state === 'playing' && !this.holding()) this.sword.swing(this);
   }
 
   onSwordPowerKey() {
-    if (this.state === 'playing' && this.freezeTimer <= 0) this.abilities.tryActivate(this, 'sword');
+    if (this.state === 'playing' && !this.holding()) this.abilities.tryActivate(this, 'sword');
   }
 
   onScarfKey() {
-    if (this.state === 'playing' && this.freezeTimer <= 0) this.abilities.tryActivate(this, 'scarf');
+    if (this.state === 'playing' && !this.holding()) this.abilities.tryActivate(this, 'scarf');
   }
 
   onNumberKey(n) {
@@ -356,6 +361,11 @@ OMJ.Game = class {
     const p = this.player;
     const a = this.abilities;
 
+    // Blink: everything holds still while you blink out and back in.
+    if (this.blinkTimer > 0) {
+      this.updateBlink(realDt);
+      return;
+    }
     // Frozen for a moment after picking a boost, so you can get ready.
     if (this.freezeTimer > 0) {
       this.freezeTimer -= realDt;
@@ -368,6 +378,7 @@ OMJ.Game = class {
     const dt = realDt * a.timeScale;
     this.frozen = a.isActive('timeFreeze');
     p.floating = a.isActive('float');
+    p.angry = a.isActive('bulldozer');
 
     // Difficulty grows with distance; speed follows difficulty.
     this.difficulty = Math.min(1, this.progress / C.DIFFICULTY_MAX_SCORE);
@@ -403,6 +414,14 @@ OMJ.Game = class {
     } else if (p.justLanded) {
       if (p.landSpeed > 150) this.sound.play('land');
       this.particles.burst(p.x + 5, p.bottom - 1, 6, 20, 55, Math.PI, Math.PI * 2, 0.3, [OMJ.PALETTE.dust, OMJ.PALETTE.dustDark], 80);
+    }
+    if (p.angry) {
+      // Bulldozer: flames lick up off you, mostly from the top of your head
+      for (let k = 0; k < 2; k++) {
+        const r = Math.random();
+        this.particles.spawn(p.x + OMJ.rand(0, 10), p.y + OMJ.rand(-2, k ? 8 : 3), OMJ.rand(-40, -10), OMJ.rand(-90, -40), 0.32,
+          r < 0.45 ? 2 : 1, r < 0.35 ? OMJ.PALETTE.danger : r < 0.8 ? '#ff8a3d' : OMJ.PALETTE.gold, -60);
+      }
     }
     if (p.smashing) {
       // Speed streaks above you while you plummet
@@ -541,6 +560,84 @@ OMJ.Game = class {
       if (!best || o.x < best.x) best = o;
     }
     return best;
+  }
+
+  // Is the game holding still for a moment (after a boost pick, or mid-Blink)?
+  holding() {
+    return this.freezeTimer > 0 || this.blinkTimer > 0;
+  }
+
+  // ---- Blink: stop for a beat, blink out in a blue star, blink back in ----
+  // Timeline (seconds): 0 star opens on you, 0.12 you vanish, 0.2 the world
+  // jumps forward, a second star opens, 0.3 you reappear, 0.42 go again.
+  startBlink() {
+    this.blinkTimer = OMJ.BLINK.total;
+    this.blinkShifted = false;
+    this.sound.play('blink');
+  }
+
+  blinkElapsed() { return OMJ.BLINK.total - this.blinkTimer; }
+
+  updateBlink(dt) {
+    this.blinkTimer -= dt;
+    if (!this.blinkShifted && this.blinkElapsed() >= OMJ.BLINK.jumpAt) {
+      this.blinkShifted = true;
+      const target = this.nextThingAhead();
+      if (target) this.blinkPast(target);
+      this.sound.play('blinkIn');
+    }
+    if (this.blinkTimer <= 0) {
+      this.blinkTimer = 0;
+      // Safe for a moment after landing (and never switching off next to danger).
+      this.abilities.giveInvulnerability(0.35);
+    }
+  }
+
+  // Is the runner "blinked out" (invisible) right now?
+  get blinkedOut() {
+    if (this.blinkTimer <= 0) return false;
+    const t = this.blinkElapsed();
+    return t >= OMJ.BLINK.hideAt && t < OMJ.BLINK.showAt;
+  }
+
+  // A blue four-pointed star that bursts open and closes again.
+  // `t` goes 0 -> 1 over its life.
+  drawBlinkStar(ctx, cx, cy, t, twist) {
+    const size = Math.round(Math.sin(t * Math.PI) * 11);      // grow, then shrink
+    if (size < 1) return;
+    const diag = Math.floor(this.time * 20) % 2 === (twist ? 1 : 0);
+    const layers = [['#3b8bff', size, 2], ['#7bd6ff', Math.round(size * 0.65), 1], [OMJ.PALETTE.white, Math.round(size * 0.3), 1]];
+    for (let l = 0; l < layers.length; l++) {
+      const color = layers[l][0];
+      const len = layers[l][1];
+      const thick = layers[l][2];
+      ctx.fillStyle = color;
+      for (let i = -len; i <= len; i++) {
+        const w = Math.max(0, Math.round((1 - Math.abs(i) / (len + 1)) * thick));
+        // The four long points...
+        ctx.fillRect(cx - w, cy + i, w * 2 + 1, 1);
+        ctx.fillRect(cx + i, cy - w, 1, w * 2 + 1);
+      }
+      // ...and four short ones on the diagonals, which twinkle.
+      if (diag) {
+        const d = Math.round(len * 0.5);
+        for (let i = -d; i <= d; i++) {
+          ctx.fillRect(cx + i, cy + i, 1, 1);
+          ctx.fillRect(cx + i, cy - i, 1, 1);
+        }
+      }
+    }
+  }
+
+  drawBlink(ctx) {
+    if (this.blinkTimer <= 0) return;
+    const B = OMJ.BLINK;
+    const t = this.blinkElapsed();
+    const p = this.player;
+    const cx = Math.round(p.x + p.w / 2);
+    const cy = Math.round(p.y + p.h / 2);
+    if (t < B.jumpAt + 0.02) this.drawBlinkStar(ctx, cx, cy, t / (B.jumpAt + 0.02), false);    // blink out
+    if (t >= B.jumpAt) this.drawBlinkStar(ctx, cx, cy, (t - B.jumpAt) / (B.total - B.jumpAt), true);  // blink in
   }
 
   // Blink: jump the whole world forward so you land just past `o`.
@@ -1016,10 +1113,13 @@ OMJ.Game = class {
     if (inRun) this.abilities.drawBehindPlayer(ctx, this);
 
     ctx.globalAlpha = inRun ? this.abilities.playerAlpha(this.time) : 1;
-    this.sword.drawBehind(ctx, this);     // a dragged sword trails out behind you
-    this.player.draw(ctx, this.skin, this.time, this.scarf);
-    this.sword.draw(ctx, this);
+    if (!this.blinkedOut) {
+      this.sword.drawBehind(ctx, this);     // a dragged sword trails out behind you
+      this.player.draw(ctx, this.skin, this.time, this.scarf);
+      this.sword.draw(ctx, this);
+    }
     ctx.globalAlpha = 1;
+    this.drawBlink(ctx);
     if (inRun) this.abilities.drawInFrontOfPlayer(ctx, this);
 
     if (C.DEBUG_HITBOXES) this.drawHitboxes(ctx);

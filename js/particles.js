@@ -52,8 +52,8 @@ OMJ.Particles = class {
     for (let i = 0; i < this.pool.length; i++) {
       const p = this.pool[i];
       if (!p.active) continue;
-      // Shrink to 1px near the end of their life.
-      const size = p.life < p.maxLife * 0.4 ? 1 : p.size;
+      // Shrink as they fade (big ones shrink step by step).
+      const size = Math.max(1, Math.min(p.size, Math.ceil(p.size * (p.life / p.maxLife) * 1.6)));
       ctx.fillStyle = p.color;
       ctx.fillRect(Math.round(p.x), Math.round(p.y), size, size);
     }

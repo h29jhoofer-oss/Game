@@ -32,6 +32,8 @@ OMJ.Player = class {
     this.smashing = false;
     // Float (Blue Scarf power): fall slowly while this is on.
     this.floating = false;
+    // Bulldozer: furious and red-hot.
+    this.angry = false;
     // Standing on a platform? (DOWN drops through it for a moment.)
     this.standingOn = null;      // the obstacle under your feet, or null for the ground
     this.dropTimer = 0;
@@ -237,6 +239,17 @@ OMJ.PlayerArt = (function () {
     c.fillRect(bx - 3, by + 7 + flap, 2, 1);
     c.fillRect(bx - 5, by + 8 - flap, 2, 1);
 
+    // Bulldozer: a flickering red-hot tint over the body (the face is
+    // drawn after, so the angry expression stays easy to read).
+    if (p.angry) {
+      c.globalCompositeOperation = 'source-atop';
+      c.globalAlpha = 0.38 + (Math.floor(time * 20) % 2) * 0.14;
+      c.fillStyle = '#ff2a1a';
+      c.fillRect(ox, oy, BUF_W, BUF_H);
+      c.globalAlpha = 1;
+      c.globalCompositeOperation = 'source-over';
+    }
+
     // ---- Face ----
     if (p.dead) {
       c.fillStyle = INK;            // X X eyes
@@ -247,6 +260,21 @@ OMJ.PlayerArt = (function () {
       c.fillRect(bx + 9, by + 3, 1, 1);
       c.fillRect(bx + 8, by + 4, 1, 1); c.fillRect(bx + 10, by + 4, 1, 1);
       c.fillRect(bx + 7, by + 6, 3, 1);
+    } else if (p.angry) {
+      // Furious: brows slammed down, narrowed eyes, gritted teeth.
+      c.fillStyle = WHITE;
+      c.fillRect(bx + 5, by + 3, 2, 2);
+      c.fillRect(bx + 8, by + 3, 2, 2);
+      c.fillStyle = INK;
+      c.fillRect(bx + 6, by + 3, 1, 2);
+      c.fillRect(bx + 9, by + 3, 1, 2);
+      c.fillRect(bx + 4, by + 1, 2, 1); c.fillRect(bx + 6, by + 2, 1, 1);   // left brow, slanting in
+      c.fillRect(bx + 10, by + 1, 1, 1); c.fillRect(bx + 8, by + 2, 2, 1);  // right brow
+      c.fillRect(bx + 6, by + 5, 4, 2);                                      // mouth
+      c.fillStyle = WHITE;
+      c.fillRect(bx + 6, by + 5, 4, 1);                                      // teeth
+      c.fillStyle = INK;
+      c.fillRect(bx + 8, by + 5, 1, 1);
     } else if (p.blinking) {
       c.fillStyle = INK;
       c.fillRect(bx + 5, by + 4, 2, 1);

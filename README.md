@@ -101,8 +101,8 @@ You can own one per run.
 | Rare ability | Effect | Cooldown |
 | --- | --- | --- |
 | Rocket Jump | Blast sky-high; you can't crash until you land | 12 s |
-| Blink | Teleport past the next obstacle | 10 s |
-| Bulldozer | Smash through everything for 4 seconds | 18 s |
+| Blink | Stop for a beat, blink out in a blue star, blink back in past the next obstacle | 10 s |
+| Bulldozer | Charge ahead at 1.6x speed, red-hot and furious, smashing everything for 4 s | 18 s |
 
 Fairness: Spring Shoes changes the jump that the spawner, the boss and the coin arcs all plan
 around (`OMJ.Physics`), so obstacles space themselves out for your longer jumps.

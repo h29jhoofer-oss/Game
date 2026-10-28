@@ -18,6 +18,9 @@
 // Colors: edge = bright side of the blade, blade = middle, dark = shadow
 // side, guard = crossguard, gem = the jewel in it, grip = handle wrap,
 // pommel = the knob on the end. `hilt` is used for small effects.
+// Spark colors when a sword drags along the ground.
+OMJ.SPARK_COLORS = [OMJ.PALETTE.gold, OMJ.PALETTE.gold, OMJ.PALETTE.white];
+
 OMJ.SWORDS = [
   { id: 'wood', name: 'Wooden Sword', price: 0, damage: 1, range: 16, cut: 1,
     edge: '#e8a95c', blade: '#c9843e', dark: '#8a5424', guard: '#6b4220', gem: '#8a5424',
@@ -27,7 +30,8 @@ OMJ.SWORDS = [
     grip: '#6b4220', pommel: '#6e7886', hilt: '#4a3a2a', power: 'swordBeam' },
   { id: 'flame', name: 'Flame Blade', price: 400, damage: 2, range: 18, cut: 2,
     edge: '#ffd23f', blade: '#ff8a3d', dark: '#c2412b', guard: '#2a2540', gem: '#e8384f',
-    grip: '#1d1a2f', pommel: '#2a2540', hilt: '#2a2540', power: 'fireWave' },
+    grip: '#1d1a2f', pommel: '#2a2540', hilt: '#2a2540', power: 'fireWave',
+    sparkSize: 2, sparkColors: ['#ffd23f', '#ff8a3d', '#e8384f', '#ff8a3d'] },   // fiery sparks
   { id: 'thunder', name: 'Thunder Sword', price: 800, damage: 3, range: 18, cut: 2,
     edge: '#ffffff', blade: '#7bd6ff', dark: '#3b8bff', guard: '#3a3a4e', gem: '#ffd23f',
     grip: '#22222e', pommel: '#3a3a4e', hilt: '#3a3a4e', power: 'thunderstorm' },
@@ -300,14 +304,21 @@ OMJ.SwordSystem = class {
   gripX(p) { return Math.round(this.dragging ? p.x - 2 : p.x + 10); }
   gripY(p) { return Math.round(this.dragging ? p.y + 7 : p.y + 9); }
 
-  // Sparks where the tip scrapes along the ground.
+  // Sparks where the tip scrapes along the ground. The faster you run,
+  // the bigger, wilder and more frequent they get. A sword can set a
+  // bigger starting size (`sparkSize`) and its own `sparkColors`.
   dragSparks(g) {
     const p = g.player;
-    if (!this.dragging || !p.grounded || p.dead || Math.random() > 0.35) return;
+    if (!this.dragging || !p.grounded || p.dead) return;
+    const C = OMJ.CONFIG;
+    const fast = OMJ.clamp((g.worldSpeed - C.START_SPEED) / (C.MAX_SPEED - C.START_SPEED), 0, 1);
+    if (Math.random() > 0.3 + 0.4 * fast) return;
     const a = (this.swordAngle(p, g.time) * Math.PI) / 180;
     const tipX = this.gripX(p) + Math.sin(a) * OMJ.SwordArt.LENGTH;
-    g.particles.spawn(tipX + OMJ.rand(-1, 1), p.bottom - 1, OMJ.rand(-50, -10), OMJ.rand(-70, -25), 0.22, 1,
-      Math.random() < 0.6 ? OMJ.PALETTE.gold : OMJ.PALETTE.white, 400);
+    const size = (this.sword.sparkSize || 1) + Math.round(fast * 2);       // 1 -> 3 px (fire: 2 -> 4)
+    const colors = this.sword.sparkColors || OMJ.SPARK_COLORS;
+    g.particles.spawn(tipX + OMJ.rand(-1, 1), p.bottom - size, OMJ.rand(-50, -10) * (1 + fast), OMJ.rand(-70, -25) * (1 + 0.5 * fast),
+      0.22 + 0.12 * fast, size, colors[Math.floor(Math.random() * colors.length)], 400);
   }
 
   // Drawn BEFORE the player, so a dragged sword trails out from behind you.
@@ -368,13 +379,41 @@ OMJ.SwordSystem = class {
         ctx.fillStyle = this.sword.blade;
         ctx.fillRect(x - 3, y - 1, 3, 3);
       } else {
-        const f = Math.floor(time * 16) % 2;
-        ctx.fillStyle = OMJ.PALETTE.danger;
-        ctx.fillRect(x - 4, C.GROUND_Y - 12 - f, 8, 12 + f);
-        ctx.fillStyle = '#ff8a3d';
-        ctx.fillRect(x - 3, C.GROUND_Y - 9 + f, 6, 9 - f);
+        // A wall of fire: a few flame tongues of different heights that
+        // flicker and sway. The tallest one leads.
+        const base = C.GROUND_Y;
+        const t = time * 14 + s.age * 3;
+        this.drawFlame(ctx, x - 9, base, 9 + Math.round(Math.sin(t * 1.3) * 2), 7, t + 2);
+        this.drawFlame(ctx, x + 3, base, 11 + Math.round(Math.sin(t * 1.1 + 1) * 2), 7, t + 4);
+        this.drawFlame(ctx, x - 3, base, 15 + Math.round(Math.sin(t) * 2), 9, t);
+        // Glowing embers on the ground under it
         ctx.fillStyle = OMJ.PALETTE.gold;
-        ctx.fillRect(x - 1, C.GROUND_Y - 5, 3, 5);
+        ctx.fillRect(x - 12, base - 1, 18, 1);
+      }
+    }
+  }
+
+  // One flame tongue: wide at the bottom, a swaying point at the top.
+  // Four layers from the outside in: red, orange, gold, white-hot core.
+  drawFlame(ctx, cx, baseY, height, width, phase) {
+    const layers = [
+      [OMJ.PALETTE.danger, 1, 1],
+      ['#ff8a3d', 0.72, 0.8],
+      [OMJ.PALETTE.gold, 0.45, 0.55],
+      ['#fff2a8', 0.2, 0.28],
+    ];
+    for (let l = 0; l < layers.length; l++) {
+      const color = layers[l][0];
+      const h = Math.max(2, Math.round(height * layers[l][2]));
+      const w = width * layers[l][1];
+      ctx.fillStyle = color;
+      for (let row = 0; row < h; row++) {
+        const up = row / h;                                 // 0 at the base, 1 at the tip
+        const half = Math.max(0.5, (w / 2) * Math.pow(1 - up, 0.8));
+        const sway = Math.round(Math.sin(phase + row * 0.55) * up * 2.5);  // the top sways most
+        const left = Math.round(cx + sway - half);
+        const right = Math.round(cx + sway + half);
+        ctx.fillRect(left, baseY - 1 - row, Math.max(1, right - left), 1);
       }
     }
   }

@@ -220,9 +220,13 @@ OMJ.Sound = class {
         this.noise(0.5, 0.2, 700, 'bandpass');
         this.tone(150, 900, 0.4, 'sawtooth', 0.05);
         break;
-      case 'blink':
-        this.tone(1800, 400, 0.15, 'sine', 0.08);
-        this.tone(900, 2400, 0.12, 'triangle', 0.04, 0.05);
+      case 'blink':                      // blinking out: a falling shimmer
+        this.tone(1800, 500, 0.15, 'sine', 0.08);
+        this.tone(2400, 900, 0.1, 'triangle', 0.03, 0.03);
+        break;
+      case 'blinkIn':                    // blinking back in: a rising shimmer
+        this.tone(700, 2200, 0.14, 'sine', 0.07);
+        this.tone(1400, 2800, 0.1, 'triangle', 0.03, 0.04);
         break;
 
       // ---- Sword & scarf ----

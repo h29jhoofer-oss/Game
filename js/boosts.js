@@ -82,14 +82,10 @@ OMJ.BONUS_ABILITIES = {
   blink: {
     name: 'Blink', desc: 'Teleport past the next obstacle', cooldown: 10, duration: 0,
     canUse(g) { return g.nextThingAhead() !== null; },
-    activate(g, a) {
-      g.blinkPast(g.nextThingAhead());
-      a.giveInvulnerability(0.35);
-      g.sound.play('blink');
-    },
+    activate(g) { g.startBlink(); },     // the blink-out / blink-in show is in game.js
   },
   bulldozer: {
-    name: 'Bulldozer', desc: 'Smash through everything for 4 seconds', cooldown: 18, duration: 4,
+    name: 'Bulldozer', desc: 'Charge ahead, smashing everything for 4 seconds', cooldown: 18, duration: 4,
     activate(g, a) {
       a.giveInvulnerability(4);
       g.sound.play('dash');
