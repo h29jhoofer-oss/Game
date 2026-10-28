@@ -350,7 +350,7 @@ belongs to.
 - At 1500 points Big Bonk arrives with its own music. Swinging (`F`) as a bomb or fireball
   reaches you knocks it back into Big Bonk and shrinks its health bar; ground smash doesn't.
   Beating it gives +250 and coins, and normal obstacles return afterwards.
-- `F` swings the sword: crates and arrows break; a Wooden Sword can't cut spikes, an Iron one
+- `F` swings the (slightly too big) sword: crates and arrows break; a Wooden Sword can't cut spikes, an Iron one
   can; nothing cuts barriers. `Q` and `E` use the sword and scarf powers (their meters sit
   next to the skin ability's).
 - The SHOP shows your banked coins. Buying takes coins and equips the item; clicking an owned

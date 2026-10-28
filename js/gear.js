@@ -15,17 +15,25 @@
 // of an ability in OMJ.GEAR_ABILITIES (same format as abilities.js).
 // =============================================================
 
+// Colors: edge = bright side of the blade, blade = middle, dark = shadow
+// side, guard = crossguard, gem = the jewel in it, grip = handle wrap,
+// pommel = the knob on the end. `hilt` is used for small effects.
 OMJ.SWORDS = [
-  { id: 'wood', name: 'Wooden Sword', price: 0, damage: 1, range: 14, cut: 1,
-    blade: '#c9843e', edge: '#e8a95c', hilt: '#6b4220', power: 'spinSlash' },
-  { id: 'iron', name: 'Iron Sword', price: 150, damage: 2, range: 16, cut: 2,
-    blade: '#a3acb9', edge: '#ffffff', hilt: '#4a3a2a', power: 'swordBeam' },
+  { id: 'wood', name: 'Wooden Sword', price: 0, damage: 1, range: 16, cut: 1,
+    edge: '#e8a95c', blade: '#c9843e', dark: '#8a5424', guard: '#6b4220', gem: '#8a5424',
+    grip: '#4a2c15', pommel: '#6b4220', hilt: '#6b4220', power: 'spinSlash' },
+  { id: 'iron', name: 'Iron Sword', price: 150, damage: 2, range: 17, cut: 2,
+    edge: '#ffffff', blade: '#a3acb9', dark: '#6e7886', guard: '#4a525e', gem: '#7bd6ff',
+    grip: '#6b4220', pommel: '#6e7886', hilt: '#4a3a2a', power: 'swordBeam' },
   { id: 'flame', name: 'Flame Blade', price: 400, damage: 2, range: 18, cut: 2,
-    blade: '#ff8a3d', edge: '#ffd23f', hilt: '#2a2540', power: 'fireWave' },
+    edge: '#ffd23f', blade: '#ff8a3d', dark: '#c2412b', guard: '#2a2540', gem: '#e8384f',
+    grip: '#1d1a2f', pommel: '#2a2540', hilt: '#2a2540', power: 'fireWave' },
   { id: 'thunder', name: 'Thunder Sword', price: 800, damage: 3, range: 18, cut: 2,
-    blade: '#7bd6ff', edge: '#ffffff', hilt: '#3a3a4e', power: 'thunderstorm' },
+    edge: '#ffffff', blade: '#7bd6ff', dark: '#3b8bff', guard: '#3a3a4e', gem: '#ffd23f',
+    grip: '#22222e', pommel: '#3a3a4e', hilt: '#3a3a4e', power: 'thunderstorm' },
   { id: 'hero', name: 'Hero Sword', price: 1500, damage: 4, range: 20, cut: 2,
-    blade: '#ffd23f', edge: '#fff2a8', hilt: '#3b8bff', power: 'heroShield' },
+    edge: '#ffffff', blade: '#c8ccd8', dark: '#7d8299', guard: '#ffd23f', gem: '#3b8bff',
+    grip: '#3b8bff', pommel: '#ffd23f', hilt: '#3b8bff', power: 'heroShield' },
 ];
 
 OMJ.SCARVES = [
@@ -261,57 +269,57 @@ OMJ.SwordSystem = class {
   }
 
   // ---- Drawing ----
+  // Angles for the sword: 0 = pointing straight up, 90 = pointing forward.
+  swordAngle(p, time) {
+    if (this.spinTimer > 0) return (time * 1440) % 360;
+    if (this.swingTimer > 0) {
+      // A big heave over the top: hauled back behind your head, then
+      // brought down in front.
+      const t = 1 - this.swingTimer / this.SWING_TIME;
+      return -40 + 170 * (1 - (1 - t) * (1 - t));     // fast start, heavy finish
+    }
+    // Held up in front of you, wobbling as you run (it's heavy!).
+    const wobble = p.grounded ? (Math.floor(p.runTime * 12) % 2 ? 6 : 0) : -8;
+    return 18 + wobble;
+  }
+
+  // Where your little fist holds the sword.
+  gripX(p) { return Math.round(p.x + 10); }
+  gripY(p) { return Math.round(p.y + 9); }
+
+  // Drawn after the player: the sword, your fist, shots and lightning.
   draw(ctx, g) {
     const p = g.player;
-    if (!p.dead) this.drawSword(ctx, p, g.time);
+    if (!p.dead) {
+      const swinging = this.swingTimer > 0 || this.spinTimer > 0;
+      const angle = this.swordAngle(p, g.time);
+      const hx = this.gripX(p);
+      const hy = this.gripY(p);
+      if (swinging) this.drawTrail(ctx, angle, hx, hy);
+      OMJ.SwordArt.draw(ctx, this.sword, angle, hx, hy);
+      // The little fist wrapped around the handle
+      ctx.fillStyle = OMJ.PALETTE.ink;
+      ctx.fillRect(hx - 1, hy - 1, 3, 3);
+      ctx.fillStyle = g.skin.body;
+      ctx.fillRect(hx, hy, 1, 1);
+    }
     this.drawShots(ctx, g.time);
     this.drawStrikes(ctx, g.time);
   }
 
-  // The sword held in the hand. Angles: -90 = straight up, 0 = forward.
-  drawSword(ctx, p, time) {
-    const sw = this.sword;
-    let angle = -60;
-    if (this.spinTimer > 0) {
-      angle = (time * 1800) % 360;
-    } else if (this.swingTimer > 0) {
-      const t = 1 - this.swingTimer / this.SWING_TIME;  // 0 -> 1 through the swing
-      angle = -110 + 160 * t;
-    }
-    const hx = Math.round(p.x + 9);
-    const hy = Math.round(p.y + 8);
-    const a = (angle * Math.PI) / 180;
-    const ca = Math.cos(a);
-    const sa = Math.sin(a);
-    const length = 8;
-    // Slash trail during a swing
-    if (this.swingTimer > 0 || this.spinTimer > 0) {
-      ctx.fillStyle = sw.edge;
-      ctx.globalAlpha = 0.6;
-      const from = this.spinTimer > 0 ? angle - 160 : -110;
-      for (let d = from; d < angle; d += 8) {
-        const r = (d * Math.PI) / 180;
-        ctx.fillRect(Math.round(hx + Math.cos(r) * (length + 2)), Math.round(hy + Math.sin(r) * (length + 2)), 2, 2);
+  // A pale crescent following the tip of the sword during a swing.
+  drawTrail(ctx, angle, hx, hy) {
+    const from = this.spinTimer > 0 ? angle - 150 : -40;
+    const reach = OMJ.SwordArt.LENGTH;
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = this.sword.edge;
+    for (let d = from; d < angle - 4; d += 6) {
+      const r = (d * Math.PI) / 180;
+      for (let k = reach - 4; k <= reach; k += 2) {
+        ctx.fillRect(Math.round(hx + Math.sin(r) * k), Math.round(hy - Math.cos(r) * k), 1, 1);
       }
-      ctx.globalAlpha = 1;
     }
-    // Handle behind the hand
-    ctx.fillStyle = sw.hilt;
-    ctx.fillRect(Math.round(hx - ca * 2), Math.round(hy - sa * 2), 2, 2);
-    // Blade with an outline, then the bright edge
-    for (let i = 1; i <= length; i++) {
-      ctx.fillStyle = OMJ.PALETTE.ink;
-      ctx.fillRect(Math.round(hx + ca * i) - 1, Math.round(hy + sa * i) - 1, 3, 3);
-    }
-    for (let i = 1; i <= length; i++) {
-      ctx.fillStyle = i > length / 2 ? sw.edge : sw.blade;
-      ctx.fillRect(Math.round(hx + ca * i), Math.round(hy + sa * i), 1, 1);
-    }
-    // Crossguard
-    ctx.fillStyle = sw.hilt;
-    ctx.fillRect(Math.round(hx + ca - sa * 2), Math.round(hy + sa + ca * 2), 1, 1);
-    ctx.fillRect(Math.round(hx + ca + sa * 2), Math.round(hy + sa - ca * 2), 1, 1);
-    ctx.fillRect(Math.round(hx + ca), Math.round(hy + sa), 1, 1);
+    ctx.globalAlpha = 1;
   }
 
   drawShots(ctx, time) {
@@ -359,42 +367,153 @@ OMJ.SwordSystem = class {
   }
 };
 
+// ---- Sword sprite --------------------------------------------
+// The sword is drawn pointing up, then rotated in 32 steps ONCE (per
+// sword) into little canvases. Rotating pixel by pixel this way keeps
+// the pixels crisp, instead of the blur you'd get rotating on the fly.
+// It's 21 px long; the runner is only 12 px tall. Too big? Exactly.
+OMJ.SwordArt = (function () {
+  const ROWS = [
+    '...O...',   // tip
+    '..OEO..',
+    '.OEBDO.',
+    '.OEBDO.',
+    '.OEBDO.',
+    '.OEBDO.',
+    '.OEBDO.',
+    '.OEBDO.',
+    '.OEBDO.',
+    '.OEBDO.',
+    '.OEBDO.',
+    '.OEBDO.',
+    '.OEBDO.',
+    'OOOOOOO',   // crossguard
+    'OGGJGGO',
+    'OOOOOOO',
+    '..OHO..',   // handle (you hold it here)
+    '..OhO..',
+    '..OHO..',
+    '.OPPPO.',   // pommel
+    '..OOO..',
+  ];
+  const PIVOT_X = 3;
+  const PIVOT_Y = 17;
+  const STEPS = 32;
+  const R = 19;                 // frames are (2R+1) square, pivot in the middle
+  const cache = {};
+
+  function shade(hex, amount) {   // darken (amount < 0) or lighten a color
+    const n = parseInt(hex.slice(1), 16);
+    const f = (c) => Math.max(0, Math.min(255, Math.round(c + amount * 255)));
+    return 'rgb(' + f(n >> 16) + ',' + f((n >> 8) & 255) + ',' + f(n & 255) + ')';
+  }
+
+  function build(sword) {
+    const pal = {
+      O: OMJ.PALETTE.ink, E: sword.edge, B: sword.blade, D: sword.dark,
+      G: sword.guard, J: sword.gem, H: sword.grip, h: shade(sword.grip, 0.15), P: sword.pommel,
+    };
+    const frames = [];
+    for (let i = 0; i < STEPS; i++) {
+      const a = (i / STEPS) * Math.PI * 2;
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = R * 2 + 1;
+      const c = canvas.getContext('2d');
+      for (let v = -R; v <= R; v++) {
+        for (let u = -R; u <= R; u++) {
+          // Which sprite pixel lands on output pixel (u, v)?
+          const sx = Math.round(u * ca + v * sa) + PIVOT_X;
+          const sy = Math.round(-u * sa + v * ca) + PIVOT_Y;
+          if (sy < 0 || sy >= ROWS.length || sx < 0 || sx >= ROWS[0].length) continue;
+          const color = pal[ROWS[sy][sx]];
+          if (!color) continue;
+          c.fillStyle = color;
+          c.fillRect(u + R, v + R, 1, 1);
+        }
+      }
+      frames.push(canvas);
+    }
+    return frames;
+  }
+
+  function frames(sword) {
+    if (!cache[sword.id]) cache[sword.id] = build(sword);
+    return cache[sword.id];
+  }
+
+  // Draw `sword` at `angle` degrees (0 = up, 90 = forward) with its
+  // handle at (x, y).
+  function draw(ctx, sword, angle, x, y) {
+    const list = frames(sword);
+    const i = ((Math.round((angle / 360) * STEPS) % STEPS) + STEPS) % STEPS;
+    ctx.drawImage(list[i], x - R, y - R);
+  }
+
+  return { draw, frames, shade, LENGTH: PIVOT_Y, SIZE: R * 2 + 1 };
+})();
+
 // ---- Little pictures for the shop ----------------------------
 OMJ.GearArt = {
+  // The sword, tilted like it's leaning in a display rack.
   drawSwordIcon(canvas, sword) {
-    canvas.width = 16;
-    canvas.height = 16;
+    const size = 24;
+    canvas.width = canvas.height = size;
     const c = canvas.getContext('2d');
-    c.clearRect(0, 0, 16, 16);
-    for (let i = 0; i < 10; i++) {               // diagonal blade, bottom-left to top-right
-      c.fillStyle = OMJ.PALETTE.ink;
-      c.fillRect(3 + i, 11 - i, 3, 3);
-    }
-    for (let i = 0; i < 10; i++) {
-      c.fillStyle = i > 4 ? sword.edge : sword.blade;
-      c.fillRect(4 + i, 12 - i, 1, 1);
-    }
-    c.fillStyle = sword.hilt;                     // crossguard and handle
-    c.fillRect(2, 10, 5, 2);
-    c.fillRect(4, 8, 2, 5);
-    c.fillRect(1, 13, 2, 2);
+    c.clearRect(0, 0, size, size);
+    // 45 degrees, handle at the bottom-left
+    OMJ.SwordArt.draw(c, sword, 45, 6, 18);
   },
 
+  // A knitted scarf: a loop with two tails, stripes and fringe.
+  //   O outline, C main color, S shade, L light stripe, F fringe
+  SCARF: [
+    '...OOOOOOOOOOOOOO...',
+    '..OLLLLLLLLLLLLLLO..',
+    '.OCCCCCCCCCCCCCCCCO.',
+    '.OCSOOOOOOOOOOOOSCO.',
+    '.OCSO..........OSCO.',
+    '.OCCO..........OCCO.',
+    '.OSCCO........OCCSO.',
+    '..OSCCOOOOOOOOCCSO..',
+    '...OSSCCCCCCCCSSO...',
+    '....OOOSCCCCSOOO....',
+    '......OCCCOCCCO.....',
+    '......OLLLOLLLO.....',
+    '......OCCCOCCCO.....',
+    '......OCCCOCCCO.....',
+    '......OLLLOLLLO.....',
+    '......OCCCOCCCO.....',
+    '......OSSSOSSSO.....',
+    '......OOOOOOOOO.....',
+    '......F.F.F.F.F.....',
+    '......F.F...F.F.....',
+  ],
+
   drawScarfIcon(canvas, scarf, time) {
-    canvas.width = 16;
-    canvas.height = 16;
+    const rows = this.SCARF;
+    canvas.width = canvas.height = 24;
     const c = canvas.getContext('2d');
-    c.clearRect(0, 0, 16, 16);
-    const color = scarf.rainbow ? 'hsl(' + Math.floor((time || 0) * 120) % 360 + ', 90%, 62%)' : scarf.color;
-    c.fillStyle = OMJ.PALETTE.ink;
-    c.fillRect(2, 4, 12, 5);
-    c.fillRect(9, 8, 5, 6);
-    c.fillStyle = color;
-    c.fillRect(3, 5, 10, 3);
-    c.fillRect(10, 8, 3, 5);
-    c.fillStyle = OMJ.PALETTE.white;
-    c.globalAlpha = 0.4;
-    c.fillRect(3, 5, 10, 1);
-    c.globalAlpha = 1;
+    c.clearRect(0, 0, 24, 24);
+    const ox = 2;
+    const oy = 2;
+    for (let y = 0; y < rows.length; y++) {
+      // The Rainbow Scarf gets a different color on every row.
+      const main = scarf.rainbow ? 'hsl(' + Math.floor((y * 24 + (time || 0) * 120) % 360) + ', 85%, 60%)' : scarf.color;
+      const pal = {
+        O: OMJ.PALETTE.ink,
+        C: main,
+        S: scarf.rainbow ? main : OMJ.SwordArt.shade(scarf.color, -0.22),
+        L: scarf.rainbow ? OMJ.PALETTE.white : OMJ.SwordArt.shade(scarf.color, 0.2),
+        F: scarf.rainbow ? main : OMJ.SwordArt.shade(scarf.color, -0.1),
+      };
+      for (let x = 0; x < rows[y].length; x++) {
+        const color = pal[rows[y][x]];
+        if (!color) continue;
+        c.fillStyle = color;
+        c.fillRect(ox + x, oy + y, 1, 1);
+      }
+    }
   },
 };

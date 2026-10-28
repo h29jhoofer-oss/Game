@@ -340,8 +340,8 @@ html, body.omj-page {
 .omj-item.is-locked { opacity: 0.6; }
 .omj-item-icon {
   flex: none;
-  width: calc(var(--px) * 16);
-  height: calc(var(--px) * 16);
+  width: calc(var(--px) * 24);
+  height: calc(var(--px) * 24);
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
