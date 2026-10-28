@@ -76,6 +76,30 @@ OMJ.ABILITIES = {
       g.sound.play('nova');
     },
   },
+
+  frostNova: {
+    name: 'Frost Nova', desc: 'Freeze everything on screen into ice you can stand on. Pits ice over', cooldown: 16, duration: 0,
+    activate(g) {
+      g.frostNova();
+      g.sound.play('frost');
+    },
+  },
+
+  mega: {
+    name: 'Mega Jelly', desc: 'Grow HUGE for 4 seconds, squashing everything you touch', cooldown: 18, duration: 4,
+    activate(g, a) {
+      a.giveInvulnerability(4);
+      g.sound.play('mega');
+    },
+  },
+
+  drone: {
+    name: 'Zap Drone', desc: 'A drone zaps obstacles ahead for 6 s and bats boss attacks back', cooldown: 16, duration: 6,
+    activate(g, a) {
+      a.droneZap = 0.25;
+      g.sound.play('drone');
+    },
+  },
 };
 
 OMJ.AbilitySystem = class {
@@ -113,6 +137,9 @@ OMJ.AbilitySystem = class {
     this.secondChanceUsed = false;
     this.rocketing = false;      // Rocket Jump: protected until you land
     for (let i = 0; i < this.stars.length; i++) this.stars[i].active = false;
+    this.droneZap = 0;           // Zap Drone: seconds until its next zap
+    this.beams = [];             // ...and its zap beams, just for drawing
+    for (let i = 0; i < 4; i++) this.beams.push({ life: 0, x1: 0, y1: 0, x2: 0, y2: 0 });
   }
 
   setBonus(key) {
@@ -138,7 +165,17 @@ OMJ.AbilitySystem = class {
   }
   get timeScale() { return this.isActive('slowmo') ? 0.5 : 1; }
   get speedScale() { return this.isActive('dash') ? 2.2 : this.isActive('bulldozer') ? 1.6 : 1; }
-  get smashing() { return this.isActive('dash') || this.isActive('bulldozer') || this.isActive('heroShield'); }
+  get smashing() {
+    return this.isActive('dash') || this.isActive('bulldozer') || this.isActive('heroShield') || this.isActive('mega');
+  }
+
+  // How big you are (Mega Jelly grows to 2x, then shrinks back).
+  get playerScale() {
+    const left = this.slotTimer('mega');
+    if (left <= 0) return 1;
+    const grow = Math.min(1, (OMJ.ABILITIES.mega.duration - left) * 5, left * 5);
+    return 1 + grow;
+  }
   get invulnerable() { return this.invulnTimer > 0; }
   isReady(slot) { return !!slot && slot.cooldown <= 0 && slot.timer <= 0; }
   get ready() { return this.isReady(this.slots.skin); }
@@ -230,8 +267,63 @@ OMJ.AbilitySystem = class {
     }
   }
 
+  // Where the Zap Drone hovers: over your head, bobbing.
+  droneX(g) { return Math.round(g.player.x + 3); }
+  droneY(g) { return Math.round(g.player.y - 16 + Math.sin(g.time * 6) * 2); }
+
+  // Zap Drone: every so often, zap the nearest thing ahead. Boss attacks
+  // that can be knocked back get batted back at the boss instead.
+  updateDrone(dt, g) {
+    for (let i = 0; i < this.beams.length; i++) if (this.beams[i].life > 0) this.beams[i].life -= dt;
+    if (!this.isActive('drone')) return;
+    this.droneZap -= dt;
+    if (this.droneZap > 0) return;
+    const p = g.player;
+    const pool = g.obstacles.pool;
+    let target = null;
+    for (let i = 0; i < pool.length; i++) {
+      const o = pool[i];
+      if (!o.active || o.type.isGap || o.type.harmless || o.x + o.w < p.x || o.x > p.x + 170) continue;
+      if (!target || o.x < target.x) target = o;
+    }
+    if (!target) return;                    // nothing in range: stay charged
+    this.droneZap = 0.55;
+    const tx = target.x + target.bx + target.bw / 2;
+    const ty = Math.min(target.y + target.h / 2, OMJ.CONFIG.GROUND_Y - 3);
+    for (let i = 0; i < this.beams.length; i++) {
+      const b = this.beams[i];
+      if (b.life > 0) continue;
+      b.life = 0.12; b.x1 = this.droneX(g); b.y1 = this.droneY(g) + 2; b.x2 = tx; b.y2 = ty;
+      break;
+    }
+    g.sound.play('zap');
+    g.particles.burst(tx, ty, 6, 30, 80, 0, Math.PI * 2, 0.3, ['#7bd6ff', OMJ.PALETTE.white], 0);
+    if (target.type.reflectable) g.reflect(target, 1);
+    else g.smash(target);
+  }
+
+  // Mega Jelly squashes anything touching your (huge) body.
+  updateMega(g) {
+    const scale = this.playerScale;
+    if (scale <= 1) return;
+    const p = g.player;
+    const half = (p.w / 2) * scale;
+    const x1 = p.x + p.w / 2 - half;
+    const x2 = p.x + p.w / 2 + half;
+    const y1 = p.bottom - p.h * scale;
+    const pool = g.obstacles.pool;
+    for (let i = 0; i < pool.length; i++) {
+      const o = pool[i];
+      if (!o.active || o.type.isGap || o.type.harmless) continue;
+      const left = o.x + o.bx;
+      if (left < x2 && left + o.bw > x1 && o.y < p.bottom && o.y + o.h > y1) g.smash(o);
+    }
+  }
+
   // Things that move with the world (use the slowed-down game time).
   updateWorld(dt, g) {
+    this.updateDrone(dt, g);
+    this.updateMega(g);
     for (let i = 0; i < this.stars.length; i++) {
       const s = this.stars[i];
       if (!s.active) continue;
@@ -323,6 +415,7 @@ OMJ.AbilitySystem = class {
   }
 
   drawInFrontOfPlayer(ctx, g) {
+    this.drawDrone(ctx, g);
     const shieldLeft = this.slotTimer('shield') || this.slotTimer('heroShield');
     if (shieldLeft <= 0) return;
     // Blink during the last 2 seconds so you know it's about to end.
@@ -335,6 +428,37 @@ OMJ.AbilitySystem = class {
     ctx.fillStyle = OMJ.PALETTE.white;
     ctx.fillRect(cx - 6, cy - 8, 2, 1);
     ctx.fillRect(cx - 8, cy - 6, 1, 2);
+  }
+
+  // The Zap Drone and its beams.
+  drawDrone(ctx, g) {
+    const P = OMJ.PALETTE;
+    for (let i = 0; i < this.beams.length; i++) {
+      const b = this.beams[i];
+      if (b.life <= 0) continue;
+      // A jagged electric line from the drone to its target
+      const steps = Math.max(2, Math.round(Math.abs(b.x2 - b.x1) / 6));
+      for (let k = 0; k <= steps; k++) {
+        const t = k / steps;
+        const jag = k === 0 || k === steps ? 0 : OMJ.randInt(-2, 2);
+        ctx.fillStyle = k % 2 ? P.white : '#7bd6ff';
+        ctx.fillRect(Math.round(b.x1 + (b.x2 - b.x1) * t), Math.round(b.y1 + (b.y2 - b.y1) * t) + jag, 2, 1);
+      }
+    }
+    const left = this.slotTimer('drone');
+    if (left <= 0) return;
+    if (left < 1.5 && Math.floor(g.time * 8) % 2) return;     // blinks before it leaves
+    const x = this.droneX(g);
+    const y = this.droneY(g);
+    const spin = Math.floor(g.time * 24) % 2;
+    ctx.fillStyle = P.ink;
+    ctx.fillRect(x - 1, y, 7, 4);                              // body
+    ctx.fillRect(x + 2, y - 2, 1, 2);                          // rotor stalk
+    ctx.fillStyle = P.metalLight;
+    ctx.fillRect(x, y + 1, 5, 2);
+    ctx.fillRect(spin ? x - 2 : x + 1, y - 3, spin ? 9 : 3, 1);   // rotor
+    ctx.fillStyle = this.droneZap < 0.15 ? P.white : '#7bd6ff';
+    ctx.fillRect(x + 3, y + 1, 2, 2);                          // eye
   }
 
   // Full-screen tints while Slow-Mo or Time Freeze is on.

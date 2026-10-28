@@ -20,6 +20,9 @@ OMJ.PASSIVE_DEFAULTS = {
   hitboxShrink: 0,      // pixels removed from each side of your hitbox
   cooldownRate: 1,      // 1.5 = abilities recharge 50% faster
   secondChance: false,  // survive one crash per run
+  swingRate: 1,         // 1.4 = the sword swing recharges 40% faster
+  plungeRate: 1,        // 2 = the plunge attack recharges twice as fast
+  jumpScale: 1,         // 1.08 = jumps 8% higher
 };
 
 OMJ.SKINS = [
@@ -53,10 +56,25 @@ OMJ.SKINS = [
     passive: { name: 'Midas Touch', desc: '+25% score', scoreRate: 1.25 },
     active: 'shield' },
 
+  { id: 'frosty', name: 'Frosty', unlockAt: 1250,
+    body: '#9fe3ff', shade: '#4fa8d8', light: '#e8fbff',
+    passive: { name: 'Cold Snap', desc: 'Your sword swing recharges 40% faster', swingRate: 1.4 },
+    active: 'frostNova' },
+
+  { id: 'jelly', name: 'Jelly', unlockAt: 1500,
+    body: '#ff6fae', shade: '#c23c7c', light: '#ffc2dc',
+    passive: { name: 'Bouncy', desc: 'Jump 8% higher', jumpScale: 1.08 },
+    active: 'mega' },
+
   { id: 'cosmic', name: 'Cosmic', unlockAt: 2000,
     body: '#2b1b5c', shade: '#170e36', light: '#8b6fe0',
     passive: { name: 'Stardust', desc: 'Abilities recharge 50% faster, +15% score', cooldownRate: 1.5, scoreRate: 1.15 },
     active: 'supernova' },
+
+  { id: 'robo', name: 'Robo', unlockAt: 3000,
+    body: '#a9b4c2', shade: '#6b7686', light: '#e2e8f0',
+    passive: { name: 'Hydraulics', desc: 'Your plunge attack recharges twice as fast', plungeRate: 2 },
+    active: 'drone' },
 ];
 
 OMJ.getSkin = function (id) {

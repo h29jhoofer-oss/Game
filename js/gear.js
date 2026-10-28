@@ -160,7 +160,9 @@ OMJ.SwordSystem = class {
     this.sword = sword;
     this.swingTimer = 0;
     this.cooldown = 0;
+    this.cooldownMax = this.SWING_COOLDOWN;
     this.plungeCooldown = 0;
+    this.plungeCooldownMax = this.PLUNGE_COOLDOWN;
     this.spinTimer = 0;
     this.plunging = false;     // falling sword-first after a mid-air attack
     this.slamTimer = 0;        // sword stuck in the ground after a plunge
@@ -180,7 +182,8 @@ OMJ.SwordSystem = class {
     if (g.player.dead || this.swingTimer > 0) return;
     if (this.cooldown > 0) { g.sound.play('denied'); return; }
     this.swingTimer = this.SWING_TIME;
-    this.cooldown = this.SWING_COOLDOWN;
+    this.cooldownMax = this.SWING_COOLDOWN / g.passive.swingRate;   // Frosty recharges faster
+    this.cooldown = this.cooldownMax;
     g.sound.play('heave');
   }
 
@@ -196,7 +199,8 @@ OMJ.SwordSystem = class {
     const p = g.player;
     if (this.plunging || p.dead) return;
     if (this.plungeCooldown > 0) { g.sound.play('denied'); return; }
-    this.plungeCooldown = this.PLUNGE_COOLDOWN;
+    this.plungeCooldownMax = this.PLUNGE_COOLDOWN / g.passive.plungeRate;   // Robo recharges faster
+    this.plungeCooldown = this.plungeCooldownMax;
     this.plunging = true;
     this.swingTimer = 0;
     p.smashing = true;                                   // fall like a ground smash
@@ -482,8 +486,8 @@ OMJ.SwordSystem = class {
   // (blue) is recharging. They vanish once the attack is ready.
   drawCooldowns(ctx, p) {
     const bars = [
-      [this.cooldown / this.SWING_COOLDOWN, OMJ.PALETTE.gold],
-      [this.plungeCooldown / this.PLUNGE_COOLDOWN, '#7bd6ff'],
+      [this.cooldown / this.cooldownMax, OMJ.PALETTE.gold],
+      [this.plungeCooldown / this.plungeCooldownMax, '#7bd6ff'],
     ];
     let y = Math.round(p.y) - 5;
     for (let i = 0; i < bars.length; i++) {

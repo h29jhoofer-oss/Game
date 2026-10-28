@@ -236,7 +236,7 @@ html, body.omj-page {
 }
 .omj-skin-preview {
   width: calc(var(--px) * 36);
-  height: calc(var(--px) * 26);
+  height: calc(var(--px) * 34);
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }

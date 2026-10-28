@@ -51,7 +51,10 @@ the bottom-left corner shows when the ability is ready. Every run starts with it
 | Ghost | 500 | **Second Chance**: survive one crash per run | **Phase**: float through anything for 1.2 s (10 s) |
 | Ninja | 750 | **Slippery**: smaller hitbox | **Shuriken**: throw a star that breaks the next obstacle (6 s) |
 | Golden | 1000 | **Midas Touch**: +25% score | **Shield**: a bubble that blocks one crash for 10 s (20 s) |
+| Frosty | 1250 | **Cold Snap**: your sword swing recharges 40% faster | **Frost Nova**: freeze everything on screen into ice you can run through or stand on; pits get an ice bridge (16 s) |
+| Jelly | 1500 | **Bouncy**: jump 8% higher | **Mega Jelly**: grow huge for 4 s, squashing everything you touch (18 s) |
 | Cosmic | 2000 | **Stardust**: abilities recharge 50% faster, +15% score | **Supernova**: blast away everything on screen (25 s) |
+| Robo | 3000 | **Hydraulics**: your plunge attack recharges twice as fast | **Zap Drone**: for 6 s a drone zaps obstacles ahead and bats boss attacks back (16 s) |
 
 Abilities only ever help. Protection (Dash, Phase, Shield, Second Chance) never runs out while
 you're over a pit or about to touch an obstacle, so it can't end in an unfair crash. Score
@@ -174,7 +177,7 @@ Every skin starts with the same **Blue Scarf**. Others are in the shop:
 Time Freeze never freezes a crusher that is already slamming down, so it can't leave a block
 hanging at head height in front of you.
 
-## The boss: Big Bonk
+## The bosses: Big Bonk and Gloomwing
 
 When the first night ends (score 1500), normal obstacles stop and **Big Bonk**, a huge
 crowned block, flies in. Its eyes turn red and it shakes just before every attack:
@@ -191,9 +194,24 @@ crowned block, flies in. Its eyes turn red and it shakes just before every attac
 - **Hurt it** by swinging your sword (`SPACE`) a moment before a bomb or fireball reaches you
   (the heavy sword takes a third of a second to come down): it flies back into Big Bonk for your sword's damage (8 health the first time, so 8 hits with the
   Wooden Sword). Sword powers, Shuriken and Supernova hurt it too. Ground smash doesn't.
-- **Beat it** for +250 points and a pile of coins. It comes back after every night (score
-  3000, 4500…) with 3 more health and a bigger reward.
+- **Beat it** for +250 points and a pile of coins.
 - **Run out the clock** (40 seconds, the thin bar under its health) and it leaves with no bonus.
+
+When the **second** night ends (score 3000), **Gloomwing** swoops in instead: a giant bat with
+glowing eyes and its own spooky music. Its eyes turn red and its wings flap faster before every
+attack:
+
+| Attack | What to do |
+| --- | --- |
+| Shadow orb | Drops and rolls at you (faster than a bomb). Jump it, or swing it back. |
+| Hex bolt | A purple bolt that swoops to the ground. Jump it, or swing it back. |
+| Hex burst | Two hex bolts, one after another. |
+| Bats | Three little bats flap at you just above the ground. Jump them or cut them. |
+| Spiky egg | Drops and sits still. Jump it. |
+| Swoop | Gloomwing dives to the ground and its wings send a gust along it. Jump it. |
+
+Gloomwing has 10 health. The two bosses then take turns (Big Bonk at 4500, Gloomwing at 6000…),
+each with 3 more health and a bigger reward every time it comes back.
 
 Fairness: the boss works out when each attack will reach you, and never lets two attacks
 arrive closer together than one full jump plus reaction time. If an attack would be too soon,
@@ -224,7 +242,7 @@ the top saying what it does.
 | `js/coins.js` | Coins: moving, collecting (and the magnet), drawing |
 | `js/boosts.js` | Boosts bought with coins, rare bonus abilities, and how cards are picked |
 | `js/gear.js` | Swords and scarves: their stats and powers, swinging, sword shots, shop icons |
-| `js/boss.js` | Big Bonk: when it appears, its attacks, health and drawing |
+| `js/boss.js` | The bosses (Big Bonk, Gloomwing): when they appear, their attacks, health and drawing |
 | `js/particles.js` | Dust and sparkle particles |
 | `js/background.js` | Parallax sky, mountains, hills, town, ground; day/sunset/night themes |
 | `js/input.js` | Keyboard and mouse |
@@ -290,9 +308,11 @@ Copy an entry in `OMJ.SWORDS` or `OMJ.SCARVES` in `js/gear.js` and set its price
 stats. Its `power` names an ability in `OMJ.GEAR_ABILITIES` in the same file. To let a sword
 cut a new obstacle, give that obstacle type a `toughness` in `js/obstacles.js`.
 
-### Tune the boss
-All of Big Bonk's numbers (when it appears, health, time limit, reward, warning time, size,
-and how often it uses each attack) are in `OMJ.BOSS` at the top of `js/boss.js`. Its music is the `boss` song in `js/music.js`.
+### Tune the bosses
+The shared numbers (when bosses appear, time limit, reward, warning time, size) are in
+`OMJ.BOSS` at the top of `js/boss.js`. Each boss's own name, health, attacks (and how often it
+uses each one) and music are in `OMJ.BOSS_TYPES`, and `OMJ.BOSS_ORDER` sets the order they take
+turns in. Their music is the `boss` and `boss2` songs in `js/music.js`.
 
 ### Add a background theme
 Add an entry to `THEMES` in `js/background.js` (copy one and change the colors). Themes switch

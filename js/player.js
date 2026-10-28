@@ -171,7 +171,8 @@ OMJ.PlayerArt = (function () {
     '..OOOOOOOO..',
   ];
   const BUF_W = 18;     // 5 px of scarf tail + 12 px body + 1 spare
-  const BUF_H = 13;     // 11 px body + 2 px feet
+  const TOP = 4;        // room above the head (Robo's antenna)
+  const BUF_H = TOP + 13;   // + 11 px body + 2 px feet
   const BODY_X = 5;     // body position inside the buffer
   const INK = OMJ.PALETTE.ink;
   const WHITE = OMJ.PALETTE.white;
@@ -201,8 +202,47 @@ OMJ.PlayerArt = (function () {
     bctx = buffer.getContext('2d');
   }
 
+  // Extra details some skins have, drawn over the body.
+  // (bx, by) is the top-left of the body.
+  const DECOR = {
+    frosty(c, bx, by, time) {
+      c.fillStyle = WHITE;                           // a cap of snow
+      c.fillRect(bx + 2, by, 8, 1);
+      c.fillRect(bx + 1, by + 1, 4, 1); c.fillRect(bx + 7, by + 1, 4, 1);
+      c.fillRect(bx + 1, by + 2, 1, 1); c.fillRect(bx + 10, by + 2, 1, 1);
+      c.fillStyle = '#d6f6ff';                       // icicles under the chin
+      c.fillRect(bx + 3, by + 9, 1, 2); c.fillRect(bx + 6, by + 9, 1, 1); c.fillRect(bx + 8, by + 9, 1, 2);
+      if (Math.floor(time * 3) % 4 === 0) {          // a twinkle
+        c.fillStyle = WHITE;
+        c.fillRect(bx + 2, by + 4, 1, 1);
+      }
+    },
+    jelly(c, bx, by, time) {
+      c.fillStyle = WHITE;                           // shiny wet highlight
+      c.fillRect(bx + 2, by + 2, 2, 1);
+      c.fillRect(bx + 2, by + 3, 1, 1);
+      c.fillStyle = '#ffc2dc';                       // a little drip
+      const drip = Math.floor(time * 4) % 4;
+      c.fillRect(bx + 9, by + 9, 1, 1 + (drip > 1 ? 1 : 0));
+      c.fillStyle = '#ff9ccb';                       // bubbles inside
+      c.fillRect(bx + 3, by + 6, 1, 1); c.fillRect(bx + 9, by + 4, 1, 1);
+    },
+    robo(c, bx, by, time) {
+      c.fillStyle = INK;                             // antenna
+      c.fillRect(bx + 6, by - 3, 1, 3);
+      c.fillStyle = Math.floor(time * 4) % 2 ? OMJ.PALETTE.danger : '#ffb3a8';
+      c.fillRect(bx + 5, by - 4, 3, 2);
+      c.fillStyle = INK;                             // rivets
+      c.fillRect(bx + 2, by + 3, 1, 1); c.fillRect(bx + 2, by + 5, 1, 1);
+      c.fillRect(bx + 10, by + 4, 1, 1);
+      c.fillStyle = '#6b7686';                       // panel line
+      c.fillRect(bx + 1, by + 6, 2, 1);
+    },
+  };
+
   // Draws the character (un-scaled) into a small canvas context.
   function drawPose(c, p, skin, time, ox, oy, scarfItem) {
+    oy += TOP;
     // ---- Feet ----
     let bob = 0;
     c.fillStyle = INK;
@@ -227,6 +267,7 @@ OMJ.PlayerArt = (function () {
     const bx = ox + BODY_X;
     const by = oy + bob;
     c.drawImage(getBody(skin), bx, by);
+    if (DECOR[skin.id]) DECOR[skin.id](c, bx, by, time);
 
     // ---- Scarf (band + flapping tail) ----
     const item = scarfItem || OMJ.SCARVES[0];
@@ -300,8 +341,10 @@ OMJ.PlayerArt = (function () {
 
     // Squash & stretch: scale the buffer by whole pixels, anchored at the feet.
     const s = p.squash;
-    const dw = BUF_W + Math.round(s * 2);
-    const dh = BUF_H - Math.round(s * 2);
+    // Jelly wobbles all the time.
+    const wob = skin.id === 'jelly' && !p.dead ? Math.round(Math.sin(time * 14) * 0.8) : 0;
+    const dw = BUF_W + Math.round(s * 2) + wob;
+    const dh = BUF_H - Math.round(s * 2) - wob;
     const anchorX = Math.round(p.x) + 5;         // center of the hitbox
     const bottom = Math.round(p.bottom);
     const dx = anchorX - Math.round((BODY_X + 6) * dw / BUF_W);

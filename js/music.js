@@ -47,6 +47,18 @@ OMJ.SONGS = {
     drums: `K h S h K S S h | K h S h K S S h | K h S h K S S h | K h S h K S S h
             K h S h K S S h | K h S h K S S h | K h S h K S S h | S S S S S S K K`,
   },
+
+  // Spooky, swooping tune for the Gloomwing fight.
+  boss2: {
+    bpm: 144,
+    leadWave: 'triangle', leadVolume: 0.08,
+    lead: `D5 . F5 . A5 . G#5 . | A5 - - . F5 . D5 . | C#5 . E5 . G5 . F5 . | E5 - - . C#5 . A4 .
+           D5 . F5 . A5 . D6 . | C6 . A5 . F5 . A5 . | A#5 . A5 . G5 . F5 . | E5 - - - C#5 - - -`,
+    bass: `D2 D3 D2 D3 D2 D3 D2 D3 | D2 D3 D2 D3 D2 D3 D2 D3 | A1 A2 A1 A2 A1 A2 A1 A2 | A1 A2 A1 A2 C#2 C#3 E2 E3
+           D2 D3 D2 D3 D2 D3 D2 D3 | F2 F3 F2 F3 F2 F3 F2 F3 | A#1 A#2 A#1 A#2 G1 G2 G1 G2 | A1 A2 A1 A2 A1 A2 C#2 E2`,
+    drums: `K . h S . K S h | K . h S . K S h | K . h S . K S h | K . h S K K S S
+            K . h S . K S h | K . h S . K S h | K . h S . K S h | S S S S K S K S`,
+  },
 };
 
 OMJ.Music = class {

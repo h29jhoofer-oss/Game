@@ -170,6 +170,55 @@
     },
   };
 
+  // ---- Ice (Frosty's Frost Nova) ------------------------------
+  // A frozen obstacle: harmless, and you can stand on top of it.
+  // It keeps the old type in o.origType so it can be drawn inside.
+  const ICE = '#bdefff';
+  const ICE_DARK = '#4fa8d8';
+  function drawIce(ctx, x, y, w, h) {
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = ICE;
+    ctx.fillRect(x, y, w, h);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = ICE_DARK;                 // outline
+    ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + h - 1, w, 1);
+    ctx.fillRect(x, y, 1, h); ctx.fillRect(x + w - 1, y, 1, h);
+    ctx.fillStyle = P.white;                  // shine
+    ctx.fillRect(x + 1, y + 1, Math.max(1, w - 3), 1);
+    ctx.fillRect(x + 1, y + 2, 1, Math.max(1, Math.min(h - 3, 4)));
+    if (w > 6 && h > 6) ctx.fillRect(x + w - 3, y + h - 4, 1, 2);
+  }
+  OMJ.ICE = {
+    harmless: true,
+    solidTop: true,
+    oneWay: true,
+    debris: [ICE, P.white, ICE_DARK],
+    deathLines: [''],
+    update(o, dt) {
+      // Frozen things in mid-air drop to the ground.
+      if (o.y + o.h < C.GROUND_Y) {
+        o.vy += 900 * dt;
+        o.y = Math.min(C.GROUND_Y - o.h, o.y + o.vy * dt);
+      }
+    },
+    draw(ctx, o, g) {
+      o.origType.draw(ctx, o, g);
+      const top = Math.round(o.y);
+      const h = Math.min(o.h, C.GROUND_Y - top);
+      drawIce(ctx, o.drawX + o.bx - 1, top - 1, o.bw + 2, h + 1);
+    },
+  };
+  // A pit with ice over it: safe to run across.
+  OMJ.ICE_BRIDGE = {
+    harmless: true,
+    debris: [ICE, P.white],
+    deathLines: [''],
+    draw(ctx, o, g) {
+      o.origType.draw(ctx, o, g);
+      drawIce(ctx, o.drawX - 2, C.GROUND_Y, o.w + 4, 5);
+    },
+  };
+
   // ---- Fire (for the crossbow's flaming arrows) --------------
   const FIRE_ORANGE = '#ff8a3d';
 
@@ -779,6 +828,144 @@
         ctx.fillRect(x + 1, y + 2, 3, 2);
         ctx.fillStyle = P.ink;
         ctx.fillRect(x, y + 1, 1, 4);
+      },
+    },
+
+    // ---- Gloomwing's attacks ----
+
+    // A shadow orb: dropped, then rolls at you. Swing it back!
+    shadowOrb: {
+      size: () => ({ w: 10, h: 10 }),
+      hitbox: { left: 2, right: 2, top: 2 },
+      reflectable: true,
+      debris: ['#c77dff', '#3b2a5c', P.white],
+      deathLines: ['Swallowed by the dark.', 'That orb had your name on it.', 'Gloomwing: 1. You: 0.'],
+      init(o) { o.phase = 0; o.vy = 0; },
+      update(o, dt, g, speed) {
+        o.timer += dt;
+        if (o.phase === 0) {
+          o.x += speed * dt;                 // fall straight down on screen
+          o.vy += 900 * dt;
+          o.y += o.vy * dt;
+          if (o.y >= C.GROUND_Y - o.h) { o.y = C.GROUND_Y - o.h; o.phase = 1; g.sound.play('bombLand'); }
+        } else {
+          o.x -= 60 * dt;                    // rolls toward you, quickly
+          if (Math.random() < 0.4) g.particles.spawn(o.x + 9, o.y + OMJ.rand(2, 8), 40, OMJ.rand(-20, 0), 0.3, 1, '#c77dff', 0);
+        }
+      },
+      draw(ctx, o, g) {
+        const cx = o.drawX + 5;
+        const cy = Math.round(o.y) + 5;
+        const pulse = Math.floor(g.time * 10) % 2;
+        OMJ.Sprites.circle(ctx, cx, cy, 5, P.ink);
+        OMJ.Sprites.circle(ctx, cx, cy, 4, '#3b2a5c');
+        OMJ.Sprites.circle(ctx, cx, cy, 2 + pulse, '#7a4fc2');
+        ctx.fillStyle = '#c77dff';
+        ctx.fillRect(cx - 1, cy - 1, 2, 2);
+        ctx.fillStyle = P.white;
+        ctx.fillRect(cx - 3, cy - 3, 1, 1);
+      },
+    },
+
+    // A purple hex bolt: swoops down to ground level like a fireball.
+    hexBolt: {
+      size: () => ({ w: 10, h: 6 }),
+      hitbox: { left: 1, right: 2, top: 1 },
+      reflectable: true,
+      debris: ['#c77dff', '#7a4fc2', P.white],
+      deathLines: ['Hexed!', 'You have been cursed. (Mostly with losing.)', 'Spooky AND fast.'],
+      init(o) { o.extra = 150; },
+      update(o, dt, g) {
+        o.x -= o.extra * dt;
+        o.y = Math.min(C.GROUND_Y - 8, o.y + 260 * dt);
+        o.timer += dt;
+        if (Math.random() < 0.5) g.particles.spawn(o.x + 9, o.y + 3, 30, OMJ.rand(-15, 15), 0.3, 1, Math.random() < 0.5 ? '#c77dff' : P.white, 0);
+      },
+      draw(ctx, o, g) {
+        const x = o.drawX;
+        const y = Math.round(o.y);
+        const spin = Math.floor(g.time * 16) % 2;
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x, y + 1, 9, 4);
+        ctx.fillRect(x + 2, y, 5, 6);
+        ctx.fillStyle = '#7a4fc2';
+        ctx.fillRect(x + 1, y + 2, 7, 2);
+        ctx.fillRect(x + 3, y + 1, 3, 4);
+        ctx.fillStyle = '#c77dff';                // a little spinning star in the middle
+        if (spin) ctx.fillRect(x + 4, y + 1, 1, 4);
+        else ctx.fillRect(x + 2, y + 3, 5, 1);
+        ctx.fillStyle = P.white;
+        ctx.fillRect(x + 4, y + 3, 1, 1);
+      },
+    },
+
+    // A little bat that flaps along just above the ground. Jump it or cut it.
+    bat: {
+      size: () => ({ w: 12, h: 8 }),
+      hitbox: { left: 2, right: 2, top: 2 },
+      toughness: 1,
+      debris: ['#3b2a5c', '#2a1d45', P.gold],
+      deathLines: ['Batted down.', 'Nibbled by a tiny bat.', 'It was small but it was angry.'],
+      init(o) { o.extra = 90; o.phase = 0; },
+      update(o, dt, g) {
+        o.timer += dt;
+        o.x -= o.extra * dt;
+        if (o.phase === 0) {
+          // Flutter down from Gloomwing's mouth to just above the ground...
+          o.y = Math.min(C.GROUND_Y - o.h - 1, o.y + 220 * dt);
+          if (o.y >= C.GROUND_Y - o.h - 1) o.phase = 1;
+        } else {
+          // ...then bob a little as it flaps.
+          o.y = C.GROUND_Y - o.h - 1 - (Math.floor(o.timer * 10) % 2);
+        }
+      },
+      draw(ctx, o) {
+        const x = o.drawX;
+        const y = Math.round(o.y);
+        const up = Math.floor(o.timer * 12) % 2;
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 4, y + 2, 5, 5);                    // body
+        if (up) { ctx.fillRect(x, y, 4, 4); ctx.fillRect(x + 9, y, 3, 4); }
+        else { ctx.fillRect(x, y + 3, 4, 4); ctx.fillRect(x + 9, y + 3, 3, 4); }
+        ctx.fillStyle = '#3b2a5c';
+        ctx.fillRect(x + 5, y + 3, 3, 3);
+        if (up) { ctx.fillRect(x + 1, y + 1, 3, 2); ctx.fillRect(x + 9, y + 1, 2, 2); }
+        else { ctx.fillRect(x + 1, y + 4, 3, 2); ctx.fillRect(x + 9, y + 4, 2, 2); }
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 4, y + 1, 1, 1); ctx.fillRect(x + 8, y + 1, 1, 1);   // ears
+        ctx.fillStyle = P.gold;
+        ctx.fillRect(x + 5, y + 3, 1, 1);                    // eye (looking at you)
+      },
+    },
+
+    // Gloomwing's Swoop: a gust of wind racing along the ground.
+    gust: {
+      size: () => ({ w: 14, h: 10 }),
+      hitbox: { left: 2, right: 2, top: 2 },
+      debris: [P.white, '#c9c2ff', '#7a4fc2'],
+      deathLines: ['Blown away!', 'Gone with the wind.', 'Should have jumped the whoosh.'],
+      init(o) { o.extra = 140; },
+      update(o, dt, g) {
+        o.x -= o.extra * dt;
+        o.timer += dt;
+        if (Math.random() < 0.5) {
+          g.particles.spawn(o.x + OMJ.rand(0, 14), C.GROUND_Y - OMJ.rand(1, 9), OMJ.rand(30, 90), OMJ.rand(-30, 10), 0.3, 1,
+            Math.random() < 0.5 ? P.white : '#c9c2ff', 0);
+        }
+      },
+      draw(ctx, o, g) {
+        const x = o.drawX;
+        const gy = C.GROUND_Y;
+        const f = Math.floor(g.time * 20) % 3;
+        // Three curling wind streaks, the tallest in front
+        ctx.fillStyle = '#c9c2ff';
+        ctx.fillRect(x + 1, gy - 9, 6, 1); ctx.fillRect(x, gy - 8, 1, 3); ctx.fillRect(x + 1, gy - 5, 3, 1);
+        ctx.fillRect(x + 4 + f, gy - 6, 9, 1);
+        ctx.fillRect(x + 2, gy - 3, 11 - f, 1);
+        ctx.fillStyle = P.white;
+        ctx.fillRect(x + 7 - f, gy - 9, 6, 1);
+        ctx.fillRect(x + 3, gy - 1, 10, 1);
+        ctx.fillRect(x + 2, gy - 7, 1, 1);
       },
     },
   };

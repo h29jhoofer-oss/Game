@@ -249,6 +249,26 @@ OMJ.Sound = class {
         this.tone(110, 190, 0.3, 'triangle', 0.05);
         this.noise(0.25, 0.04, 400);
         break;
+      case 'frost':                      // Frost Nova
+        this.noise(0.4, 0.12, 6000, 'highpass');
+        this.melody([2093, 0.04, 1568, 0.04, 2637, 0.04, 2093, 0.12], 'triangle', 0.05);
+        break;
+      case 'mega':                       // Mega Jelly grows
+        this.tone(120, 480, 0.4, 'square', 0.06);
+        this.tone(240, 960, 0.4, 'triangle', 0.04, 0.05);
+        break;
+      case 'drone':                      // Zap Drone powers up
+        this.tone(400, 1600, 0.25, 'sawtooth', 0.03);
+        this.tone(1600, 1600, 0.08, 'square', 0.03, 0.25);
+        break;
+      case 'zap':
+        this.noise(0.08, 0.08, 5000, 'highpass');
+        this.tone(1800, 300, 0.08, 'square', 0.03);
+        break;
+      case 'bat':                        // Gloomwing sends a bat
+        this.tone(2400, 1800, 0.05, 'square', 0.03);
+        this.tone(2600, 2000, 0.05, 'square', 0.03, 0.07);
+        break;
       case 'swing':
         this.noise(0.08, 0.08, 3500, 'highpass');
         this.tone(900, 500, 0.06, 'triangle', 0.03);

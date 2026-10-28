@@ -130,6 +130,7 @@ OMJ.Game = class {
     // Coins and boosts start fresh every run.
     this.mods = OMJ.newRunMods();
     OMJ.Physics.resetJump();
+    this.applyMods();                // (some skins jump higher)
     this.coins.reset();
     this.coinCount = 0;              // coins toward the next boost
     this.coinsTotal = 0;             // coins collected this run
@@ -436,6 +437,10 @@ OMJ.Game = class {
           r < 0.45 ? 2 : 1, r < 0.35 ? OMJ.PALETTE.danger : r < 0.8 ? '#ff8a3d' : OMJ.PALETTE.gold, -60);
       }
     }
+    if (a.isActive('mega') && p.justLanded) {
+      this.shake = Math.max(this.shake, 3);      // Mega Jelly lands with a THUD
+      this.sound.play('groundSmash');
+    }
     if (p.smashing) {
       // Speed streaks above you while you plummet
       this.particles.spawn(p.x + OMJ.randInt(1, 9), p.y - 2, 0, -40, 0.15, 1, OMJ.PALETTE.white, 0);
@@ -560,7 +565,7 @@ OMJ.Game = class {
 
   // Push the run's boosts into the player and the jump physics.
   applyMods() {
-    OMJ.Physics.jumpVelocity = OMJ.CONFIG.JUMP_VELOCITY * this.mods.jumpScale;
+    OMJ.Physics.jumpVelocity = OMJ.CONFIG.JUMP_VELOCITY * this.mods.jumpScale * this.passive.jumpScale;
     this.player.setTiming(this.passive, this.mods.extraCoyote, this.mods.extraBuffer);
   }
 
@@ -871,12 +876,12 @@ OMJ.Game = class {
     this.particles.burst(o.x + 10, OMJ.CONFIG.GROUND_Y - 1, 12, 30, 90, Math.PI, Math.PI * 2, 0.4, [OMJ.PALETTE.dust, OMJ.PALETTE.dustDark], 150);
   }
 
-  onBossEnd(defeated, reward) {
+  onBossEnd(defeated, reward, name) {
     const B = OMJ.BOSS;
     if (defeated) {
       this.score += reward;
       this.collectCoins(10 * this.boss.level);      // and a pile of coins
-      this.announce('BOSS DEFEATED! +' + reward, OMJ.PALETTE.gold);
+      this.announce(name + ' DEFEATED! +' + reward, OMJ.PALETTE.gold);
     }
     // Next visit: after the next night.
     this.boss.nextAt = Math.floor(this.score / B.every + 1) * B.every;
@@ -1022,6 +1027,31 @@ OMJ.Game = class {
     this.score += 5;
   }
 
+  // Frost Nova (Frosty): everything on screen freezes into a block of ice
+  // you can run through or stand on, and pits get an ice bridge.
+  frostNova() {
+    const C = OMJ.CONFIG;
+    const pool = this.obstacles.pool;
+    for (let i = 0; i < pool.length; i++) {
+      const o = pool[i];
+      // (Crossbow towers are harmless but they shoot, so freeze them too.)
+      if (!o.active || (o.type.harmless && o.typeName !== 'crossbow') || o.x > C.VIEW_W) continue;
+      if (o.type === OMJ.ICE || o.type === OMJ.ICE_BRIDGE) continue;
+      o.origType = o.type;
+      o.type = o.type.isGap ? OMJ.ICE_BRIDGE : OMJ.ICE;
+      o.solid = !o.origType.isGap;
+      o.dropping = false;
+      o.vy = 0;
+      if (!o.passed) this.jumped++;
+      o.passed = true;
+      this.score += 5;
+      const cy = o.origType.isGap ? C.GROUND_Y : o.y + o.h / 2;
+      this.particles.burst(o.x + o.bx + o.bw / 2, cy, 10, 30, 90, 0, Math.PI * 2, 0.5, ['#d6f6ff', OMJ.PALETTE.white, '#7bd6ff'], 100);
+    }
+    this.flash = 0.1;
+    this.shake = Math.max(this.shake, 2);
+  }
+
   // Supernova: everything on screen disappears in a burst.
   clearScreen() {
     const C = OMJ.CONFIG;
@@ -1155,9 +1185,20 @@ OMJ.Game = class {
 
     ctx.globalAlpha = inRun ? this.abilities.playerAlpha(this.time) : 1;
     if (!this.blinkedOut) {
+      // Mega Jelly: draw you (and your sword) bigger, growing from your feet.
+      const big = inRun ? Math.round(this.abilities.playerScale * 4) / 4 : 1;
+      if (big > 1) {
+        const ax = Math.round(this.player.x + this.player.w / 2);
+        const ay = Math.round(this.player.bottom);
+        ctx.save();
+        ctx.translate(ax, ay);
+        ctx.scale(big, big);
+        ctx.translate(-ax, -ay);
+      }
       this.sword.drawBehind(ctx, this);     // a dragged sword trails out behind you
       this.player.draw(ctx, this.skin, this.time, this.scarf);
       this.sword.draw(ctx, this);
+      if (big > 1) ctx.restore();
     }
     ctx.globalAlpha = 1;
     this.drawBlink(ctx);
