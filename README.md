@@ -43,6 +43,10 @@ Press SHOP and the fisherman starts the outboard and speeds off to town; the sho
 | Pole | 7 | Shove past fish on the way down without snagging (up to 6 per cast), and reel and steer faster |
 | Bait | 7 | Worm → Cricket → Shrimp → Minnow → Squid → Glow Lure → Gold Lure. Raises fish value (up to 3.2x), draws nearby fish toward the hook, lights up more of the dark, and makes golden fish more common |
 
+## Fish log
+
+FISH LOG takes the same boat trip. The log is a spiral-bound leather notebook on the wooden table: every species you've caught gets a photo taped in beside its name, depth range, value and count, with a gold star if you've landed a golden one. Species you haven't caught show as a faint outline. Pages turn with an animation and the log has its own quiet tune.
+
 Cash, tackle, the fish log and your best depth are saved in the browser.
 
 ## Sound

@@ -1141,6 +1141,17 @@
       bass: { voice: 'drone', vol: 0.07, pattern: 'r - - - - - - -' },
       drums: 'k.......',
     },
+    // The fish log: a gentle tune for leafing through old pages.
+    log: {
+      bpm: 84, swing: 0.08, echo: 0.25,
+      chords: 'C Am F G C Am Dm G',
+      melody: { voice: 'tri', vol: 0.07, notes:
+        'G4 - C5 - E5 - D5 C5 A4 - - - C5 - E5 - F5 - E5 - D5 - C5 - B4 - - - D5 - G4 - ' +
+        'G4 - C5 - E5 - G5 - A5 - G5 - E5 - C5 - D5 - F5 - A5 - G5 F5 D5 - - - B4 - - -' },
+      arp: { voice: 'pluck', vol: 0.018, oct: 4, pattern: '0 . 1 . 2 . 1 .' },
+      bass: { voice: 'bass', vol: 0.08, pattern: 'r - - - 5 - - -' },
+      drums: '........',
+    },
     // The tackle shop: a jaunty little shuffle.
     shop: {
       bpm: 116, swing: 0.16, echo: 0.1,
@@ -1399,7 +1410,7 @@
   // Which song fits where we are.
   function songFor() {
     const st = state === 'pause' ? pausedFrom : state;
-    if (st === 'shop' || st === 'log') return 'shop';
+    if (st === 'shop' || st === 'log') return st;
     if (st === 'drop' || st === 'reel') {
       const z = zoneIndex(Math.max(0, hook.y) / PPM);
       return z <= 1 ? 'shallows' : z === 2 ? 'twilight' : z === 3 ? 'midnight' : 'abyss';
@@ -1526,6 +1537,7 @@
   let menuSel = 0;
   let shopSel = 0;
   let logPage = 0;
+  let logFlip = null; // a page mid-turn: { t, from, dir }
   let fish = [];
   let bubbles = [];
   let popups = [];
@@ -1739,10 +1751,11 @@
     run.catch = [];
   }
 
-  // Pressing SHOP: reel in, start the motor and speed off screen, then fade.
-  function startSail() {
+  // Pressing SHOP or FISH LOG: reel in, start the motor and speed off
+  // screen, then fade to `dest`.
+  function startSail(dest) {
     state = 'sail';
-    sail = { t: 0, fading: false };
+    sail = { t: 0, fading: false, dest };
     boatV = 0;
     boatFx.cat = 0.5;
     sfx.engineStart();
@@ -1764,9 +1777,12 @@
     }
     if (boatDX > W - BOAT_X + 10 && !sail.fading) {
       sail.fading = true;
+      const dest = sail.dest;
       fadeOut(() => {
-        state = 'shop';
+        state = dest;
         shopMsg = null;
+        logPage = 0;
+        logFlip = null;
         sail = null;
         boatDX = 0;
         boatV = 0;
@@ -2162,8 +2178,7 @@
       let act = ready ? tap : null;
       if (pressed.has('ok') && ready) act = ['cast', 'shop', 'log'][menuSel];
       if (act === 'cast') startCast();
-      else if (act === 'shop') startSail();
-      else if (act === 'log') { state = 'log'; logPage = 0; sfx.select(); }
+      else if (act === 'shop' || act === 'log') startSail(act);
     } else if (state === 'sail') {
       updateSail(dt);
     } else if (state === 'drop') {
@@ -2198,10 +2213,25 @@
       }
       if (shopMsg) shopMsg.t += dt;
     } else if (state === 'log') {
-      const pages = Math.ceil(SPECIES.length / 7);
-      if (pressed.has('left') || tap === 'prev') { logPage = (logPage + pages - 1) % pages; sfx.page(); }
-      if (pressed.has('right') || tap === 'next') { logPage = (logPage + 1) % pages; sfx.page(); }
-      if (pressed.has('back') || pressed.has('ok') || tap === 'back') { state = 'title'; menuSel = 2; sfx.back(); }
+      if (logFlip) {
+        logFlip.t += dt;
+        if (logFlip.t >= 0.35) logFlip = null;
+      }
+      if (fadeDir || logFlip) {
+        // Wait for the page or the scene to finish turning
+      } else if (pressed.has('left') || tap === 'prev') {
+        turnLogPage(-1);
+      } else if (pressed.has('right') || tap === 'next') {
+        turnLogPage(1);
+      } else if (pressed.has('back') || pressed.has('ok') || tap === 'back') {
+        sfx.back();
+        fadeOut(() => {
+          state = 'title';
+          menuSel = 2;
+          boatDX = -75;
+          sfx.engineArrive();
+        });
+      }
     }
 
     // Scene fades, and the boat coasting home to its mooring
@@ -3126,17 +3156,6 @@
     if (Math.floor(time * 2) % 2) drawText('TAP TO CONTINUE', W / 2, 172, '#fff', 1, 'center');
   }
 
-  function drawUnderwaterBg() {
-    for (let y = 0; y < H; y++) {
-      ctx.fillStyle = waterColor(200 + y * 1.5);
-      ctx.fillRect(0, y, W, 1);
-    }
-    for (let i = 0; i < 16; i++) {
-      const by = H - ((time * (6 + (i % 4) * 3) + hash(i, 4) * H) % H);
-      dot(hash(i, 2) * W + Math.sin(time * 2 + i) * 2, by, 'rgba(220,240,255,0.5)');
-    }
-  }
-
   // An old wooden tabletop for the shop, generated once at detail resolution:
   // planks with wavy grain, knots, seams, nails, wear and a dark vignette.
   let woodCanvas = null;
@@ -3286,14 +3305,8 @@
     ctx.fillRect(bx, by - 7, 1, 3);
   }
 
-  function drawShop() {
-    if (!woodCanvas) woodCanvas = buildWood();
-    ctx.drawImage(woodCanvas, 0, 0, W, H);
-    // Warm lamplight that flickers a touch
-    ctx.fillStyle = `rgba(255,190,110,${(0.04 + Math.sin(time * 7) * 0.012 + Math.sin(time * 13) * 0.008).toFixed(3)})`;
-    ctx.fillRect(0, 0, W, H);
-
-    // Hanging wooden sign
+  // The hanging wooden sign at the top of the shop and the log.
+  function drawSign(title) {
     ctx.fillStyle = 'rgba(20,8,0,0.45)';
     ctx.fillRect(15, 2, 100, 18);
     ctx.fillStyle = '#4a2a12';
@@ -3311,7 +3324,17 @@
       ctx.fillRect(nx, 3, 1.5, 1.5);
       ctx.fillRect(nx, 15, 1.5, 1.5);
     }
-    drawWavyText('TACKLE SHOP', W / 2, 4, '#f2c200', 1, '#2a1406', 1, 5);
+    drawWavyText(title, W / 2, 4, '#f2c200', 1, '#2a1406', 1, 5);
+  }
+
+  function drawShop() {
+    if (!woodCanvas) woodCanvas = buildWood();
+    ctx.drawImage(woodCanvas, 0, 0, W, H);
+    // Warm lamplight that flickers a touch
+    ctx.fillStyle = `rgba(255,190,110,${(0.04 + Math.sin(time * 7) * 0.012 + Math.sin(time * 13) * 0.008).toFixed(3)})`;
+    ctx.fillRect(0, 0, W, H);
+
+    drawSign('TACKLE SHOP');
     const bump = moneyBump > 0 ? 1 : 0;
     drawText('$' + fmt(save.money), W / 2, 12 - bump, '#a0f0a0', 1, 'center', '#1a0c04');
 
@@ -3373,42 +3396,179 @@
     });
   }
 
+  // The fish log: a leather notebook lying on the shop's wooden table, with a
+  // photo taped in for every species you've caught.
+  const LOG_PER = 7;
+  const logPages = () => Math.ceil(SPECIES.length / LOG_PER);
+  const PAGE = { x: 13, y: 25, w: 108, h: 150 };
+
+  function turnLogPage(dir) {
+    logFlip = { t: 0, from: logPage, dir };
+    logPage = (logPage + dir + logPages()) % logPages();
+    sfx.page();
+  }
+
+  // A five-point gold star sticker.
+  function star(cx, cy) {
+    const rows = ['..y..', '.yyy.', 'yyYyy', '.yyy.', 'y...y'];
+    rows.forEach((r, j) => [...r].forEach((ch, i) => {
+      if (ch === '.') return;
+      ctx.fillStyle = ch === 'Y' ? '#fff3a0' : '#e8b400';
+      ctx.fillRect(cx + i - 2.5, cy + j - 2.5, 1, 1);
+    }));
+  }
+
+  function drawLogEntry(sp, i, y) {
+    const n = save.caught[sp.id] || 0;
+    const px = PAGE.x + 2, pw = 25, ph = 16;
+    const tilt = i % 2 ? 0.5 : 0;
+    if (n) {
+      // Photo with a white border, the fish swimming in water from its depth
+      ctx.fillStyle = 'rgba(40,20,0,0.3)';
+      ctx.fillRect(px + 1, y + 2 + tilt, pw, ph);
+      ctx.fillStyle = '#fbfbf2';
+      ctx.fillRect(px, y + 1 + tilt, pw, ph);
+      const m = (sp.min + sp.max) / 2;
+      for (let r = 0; r < ph - 2; r++) {
+        ctx.fillStyle = waterColor(Math.min(m, 300) * 0.6 + r * 6);
+        ctx.fillRect(px + 1, y + 2 + tilt + r, pw - 2, 1);
+      }
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(px + 1, y + 2 + tilt, pw - 2, ph - 2);
+      ctx.clip();
+      fishIcon(sp, false, px + 2 + Math.sin(time * 1.5 + i) * 1, y + 3 + tilt, pw - 4, ph - 4, time * 6 + i);
+      ctx.restore();
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fillRect(px + 1, y + 2 + tilt, pw - 2, 1);
+      // Tape over the corner
+      ctx.fillStyle = 'rgba(250,246,226,0.7)';
+      ctx.fillRect(px - 2, y + tilt, 7, 2.5);
+    } else {
+      // Dashed pencil outline with a faint hint of the shape
+      ctx.fillStyle = '#a8987c';
+      for (let k = 0; k < pw; k += 2) {
+        ctx.fillRect(px + k, y + 1, 1, 0.5);
+        ctx.fillRect(px + k, y + ph, 1, 0.5);
+      }
+      for (let k = 0; k < ph; k += 2) {
+        ctx.fillRect(px, y + 1 + k, 0.5, 1);
+        ctx.fillRect(px + pw - 0.5, y + 1 + k, 0.5, 1);
+      }
+      ctx.globalAlpha = 0.12;
+      const img = sp.dark;
+      const k = Math.min(1, (pw - 4) / (img.width / S), (ph - 4) / (img.height / S));
+      ctx.drawImage(img, snap(px + (pw - img.width / S * k) / 2), snap(y + 1 + (ph - img.height / S * k) / 2), img.width / S * k, img.height / S * k);
+      ctx.globalAlpha = 1;
+      drawText('?', px + pw / 2, y + 6, '#a8987c', 1, 'center', null);
+    }
+    const tx = PAGE.x + 31;
+    drawText(n ? sp.name : '???', tx, y + 3, n ? '#26264a' : '#a8987c', 1, 'left', null);
+    drawText(sp.min + '-' + sp.max + 'M', tx, y + 11, '#7a6a54', 1, 'left', null);
+    if (n) {
+      drawText('$' + fmt(sp.value), PAGE.x + PAGE.w - 3, y + 3, '#2a6a2a', 1, 'right', null);
+      drawText('X' + n, PAGE.x + PAGE.w - 3, y + 11, '#26264a', 1, 'right', null);
+      if (save.golden[sp.id]) {
+        star(PAGE.x + PAGE.w - 20, y + 12);
+        if (Math.floor(time * 3 + i) % 4 === 0) dot(PAGE.x + PAGE.w - 20, y + 9, '#ffffff');
+      }
+    }
+  }
+
+  function drawLogPage(page) {
+    const { x, y, w, h } = PAGE;
+    ctx.fillStyle = '#f2e8cc';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = 'rgba(90,130,190,0.3)';
+    for (let ly = y + 6; ly < y + h - 2; ly += 4) ctx.fillRect(x, ly, w, 0.5);
+    ctx.fillStyle = 'rgba(210,80,80,0.45)';
+    ctx.fillRect(x + 29, y, 0.5, h);
+    for (let i = 0; i < 40; i++) dot(x + hash(i, page * 13) * w, y + hash(i + 70, page) * h, i % 5 ? '#e8dcbc' : '#dccca4');
+    SPECIES.slice(page * LOG_PER, page * LOG_PER + LOG_PER).forEach((sp, i) => drawLogEntry(sp, i, y + 2 + i * 20));
+    drawText('PAGE ' + (page + 1) + '/' + logPages(), x + w / 2, y + h - 7, '#7a6a54', 1, 'center', null);
+  }
+
+  // One page squeezed toward the spine, as if it's turning.
+  function drawTurningPage(page, k) {
+    if (k <= 0.02) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(PAGE.x, PAGE.y, PAGE.w, PAGE.h);
+    ctx.clip();
+    ctx.translate(PAGE.x, 0);
+    ctx.scale(k, 1);
+    ctx.translate(-PAGE.x, 0);
+    drawLogPage(page);
+    ctx.restore();
+    const ex = PAGE.x + PAGE.w * k;
+    ctx.fillStyle = 'rgba(40,20,0,0.3)';
+    ctx.fillRect(ex, PAGE.y, 1 + 3 * (1 - k), PAGE.h);
+    ctx.fillStyle = '#fbf6e4';
+    ctx.fillRect(ex - 0.5, PAGE.y, 0.5, PAGE.h);
+  }
+
   function drawLog() {
-    drawUnderwaterBg();
+    if (!woodCanvas) woodCanvas = buildWood();
+    ctx.drawImage(woodCanvas, 0, 0, W, H);
+    ctx.fillStyle = `rgba(255,190,110,${(0.04 + Math.sin(time * 7) * 0.012 + Math.sin(time * 13) * 0.008).toFixed(3)})`;
+    ctx.fillRect(0, 0, W, H);
     const known = SPECIES.filter((s) => save.caught[s.id]).length;
-    drawWavyText('FISH LOG', W / 2, 4, '#ffe070', 1, '#000', 1, 5);
-    drawText(known + '/' + SPECIES.length + ' SPECIES', W / 2, 12, '#8fe0ff', 1, 'center');
-    const per = 7;
-    const list = SPECIES.slice(logPage * per, logPage * per + per);
-    list.forEach((sp, i) => {
-      const y = 22 + i * 21;
-      drawPanel(4, y, 120, 19);
-      const n = save.caught[sp.id] || 0;
-      if (n) {
-        fishIcon(sp, false, 6 + Math.sin(time * 1.5 + i) * 1, y + 2, 28, 15, time * 6 + i);
+    drawSign('FISH LOG');
+    drawText(known + '/' + SPECIES.length + ' SPECIES', W / 2, 12, '#8fe0ff', 1, 'center', '#1a0c04');
+
+    // Leather cover with stitching
+    ctx.fillStyle = 'rgba(20,8,0,0.5)';
+    ctx.fillRect(7, 23, 118, 158);
+    ctx.fillStyle = '#5a2418';
+    ctx.fillRect(5, 21, 118, 158);
+    ctx.fillStyle = '#6e2e1e';
+    ctx.fillRect(6, 22, 116, 0.5);
+    ctx.fillStyle = '#c8a070';
+    for (let k = 8; k < 121; k += 2) {
+      ctx.fillRect(k, 22.5, 1, 0.5);
+      ctx.fillRect(k, 177, 1, 0.5);
+    }
+    for (let k = 24; k < 177; k += 2) ctx.fillRect(121.5, k, 0.5, 1);
+    // A second page peeking out beneath this one
+    ctx.fillStyle = '#e4d8b8';
+    ctx.fillRect(PAGE.x + 1, PAGE.y + 1, PAGE.w, PAGE.h);
+
+    if (logFlip) {
+      const p = clamp(logFlip.t / 0.35, 0, 1);
+      if (logFlip.dir > 0) {
+        drawLogPage(logPage);
+        drawTurningPage(logFlip.from, 1 - p);
       } else {
-        const img = sp.dark;
-        const k = Math.min(1, 28 / (img.width / S), 15 / (img.height / S));
-        ctx.drawImage(img, snap(6 + (28 - img.width / S * k) / 2), snap(y + 2 + (15 - img.height / S * k) / 2), img.width / S * k, img.height / S * k);
+        drawLogPage(logFlip.from);
+        drawTurningPage(logPage, p);
       }
-      drawText(n ? sp.name : '???', 36, y + 3, n ? '#fff' : '#5a6a80');
-      drawText(sp.min + '-' + sp.max + 'M', 36, y + 11, '#8a9ab0');
-      if (n) {
-        drawText('$' + fmt(sp.value), 120, y + 3, '#a0f0a0', 1, 'right');
-        drawText('X' + n, 120, y + 11, '#fff', 1, 'right');
-        if (save.golden[sp.id]) {
-          ctx.fillStyle = '#f2c200';
-          ctx.fillRect(100, y + 12, 3, 3);
-          if (Math.floor(time * 3 + i) % 4 === 0) dot(102.5, y + 11.5, '#ffffff');
-        }
-      }
-    });
-    const pages = Math.ceil(SPECIES.length / per);
-    drawText((logPage + 1) + '/' + pages, W / 2, 172, '#8a9ab0', 1, 'center');
-    button(4, 168, 22, 12, '<', 'prev');
-    button(102, 168, 22, 12, '>', 'next');
-    button(44, 181, 40, 10, 'BACK', 'back', { selected: true });
+    } else {
+      drawLogPage(logPage);
+    }
+
+    // Spiral binding down the left edge
+    for (let ry = PAGE.y + 3; ry < PAGE.y + PAGE.h - 2; ry += 6) {
+      ctx.fillStyle = '#3a1810';
+      ctx.fillRect(PAGE.x + 1.5, ry + 0.5, 1.5, 1.5);
+      ctx.fillStyle = '#8a8a96';
+      ctx.fillRect(PAGE.x - 5, ry, 7.5, 1.5);
+      ctx.fillStyle = '#d8d8e0';
+      ctx.fillRect(PAGE.x - 4.5, ry, 5, 0.5);
+    }
+    // Bookmark ribbon hanging out of the bottom
+    const sway = Math.round(Math.sin(time * 1.5)) * 0.5;
+    ctx.fillStyle = '#b02a2a';
+    ctx.fillRect(35, 174, 3, 9);
+    ctx.fillRect(35 + sway, 183, 1, 1.5);
+    ctx.fillRect(37 + sway, 183, 1, 1.5);
+    ctx.fillStyle = '#d04a40';
+    ctx.fillRect(35, 174, 1, 9);
     if (save.chest) spr(chestSprite, 2, 2);
+
+    const wood = { bg: '#5a3418', hi: '#7a4a24', border: '#c89050', color: '#f8e8c0' };
+    button(6, 181, 24, 10, '<', 'prev', wood);
+    button(98, 181, 24, 10, '>', 'next', wood);
+    button(44, 181, 40, 10, 'BACK', 'back', Object.assign({ selected: true }, wood));
   }
 
   function drawPause() {
