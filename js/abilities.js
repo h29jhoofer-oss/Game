@@ -159,8 +159,9 @@ OMJ.AbilitySystem = class {
     if (this.invulnTimer > 0) {
       this.invulnTimer -= dt;
       // Never switch protection off over a pit or right in front of an
-      // obstacle: that would be an unfair crash.
-      if (this.invulnTimer <= 0 && g.isDangerClose()) this.invulnTimer = 0.01;
+      // obstacle: that would be an unfair crash. (This runs before things
+      // move this step, so it looks a little further ahead to be safe.)
+      if (this.invulnTimer <= 0 && g.isDangerClose(0.45)) this.invulnTimer = 0.01;
     }
   }
 
@@ -175,7 +176,7 @@ OMJ.AbilitySystem = class {
       const targetY = OMJ.CONFIG.GROUND_Y - 6;
       s.y += OMJ.clamp(targetY - s.y, -200 * dt, 200 * dt);
       if (s.x > OMJ.CONFIG.VIEW_W + 8) { s.active = false; continue; }
-      if (g.boss.fighting && s.x >= g.boss.x - 16) { g.boss.hit(1, g); s.active = false; continue; }
+      if (g.boss.fighting && s.x >= g.boss.leftEdge) { g.boss.hit(1, g); s.active = false; continue; }
       const pool = g.obstacles.pool;
       for (let j = 0; j < pool.length; j++) {
         const o = pool[j];

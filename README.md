@@ -23,6 +23,7 @@ python3 -m http.server 8000
 | --- | --- |
 | `SPACE`, `↑`, `W`, mouse click | Jump |
 | `↓` or `S` (in the air) | Ground smash: drop straight down |
+| `↓` or `S` (on a platform) | Drop down through the platform |
 | `B`, `SHIFT`, right-click | Use your skin's ability |
 | `ESC` or `P` | Pause / resume |
 | `R` | Restart after a crash |
@@ -67,6 +68,12 @@ Moving obstacles are still fair. The sliding saw never moves faster than the wor
 chase you. The pop-up saw never rises higher than a normal jump clears. The crusher always slams before you reach it. The crossbow waits until nothing else is
 between you, and its arrow always gives you at least ¾ of a second.
 
+## Wooden platforms
+
+Floating wooden planks show up over spikes, saws and pits. Jump up through one from below and
+you land on top; walk off the end or press `↓` to drop back down. They never hurt you, and
+whatever is under them can always be jumped the normal way, so they're an optional high road.
+
 ## Ground smash
 
 Press `↓` (or `S`) in the air to drop straight down. It lands you sooner, so you can set up
@@ -75,15 +82,23 @@ a shockwave along the ground that hurts the boss.
 
 ## The boss: Big Bonk
 
-When the first night ends (score 1500), normal obstacles stop and **Big Bonk** flies in. It
-throws bombs that roll at you, spiky balls that drop and sit still, and fireballs that swoop
-down to ground level. Its eyes turn red and it shakes just before each throw.
+When the first night ends (score 1500), normal obstacles stop and **Big Bonk**, a huge
+crowned block, flies in. Its eyes turn red and it shakes just before every attack:
+
+| Attack | What to do |
+| --- | --- |
+| Bomb | Drops and rolls toward you. Jump it. |
+| Spiky ball | Drops and sits still. Jump it. |
+| Fireball | Swoops down to the ground and flies at you. Jump it. |
+| Fireball burst | Three fireballs, one after another. Jump each one. |
+| Ground Pound | Big Bonk slams into the ground and a quake wave rolls at you. Jump it. |
+| Crate drop | Drops a crate. Jump over it or land on top. |
 
 - **Hurt it** with ground smash shockwaves (6 hits the first time). Shuriken hits it, and
   Supernova does double damage.
 - **Beat it** for +250 points. It comes back after every night (score 3000, 4500…) with
   2 more health and a bigger reward.
-- **Run out the clock** (35 seconds, the thin bar under its health) and it leaves with no bonus.
+- **Run out the clock** (40 seconds, the thin bar under its health) and it leaves with no bonus.
 
 Fairness: the boss works out when each attack will reach you, and never lets two attacks
 arrive closer together than one full jump plus reaction time. If an attack would be too soon,
@@ -167,8 +182,8 @@ Songs live at the top of `js/music.js`. Each word is one eighth-note step: a not
    Give it a `minDifficulty` (0 = from the start, 1 = only at max difficulty) and a `weight`.
 
 ### Tune the boss
-All of Big Bonk's numbers (when it appears, health, time limit, reward, warning time) are in
-`OMJ.BOSS` at the top of `js/boss.js`. Its music is the `boss` song in `js/music.js`.
+All of Big Bonk's numbers (when it appears, health, time limit, reward, warning time, size,
+and how often it uses each attack) are in `OMJ.BOSS` at the top of `js/boss.js`. Its music is the `boss` song in `js/music.js`.
 
 ### Add a background theme
 Add an entry to `THEMES` in `js/background.js` (copy one and change the colors). Themes switch
@@ -213,7 +228,9 @@ belongs to.
 - Obstacles are different every run, and the game slowly speeds up.
 - Gaps show up after about 150 points, barriers after about 300, combos later.
 - Sliding saws appear after about 225 points, pop-up saws after 375, crushers after 450,
-  crossbows after 600.
+  crossbows after 600. Wooden platforms appear over spikes from the start, and over pits and
+  saws later.
+- Jumping up into a platform lands you on top; `↓` on a platform drops you through it.
 - The crusher rattles, then slams down before you reach it. You can stand on it afterwards.
 - The crossbow only fires when nothing else is between you; its flaming arrow dips to ground
   level and leaves a trail of fire and smoke.

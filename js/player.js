@@ -30,6 +30,9 @@ OMJ.Player = class {
 
     // Ground smash (DOWN in the air): drop fast until you land.
     this.smashing = false;
+    // Standing on a platform? (DOWN drops through it for a moment.)
+    this.standingOn = null;      // the obstacle under your feet, or null for the ground
+    this.dropTimer = 0;
 
     // One-step event flags the game reads for sounds/particles.
     this.justJumped = false;
@@ -59,6 +62,13 @@ OMJ.Player = class {
     return true;
   }
 
+  // DOWN while standing on a wooden platform: fall through it.
+  dropThrough() {
+    this.dropTimer = 0.25;
+    this.grounded = false;
+    this.standingOn = null;
+  }
+
   // Use a skin's passive perk for jump timing (null = keep the normal value).
   setTiming(passive) {
     if (passive.coyoteTime !== null) this.coyoteTime = passive.coyoteTime;
@@ -77,6 +87,7 @@ OMJ.Player = class {
       if (this.grounded) this.coyoteTimer = this.coyoteTime;
       else this.coyoteTimer -= dt;
       this.jumpBufferTimer -= dt;
+      if (this.dropTimer > 0) this.dropTimer -= dt;
 
       if (this.jumpBufferTimer > 0 && (this.grounded || this.coyoteTimer > 0)) {
         this.vy = -C.JUMP_VELOCITY;

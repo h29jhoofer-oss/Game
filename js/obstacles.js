@@ -125,6 +125,8 @@
   // hitbox         -> how many pixels to shrink the deadly box on each side
   //                   (smaller hitboxes feel fairer)
   // solidTop       -> true if the player can land and stand on it
+  // oneWay         -> a platform: jump up through it from below, land on
+  //                   top, press DOWN to drop through
   // isGap          -> true for holes in the ground
   // harmless       -> scenery that can't hurt you (e.g. the crossbow tower)
   // debris         -> colors of the pieces when it gets smashed
@@ -467,6 +469,54 @@
       },
     },
 
+    // ---- WOODEN PLATFORM: a floating plank you can stand on ----
+    // Jump up through it from underneath and land on top. Press DOWN while
+    // standing on it to drop through. It never hurts you, and whatever is
+    // under it can always be jumped normally, so it's an optional high road.
+    // variant = width in pixels.
+    platform: {
+      size: (width) => ({ w: width, h: 6 }),
+      hitbox: { left: 0, right: 0, top: 0 },
+      solidTop: true,
+      oneWay: true,
+      harmless: true,
+      debris: [P.wood, P.woodLight, P.woodDark],
+      deathLines: ['Splinters!'],
+      init(o) {
+        o.y = C.GROUND_Y - OMJ.randInt(32, 40);   // the top you stand on
+      },
+      draw(ctx, o) {
+        const x = o.drawX;
+        const y = Math.round(o.y);
+        const w = o.w;
+        // Little support brackets hanging under each end
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 3, y + 6, 4, 3); ctx.fillRect(x + w - 7, y + 6, 4, 3);
+        ctx.fillStyle = P.woodDark;
+        ctx.fillRect(x + 4, y + 6, 2, 2); ctx.fillRect(x + w - 6, y + 6, 2, 2);
+        // The plank
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x, y, w, 6);
+        ctx.fillStyle = P.wood;
+        ctx.fillRect(x + 1, y + 1, w - 2, 4);
+        ctx.fillStyle = P.woodLight;
+        ctx.fillRect(x + 1, y + 1, w - 2, 1);
+        ctx.fillStyle = P.woodDark;
+        ctx.fillRect(x + 1, y + 4, w - 2, 1);
+        // Board seams with a nail on each side
+        for (let sx = x + 16; sx < x + w - 4; sx += 16) {
+          ctx.fillStyle = P.ink;
+          ctx.fillRect(sx, y + 1, 1, 4);
+          ctx.fillStyle = P.metalLight;
+          ctx.fillRect(sx - 2, y + 2, 1, 1);
+          ctx.fillRect(sx + 2, y + 2, 1, 1);
+        }
+        // Wood grain
+        ctx.fillStyle = P.woodDark;
+        for (let gx = x + 5; gx < x + w - 4; gx += 11) ctx.fillRect(gx, y + 3, 3, 1);
+      },
+    },
+
     // ---- BOSS ATTACKS (launched by boss.js) ----
 
     // A bomb that drops straight down, then rolls toward you.
@@ -531,6 +581,43 @@
       },
     },
 
+    // Ground Pound: a wave of rock and dust rolling along the ground.
+    quake: {
+      size: () => ({ w: 14, h: 10 }),
+      hitbox: { left: 2, right: 2, top: 2 },
+      debris: [P.dirt, P.dirtLight, P.dust],
+      deathLines: ['The ground itself turned on you.', 'Earthquake! (Well, a Bonk-quake.)', 'Should have jumped the rumble.'],
+      init(o) { o.extra = 140; },
+      update(o, dt, g) {
+        o.x -= o.extra * dt;
+        o.timer += dt;
+        if (Math.random() < 0.5) {
+          g.particles.spawn(o.x + OMJ.rand(0, 14), C.GROUND_Y - 2, OMJ.rand(20, 80), OMJ.rand(-80, -30), 0.35, OMJ.randInt(1, 2),
+            Math.random() < 0.5 ? P.dust : P.dirtLight, 400);
+        }
+      },
+      draw(ctx, o, g) {
+        const x = o.drawX;
+        const gy = C.GROUND_Y;
+        const f = Math.floor(g.time * 20) % 2;
+        // A hump of cracked earth with rocks flying off the top
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 2, gy - 6, 10, 6);
+        ctx.fillRect(x + 4, gy - 9, 6, 3);
+        ctx.fillRect(x, gy - 3, 14, 3);
+        ctx.fillStyle = P.dirt;
+        ctx.fillRect(x + 3, gy - 5, 8, 5);
+        ctx.fillRect(x + 5, gy - 8, 4, 3);
+        ctx.fillRect(x + 1, gy - 2, 12, 2);
+        ctx.fillStyle = P.dirtLight;
+        ctx.fillRect(x + 5, gy - 8, 2, 1);
+        ctx.fillRect(x + 3, gy - 5, 2, 1);
+        ctx.fillStyle = P.grass;
+        ctx.fillRect(x + 4, gy - 9 + f, 2, 1);
+        ctx.fillRect(x + 9, gy - 7 - f, 2, 1);
+      },
+    },
+
     // A fireball that swoops down to ground level and flies at you.
     fireball: {
       size: () => ({ w: 10, h: 6 }),
@@ -540,7 +627,7 @@
       init(o) { o.extra = 150; },
       update(o, dt, g) {
         o.x -= o.extra * dt;
-        o.y = Math.min(C.GROUND_Y - 8, o.y + 170 * dt);
+        o.y = Math.min(C.GROUND_Y - 8, o.y + 260 * dt);
         o.timer += dt;
         if (Math.random() < 0.5) g.particles.spawn(o.x + 9, o.y + 3, 30, OMJ.rand(-15, 15), 0.25, 1, Math.random() < 0.5 ? P.gold : P.danger, 0);
       },
@@ -572,6 +659,7 @@
           x: 0, y: 0, w: 0, h: 0, drawX: 0, passed: false,
           bx: 0, bw: 0, solid: false,                 // body box & standable?
           phase: 0, timer: 0, vy: 0, extra: 0, fired: false,  // for moving types
+          dropping: false,                            // falling from the boss
         });
       }
     }
@@ -602,6 +690,7 @@
         o.bw = size.w;
         o.solid = !!type.solidTop;
         o.phase = 0; o.timer = 0; o.vy = 0; o.extra = 0; o.fired = false;
+        o.dropping = false;
         if (type.init) type.init(o);
         return o;
       }
@@ -613,7 +702,19 @@
         const o = this.pool[i];
         if (!o.active) continue;
         o.x -= speed * dt;
-        if (o.type.update) o.type.update(o, dt, game, speed);
+        if (o.dropping) {
+          // Dropped by the boss: fall straight down, then sit on the ground.
+          o.x += speed * dt;
+          o.vy += 900 * dt;
+          o.y += o.vy * dt;
+          if (o.y >= C.GROUND_Y - o.h) {
+            o.y = C.GROUND_Y - o.h;
+            o.dropping = false;
+            game.sound.play('bombLand');
+          }
+        } else if (o.type.update) {
+          o.type.update(o, dt, game, speed);
+        }
         o.drawX = Math.round(o.x);
         if (o.x + o.w < -24) o.active = false; // off screen: recycle it
       }

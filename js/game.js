@@ -216,8 +216,16 @@ OMJ.Game = class {
     if (this.state === 'playing') this.abilities.tryActivate(this);
   }
 
+  // DOWN: ground smash in the air, or drop through a wooden platform.
   onSmashKey() {
-    if (this.state === 'playing' && this.player.groundSmash()) this.sound.play('smashDown');
+    if (this.state !== 'playing') return;
+    const p = this.player;
+    if (p.grounded && p.standingOn && p.standingOn.type.oneWay) {
+      p.dropThrough();
+      this.sound.play('dropThrough');
+    } else if (p.groundSmash()) {
+      this.sound.play('smashDown');
+    }
   }
 
   onConfirmKey() {
@@ -460,18 +468,26 @@ OMJ.Game = class {
       if (o.active && o.type.isGap && footL >= o.x && footR <= o.x + o.w) overGap = true;
     }
     let floor = overGap && !bridgeGaps ? Infinity : C.GROUND_Y;
+    let floorObject = null;
 
     for (let i = 0; i < pool.length; i++) {
       const o = pool[i];
       if (!o.active || !o.solid) continue;
+      if (o.type.oneWay && p.dropTimer > 0) continue;    // dropping through a platform
       const overlaps = footR > o.x + o.bx + 1 && footL < o.x + o.bx + o.bw - 1;
-      if (overlaps && p.prevBottom <= o.y + 4 && o.y < floor) floor = o.y;
+      if (overlaps && p.prevBottom <= o.y + 4 && o.y < floor) { floor = o.y; floorObject = o; }
     }
 
     // Land only if we were above the floor a moment ago (so you can't
-    // "pop up" out of a pit once you've fallen in).
-    if (p.vy >= 0 && p.bottom >= floor && p.prevBottom <= floor + 2) p.land(floor);
-    else p.grounded = false;
+    // "pop up" out of a pit once you've fallen in). Platforms work the
+    // same way, which is why you can jump up through them from below.
+    if (p.vy >= 0 && p.bottom >= floor && p.prevBottom <= floor + 2) {
+      p.land(floor);
+      p.standingOn = floorObject;
+    } else {
+      p.grounded = false;
+      p.standingOn = null;
+    }
   }
 
   // Returns the obstacle the player crashed into, or null.
@@ -509,11 +525,11 @@ OMJ.Game = class {
     return null;
   }
 
-  // Is an obstacle or pit touching the player or just ahead of them?
-  // (Used so invulnerability never runs out at an unfair moment.)
-  isDangerClose() {
+  // Is an obstacle or pit touching the player, or less than `seconds`
+  // away? (Used so invulnerability never runs out at an unfair moment.)
+  isDangerClose(seconds) {
     const p = this.player;
-    const reach = p.x + p.w + this.worldSpeed * 0.3;
+    const reach = p.x + p.w + this.worldSpeed * (seconds || 0.3);
     const pool = this.obstacles.pool;
     for (let i = 0; i < pool.length; i++) {
       const o = pool[i];

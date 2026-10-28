@@ -86,6 +86,40 @@ OMJ.PATTERNS = [
     name: 'crossbow', minDifficulty: 0.4, weight: 1.5,
     build(api) { return api.place('crossbow', 0, 1); },
   },
+  // ---- Wooden platforms: an optional high road over a hazard ----
+  // The hazard underneath is always jumpable on its own; the platform
+  // just gives you another way across.
+  {
+    name: 'platformSpikes', minDifficulty: 0.05, weight: 1.5,
+    build(api, d) {
+      const count = OMJ.randInt(2, d < 0.4 ? 2 : 3);
+      const width = 8 * count + OMJ.randInt(20, 36);
+      api.place('platform', 0, width);
+      api.place('spike', Math.floor((width - 8 * count) / 2), count);
+      return width;
+    },
+  },
+  {
+    name: 'platformGap', minDifficulty: 0.25, weight: 1.2,
+    build(api, d) {
+      const maxWidth = Math.floor(api.airDistance * 0.55);
+      const gapWidth = OMJ.clamp(OMJ.randInt(28, 28 + Math.floor(24 * d)), 24, maxWidth);
+      const width = gapWidth + OMJ.randInt(24, 40);
+      api.place('platform', 0, width);
+      api.place('gap', Math.floor((width - gapWidth) / 2), gapWidth);
+      return width;
+    },
+  },
+  {
+    name: 'platformSaw', minDifficulty: 0.35, weight: 1.2,
+    build(api) {
+      const range = OMJ.randInt(16, 28);
+      const width = range + 23 + OMJ.randInt(20, 32);
+      api.place('platform', 0, width);
+      api.place('saw', Math.floor((width - range - 23) / 2), range);
+      return width;
+    },
+  },
   {
     name: 'crateSpikes', minDifficulty: 0.65, weight: 1.5,
     build(api) {

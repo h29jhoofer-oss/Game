@@ -130,6 +130,9 @@ OMJ.Sound = class {
       case 'smashDown':                  // starting a ground smash
         this.tone(700, 200, 0.12, 'square', 0.05);
         break;
+      case 'dropThrough':                // dropping through a platform
+        this.tone(500, 250, 0.08, 'triangle', 0.05);
+        break;
       case 'groundSmash':                // landing a ground smash
         this.noise(0.2, 0.25, 400);
         this.tone(140, 40, 0.25, 'sine', 0.25);
@@ -149,6 +152,10 @@ OMJ.Sound = class {
       // ---- Boss ----
       case 'bossAlarm':
         this.melody([880, 0.15, 660, 0.15, 880, 0.15, 660, 0.15], 'square', 0.06);
+        break;
+      case 'bossStomp':                  // Ground Pound impact
+        this.noise(0.5, 0.35, 250);
+        this.tone(70, 25, 0.5, 'sine', 0.35);
         break;
       case 'bossThrow':
         this.tone(400, 200, 0.12, 'triangle', 0.07);
