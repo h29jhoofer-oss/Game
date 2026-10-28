@@ -143,7 +143,7 @@ html, body.omj-page {
 .omj-scores div {
   display: flex;
   flex-direction: column;
-  min-width: calc(var(--px) * 48);
+  min-width: calc(var(--px) * 42);
   padding: calc(var(--px) * 3) calc(var(--px) * 4);
   background: rgba(29, 26, 47, 0.85);
   box-shadow: 0 0 0 calc(var(--px) * 1) #4a4570;
@@ -286,6 +286,75 @@ html, body.omj-page {
 .omj-icon .omj-icon-cross { display: none; fill: #e8384f; }
 .omj-icon.is-muted .omj-icon-waves { display: none; }
 .omj-icon.is-muted .omj-icon-cross { display: block; }
+
+/* ---- Boost cards ---- */
+.omj-screen--boost { background: rgba(13, 11, 26, 0.72); }
+.omj-cards {
+  display: flex;
+  gap: calc(var(--px) * 6);
+  margin-bottom: calc(var(--px) * 2);
+}
+.omj-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--px) * 3);
+  width: calc(var(--px) * 96);
+  min-height: calc(var(--px) * 50);
+  padding: calc(var(--px) * 8) calc(var(--px) * 5) calc(var(--px) * 6);
+  color: #fffdf4;
+  text-align: center;
+  background: #2a2540;
+  box-shadow:
+    0 0 0 calc(var(--px) * 1) #1d1a2f,
+    inset 0 0 0 calc(var(--px) * 1) #5d578a,
+    0 calc(var(--px) * 3) 0 calc(var(--px) * 1) #1d1a2f;
+  transition: transform 0.08s;
+}
+.omj-card:hover,
+.omj-card:focus-visible {
+  transform: translateY(calc(var(--px) * -3));
+  background: #3a3460;
+}
+.omj-card--rare {
+  background: #3d2a1a;
+  box-shadow:
+    0 0 0 calc(var(--px) * 1) #1d1a2f,
+    inset 0 0 0 calc(var(--px) * 1) #ffd23f,
+    0 calc(var(--px) * 3) 0 calc(var(--px) * 1) #1d1a2f;
+  animation: omj-pulse 0.8s steps(2) infinite;
+}
+.omj-card--rare:hover { background: #5a3e22; }
+.omj-card-key {
+  position: absolute;
+  top: calc(var(--px) * -5);
+  left: calc(var(--px) * -5);
+  width: calc(var(--px) * 11);
+  height: calc(var(--px) * 11);
+  line-height: calc(var(--px) * 11);
+  font-size: calc(var(--px) * 7);
+  color: #1d1a2f;
+  background: #fffdf4;
+  box-shadow: 0 0 0 calc(var(--px) * 1) #1d1a2f;
+}
+.omj-card-tag {
+  font-size: calc(var(--px) * 4.5);
+  letter-spacing: calc(var(--px) * 0.4);
+  color: #7d8299;
+}
+.omj-card--rare .omj-card-tag { color: #ffd23f; }
+.omj-card-name {
+  font-size: calc(var(--px) * 8);
+  line-height: 1.1;
+  color: #ffd23f;
+}
+.omj-card--rare .omj-card-name { color: #ff8a3d; }
+.omj-card-desc {
+  font-size: calc(var(--px) * 5.5);
+  line-height: 1.35;
+  color: #c8ccd8;
+}
 
 @keyframes omj-pulse {
   50% { filter: brightness(1.4); }

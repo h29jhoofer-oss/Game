@@ -270,7 +270,7 @@ OMJ.Boss = class {
       w.age += dt;
       if (this.fighting && w.x >= this.leftEdge) {
         w.active = false;
-        this.hit(1, g);
+        this.hit(g.mods.smashDamage, g);     // Heavy Stomp boost hits harder
       } else if (w.x > OMJ.CONFIG.VIEW_W) {
         w.active = false;
       }

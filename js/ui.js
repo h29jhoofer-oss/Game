@@ -114,6 +114,44 @@ OMJ.UI = class {
     if (this.skinShown) OMJ.PlayerArt.drawPreview(this.skinPreview, this.skinShown, this.skinLocked, time);
   }
 
+  // Build the three boost cards. Each is a button with data-action
+  // "boost-0/1/2", so the normal click handler picks it.
+  showBoostChoice(choices, mods) {
+    const holder = this.fields.cards;
+    holder.textContent = '';
+    for (let i = 0; i < choices.length; i++) {
+      const c = choices[i];
+      const rare = c.kind === 'bonus';
+      const card = document.createElement('button');
+      card.className = 'omj-card' + (rare ? ' omj-card--rare' : '');
+      card.dataset.action = 'boost-' + i;
+
+      const key = document.createElement('span');
+      key.className = 'omj-card-key';
+      key.textContent = String(i + 1);
+      const tag = document.createElement('span');
+      tag.className = 'omj-card-tag';
+      const name = document.createElement('strong');
+      name.className = 'omj-card-name';
+      const desc = document.createElement('span');
+      desc.className = 'omj-card-desc';
+
+      if (rare) {
+        tag.textContent = 'RARE ABILITY · V';
+        name.textContent = c.ability.name;
+        desc.textContent = c.ability.desc;
+      } else {
+        const have = mods.stacks[c.boost.id] || 0;
+        tag.textContent = c.boost.max > 1 ? 'BOOST ' + (have + 1) + '/' + c.boost.max : 'BOOST';
+        name.textContent = c.boost.name;
+        desc.textContent = c.boost.desc;
+      }
+      card.append(key, tag, name, desc);
+      holder.append(card);
+    }
+    this.show('boost');
+  }
+
   showGameOver(info) {
     const f = this.fields;
     this.renderTitle(f['over-title'], info.isNewBest ? 'NEW BEST!' : 'GAME OVER');
@@ -123,6 +161,7 @@ OMJ.UI = class {
     f.score.textContent = info.score;
     f['over-best'].textContent = info.best;
     f.jumped.textContent = info.jumped;
+    f.coins.textContent = info.coins;
     f.unlock.textContent = info.unlocks.length
       ? 'Unlocked: ' + info.unlocks.join(', ') + '! Choose skins on the menu.'
       : info.nextUnlock || '';

@@ -25,6 +25,8 @@ python3 -m http.server 8000
 | `↓` or `S` (in the air) | Ground smash: drop straight down |
 | `↓` or `S` (on a platform) | Drop down through the platform |
 | `B`, `SHIFT`, right-click | Use your skin's ability |
+| `V` | Use your bonus ability (a rare boost) |
+| `1` `2` `3` | Pick a boost card |
 | `ESC` or `P` | Pause / resume |
 | `R` | Restart after a crash |
 | `M` | Mute / unmute everything |
@@ -67,6 +69,40 @@ bonuses don't make the game speed up faster: difficulty follows distance travell
 Moving obstacles are still fair. The sliding saw never moves faster than the world, so it can't
 chase you. The pop-up saw never rises higher than a normal jump clears. The crusher always slams before you reach it. The crossbow waits until nothing else is
 between you, and its arrow always gives you at least ¾ of a second.
+
+## Coins and boosts
+
+Gold coins float along the path of a good jump, sit in rows on the ground, and line the tops of
+platforms. The counter under your score shows how many you have toward the next boost.
+
+When you have enough (25 for the first, then 10 more each time), the game waits for a calm
+moment, pauses, and offers **three boost cards**. Press `1`, `2` or `3` (or click). SPACE never
+picks a card, so you can't choose one by accident. Boosts last until the end of the run.
+
+| Boost | Effect | Max |
+| --- | --- | --- |
+| Steady Pace | The world moves 7% slower | 3 |
+| Spring Shoes | Jump higher and hang in the air longer | 3 |
+| Coin Magnet | Nearby coins fly to you | 3 |
+| Lucky Coins | Every coin counts double | 1 |
+| Show-Off | +15% score | 5 |
+| Quick Recharge | Abilities recharge 25% faster | 3 |
+| Squeeze | Smaller hitbox | 1 |
+| Cat Reflexes | Even more forgiving jump timing | 1 |
+| Extra Life | Survive one more crash | 2 |
+| Heavy Stomp | Ground-smash shockwaves hit bosses twice as hard | 1 |
+
+Sometimes a gold **rare card** shows up instead: an active ability no skin has, used with `V`.
+You can own one per run.
+
+| Rare ability | Effect | Cooldown |
+| --- | --- | --- |
+| Rocket Jump | Blast sky-high; you can't crash until you land | 12 s |
+| Blink | Teleport past the next obstacle | 10 s |
+| Bulldozer | Smash through everything for 4 seconds | 18 s |
+
+Fairness: Spring Shoes changes the jump that the spawner, the boss and the coin arcs all plan
+around (`OMJ.Physics`), so obstacles space themselves out for your longer jumps.
 
 ## Wooden platforms
 
@@ -125,7 +161,9 @@ the top saying what it does.
 | `js/player.js` | The player: jumping, gravity, landing, and how it's drawn |
 | `js/obstacles.js` | Obstacle types (spike, crate, barrier, gap, saw, crusher, crossbow, boss attacks) and the obstacle pool |
 | `js/spawner.js` | Obstacle patterns and when they appear |
-| `js/abilities.js` | Active abilities, cooldowns, invulnerability, the ability meter |
+| `js/abilities.js` | Active abilities, cooldowns, invulnerability, the ability meters |
+| `js/coins.js` | Coins: moving, collecting (and the magnet), drawing |
+| `js/boosts.js` | Boosts bought with coins, rare bonus abilities, and how cards are picked |
 | `js/boss.js` | Big Bonk: when it appears, its attacks, health and drawing |
 | `js/particles.js` | Dust and sparkle particles |
 | `js/background.js` | Parallax sky, mountains, hills, town, ground; day/sunset/night themes |
@@ -180,6 +218,12 @@ Songs live at the top of `js/music.js`. Each word is one eighth-note step: a not
    `init(o)` and `update(o, dt, game, speed)`; the saw, crusher and crossbow are good examples.
 2. In `js/spawner.js`, add a pattern to `OMJ.PATTERNS` that uses it with `api.place(...)`.
    Give it a `minDifficulty` (0 = from the start, 1 = only at max difficulty) and a `weight`.
+
+### Tune coins and boosts
+How many coins a boost costs and how often rare cards appear are in `OMJ.COINS` at the top of
+`js/boosts.js`. Add a boost by copying an entry in `OMJ.BOOSTS`: its `apply(m)` changes one of
+the run modifiers listed in `OMJ.newRunMods`. How often coins appear is in `js/spawner.js`
+(search for `coinArc` and `coinRow`).
 
 ### Tune the boss
 All of Big Bonk's numbers (when it appears, health, time limit, reward, warning time, size,
@@ -256,6 +300,10 @@ belongs to.
 - Beating 100, 250, 500… unlocks new skins, announced mid-run.
 - Each skin's passive and active show on the start screen, even while it's locked.
 - `B` uses the ability; the meter fills while it recharges and says READY when it's charged.
+- Coins appear in arcs over obstacles, in ground rows and on platforms; the counter under the
+  score fills toward the next boost, then says BOOST! and the card screen opens at a calm moment.
+- Picking a card shows its name, a short "GO!" pause, and the boost works right away. A rare
+  card adds a second meter (gold, `V`) next to the first.
 - `↓` in the air drops you fast with a thump and a dust cloud. On the ground it does nothing.
 - At 1500 points Big Bonk arrives with its own music. Ground smash shockwaves shrink its health
   bar; beating it gives +250, and normal obstacles return afterwards.

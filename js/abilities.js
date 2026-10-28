@@ -21,7 +21,7 @@ OMJ.ABILITIES = {
     activate(g) {
       const p = g.player;
       p.smashing = false;
-      p.vy = -OMJ.CONFIG.JUMP_VELOCITY * 0.9;
+      p.vy = -OMJ.Physics.jumpVelocity * 0.9;
       p.squash = -1;
       g.particles.burst(p.x + 5, p.bottom, 10, 30, 70, 0, Math.PI * 2, 0.4, [g.skin.light, OMJ.PALETTE.white], 0);
       g.sound.play('doubleJump');
@@ -100,13 +100,31 @@ OMJ.AbilitySystem = class {
     this.invulnTimer = 0;
     this.secondChanceUsed = false;
     for (let i = 0; i < this.stars.length; i++) this.stars[i].active = false;
+
+    // Bonus slot (V): a rare ability bought with coins (boosts.js).
+    this.bonusKey = null;
+    this.bonusDef = null;
+    this.bonusLabel = '';
+    this.bonusCooldown = 0;
+    this.bonusTimer = 0;
+    this.rocketing = false;      // Rocket Jump: protected until you land
+  }
+
+  setBonus(key) {
+    this.bonusKey = key;
+    this.bonusDef = OMJ.BONUS_ABILITIES[key];
+    this.bonusLabel = this.bonusDef.name.toUpperCase();
+    this.bonusCooldown = 0;
+    this.bonusTimer = 0;
   }
 
   // ---- What the game asks each step ----
   isActive(key) { return this.key === key && this.activeTimer > 0; }
+  isBonusActive(key) { return this.bonusKey === key && this.bonusTimer > 0; }
   get timeScale() { return this.isActive('slowmo') ? 0.5 : 1; }
   get speedScale() { return this.isActive('dash') ? 2.2 : 1; }
-  get smashing() { return this.isActive('dash'); }
+  get smashing() { return this.isActive('dash') || this.isBonusActive('bulldozer'); }
+  get bonusReady() { return this.bonusDef && this.bonusCooldown <= 0 && this.bonusTimer <= 0; }
   get invulnerable() { return this.invulnTimer > 0; }
   get ready() { return this.cooldown <= 0 && this.activeTimer <= 0; }
 
@@ -122,6 +140,17 @@ OMJ.AbilitySystem = class {
     this.activeTimer = this.def.duration;
     this.cooldown = this.def.cooldown;
     this.def.activate(g, this);
+  }
+
+  tryActivateBonus(g) {
+    if (!this.bonusDef) return;
+    if (!this.bonusReady || (this.bonusDef.canUse && !this.bonusDef.canUse(g))) {
+      g.sound.play('denied');
+      return;
+    }
+    this.bonusTimer = this.bonusDef.duration;
+    this.bonusCooldown = this.bonusDef.cooldown;
+    this.bonusDef.activate(g, this);
   }
 
   // Shield or Second Chance can save you from a crash. Returns true if saved.
@@ -140,21 +169,41 @@ OMJ.AbilitySystem = class {
       g.announce('BOO! SECOND CHANCE', '#7bd6ff');
       return true;
     }
+    if (g.mods.extraLives > 0) {              // Extra Life boost
+      g.mods.extraLives--;
+      this.giveInvulnerability(1.5);
+      g.sound.play('secondChance');
+      g.announce('EXTRA LIFE USED!', OMJ.PALETTE.gold);
+      return true;
+    }
     return false;
   }
 
   // Timers run in REAL time (so Slow-Mo can't make itself last longer).
   update(dt, g) {
+    const rechargeRate = this.passive.cooldownRate * g.mods.cooldownRate;
     if (this.activeTimer > 0) {
       this.activeTimer -= dt;
     } else if (this.cooldown > 0) {
-      this.cooldown -= dt * this.passive.cooldownRate;
+      this.cooldown -= dt * rechargeRate;
       if (this.cooldown <= 0) {
         this.cooldown = 0;
         g.sound.play('ready');
         const p = g.player;
         g.particles.burst(p.x + 5, p.y + 6, 6, 20, 50, 0, Math.PI * 2, 0.4, [this.skin.light], 0);
       }
+    }
+    // Bonus slot timers
+    if (this.bonusTimer > 0) {
+      this.bonusTimer -= dt;
+    } else if (this.bonusCooldown > 0) {
+      this.bonusCooldown -= dt * rechargeRate;
+      if (this.bonusCooldown <= 0) { this.bonusCooldown = 0; g.sound.play('ready'); }
+    }
+    // Rocket Jump keeps you safe until you're back on your feet.
+    if (this.rocketing) {
+      if (g.player.grounded) this.rocketing = false;
+      else this.invulnTimer = Math.max(this.invulnTimer, 0.05);
     }
     if (this.invulnTimer > 0) {
       this.invulnTimer -= dt;
@@ -211,7 +260,7 @@ OMJ.AbilitySystem = class {
 
   drawBehindPlayer(ctx, g) {
     // Dash afterimages
-    if (this.smashing) {
+    if (this.isActive('dash')) {
       const p = g.player;
       const x0 = p.x;
       for (let i = 3; i >= 1; i--) {
@@ -311,9 +360,41 @@ OMJ.AbilitySystem = class {
     ctx.fillRect(x + 81, y + 4, 11, 11);
     F.draw(ctx, 'B', x + 85, y + 7, 1, P.ink, 'left');
 
-    // Ghost's spare life
-    if (this.passive.secondChance && !this.secondChanceUsed) {
-      F.drawShadowed(ctx, '+1 LIFE', x + 3, y - 9, 1, '#7bd6ff', P.ink, 'left');
+    // Spare lives (Ghost's Second Chance and Extra Life boosts)
+    const lives = (this.passive.secondChance && !this.secondChanceUsed ? 1 : 0) + g.mods.extraLives;
+    if (lives > 0) {
+      F.drawShadowed(ctx, '+' + lives + (lives > 1 ? ' LIVES' : ' LIFE'), x + 3, y - 9, 1, '#7bd6ff', P.ink, 'left');
     }
+
+    if (this.bonusDef) this.drawBonusHud(ctx, g, x + 102, y);
+  }
+
+  // The bonus ability meter (V), next to the main one.
+  drawBonusHud(ctx, g, x, y) {
+    const F = OMJ.PixelFont;
+    const P = OMJ.PALETTE;
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = P.ink;
+    ctx.fillRect(x, y, 98, 19);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = P.gold;                       // gold frame: it's a rare one
+    ctx.fillRect(x, y, 98, 1);
+    F.draw(ctx, this.bonusLabel, x + 3, y + 3, 1, P.gold, 'left');
+    let fill = 1;
+    let color = P.gold;
+    if (this.bonusTimer > 0 && this.bonusDef.duration > 0) {
+      fill = this.bonusTimer / this.bonusDef.duration;
+      color = P.white;
+    } else if (this.bonusCooldown > 0) {
+      fill = 1 - this.bonusCooldown / this.bonusDef.cooldown;
+      color = P.metalDark;
+    }
+    ctx.fillStyle = '#4a4570';
+    ctx.fillRect(x + 3, y + 11, 72, 4);
+    ctx.fillStyle = color;
+    ctx.fillRect(x + 3, y + 11, Math.round(72 * fill), 4);
+    ctx.fillStyle = P.white;
+    ctx.fillRect(x + 81, y + 4, 11, 11);
+    F.draw(ctx, 'V', x + 85, y + 7, 1, P.ink, 'left');
   }
 };

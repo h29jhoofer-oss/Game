@@ -205,6 +205,26 @@ OMJ.Sound = class {
         this.melody([392, 0.16, 370, 0.16, 349, 0.16, 330, 0.4], 'triangle', 0.08);
         break;
 
+      // ---- Coins & boosts ----
+      case 'coin':                       // the classic two-note "ding"
+        this.tone(988, 988, 0.05, 'square', 0.04);
+        this.tone(1319, 1319, 0.12, 'square', 0.04, 0.05);
+        break;
+      case 'boostReady':
+        this.melody([659, 0.06, 880, 0.06, 1175, 0.12], 'triangle', 0.08);
+        break;
+      case 'boostPick':
+        this.melody([523, 0.05, 784, 0.05, 1047, 0.05, 1568, 0.15], 'square', 0.05);
+        break;
+      case 'rocket':
+        this.noise(0.5, 0.2, 700, 'bandpass');
+        this.tone(150, 900, 0.4, 'sawtooth', 0.05);
+        break;
+      case 'blink':
+        this.tone(1800, 400, 0.15, 'sine', 0.08);
+        this.tone(900, 2400, 0.12, 'triangle', 0.04, 0.05);
+        break;
+
       // ---- Abilities ----
       case 'ready':                      // ability recharged
         this.tone(1320, 1760, 0.08, 'sine', 0.06);

@@ -80,6 +80,14 @@ OMJ.Input = class {
         e.preventDefault();
         if (firstPress) g.onAbilityKey();
         break;
+      case 'KeyV':
+        e.preventDefault();
+        if (firstPress) g.onBonusKey();      // rare ability from a boost
+        break;
+      case 'Digit1': case 'Digit2': case 'Digit3':
+      case 'Numpad1': case 'Numpad2': case 'Numpad3':
+        if (firstPress) g.onNumberKey(parseInt(code.slice(-1), 10));   // pick a boost card
+        break;
       case 'ArrowDown':
       case 'KeyS':
         e.preventDefault();

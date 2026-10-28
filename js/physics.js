@@ -5,16 +5,30 @@
 // =============================================================
 
 OMJ.Physics = {
+  // The jump the player has RIGHT NOW. Boosts (like Spring Shoes) change
+  // these during a run, and everything that plans around the jump (the
+  // spawner, the boss, coin arcs) reads them, so spacing stays fair.
+  jumpVelocity: OMJ.CONFIG.JUMP_VELOCITY,
+  gravity: OMJ.CONFIG.GRAVITY,
+
+  resetJump() {
+    this.jumpVelocity = OMJ.CONFIG.JUMP_VELOCITY;
+    this.gravity = OMJ.CONFIG.GRAVITY;
+  },
+
   // How long a full jump lasts (seconds), from take-off to landing.
   airTime() {
-    const C = OMJ.CONFIG;
-    return (2 * C.JUMP_VELOCITY) / C.GRAVITY;
+    return (2 * this.jumpVelocity) / this.gravity;
   },
 
   // The highest point of a jump, in pixels above the ground.
   maxJumpHeight() {
-    const C = OMJ.CONFIG;
-    return (C.JUMP_VELOCITY * C.JUMP_VELOCITY) / (2 * C.GRAVITY);
+    return (this.jumpVelocity * this.jumpVelocity) / (2 * this.gravity);
+  },
+
+  // Height above the ground `t` seconds after take-off.
+  heightAt(t) {
+    return this.jumpVelocity * t - 0.5 * this.gravity * t * t;
   },
 
   // How far the world scrolls during one full jump.
@@ -24,11 +38,10 @@ OMJ.Physics = {
 
   // How long (seconds) the player's feet stay above `height` during a jump.
   timeAbove(height) {
-    const C = OMJ.CONFIG;
-    const v = C.JUMP_VELOCITY;
-    const disc = v * v - 2 * C.GRAVITY * height;
+    const v = this.jumpVelocity;
+    const disc = v * v - 2 * this.gravity * height;
     if (disc <= 0) return 0;
-    return (2 * Math.sqrt(disc)) / C.GRAVITY;
+    return (2 * Math.sqrt(disc)) / this.gravity;
   },
 
   // The widest obstacle of a given height that a single jump can clear.

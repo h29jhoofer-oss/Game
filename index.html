@@ -62,7 +62,8 @@
         <button class="omj-btn" data-action="play">PLAY</button>
         <p class="omj-hint">
           SPACE / &uarr; / W / CLICK = JUMP &nbsp;·&nbsp; &darr; / S (IN THE AIR) = GROUND SMASH<br>
-          B / SHIFT / RIGHT-CLICK = ABILITY &nbsp;·&nbsp; ESC = PAUSE &nbsp;·&nbsp; M = MUTE &nbsp;·&nbsp; N = MUSIC
+          B / SHIFT / RIGHT-CLICK = ABILITY &nbsp;·&nbsp; V = BONUS ABILITY &nbsp;·&nbsp; ESC = PAUSE<br>
+          COLLECT COINS TO PICK BOOSTS &nbsp;·&nbsp; M = MUTE &nbsp;·&nbsp; N = MUSIC
         </p>
       </div>
 
@@ -75,6 +76,13 @@
         <p class="omj-hint">Press <kbd>ESC</kbd> to resume</p>
       </div>
 
+      <!-- BOOST SCREEN (pick a card when you have enough coins) -->
+      <div class="omj-screen omj-screen--boost" data-screen="boost">
+        <canvas class="omj-title" data-title="PICK A BOOST"></canvas>
+        <div class="omj-cards" data-field="cards"></div>
+        <p class="omj-hint">Press <kbd>1</kbd> <kbd>2</kbd> or <kbd>3</kbd>, or click a card</p>
+      </div>
+
       <!-- GAME OVER SCREEN -->
       <div class="omj-screen omj-screen--over" data-screen="over">
         <canvas class="omj-title" data-title="GAME OVER" data-field="over-title"></canvas>
@@ -84,6 +92,7 @@
           <div><span>SCORE</span><strong data-field="score">0</strong></div>
           <div><span>BEST</span><strong data-field="over-best">0</strong></div>
           <div><span>JUMPED</span><strong data-field="jumped">0</strong></div>
+          <div><span>COINS</span><strong data-field="coins">0</strong></div>
         </div>
         <p class="omj-unlock" data-field="unlock"></p>
         <div class="omj-row">
@@ -107,6 +116,8 @@
   <script src="js/music.js"></script>
   <script src="js/player.js"></script>
   <script src="js/obstacles.js"></script>
+  <script src="js/coins.js"></script>
+  <script src="js/boosts.js"></script>
   <script src="js/spawner.js"></script>
   <script src="js/abilities.js"></script>
   <script src="js/boss.js"></script>

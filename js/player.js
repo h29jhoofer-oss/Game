@@ -69,10 +69,12 @@ OMJ.Player = class {
     this.standingOn = null;
   }
 
-  // Use a skin's passive perk for jump timing (null = keep the normal value).
-  setTiming(passive) {
-    if (passive.coyoteTime !== null) this.coyoteTime = passive.coyoteTime;
-    if (passive.jumpBufferTime !== null) this.jumpBufferTime = passive.jumpBufferTime;
+  // Use a skin's passive perk for jump timing (null = keep the normal value),
+  // plus any extra time from boosts.
+  setTiming(passive, extraCoyote, extraBuffer) {
+    const C = OMJ.CONFIG;
+    this.coyoteTime = (passive.coyoteTime !== null ? passive.coyoteTime : C.COYOTE_TIME) + (extraCoyote || 0);
+    this.jumpBufferTime = (passive.jumpBufferTime !== null ? passive.jumpBufferTime : C.JUMP_BUFFER_TIME) + (extraBuffer || 0);
   }
 
   update(dt, runSpeed) {
@@ -90,7 +92,7 @@ OMJ.Player = class {
       if (this.dropTimer > 0) this.dropTimer -= dt;
 
       if (this.jumpBufferTimer > 0 && (this.grounded || this.coyoteTimer > 0)) {
-        this.vy = -C.JUMP_VELOCITY;
+        this.vy = -OMJ.Physics.jumpVelocity;   // (boosts can make this bigger)
         this.grounded = false;
         this.coyoteTimer = 0;
         this.jumpBufferTimer = 0;
@@ -102,8 +104,9 @@ OMJ.Player = class {
 
     // Gravity. Using the exact formula (not just "speed * time") means the
     // jump is identical at any frame rate and matches the math in physics.js.
-    this.y += this.vy * dt + 0.5 * C.GRAVITY * dt * dt;
-    this.vy += C.GRAVITY * dt;
+    const gravity = OMJ.Physics.gravity;
+    this.y += this.vy * dt + 0.5 * gravity * dt * dt;
+    this.vy += gravity * dt;
     if (this.vy > C.MAX_FALL_SPEED) this.vy = C.MAX_FALL_SPEED;
 
     // Animation timers

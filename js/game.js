@@ -31,7 +31,9 @@ OMJ.Game = class {
     this.music = new OMJ.Music(this.sound);
     this.player = new OMJ.Player();
     this.obstacles = new OMJ.Obstacles(24);
-    this.spawner = new OMJ.Spawner(this.obstacles);
+    this.coins = new OMJ.Coins(48);
+    this.spawner = new OMJ.Spawner(this.obstacles, this.coins);
+    this.mods = OMJ.newRunMods();
     this.abilities = new OMJ.AbilitySystem();
     this.boss = new OMJ.Boss();
     this.particles = new OMJ.Particles(200);
@@ -88,7 +90,7 @@ OMJ.Game = class {
   }
 
   step(dt) {
-    if (this.state === 'paused') return;
+    if (this.state === 'paused' || this.state === 'choosing') return;
     this.time += dt;
 
     if (this.state === 'menu') this.updateMenu(dt);
@@ -112,6 +114,19 @@ OMJ.Game = class {
     this.boss.reset();
     this.passive = this.abilities.passive;
     this.player.setTiming(this.passive);
+
+    // Coins and boosts start fresh every run.
+    this.mods = OMJ.newRunMods();
+    OMJ.Physics.resetJump();
+    this.coins.reset();
+    this.coinCount = 0;              // coins toward the next boost
+    this.coinsTotal = 0;             // coins collected this run
+    this.coinsNeeded = OMJ.COINS.firstBoostAt;
+    this.boostsTaken = 0;
+    this.boostChoices = null;
+    this.freezeTimer = 0;            // short "GO!" pause after picking a boost
+    this.coinText = '';
+    this.shownCoins = -1;
     for (let i = 0; i < this.announcements.length; i++) this.announcements[i].active = false;
 
     this.score = 0;        // the score you see (includes skin bonuses)
@@ -145,6 +160,8 @@ OMJ.Game = class {
     this.sound.play('click');
     this.music.setTempoScale(1);
     this.music.play('run');
+    // A few coins right away, so new players see what to collect.
+    for (let i = 0; i < 4; i++) this.coins.spawn(150 + i * 12, OMJ.CONFIG.GROUND_Y - 8);
   }
 
   goToMenu() {
@@ -213,7 +230,15 @@ OMJ.Game = class {
   }
 
   onAbilityKey() {
-    if (this.state === 'playing') this.abilities.tryActivate(this);
+    if (this.state === 'playing' && this.freezeTimer <= 0) this.abilities.tryActivate(this);
+  }
+
+  onBonusKey() {
+    if (this.state === 'playing' && this.freezeTimer <= 0) this.abilities.tryActivateBonus(this);
+  }
+
+  onNumberKey(n) {
+    if (this.state === 'choosing') this.chooseBoost(n - 1);
   }
 
   // DOWN: ground smash in the air, or drop through a wooden platform.
@@ -257,6 +282,9 @@ OMJ.Game = class {
       case 'music': this.toggleMusic(); break;
       case 'skin-prev': this.cycleSkin(-1); break;
       case 'skin-next': this.cycleSkin(1); break;
+      case 'boost-0': this.chooseBoost(0); break;
+      case 'boost-1': this.chooseBoost(1); break;
+      case 'boost-2': this.chooseBoost(2); break;
     }
   }
 
@@ -298,6 +326,12 @@ OMJ.Game = class {
     const p = this.player;
     const a = this.abilities;
 
+    // Frozen for a moment after picking a boost, so you can get ready.
+    if (this.freezeTimer > 0) {
+      this.freezeTimer -= realDt;
+      return;
+    }
+
     // Ability timers use real time; everything else uses game time,
     // which Slow-Mo slows down.
     a.update(realDt, this);
@@ -305,7 +339,7 @@ OMJ.Game = class {
 
     // Difficulty grows with distance; speed follows difficulty.
     this.difficulty = Math.min(1, this.progress / C.DIFFICULTY_MAX_SCORE);
-    this.speed = OMJ.lerp(C.START_SPEED, C.MAX_SPEED, this.difficulty);
+    this.speed = OMJ.lerp(C.START_SPEED, C.MAX_SPEED, this.difficulty) * this.mods.speedScale;
     const speed = this.speed * a.speedScale;
     this.worldSpeed = speed;
     this.music.setTempoScale((1 + 0.18 * this.difficulty) * (a.timeScale < 1 ? 0.7 : 1));
@@ -319,6 +353,8 @@ OMJ.Game = class {
     this.particles.update(dt, speed);
     a.updateWorld(dt, this);
     this.resolveFloor(a.invulnerable);
+    const picked = this.coins.update(dt, speed, p, this.mods.magnet);
+    if (picked > 0) this.collectCoins(picked);
 
     // Jump & land effects
     if (p.justJumped) {
@@ -377,11 +413,121 @@ OMJ.Game = class {
     // Score: based on distance, so frame rate doesn't matter.
     const gained = speed * dt * C.SCORE_PER_PIXEL;
     this.progress += gained;
-    this.score += gained * this.passive.scoreRate;
+    this.score += gained * this.scoreRate();
     this.checkScoreEvents();
 
     // The boss arrives when a night ends.
     if (!this.boss.active && this.score >= this.boss.nextAt) this.boss.start(this);
+
+    // Enough coins for a boost? Wait for a calm moment (on the ground,
+    // nothing close, boss not mid-slam), then pause and offer the cards.
+    if (this.coinCount >= this.coinsNeeded && p.grounded && !a.invulnerable &&
+        !this.isDangerClose(0.8) && !this.boss.stomp) {
+      this.openBoostChoice();
+    }
+  }
+
+  scoreRate() {
+    return this.passive.scoreRate * this.mods.scoreRate;
+  }
+
+  // ---------------------------------------------------------------
+  // Coins and boosts
+  // ---------------------------------------------------------------
+  collectCoins(count) {
+    const value = count * this.mods.coinValue;
+    this.coinCount += value;
+    this.coinsTotal += value;
+    this.sound.play('coin');
+    const p = this.player;
+    this.particles.burst(p.x + 5, p.y + 4, 4, 20, 60, -Math.PI, 0, 0.3, [OMJ.PALETTE.gold, '#fff2a8'], 0);
+    if (this.coinCount >= this.coinsNeeded && this.coinCount - value < this.coinsNeeded) {
+      this.announce('BOOST READY!', OMJ.PALETTE.gold);
+      this.sound.play('boostReady');
+    }
+  }
+
+  openBoostChoice() {
+    this.boostChoices = OMJ.pickBoostChoices(this.mods, !!this.abilities.bonusDef);
+    if (this.boostChoices.length === 0) {         // everything maxed out: just keep the coins
+      this.coinCount = 0;
+      return;
+    }
+    this.state = 'choosing';
+    this.choiceOpenedAt = performance.now();
+    this.ui.showBoostChoice(this.boostChoices, this.mods);
+  }
+
+  // Pick card number `index` (0, 1 or 2).
+  chooseBoost(index) {
+    if (this.state !== 'choosing') return;
+    // Ignore clicks/keys in the first moment, so a jump you were already
+    // pressing can't pick a card by accident.
+    if (performance.now() - this.choiceOpenedAt < 400) return;
+    const choice = this.boostChoices[index];
+    if (!choice) return;
+
+    let name;
+    if (choice.kind === 'bonus') {
+      this.abilities.setBonus(choice.key);
+      name = choice.ability.name;
+    } else {
+      choice.boost.apply(this.mods);
+      this.mods.stacks[choice.boost.id] = (this.mods.stacks[choice.boost.id] || 0) + 1;
+      name = choice.boost.name;
+    }
+    this.applyMods();
+
+    this.coinCount -= this.coinsNeeded;
+    this.boostsTaken++;
+    this.coinsNeeded = OMJ.COINS.firstBoostAt + OMJ.COINS.costIncrease * this.boostsTaken;
+    this.boostChoices = null;
+
+    this.state = 'playing';
+    this.ui.show(null);
+    this.player.jumpBufferTimer = 0;
+    this.freezeTimer = 0.7;
+    this.announce(name.toUpperCase() + '!', OMJ.PALETTE.gold);
+    this.announce('GO!', OMJ.PALETTE.white);
+    this.sound.play('boostPick');
+  }
+
+  // Push the run's boosts into the player and the jump physics.
+  applyMods() {
+    OMJ.Physics.jumpVelocity = OMJ.CONFIG.JUMP_VELOCITY * this.mods.jumpScale;
+    this.player.setTiming(this.passive, this.mods.extraCoyote, this.mods.extraBuffer);
+  }
+
+  // The nearest dangerous thing (including pits) touching or ahead of you.
+  nextThingAhead() {
+    const p = this.player;
+    let best = null;
+    const pool = this.obstacles.pool;
+    for (let i = 0; i < pool.length; i++) {
+      const o = pool[i];
+      if (!o.active || o.type.harmless || o.x + o.w <= p.x || o.x > OMJ.CONFIG.VIEW_W) continue;
+      if (!best || o.x < best.x) best = o;
+    }
+    return best;
+  }
+
+  // Blink: jump the whole world forward so you land just past `o`.
+  blinkPast(o) {
+    const p = this.player;
+    const distance = OMJ.clamp(o.x + o.w - p.x + 4, 16, 220);
+    const pool = this.obstacles.pool;
+    for (let i = 0; i < pool.length; i++) if (pool[i].active) pool[i].x -= distance;
+    this.coins.shift(distance);
+    this.background.distance += distance;
+    this.spawner.distanceUntilNext -= distance;
+    const gained = distance * OMJ.CONFIG.SCORE_PER_PIXEL;
+    this.progress += gained;
+    this.score += gained * this.scoreRate();
+    // A streak of sparkles where you "were"
+    for (let k = 0; k < 10; k++) {
+      this.particles.spawn(p.x + 5 - (distance * k) / 10, p.y + OMJ.rand(2, 10), OMJ.rand(-20, 20), OMJ.rand(-20, 20), 0.4, 1,
+        k % 2 ? '#7bd6ff' : OMJ.PALETTE.white, 0);
+    }
   }
 
   // Milestones, new best and unlocks.
@@ -497,7 +643,7 @@ OMJ.Game = class {
     // (Obstacle "body" boxes: see the top of obstacles.js.)
     // The player's hitbox is 1px smaller than the sprite: near misses feel great.
     // Some skins shrink it even more.
-    const shrink = 1 + this.passive.hitboxShrink;
+    const shrink = 1 + this.passive.hitboxShrink + this.mods.hitboxShrink;
     const px1 = p.x + shrink;
     const px2 = p.x + p.w - shrink;
     const py1 = p.y + shrink;
@@ -585,6 +731,7 @@ OMJ.Game = class {
     const B = OMJ.BOSS;
     if (defeated) {
       this.score += reward;
+      this.collectCoins(10 * this.boss.level);      // and a pile of coins
       this.announce('BOSS DEFEATED! +' + reward, OMJ.PALETTE.gold);
     }
     // Next visit: after the next night.
@@ -682,6 +829,7 @@ OMJ.Game = class {
       message: OMJ.pickMessage(this.finalScore),
       cause: this.deathLine,
       jumped: this.jumped,
+      coins: this.coinsTotal,
       unlocks: this.newUnlocks,
       nextUnlock: nextUnlock,
     });
@@ -709,7 +857,7 @@ OMJ.Game = class {
     const C = OMJ.CONFIG;
     const ctx = this.ctx;
     const ink = OMJ.PALETTE.ink;
-    const inRun = this.state === 'playing' || this.state === 'paused';
+    const inRun = this.state === 'playing' || this.state === 'paused' || this.state === 'choosing';
 
     // Screen shake: shift everything by a few whole pixels.
     let sx = 0;
@@ -728,6 +876,7 @@ OMJ.Game = class {
     this.background.drawGroundTint(ctx);
     this.boss.draw(ctx, this);
     this.obstacles.draw(ctx, this);
+    this.coins.draw(ctx);
     this.particles.draw(ctx);
     if (inRun) this.abilities.drawBehindPlayer(ctx, this);
 
@@ -773,6 +922,24 @@ OMJ.Game = class {
     F.drawShadowed(ctx, this.scoreText, C.VIEW_W - 8, 8, 2, OMJ.PALETTE.white, ink, 'right');
     F.drawShadowed(ctx, this.bestText, C.VIEW_W - 8, 22, 1, '#ffe98a', ink, 'right');
 
+    // Coins toward the next boost (rebuilt only when it changes)
+    if (this.coinCount !== this.shownCoins) {
+      this.shownCoins = this.coinCount;
+      this.coinText = Math.min(this.coinCount, this.coinsNeeded) + '/' + this.coinsNeeded;
+    }
+    const ready = this.coinCount >= this.coinsNeeded;
+    const label = ready ? 'BOOST!' : this.coinText;
+    if (!ready || Math.floor(this.time * 4) % 2 === 0) {
+      F.drawShadowed(ctx, label, C.VIEW_W - 8, 32, 1, ready ? OMJ.PALETTE.gold : OMJ.PALETTE.white, ink, 'right');
+    }
+    const iconX = C.VIEW_W - 12 - F.measure(label, 1);
+    ctx.fillStyle = ink;
+    ctx.fillRect(iconX - 3, 31, 6, 7);
+    ctx.fillStyle = OMJ.PALETTE.gold;
+    ctx.fillRect(iconX - 2, 31, 4, 6);
+    ctx.fillStyle = '#fff2a8';
+    ctx.fillRect(iconX - 1, 32, 1, 3);
+
     // Pop-up announcements, stacked in the middle-top.
     let row = 0;
     for (let i = 0; i < this.announcements.length; i++) {
@@ -788,7 +955,7 @@ OMJ.Game = class {
 
   drawHitboxes(ctx) {
     const p = this.player;
-    const s = 1 + this.passive.hitboxShrink;
+    const s = 1 + this.passive.hitboxShrink + this.mods.hitboxShrink;
     ctx.strokeStyle = '#00ff00';
     ctx.lineWidth = 1;
     ctx.strokeRect(p.x + s + 0.5, p.y + s + 0.5, p.w - s * 2, p.h - s);
