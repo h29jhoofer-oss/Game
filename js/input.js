@@ -77,32 +77,15 @@ OMJ.Input = class {
       case 'KeyN':
         if (firstPress) g.toggleMusic();
         break;
-      case 'KeyB':
-      case 'ShiftLeft':
-      case 'ShiftRight':
-        e.preventDefault();
-        if (firstPress) g.onAbilityKey();
-        break;
       case 'KeyF':
       case 'KeyJ':
         e.preventDefault();
         if (firstPress) g.onSwordKey();      // swing your sword
         break;
-      case 'KeyQ':
-        e.preventDefault();
-        if (firstPress) g.onSwordPowerKey(); // sword power
-        break;
-      case 'KeyE':
-        e.preventDefault();
-        if (firstPress) g.onScarfKey();      // scarf power
-        break;
-      case 'KeyV':
-        e.preventDefault();
-        if (firstPress) g.onBonusKey();      // rare ability from a boost
-        break;
-      case 'Digit1': case 'Digit2': case 'Digit3':
-      case 'Numpad1': case 'Numpad2': case 'Numpad3':
-        if (firstPress) g.onNumberKey(parseInt(code.slice(-1), 10));   // pick a boost card
+      case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4':
+      case 'Numpad1': case 'Numpad2': case 'Numpad3': case 'Numpad4':
+        // In a run: use ability 1-4. On the boost screen: pick card 1-3.
+        if (firstPress) g.onNumberKey(parseInt(code.slice(-1), 10));
         break;
       case 'ArrowDown':
       case 'KeyS':

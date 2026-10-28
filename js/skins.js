@@ -6,7 +6,7 @@
 //   (Everyone wears the scarf you equip in the shop: see gear.js.)
 //   passive              = always-on perk (see OMJ.PASSIVE_DEFAULTS)
 //   active               = name of an ability in abilities.js,
-//                          used with B / SHIFT / right-click
+//                          used with key 1 (or right-click)
 //
 // To add a skin, copy one entry and change it.
 // =============================================================

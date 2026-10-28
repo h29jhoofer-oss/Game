@@ -142,8 +142,13 @@ OMJ.REFLECTED = {
 // ---- The sword in your hands ---------------------------------
 OMJ.SwordSystem = class {
   constructor() {
-    this.SWING_TIME = 0.2;     // how long a swing can hit things
-    this.SWING_COOLDOWN = 0.45;
+    // The sword is HEAVY: a swing is a slow heave over your head, then a
+    // fast chop down. It only hits during the chop.
+    this.SWING_TIME = 0.6;        // whole swing, start to finish
+    this.SWING_LIFT = 0.55;       // first 55% = lifting it (can't hit yet)
+    this.SWING_CHOP = 0.8;        // chop ends here; the rest is recovering
+    this.SWING_COOLDOWN = 1.1;    // seconds between swings (from the press)
+    this.PLUNGE_COOLDOWN = 1.5;   // seconds between plunge attacks
     this.shots = [];           // beams and fire waves (fixed pool)
     for (let i = 0; i < 4; i++) this.shots.push({ active: false, kind: '', x: 0, y: 0, hits: 0, age: 0 });
     this.strikes = [];         // lightning bolts, just for drawing
@@ -155,6 +160,7 @@ OMJ.SwordSystem = class {
     this.sword = sword;
     this.swingTimer = 0;
     this.cooldown = 0;
+    this.plungeCooldown = 0;
     this.spinTimer = 0;
     this.plunging = false;     // falling sword-first after a mid-air attack
     this.slamTimer = 0;        // sword stuck in the ground after a plunge
@@ -171,15 +177,26 @@ OMJ.SwordSystem = class {
   }
 
   swing(g) {
-    if (this.cooldown > 0 || g.player.dead) return;
+    if (g.player.dead || this.swingTimer > 0) return;
+    if (this.cooldown > 0) { g.sound.play('denied'); return; }
     this.swingTimer = this.SWING_TIME;
     this.cooldown = this.SWING_COOLDOWN;
-    g.sound.play('swing');
+    g.sound.play('heave');
+  }
+
+  // How far through the current swing we are (0 = start, 1 = done).
+  get swingT() { return 1 - this.swingTimer / this.SWING_TIME; }
+  // Is the blade coming down right now (the only part that hits)?
+  get chopping() {
+    const t = this.swingT;
+    return this.swingTimer > 0 && t >= this.SWING_LIFT && t < this.SWING_CHOP;
   }
 
   plunge(g) {
     const p = g.player;
     if (this.plunging || p.dead) return;
+    if (this.plungeCooldown > 0) { g.sound.play('denied'); return; }
+    this.plungeCooldown = this.PLUNGE_COOLDOWN;
     this.plunging = true;
     this.swingTimer = 0;
     p.smashing = true;                                   // fall like a ground smash
@@ -232,7 +249,13 @@ OMJ.SwordSystem = class {
 
   update(dt, g) {
     if (this.cooldown > 0) this.cooldown -= dt;
+    if (this.plungeCooldown > 0) this.plungeCooldown -= dt;
+    const wasLifting = this.swingTimer > 0 && this.swingT < this.SWING_LIFT;
     if (this.swingTimer > 0) this.swingTimer -= dt;
+    if (wasLifting && this.chopping) {
+      g.sound.play('swing');                             // ...and down it comes!
+      g.shake = Math.max(g.shake, 1.5);
+    }
     if (this.spinTimer > 0) this.spinTimer -= dt;
     if (this.slamTimer > 0) this.slamTimer -= dt;
     for (let i = 0; i < this.strikes.length; i++) if (this.strikes[i].life > 0) this.strikes[i].life -= dt;
@@ -258,7 +281,7 @@ OMJ.SwordSystem = class {
     }
     if (this.spinTimer > 0) {
       this.hitZone(g, p.x - 20, p.x + p.w + 22, p.y - 14, p.bottom + 4);
-    } else if (this.swingTimer > 0) {
+    } else if (this.chopping) {
       // Overhead: it hits above your head as well as in front of you.
       this.hitZone(g, p.x - 4, p.x + p.w + this.sword.range, p.y - 16, p.bottom + 2);
     }
@@ -329,11 +352,21 @@ OMJ.SwordSystem = class {
     if (this.plunging || this.slamTimer > 0) return 180;        // pointing straight down
     const drag = OMJ.CONFIG.SWORD_POSE === 'drag';
     if (this.swingTimer > 0) {
-      // A big heave over the top, brought down in front. From the drag
-      // pose it swings all the way up from behind you.
-      const t = 1 - this.swingTimer / this.SWING_TIME;
+      // A slow, straining heave up over your head (wobbling a little, it's
+      // heavy!), then a fast chop down in front, then a short rest.
+      const t = this.swingT;
       const start = drag ? -100 : -40;
-      return start + (130 - start) * (1 - (1 - t) * (1 - t));   // fast start, heavy finish
+      const top = -15;                                            // held up, just behind your head
+      if (t < this.SWING_LIFT) {
+        const k = t / this.SWING_LIFT;
+        const wobble = k > 0.7 ? (Math.floor(time * 20) % 2 ? 4 : 0) : 0;
+        return start + (top - start) * (k * k * (3 - 2 * k)) + wobble;   // ease in and out
+      }
+      if (t < this.SWING_CHOP) {
+        const k = (t - this.SWING_LIFT) / (this.SWING_CHOP - this.SWING_LIFT);
+        return top + (130 - top) * (k * k);                         // gravity takes over
+      }
+      return 130;                                                   // blade resting in front
     }
     if (drag) {
       // Trailing behind you, tip on the ground. In the air it dangles.
@@ -390,7 +423,7 @@ OMJ.SwordSystem = class {
   draw(ctx, g) {
     const p = g.player;
     if (!p.dead) {
-      const swinging = this.swingTimer > 0 || this.spinTimer > 0;
+      const swinging = this.chopping || this.spinTimer > 0;
       const angle = this.swordAngle(p, g.time);
       const hx = this.gripX(p);
       const hy = this.gripY(p);
@@ -404,11 +437,32 @@ OMJ.SwordSystem = class {
     }
     this.drawShots(ctx, g.time);
     this.drawStrikes(ctx, g.time);
+    if (!p.dead) this.drawCooldowns(ctx, p);
+  }
+
+  // Tiny bars over your head while the swing (gold) or the plunge
+  // (blue) is recharging. They vanish once the attack is ready.
+  drawCooldowns(ctx, p) {
+    const bars = [
+      [this.cooldown / this.SWING_COOLDOWN, OMJ.PALETTE.gold],
+      [this.plungeCooldown / this.PLUNGE_COOLDOWN, '#7bd6ff'],
+    ];
+    let y = Math.round(p.y) - 5;
+    for (let i = 0; i < bars.length; i++) {
+      const left = bars[i][0];
+      if (left <= 0) continue;
+      const x = Math.round(p.x + p.w / 2 - 7);
+      ctx.fillStyle = OMJ.PALETTE.ink;
+      ctx.fillRect(x - 1, y - 1, 16, 3);
+      ctx.fillStyle = bars[i][1];
+      ctx.fillRect(x, y, Math.round(14 * (1 - left)), 1);
+      y -= 3;
+    }
   }
 
   // A pale crescent following the tip of the sword during a swing.
   drawTrail(ctx, angle, hx, hy) {
-    const from = this.spinTimer > 0 ? angle - 150 : OMJ.CONFIG.SWORD_POSE === 'drag' ? -100 : -40;
+    const from = this.spinTimer > 0 ? angle - 150 : -15;
     const reach = OMJ.SwordArt.LENGTH;
     ctx.globalAlpha = 0.55;
     ctx.fillStyle = this.sword.edge;

@@ -155,10 +155,10 @@ OMJ.UI = class {
       stats.className = 'omj-item-stats';
       stats.textContent = tab === 'swords'
         ? 'DMG ' + item.damage + ' · ' + (item.cut >= 2 ? 'cuts crates, arrows & spikes' : 'cuts crates & arrows')
-        : 'E: ' + power.name;
+        : 'KEY 3: ' + power.name;
       const desc = document.createElement('span');
       desc.className = 'omj-item-desc';
-      desc.textContent = (tab === 'swords' ? 'Q: ' + power.name + '. ' : '') + power.desc;
+      desc.textContent = (tab === 'swords' ? 'KEY 2: ' + power.name + '. ' : '') + power.desc;
       const status = document.createElement('span');
       status.className = 'omj-item-status';
       status.textContent = wearing ? 'EQUIPPED' : has ? 'EQUIP' : 'BUY ' + item.price;
@@ -201,7 +201,7 @@ OMJ.UI = class {
       desc.className = 'omj-card-desc';
 
       if (rare) {
-        tag.textContent = 'RARE ABILITY · V';
+        tag.textContent = 'RARE ABILITY · KEY 4';
         name.textContent = c.ability.name;
         desc.textContent = c.ability.desc;
       } else {

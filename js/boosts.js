@@ -8,7 +8,7 @@
 //                       the run's modifiers `m` (see OMJ.newRunMods).
 //                       `max` = how many times you can stack it.
 //   OMJ.BONUS_ABILITIES rare ACTIVE abilities no skin has. You get at
-//                       most one per run, used with V.
+//                       most one per run, used with key 4.
 //
 // Every boost only ever helps, and anything that changes your jump
 // goes through OMJ.Physics, so obstacle spacing adapts to it.
@@ -61,7 +61,7 @@ OMJ.BOOSTS = [
     apply(m) { m.swordDamage += 1; } },
 ];
 
-// Rare ACTIVE abilities (V key). Same format as OMJ.ABILITIES in abilities.js.
+// Rare ACTIVE abilities (key 4). Same format as OMJ.ABILITIES in abilities.js.
 OMJ.BONUS_ABILITIES = {
   rocket: {
     name: 'Rocket Jump', desc: 'Blast sky-high. You can\'t crash until you land', cooldown: 12, duration: 0,

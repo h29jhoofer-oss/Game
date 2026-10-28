@@ -1,12 +1,12 @@
 // =============================================================
-// abilities.js — Each skin's ACTIVE ability (B / SHIFT / right-click)
+// abilities.js — Each skin's ACTIVE ability (key 1 / right-click)
 // and the system that runs every ability during a run.
 //
 // You can have up to four abilities at once, each in its own "slot":
-//   skin   B / SHIFT / right-click   from your skin (OMJ.ABILITIES)
-//   sword  Q                         from your sword (gear.js)
-//   scarf  E                         from your scarf (gear.js)
-//   bonus  V                         a rare boost card (boosts.js)
+//   skin   1 (or right-click)   from your skin (OMJ.ABILITIES)
+//   sword  2                     from your sword (gear.js)
+//   scarf  3                     from your scarf (gear.js)
+//   bonus  4                     a rare boost card (boosts.js)
 //
 // To add an ability, add an entry to OMJ.ABILITIES:
 //   name, desc        shown on the start screen
@@ -105,9 +105,9 @@ OMJ.AbilitySystem = class {
   reset(skin, sword, scarf) {
     this.skin = skin;
     this.passive = OMJ.getPassive(skin);
-    this.slots.skin = this.makeSlot(skin.active, OMJ.ABILITIES[skin.active], 'B', skin.light);
-    this.slots.sword = this.makeSlot(sword.power, OMJ.GEAR_ABILITIES[sword.power], 'Q', sword.edge);
-    this.slots.scarf = this.makeSlot(scarf.power, OMJ.GEAR_ABILITIES[scarf.power], 'E', scarf.color);
+    this.slots.skin = this.makeSlot(skin.active, OMJ.ABILITIES[skin.active], '1', skin.light);
+    this.slots.sword = this.makeSlot(sword.power, OMJ.GEAR_ABILITIES[sword.power], '2', sword.edge);
+    this.slots.scarf = this.makeSlot(scarf.power, OMJ.GEAR_ABILITIES[scarf.power], '3', scarf.color);
     this.slots.bonus = null;   // a rare boost card can fill this
     this.invulnTimer = 0;
     this.secondChanceUsed = false;
@@ -116,7 +116,7 @@ OMJ.AbilitySystem = class {
   }
 
   setBonus(key) {
-    this.slots.bonus = this.makeSlot(key, OMJ.BONUS_ABILITIES[key], 'V', OMJ.PALETTE.gold);
+    this.slots.bonus = this.makeSlot(key, OMJ.BONUS_ABILITIES[key], '4', OMJ.PALETTE.gold);
   }
 
   get bonusDef() { return this.slots.bonus && this.slots.bonus.def; }
@@ -354,36 +354,40 @@ OMJ.AbilitySystem = class {
     }
   }
 
-  // The ability meters along the bottom: one compact box per slot.
+  // The ability meters along the bottom: one small box per slot,
+  // with its number key (1-4) on the left.
   drawHud(ctx, g) {
     const F = OMJ.PixelFont;
     const P = OMJ.PALETTE;
     let x = 4;
-    const y = 192;
+    const y = 200;
     for (let i = 0; i < this.order.length; i++) {
       const s = this.slots[this.order[i]];
       if (!s) continue;
       this.drawSlot(ctx, g, s, x, y);
-      x += 95;
+      x += 66;
     }
     // Spare lives (Ghost's Second Chance and Extra Life boosts)
     const lives = (this.passive.secondChance && !this.secondChanceUsed ? 1 : 0) + g.mods.extraLives;
     if (lives > 0) {
-      F.drawShadowed(ctx, '+' + lives + (lives > 1 ? ' LIVES' : ' LIFE'), 7, y - 9, 1, '#7bd6ff', P.ink, 'left');
+      F.drawShadowed(ctx, '+' + lives + (lives > 1 ? ' LIVES' : ' LIFE'), 5, y - 8, 1, '#7bd6ff', P.ink, 'left');
     }
   }
 
   drawSlot(ctx, g, s, x, y) {
     const F = OMJ.PixelFont;
     const P = OMJ.PALETTE;
-    ctx.globalAlpha = 0.8;
+    const W = 64;
+    ctx.globalAlpha = 0.75;
     ctx.fillStyle = P.ink;
-    ctx.fillRect(x, y, 92, 18);
+    ctx.fillRect(x, y, W, 12);
     ctx.globalAlpha = 1;
-    ctx.fillStyle = s.color;                    // colored top edge = which slot
-    ctx.fillRect(x, y, 92, 1);
     const ready = this.isReady(s);
-    F.draw(ctx, s.label, x + 3, y + 3, 1, ready ? P.white : P.metal, 'left');
+    // Key box (blinks when ready)
+    ctx.fillStyle = ready && Math.floor(g.time * 3) % 2 === 0 ? s.color : P.white;
+    ctx.fillRect(x + 1, y + 1, 8, 10);
+    F.draw(ctx, s.keyLabel, x + 4, y + 3, 1, P.ink, 'left');
+    F.draw(ctx, s.label, x + 11, y + 2, 1, ready ? P.white : P.metal, 'left');
     // Bar: white = effect running, grey = recharging, slot color = ready
     let fill = 1;
     let color = s.color;
@@ -395,12 +399,8 @@ OMJ.AbilitySystem = class {
       color = P.metalDark;
     }
     ctx.fillStyle = '#4a4570';
-    ctx.fillRect(x + 3, y + 11, 72, 4);
+    ctx.fillRect(x + 11, y + 9, W - 13, 2);
     ctx.fillStyle = color;
-    ctx.fillRect(x + 3, y + 11, Math.round(72 * fill), 4);
-    // Key hint (blinks when ready)
-    ctx.fillStyle = ready && Math.floor(g.time * 3) % 2 === 0 ? s.color : P.white;
-    ctx.fillRect(x + 79, y + 4, 11, 11);
-    F.draw(ctx, s.keyLabel, x + 83, y + 7, 1, P.ink, 'left');
+    ctx.fillRect(x + 11, y + 9, Math.round((W - 13) * fill), 2);
   }
 };

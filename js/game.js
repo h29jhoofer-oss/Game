@@ -275,8 +275,13 @@ OMJ.Game = class {
     if (this.state === 'playing' && !this.holding()) this.abilities.tryActivate(this, 'scarf');
   }
 
+  // 1 = skin ability, 2 = sword power, 3 = scarf power, 4 = bonus ability.
+  // (On the boost screen, 1-3 pick a card instead.)
   onNumberKey(n) {
     if (this.state === 'choosing') this.chooseBoost(n - 1);
+    else if (this.state === 'playing' && !this.holding()) {
+      this.abilities.tryActivate(this, this.abilities.order[n - 1]);
+    }
   }
 
   // DOWN: ground smash in the air, or drop through a wooden platform.

@@ -26,10 +26,10 @@ python3 -m http.server 8000
 | `↓` or `S` (in the air) | Ground smash: drop straight down |
 | `↓` or `S` (on a platform) | Drop down through the platform |
 | `F` or `J` | Same as `SPACE`: swing (or plunge in the air) |
-| `Q` | Your sword's power |
-| `E` | Your scarf's power |
-| `B`, `SHIFT`, right-click | Use your skin's ability |
-| `V` | Use your bonus ability (a rare boost) |
+| `1` or right-click | Use your skin's ability |
+| `2` | Your sword's power |
+| `3` | Your scarf's power |
+| `4` | Use your bonus ability (a rare boost) |
 | `1` `2` `3` | Pick a boost card |
 | `ESC` or `P` | Pause / resume |
 | `R` | Restart after a crash |
@@ -40,7 +40,7 @@ python3 -m http.server 8000
 
 ## Skins and their powers
 
-Every skin has a **passive** perk (always on) and an **active** ability (press `B`). The meter in
+Every skin has a **passive** perk (always on) and an **active** ability (press `1`). The meter in
 the bottom-left corner shows when the ability is ready. Every run starts with it charged.
 
 | Skin | Unlock at | Passive | Active (cooldown) |
@@ -96,7 +96,7 @@ picks a card, so you can't choose one by accident. Boosts last until the end of 
 | Extra Life | Survive one more crash | 2 |
 | Sharp Edge | Your sword hits bosses 1 harder | 2 |
 
-Sometimes a gold **rare card** shows up instead: an active ability no skin has, used with `V`.
+Sometimes a gold **rare card** shows up instead: an active ability no skin has, used with `4`.
 You can own one per run.
 
 | Rare ability | Effect | Cooldown |
@@ -137,11 +137,13 @@ Every character drags a slightly-too-big **sword** behind them, tip scraping the
 throwing sparks (blue ones for the Thunder Sword, big fiery ones for the Flame Blade). Set
 `SWORD_POSE: 'raised'` in `js/config.js` to have them hold it up instead. They also wear a
 **scarf**. Both give you a power:
-the sword's is on `Q`, the scarf's on `E`. Coins you collect also go into a **bank** that you
+the sword's is on `2`, the scarf's on `3`. Coins you collect also go into a **bank** that you
 spend in the **SHOP** on the start screen, on better swords and more scarves.
 
-**SPACE on the ground** heaves the sword over your head and down in front: it hits things above
-you and ahead. **SPACE in the air** is a **plunge**: you drop fast with the sword pointing down,
+**SPACE on the ground** heaves the sword over your head and down in front. The sword is heavy:
+lifting it takes about a third of a second, and it only hits on the fast chop down, above you
+and ahead. Swings recharge for 1.1 s and plunges for 1.5 s (tiny gold and blue bars over your
+head show the wait). **SPACE in the air** is a **plunge**: you drop fast with the sword pointing down,
 cutting what's below you, then slam the ground and hit everything close by. A plunge cuts one
 level tougher than a swing, so even a Wooden Sword plunge breaks spikes.
 
@@ -150,7 +152,7 @@ arrows can be cut by any sword; spikes and spiky balls need a stronger one. **Ba
 crushers and pits can never be cut**, so you still jump those. Swing at a boss bomb or fireball
 and you knock it back into the boss.
 
-| Sword | Price | Damage | Cuts | Power (`Q`) |
+| Sword | Price | Damage | Cuts | Power (`2`) |
 | --- | --- | --- | --- | --- |
 | Wooden Sword | free | 1 | crates, arrows | **Spin Slash**: whirl, cutting all around you |
 | Iron Sword | 150 | 2 | + spikes | **Sword Beam**: a slicing beam cuts the next thing |
@@ -160,7 +162,7 @@ and you knock it back into the boss.
 
 Every skin starts with the same **Blue Scarf**. Others are in the shop:
 
-| Scarf | Price | Power (`E`) |
+| Scarf | Price | Power (`3`) |
 | --- | --- | --- |
 | Blue Scarf | free | **Float**: drift down slowly for 1.5 s |
 | Green Scarf | 150 | **Coin Vacuum**: pull in every coin on screen |
@@ -186,8 +188,8 @@ crowned block, flies in. Its eyes turn red and it shakes just before every attac
 | Ground Pound | Big Bonk slams into the ground and a quake wave rolls at you. Jump it. |
 | Crate drop | Drops a crate. Jump over it or land on top. |
 
-- **Hurt it** by swinging your sword (`F`) just as a bomb or fireball reaches you: it flies
-  back into Big Bonk for your sword's damage (8 health the first time, so 8 hits with the
+- **Hurt it** by swinging your sword (`SPACE`) a moment before a bomb or fireball reaches you
+  (the heavy sword takes a third of a second to come down): it flies back into Big Bonk for your sword's damage (8 health the first time, so 8 hits with the
   Wooden Sword). Sword powers, Shuriken and Supernova hurt it too. Ground smash doesn't.
 - **Beat it** for +250 points and a pile of coins. It comes back after every night (score
   3000, 4500…) with 3 more health and a bigger reward.
@@ -362,17 +364,18 @@ belongs to.
 - Reload the page: your best score, skin and mute setting are still there.
 - Beating 100, 250, 500… unlocks new skins, announced mid-run.
 - Each skin's passive and active show on the start screen, even while it's locked.
-- `B` uses the ability; the meter fills while it recharges and says READY when it's charged.
+- `1` uses the ability; the meter fills while it recharges and says READY when it's charged.
 - Coins appear in arcs over obstacles, in ground rows and on platforms; the counter under the
   score fills toward the next boost, then says BOOST! and the card screen opens at a calm moment.
 - Picking a card shows its name, a short "GO!" pause, and the boost works right away. A rare
-  card adds a second meter (gold, `V`) next to the first.
+  card adds a second meter (gold, `4`) next to the first.
 - `↓` in the air drops you fast with a thump and a dust cloud. On the ground it does nothing.
 - At 1500 points Big Bonk arrives with its own music. Swinging (`F`) as a bomb or fireball
   reaches you knocks it back into Big Bonk and shrinks its health bar; ground smash doesn't.
   Beating it gives +250 and coins, and normal obstacles return afterwards.
-- `SPACE` swings the (slightly too big) sword overhead; in the air it plunges and slams. Swings: crates and arrows break; a Wooden Sword can't cut spikes, an Iron one
-  can; nothing cuts barriers. `Q` and `E` use the sword and scarf powers (their meters sit
+- `SPACE` slowly heaves the (slightly too big) sword overhead and chops; a second press during the
+  1.1 s cooldown just buzzes. Mid-air it plunges and slams. Swings: crates and arrows break; a Wooden Sword can't cut spikes, an Iron one
+  can; nothing cuts barriers. `2` and `3` use the sword and scarf powers (their meters sit
   next to the skin ability's).
 - The SHOP shows your banked coins. Buying takes coins and equips the item; clicking an owned
   item equips it. Reload the page: owned items, what you're wearing and the bank are kept.

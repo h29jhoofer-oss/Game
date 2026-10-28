@@ -245,6 +245,10 @@ OMJ.Sound = class {
         this.tone(160, 40, 0.3, 'square', 0.12);
         this.tone(2000, 1200, 0.08, 'triangle', 0.04);
         break;
+      case 'heave':                      // straining to lift the heavy sword
+        this.tone(110, 190, 0.3, 'triangle', 0.05);
+        this.noise(0.25, 0.04, 400);
+        break;
       case 'swing':
         this.noise(0.08, 0.08, 3500, 'highpass');
         this.tone(900, 500, 0.06, 'triangle', 0.03);
