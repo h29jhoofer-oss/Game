@@ -110,8 +110,72 @@ OMJ.UI = class {
     el.append(strong, ': ' + desc);
   }
 
-  drawSkinPreview(time) {
-    if (this.skinShown) OMJ.PlayerArt.drawPreview(this.skinPreview, this.skinShown, this.skinLocked, time);
+  drawSkinPreview(time, scarf) {
+    if (this.skinShown) OMJ.PlayerArt.drawPreview(this.skinPreview, this.skinShown, this.skinLocked, time, scarf);
+  }
+
+  setBank(coins) {
+    this.fields.bank.textContent = coins;
+    this.fields['shop-bank'].textContent = coins;
+  }
+
+  setShopNote(text) {
+    this.fields['shop-note'].textContent = text;
+  }
+
+  // Fill the shop grid. `items` is OMJ.SWORDS or OMJ.SCARVES; each one
+  // becomes a button with data-action "shop-item-N".
+  showShop(tab, items, owned, equipped, bank) {
+    this.root.querySelectorAll('.omj-tab').forEach((t) => {
+      t.classList.toggle('is-active', t.dataset.action === 'shop-tab-' + tab);
+    });
+    const grid = this.fields['shop-grid'];
+    grid.textContent = '';
+    this.shopIcons = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const power = OMJ.GEAR_ABILITIES[item.power];
+      const has = owned.indexOf(item.id) >= 0;
+      const wearing = equipped === item.id;
+      const card = document.createElement('button');
+      card.className = 'omj-item' + (wearing ? ' is-equipped' : '') + (!has && bank < item.price ? ' is-locked' : '');
+      card.dataset.action = 'shop-item-' + i;
+
+      const icon = document.createElement('canvas');
+      icon.className = 'omj-item-icon';
+      if (tab === 'swords') OMJ.GearArt.drawSwordIcon(icon, item);
+      else OMJ.GearArt.drawScarfIcon(icon, item, 0);
+      this.shopIcons.push({ canvas: icon, item: item, tab: tab });
+
+      const text = document.createElement('span');
+      text.className = 'omj-item-text';
+      const name = document.createElement('strong');
+      name.textContent = item.name;
+      const stats = document.createElement('span');
+      stats.className = 'omj-item-stats';
+      stats.textContent = tab === 'swords'
+        ? 'DMG ' + item.damage + ' · ' + (item.cut >= 2 ? 'cuts crates, arrows & spikes' : 'cuts crates & arrows')
+        : 'E: ' + power.name;
+      const desc = document.createElement('span');
+      desc.className = 'omj-item-desc';
+      desc.textContent = (tab === 'swords' ? 'Q: ' + power.name + '. ' : '') + power.desc;
+      const status = document.createElement('span');
+      status.className = 'omj-item-status';
+      status.textContent = wearing ? 'EQUIPPED' : has ? 'EQUIP' : 'BUY ' + item.price;
+      text.append(name, stats, desc, status);
+      card.append(icon, text);
+      grid.append(card);
+    }
+    this.show('shop');
+  }
+
+  // Keep the rainbow scarf's icon shimmering while the shop is open.
+  animateShop(time) {
+    if (!this.shopIcons) return;
+    for (let i = 0; i < this.shopIcons.length; i++) {
+      const s = this.shopIcons[i];
+      if (s.tab === 'scarves' && s.item.rainbow) OMJ.GearArt.drawScarfIcon(s.canvas, s.item, time);
+    }
   }
 
   // Build the three boost cards. Each is a button with data-action
@@ -162,6 +226,7 @@ OMJ.UI = class {
     f['over-best'].textContent = info.best;
     f.jumped.textContent = info.jumped;
     f.coins.textContent = info.coins;
+    f.banked.textContent = info.coins > 0 ? '+' + info.coins + ' coins banked (' + info.bank + ' to spend in the shop)' : '';
     f.unlock.textContent = info.unlocks.length
       ? 'Unlocked: ' + info.unlocks.join(', ') + '! Choose skins on the menu.'
       : info.nextUnlock || '';

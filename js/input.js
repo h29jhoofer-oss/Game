@@ -80,6 +80,19 @@ OMJ.Input = class {
         e.preventDefault();
         if (firstPress) g.onAbilityKey();
         break;
+      case 'KeyF':
+      case 'KeyJ':
+        e.preventDefault();
+        if (firstPress) g.onSwordKey();      // swing your sword
+        break;
+      case 'KeyQ':
+        e.preventDefault();
+        if (firstPress) g.onSwordPowerKey(); // sword power
+        break;
+      case 'KeyE':
+        e.preventDefault();
+        if (firstPress) g.onScarfKey();      // scarf power
+        break;
       case 'KeyV':
         e.preventDefault();
         if (firstPress) g.onBonusKey();      // rare ability from a boost

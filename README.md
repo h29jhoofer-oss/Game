@@ -24,6 +24,9 @@ python3 -m http.server 8000
 | `SPACE`, `↑`, `W`, mouse click | Jump |
 | `↓` or `S` (in the air) | Ground smash: drop straight down |
 | `↓` or `S` (on a platform) | Drop down through the platform |
+| `F` or `J` | Swing your sword |
+| `Q` | Your sword's power |
+| `E` | Your scarf's power |
 | `B`, `SHIFT`, right-click | Use your skin's ability |
 | `V` | Use your bonus ability (a rare boost) |
 | `1` `2` `3` | Pick a boost card |
@@ -90,7 +93,7 @@ picks a card, so you can't choose one by accident. Boosts last until the end of 
 | Squeeze | Smaller hitbox | 1 |
 | Cat Reflexes | Even more forgiving jump timing | 1 |
 | Extra Life | Survive one more crash | 2 |
-| Heavy Stomp | Ground-smash shockwaves hit bosses twice as hard | 1 |
+| Sharp Edge | Your sword hits bosses 1 harder | 2 |
 
 Sometimes a gold **rare card** shows up instead: an active ability no skin has, used with `V`.
 You can own one per run.
@@ -113,8 +116,40 @@ whatever is under them can always be jumped the normal way, so they're an option
 ## Ground smash
 
 Press `↓` (or `S`) in the air to drop straight down. It lands you sooner, so you can set up
-the next jump faster. It doesn't break obstacles. During a boss fight, each ground smash sends
-a shockwave along the ground that hurts the boss.
+the next jump faster. It doesn't break obstacles or hurt the boss.
+
+## Swords, scarves and the shop
+
+Every character carries a **sword** (`F` to swing) and wears a **scarf**. Both give you a power:
+the sword's is on `Q`, the scarf's on `E`. Coins you collect also go into a **bank** that you
+spend in the **SHOP** on the start screen, on better swords and more scarves.
+
+A swing cuts what's right in front of you, if the sword is strong enough. Crates and crossbow
+arrows can be cut by any sword; spikes and spiky balls need a stronger one. **Barriers, saws,
+crushers and pits can never be cut**, so you still jump those. Swing at a boss bomb or fireball
+and you knock it back into the boss.
+
+| Sword | Price | Damage | Cuts | Power (`Q`) |
+| --- | --- | --- | --- | --- |
+| Wooden Sword | free | 1 | crates, arrows | **Spin Slash**: whirl, cutting all around you |
+| Iron Sword | 150 | 2 | + spikes | **Sword Beam**: a slicing beam cuts the next thing |
+| Flame Blade | 400 | 2 | + spikes | **Fire Wave**: fire burns through 3 obstacles |
+| Thunder Sword | 800 | 3 | + spikes | **Thunderstorm**: lightning strikes everything on screen |
+| Hero Sword | 1500 | 4 | + spikes | **Hero Shield**: 3 s of armor that smashes everything |
+
+Every skin starts with the same **Blue Scarf**. Others are in the shop:
+
+| Scarf | Price | Power (`E`) |
+| --- | --- | --- |
+| Blue Scarf | free | **Float**: drift down slowly for 1.5 s |
+| Green Scarf | 150 | **Coin Vacuum**: pull in every coin on screen |
+| Purple Scarf | 400 | **Time Freeze**: saws, crushers, crossbows and the boss freeze for 3 s |
+| Red Scarf | 700 | **Coin Rush**: turn everything on screen into coins |
+| Gold Scarf | 1200 | **Lucky Charm**: coins are worth triple for 8 s |
+| Rainbow Scarf | 2000 | **Prism**: instantly recharge your other powers |
+
+Time Freeze never freezes a crusher that is already slamming down, so it can't leave a block
+hanging at head height in front of you.
 
 ## The boss: Big Bonk
 
@@ -130,10 +165,11 @@ crowned block, flies in. Its eyes turn red and it shakes just before every attac
 | Ground Pound | Big Bonk slams into the ground and a quake wave rolls at you. Jump it. |
 | Crate drop | Drops a crate. Jump over it or land on top. |
 
-- **Hurt it** with ground smash shockwaves (6 hits the first time). Shuriken hits it, and
-  Supernova does double damage.
-- **Beat it** for +250 points. It comes back after every night (score 3000, 4500…) with
-  2 more health and a bigger reward.
+- **Hurt it** by swinging your sword (`F`) just as a bomb or fireball reaches you: it flies
+  back into Big Bonk for your sword's damage (8 health the first time, so 8 hits with the
+  Wooden Sword). Sword powers, Shuriken and Supernova hurt it too. Ground smash doesn't.
+- **Beat it** for +250 points and a pile of coins. It comes back after every night (score
+  3000, 4500…) with 3 more health and a bigger reward.
 - **Run out the clock** (40 seconds, the thin bar under its health) and it leaves with no bonus.
 
 Fairness: the boss works out when each attack will reach you, and never lets two attacks
@@ -164,6 +200,7 @@ the top saying what it does.
 | `js/abilities.js` | Active abilities, cooldowns, invulnerability, the ability meters |
 | `js/coins.js` | Coins: moving, collecting (and the magnet), drawing |
 | `js/boosts.js` | Boosts bought with coins, rare bonus abilities, and how cards are picked |
+| `js/gear.js` | Swords and scarves: their stats and powers, swinging, sword shots, shop icons |
 | `js/boss.js` | Big Bonk: when it appears, its attacks, health and drawing |
 | `js/particles.js` | Dust and sparkle particles |
 | `js/background.js` | Parallax sky, mountains, hills, town, ground; day/sunset/night themes |
@@ -224,6 +261,11 @@ How many coins a boost costs and how often rare cards appear are in `OMJ.COINS` 
 `js/boosts.js`. Add a boost by copying an entry in `OMJ.BOOSTS`: its `apply(m)` changes one of
 the run modifiers listed in `OMJ.newRunMods`. How often coins appear is in `js/spawner.js`
 (search for `coinArc` and `coinRow`).
+
+### Add a sword or scarf
+Copy an entry in `OMJ.SWORDS` or `OMJ.SCARVES` in `js/gear.js` and set its price, colors and
+stats. Its `power` names an ability in `OMJ.GEAR_ABILITIES` in the same file. To let a sword
+cut a new obstacle, give that obstacle type a `toughness` in `js/obstacles.js`.
 
 ### Tune the boss
 All of Big Bonk's numbers (when it appears, health, time limit, reward, warning time, size,
@@ -305,8 +347,14 @@ belongs to.
 - Picking a card shows its name, a short "GO!" pause, and the boost works right away. A rare
   card adds a second meter (gold, `V`) next to the first.
 - `↓` in the air drops you fast with a thump and a dust cloud. On the ground it does nothing.
-- At 1500 points Big Bonk arrives with its own music. Ground smash shockwaves shrink its health
-  bar; beating it gives +250, and normal obstacles return afterwards.
+- At 1500 points Big Bonk arrives with its own music. Swinging (`F`) as a bomb or fireball
+  reaches you knocks it back into Big Bonk and shrinks its health bar; ground smash doesn't.
+  Beating it gives +250 and coins, and normal obstacles return afterwards.
+- `F` swings the sword: crates and arrows break; a Wooden Sword can't cut spikes, an Iron one
+  can; nothing cuts barriers. `Q` and `E` use the sword and scarf powers (their meters sit
+  next to the skin ability's).
+- The SHOP shows your banked coins. Buying takes coins and equips the item; clicking an owned
+  item equips it. Reload the page: owned items, what you're wearing and the bank are kept.
   Double Jump and Shuriken buzz and stay charged if you press them when they can't work
   (on the ground, or with nothing to hit).
 

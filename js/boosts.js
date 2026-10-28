@@ -33,7 +33,7 @@ OMJ.newRunMods = function () {
     extraCoyote: 0,       // extra seconds of jump grace time
     extraBuffer: 0,
     extraLives: 0,        // crashes you can survive
-    smashDamage: 1,       // boss damage per ground-smash shockwave
+    swordDamage: 0,       // extra damage when you knock attacks back at the boss
     stacks: {},           // how many of each boost you have
   };
 };
@@ -57,8 +57,8 @@ OMJ.BOOSTS = [
     apply(m) { m.extraCoyote += 0.05; m.extraBuffer += 0.06; } },
   { id: 'life', name: 'Extra Life', desc: 'Survive one more crash', max: 2, weight: 0.5,
     apply(m) { m.extraLives += 1; } },
-  { id: 'stomp', name: 'Heavy Stomp', desc: 'Ground-smash shockwaves hit bosses twice as hard', max: 1, weight: 0.7,
-    apply(m) { m.smashDamage = 2; } },
+  { id: 'sharp', name: 'Sharp Edge', desc: 'Your sword hits bosses 1 harder', max: 2, weight: 0.8,
+    apply(m) { m.swordDamage += 1; } },
 ];
 
 // Rare ACTIVE abilities (V key). Same format as OMJ.ABILITIES in abilities.js.

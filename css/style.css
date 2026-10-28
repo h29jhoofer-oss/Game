@@ -287,6 +287,71 @@ html, body.omj-page {
 .omj-icon.is-muted .omj-icon-waves { display: none; }
 .omj-icon.is-muted .omj-icon-cross { display: block; }
 
+/* ---- Coin icon used in text ---- */
+.omj-coin-icon {
+  display: inline-block;
+  width: calc(var(--px) * 5);
+  height: calc(var(--px) * 6);
+  vertical-align: middle;
+  background: #ffd23f;
+  box-shadow: 0 0 0 calc(var(--px) * 1) #1d1a2f, inset calc(var(--px) * 1) 0 0 #fff2a8;
+}
+.omj-banked {
+  margin: 0 0 calc(var(--px) * 4);
+  font-size: calc(var(--px) * 5);
+  color: #ffd23f;
+  text-shadow: 0 calc(var(--px) * 1) 0 #1d1a2f;
+}
+
+/* ---- Shop ---- */
+.omj-screen--shop { background: rgba(13, 11, 26, 0.85); }
+.omj-shop-note { font-size: calc(var(--px) * 5); color: #e8384f; }
+.omj-tabs {
+  display: flex;
+  gap: calc(var(--px) * 3);
+  margin-bottom: calc(var(--px) * 4);
+}
+.omj-tab {
+  padding: calc(var(--px) * 2) calc(var(--px) * 8);
+  font-size: calc(var(--px) * 6);
+  color: #c8ccd8;
+  background: #2a2540;
+  box-shadow: 0 0 0 calc(var(--px) * 1) #4a4570;
+}
+.omj-tab.is-active { color: #1d1a2f; background: #ffd23f; }
+.omj-shop-grid {
+  display: grid;
+  grid-template-columns: repeat(3, calc(var(--px) * 112));
+  gap: calc(var(--px) * 4);
+  margin-bottom: calc(var(--px) * 5);
+}
+.omj-item {
+  display: flex;
+  gap: calc(var(--px) * 3);
+  align-items: flex-start;
+  padding: calc(var(--px) * 3);
+  text-align: left;
+  color: #fffdf4;
+  background: #2a2540;
+  box-shadow: 0 0 0 calc(var(--px) * 1) #4a4570;
+}
+.omj-item:hover, .omj-item:focus-visible { background: #3a3460; }
+.omj-item.is-equipped { box-shadow: 0 0 0 calc(var(--px) * 1) #ffd23f; background: #3a3020; }
+.omj-item.is-locked { opacity: 0.6; }
+.omj-item-icon {
+  flex: none;
+  width: calc(var(--px) * 16);
+  height: calc(var(--px) * 16);
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+.omj-item-text { display: flex; flex-direction: column; gap: calc(var(--px) * 1); min-width: 0; }
+.omj-item-text strong { font-size: calc(var(--px) * 6); color: #ffd23f; }
+.omj-item-stats { font-size: calc(var(--px) * 4); color: #7bd6ff; }
+.omj-item-desc { font-size: calc(var(--px) * 4); line-height: 1.3; color: #c8ccd8; }
+.omj-item-status { font-size: calc(var(--px) * 4.5); color: #fffdf4; letter-spacing: calc(var(--px) * 0.3); }
+.omj-item.is-equipped .omj-item-status { color: #ffd23f; }
+
 /* ---- Boost cards ---- */
 .omj-screen--boost { background: rgba(13, 11, 26, 0.72); }
 .omj-cards {

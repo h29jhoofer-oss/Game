@@ -4,9 +4,10 @@
 // How the fight works:
 //   - Normal obstacles stop. Big Bonk flies in and hovers on the right.
 //   - It uses its attacks (list below); you jump over what it sends.
-//   - Ground smash (DOWN while in the air) sends a shockwave along the
-//     ground. Each shockwave that reaches Big Bonk takes 1 health.
-//     (Shuriken and Supernova hurt it too.)
+//   - To hurt it, SWING your sword (F) as a bomb or fireball reaches you:
+//     it flies back into Big Bonk for your sword's damage. Sword powers,
+//     Shuriken and Supernova hurt it too. Every attack can also simply
+//     be jumped, so you never HAVE to swing.
 //   - Beat it for a big bonus. If you take too long, it flies away.
 //
 // Attacks:
@@ -27,7 +28,7 @@ OMJ.BOSS = {
   name: 'BIG BONK',
   firstAt: 1500,          // score when the first night ends (themes change every 500)
   every: 1500,            // and again after every night after that
-  baseHealth: 6,          // +2 health each time it comes back
+  baseHealth: 8,          // +3 health each time it comes back
   timeLimit: 40,          // seconds before it gets bored and leaves
   reward: 250,            // bonus points per level for beating it
   x: 300,                 // where it hovers (screen x of its center)
@@ -41,9 +42,6 @@ OMJ.BOSS = {
 
 OMJ.Boss = class {
   constructor() {
-    // Ground-smash shockwaves heading for the boss (small pool, re-used)
-    this.waves = [];
-    for (let i = 0; i < 4; i++) this.waves.push({ active: false, x: 0, age: 0 });
     // The boss is drawn at normal size into this little canvas, then
     // scaled up, so the pixels stay crisp and chunky.
     this.sprite = document.createElement('canvas');
@@ -70,12 +68,11 @@ OMJ.Boss = class {
     this.cooldown = 0;
     this.lastArrival = 0;    // game time when the last attack reaches you
     this.time = 0;
-    for (let i = 0; i < this.waves.length; i++) this.waves[i].active = false;
   }
 
   get active() { return this.state !== 'off'; }
   get fighting() { return this.state === 'fighting'; }
-  get leftEdge() { return this.x - 20 * OMJ.BOSS.scale; }   // where shockwaves hit it
+  get leftEdge() { return this.x - 20 * OMJ.BOSS.scale; }   // where knocked-back attacks hit it
   get bottom() { return this.y + 31 * OMJ.BOSS.scale; }
 
   start(g) {
@@ -83,7 +80,7 @@ OMJ.Boss = class {
     this.state = 'entering';
     this.x = OMJ.CONFIG.VIEW_W + 60;
     this.y = B.y;
-    this.maxHealth = B.baseHealth + 2 * this.level;
+    this.maxHealth = B.baseHealth + 3 * this.level;
     this.health = this.maxHealth;
     this.stateTimer = 0;
     this.attack = null;
@@ -91,7 +88,7 @@ OMJ.Boss = class {
     this.stomp = 0;
     this.cooldown = 1;
     g.announce('WARNING: BOSS!', OMJ.PALETTE.danger);
-    if (this.level === 0) g.announce('PRESS DOWN IN THE AIR TO SMASH', OMJ.PALETTE.white);
+    if (this.level === 0) g.announce('SWING (F) TO HIT ATTACKS BACK!', OMJ.PALETTE.white);
     g.sound.play('bossAlarm');
     g.music.play('boss');
   }
@@ -157,7 +154,6 @@ OMJ.Boss = class {
     this.time += dt;
     this.stateTimer += dt;
     if (this.hurtTimer > 0) this.hurtTimer -= dt;
-    this.updateWaves(dt, g);
 
     if (this.state === 'entering') {
       this.x = Math.max(B.x, this.x - 90 * dt);
@@ -249,31 +245,6 @@ OMJ.Boss = class {
       this.attack = this.chooseAttack();
       this.burstLeft = this.attack === 'burst' ? 3 : 0;
       this.windUpTimer = B.windUp;
-    }
-  }
-
-  // Ground smash: send a shockwave along the ground toward the boss.
-  sendShockwave(x) {
-    for (let i = 0; i < this.waves.length; i++) {
-      const w = this.waves[i];
-      if (w.active) continue;
-      w.active = true; w.x = x; w.age = 0;
-      return;
-    }
-  }
-
-  updateWaves(dt, g) {
-    for (let i = 0; i < this.waves.length; i++) {
-      const w = this.waves[i];
-      if (!w.active) continue;
-      w.x += 360 * dt;
-      w.age += dt;
-      if (this.fighting && w.x >= this.leftEdge) {
-        w.active = false;
-        this.hit(g.mods.smashDamage, g);     // Heavy Stomp boost hits harder
-      } else if (w.x > OMJ.CONFIG.VIEW_W) {
-        w.active = false;
-      }
     }
   }
 
@@ -371,7 +342,6 @@ OMJ.Boss = class {
   }
 
   draw(ctx, g) {
-    this.drawWaves(ctx);
     if (!this.active) return;
     const s = OMJ.BOSS.scale;
     // Draw at 1x into the sprite canvas (body top-left at 4, 10)...
@@ -391,23 +361,6 @@ OMJ.Boss = class {
       ctx.restore();
     } else {
       ctx.drawImage(this.sprite, dx, dy, w * s, h * s);
-    }
-  }
-
-  drawWaves(ctx) {
-    const P = OMJ.PALETTE;
-    const gy = OMJ.CONFIG.GROUND_Y;
-    for (let i = 0; i < this.waves.length; i++) {
-      const w = this.waves[i];
-      if (!w.active) continue;
-      const x = Math.round(w.x);
-      const rise = Math.floor(w.age * 20) % 2;
-      ctx.fillStyle = P.gold;
-      ctx.fillRect(x, gy - 4 - rise, 2, 4 + rise);
-      ctx.fillRect(x - 4, gy - 2, 3, 2);
-      ctx.fillRect(x + 3, gy - 3 + rise, 3, 3 - rise);
-      ctx.fillStyle = P.white;
-      ctx.fillRect(x, gy - 5 - rise, 2, 1);
     }
   }
 

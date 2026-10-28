@@ -25,6 +25,10 @@ OMJ.Game = class {
     if (!OMJ.isSkinUnlocked(OMJ.getSkin(this.save.skin), this.save.best)) this.save.skin = 'classic';
     this.skin = OMJ.getSkin(this.save.skin);
     this.pickerIndex = OMJ.SKINS.indexOf(this.skin);
+    this.swordItem = OMJ.getSword(this.save.sword);   // the sword you own and wear
+    this.scarf = OMJ.getScarf(this.save.scarf);
+    this.shopOpen = false;
+    this.shopTab = 'swords';
 
     // Game parts
     this.sound = new OMJ.Sound(this.save.muted, this.save.musicMuted);
@@ -35,6 +39,7 @@ OMJ.Game = class {
     this.spawner = new OMJ.Spawner(this.obstacles, this.coins);
     this.mods = OMJ.newRunMods();
     this.abilities = new OMJ.AbilitySystem();
+    this.sword = new OMJ.SwordSystem();               // swinging it, its shots
     this.boss = new OMJ.Boss();
     this.particles = new OMJ.Particles(200);
     this.background = new OMJ.Background();
@@ -52,6 +57,7 @@ OMJ.Game = class {
     this.goToMenu();
     this.ui.setMuted(this.save.muted);
     this.ui.setMusicMuted(this.save.musicMuted);
+    this.ui.setBank(this.save.bank);
 
     // Pause automatically if the player switches tabs or clicks away.
     window.addEventListener('blur', () => this.autoPause());
@@ -110,8 +116,11 @@ OMJ.Game = class {
     this.spawner.reset();
     this.particles.reset();
     this.background.reset();
-    this.abilities.reset(this.skin);
+    this.abilities.reset(this.skin, this.swordItem, this.scarf);
+    this.sword.reset(this.swordItem);
     this.boss.reset();
+    this.frozen = false;             // Time Freeze (Purple Scarf)
+    this.banked = false;             // this run's coins already added to the bank?
     this.passive = this.abilities.passive;
     this.player.setTiming(this.passive);
 
@@ -165,10 +174,13 @@ OMJ.Game = class {
   }
 
   goToMenu() {
+    this.bankCoins();                // quitting a run still keeps its coins
     this.resetRun();
     this.state = 'menu';
     this.ui.setPlaying(false);
     this.ui.setBest(this.save.best);
+    this.ui.setBank(this.save.bank);
+    this.shopOpen = false;
     this.pickerIndex = OMJ.SKINS.indexOf(this.skin);
     this.updateSkinPicker();
     this.ui.show('start');
@@ -194,6 +206,7 @@ OMJ.Game = class {
   }
 
   togglePause() {
+    if (this.state === 'menu' && this.shopOpen) { this.closeShop(); return; }   // ESC leaves the shop
     if (this.state === 'playing') this.pause();
     else if (this.state === 'paused') this.resume();
   }
@@ -220,7 +233,7 @@ OMJ.Game = class {
   // Input (called by input.js and ui.js)
   // ---------------------------------------------------------------
   onJumpKey(code) {
-    if (this.state === 'menu') this.startRun();
+    if (this.state === 'menu') { if (!this.shopOpen) this.startRun(); }
     else if (this.state === 'playing') this.player.pressJump();
     else if (this.state === 'over' && code === 'Space' && this.canRestart()) this.startRun();
   }
@@ -235,6 +248,18 @@ OMJ.Game = class {
 
   onBonusKey() {
     if (this.state === 'playing' && this.freezeTimer <= 0) this.abilities.tryActivateBonus(this);
+  }
+
+  onSwordKey() {
+    if (this.state === 'playing' && this.freezeTimer <= 0) this.sword.swing(this);
+  }
+
+  onSwordPowerKey() {
+    if (this.state === 'playing' && this.freezeTimer <= 0) this.abilities.tryActivate(this, 'sword');
+  }
+
+  onScarfKey() {
+    if (this.state === 'playing' && this.freezeTimer <= 0) this.abilities.tryActivate(this, 'scarf');
   }
 
   onNumberKey(n) {
@@ -254,7 +279,7 @@ OMJ.Game = class {
   }
 
   onConfirmKey() {
-    if (this.state === 'menu') this.startRun();
+    if (this.state === 'menu') { if (!this.shopOpen) this.startRun(); }
     else if (this.state === 'paused') this.resume();
     else if (this.state === 'over' && this.canRestart()) this.startRun();
   }
@@ -264,7 +289,7 @@ OMJ.Game = class {
   }
 
   onArrowKey(direction) {
-    if (this.state === 'menu') this.cycleSkin(direction);
+    if (this.state === 'menu' && !this.shopOpen) this.cycleSkin(direction);
   }
 
   canRestart() {
@@ -272,6 +297,7 @@ OMJ.Game = class {
   }
 
   onAction(action) {
+    if (action.indexOf('shop-item-') === 0) { this.onShopItem(parseInt(action.slice(10), 10)); return; }
     switch (action) {
       case 'play': this.startRun(); break;
       case 'restart': this.startRun(); break;
@@ -282,6 +308,10 @@ OMJ.Game = class {
       case 'music': this.toggleMusic(); break;
       case 'skin-prev': this.cycleSkin(-1); break;
       case 'skin-next': this.cycleSkin(1); break;
+      case 'shop': this.openShop(); break;
+      case 'shop-back': this.closeShop(); break;
+      case 'shop-tab-swords': this.shopTab = 'swords'; this.renderShop(); this.sound.play('click'); break;
+      case 'shop-tab-scarves': this.shopTab = 'scarves'; this.renderShop(); this.sound.play('click'); break;
       case 'boost-0': this.chooseBoost(0); break;
       case 'boost-1': this.chooseBoost(1); break;
       case 'boost-2': this.chooseBoost(2); break;
@@ -336,6 +366,8 @@ OMJ.Game = class {
     // which Slow-Mo slows down.
     a.update(realDt, this);
     const dt = realDt * a.timeScale;
+    this.frozen = a.isActive('timeFreeze');
+    p.floating = a.isActive('float');
 
     // Difficulty grows with distance; speed follows difficulty.
     this.difficulty = Math.min(1, this.progress / C.DIFFICULTY_MAX_SCORE);
@@ -348,11 +380,12 @@ OMJ.Game = class {
     this.obstacles.update(dt, speed, this);
     // No new obstacles while the boss is around: it brings its own.
     if (!this.boss.active) this.spawner.update(dt, speed, this.difficulty);
-    else this.boss.update(dt, this);
+    else if (!this.frozen) this.boss.update(dt, this);   // Time Freeze stops the boss too
     this.background.update(dt, speed, this.score);
     this.particles.update(dt, speed);
     a.updateWorld(dt, this);
     this.resolveFloor(a.invulnerable);
+    this.sword.update(dt, this);         // swings cut things before you can bump into them
     const picked = this.coins.update(dt, speed, p, this.mods.magnet);
     if (picked > 0) this.collectCoins(picked);
 
@@ -362,12 +395,11 @@ OMJ.Game = class {
       this.particles.burst(p.x + 4, p.bottom - 1, 5, 20, 50, Math.PI * 0.8, Math.PI * 1.1, 0.35, [OMJ.PALETTE.dust, OMJ.PALETTE.dustDark], 0);
     }
     if (p.justSmashed) {
-      // Ground smash landing: big dust cloud, a thump, and a shockwave
-      // that can hurt the boss. (It doesn't break obstacles.)
+      // Ground smash landing: big dust cloud and a thump.
+      // (It doesn't break obstacles or hurt the boss.)
       this.sound.play('groundSmash');
       this.shake = Math.max(this.shake, 2);
       this.particles.burst(p.x + 5, p.bottom - 1, 14, 40, 110, Math.PI, Math.PI * 2, 0.45, [OMJ.PALETTE.dust, OMJ.PALETTE.dustDark, OMJ.PALETTE.white], 150);
-      if (this.boss.fighting) this.boss.sendShockwave(p.x + p.w);
     } else if (p.justLanded) {
       if (p.landSpeed > 150) this.sound.play('land');
       this.particles.burst(p.x + 5, p.bottom - 1, 6, 20, 55, Math.PI, Math.PI * 2, 0.3, [OMJ.PALETTE.dust, OMJ.PALETTE.dustDark], 80);
@@ -435,7 +467,7 @@ OMJ.Game = class {
   // Coins and boosts
   // ---------------------------------------------------------------
   collectCoins(count) {
-    const value = count * this.mods.coinValue;
+    const value = count * this.mods.coinValue * (this.abilities.isActive('luckyCharm') ? 3 : 1);
     this.coinCount += value;
     this.coinsTotal += value;
     this.sound.play('coin');
@@ -740,6 +772,107 @@ OMJ.Game = class {
     this.music.play('run');
   }
 
+  // ---------------------------------------------------------------
+  // Sword and scarf helpers
+  // ---------------------------------------------------------------
+
+  // A sword swing hit a boss attack: send it flying back into the boss.
+  reflect(o, damage) {
+    o.origType = o.type;
+    o.type = OMJ.REFLECTED;
+    o.extra = damage;
+    o.dropping = false;
+    if (!o.passed) this.jumped++;
+    this.sound.play('reflect');
+    this.particles.burst(o.x + o.w / 2, o.y + o.h / 2, 8, 30, 90, -Math.PI / 2, Math.PI / 2, 0.3, [OMJ.PALETTE.white, OMJ.PALETTE.gold], 0);
+  }
+
+  // A sword swing cut through an obstacle.
+  cut(o) {
+    this.smash(o);
+    this.sound.play('cut');
+  }
+
+  // Coin Rush (Red Scarf): everything on screen turns into coins.
+  coinRush() {
+    const C = OMJ.CONFIG;
+    const pool = this.obstacles.pool;
+    for (let i = 0; i < pool.length; i++) {
+      const o = pool[i];
+      if (!o.active || o.type.isGap || o.type.harmless || o.x > C.VIEW_W) continue;
+      const cx = o.x + o.bx + o.bw / 2;
+      this.coins.spawn(cx - 6, Math.min(o.y + o.h / 2, C.GROUND_Y - 8));
+      this.coins.spawn(cx + 6, Math.min(o.y + o.h / 2, C.GROUND_Y - 8));
+      this.particles.burst(cx, o.y + o.h / 2, 8, 30, 80, 0, Math.PI * 2, 0.4, [OMJ.PALETTE.gold, '#fff2a8'], 100);
+      o.active = false;
+      if (!o.passed) this.jumped++;
+    }
+  }
+
+  // Add this run's coins to the saved bank (once per run).
+  bankCoins() {
+    if (this.banked || !this.coinsTotal) return;
+    this.banked = true;
+    this.save.bank += this.coinsTotal;
+    OMJ.Storage.save(this.save);
+    this.ui.setBank(this.save.bank);
+  }
+
+  // ---------------------------------------------------------------
+  // Shop (on the start screen)
+  // ---------------------------------------------------------------
+  openShop() {
+    this.shopOpen = true;
+    this.ui.setShopNote('');
+    this.renderShop();
+    this.sound.play('click');
+  }
+
+  closeShop() {
+    this.shopOpen = false;
+    this.ui.show('start');
+    this.sound.play('click');
+  }
+
+  renderShop() {
+    const swords = this.shopTab === 'swords';
+    this.ui.showShop(this.shopTab, swords ? OMJ.SWORDS : OMJ.SCARVES,
+      swords ? this.save.swords : this.save.scarves,
+      swords ? this.save.sword : this.save.scarf, this.save.bank);
+  }
+
+  // Click an item: equip it if you own it, otherwise try to buy it.
+  onShopItem(index) {
+    const swords = this.shopTab === 'swords';
+    const item = (swords ? OMJ.SWORDS : OMJ.SCARVES)[index];
+    if (!item) return;
+    const owned = swords ? this.save.swords : this.save.scarves;
+    if (owned.indexOf(item.id) < 0) {
+      if (this.save.bank < item.price) {
+        this.ui.setShopNote('Need ' + (item.price - this.save.bank) + ' more coins');
+        this.sound.play('denied');
+        return;
+      }
+      this.save.bank -= item.price;
+      owned.push(item.id);
+      this.ui.setShopNote('');
+      this.sound.play('buy');
+    } else {
+      this.sound.play('equip');
+    }
+    if (swords) {
+      this.save.sword = item.id;
+      this.swordItem = item;
+      this.sword.reset(item);
+    } else {
+      this.save.scarf = item.id;
+      this.scarf = item;
+    }
+    OMJ.Storage.save(this.save);
+    this.ui.setBank(this.save.bank);
+    this.renderShop();
+  }
+
   // Break an obstacle into pieces (Dash, Shuriken, Shield...).
   smash(o) {
     o.active = false;
@@ -760,7 +893,7 @@ OMJ.Game = class {
       if (!o.active || o.x > C.VIEW_W) continue;
       if (o.type.isGap) {
         // Pits get filled in with sparkles.
-        this.particles.burst(o.x + o.w / 2, C.GROUND_Y, 10, 30, 90, Math.PI, Math.PI * 2, 0.6, [OMJ.PALETTE.white, this.skin.scarf], 150);
+        this.particles.burst(o.x + o.w / 2, C.GROUND_Y, 10, 30, 90, Math.PI, Math.PI * 2, 0.6, [OMJ.PALETTE.white, this.scarf.color], 150);
         o.active = false;
         if (!o.passed) this.jumped++;
       } else {
@@ -792,8 +925,9 @@ OMJ.Game = class {
     this.sound.play(cause === 'gap' ? 'fall' : 'hit');
     this.music.stop();
     this.particles.burst(p.x + 5, p.y + 6, 18, 40, 140, 0, Math.PI * 2, 0.8,
-      [this.skin.body, this.skin.light, this.skin.scarf, OMJ.PALETTE.white], 300);
+      [this.skin.body, this.skin.light, this.scarf.color, OMJ.PALETTE.white], 300);
 
+    this.bankCoins();
     const type = OMJ.ObstacleTypes[cause];
     this.deathLine = OMJ.pickFrom(type.deathLines);
 
@@ -832,6 +966,7 @@ OMJ.Game = class {
       coins: this.coinsTotal,
       unlocks: this.newUnlocks,
       nextUnlock: nextUnlock,
+      bank: this.save.bank,
     });
   }
 
@@ -881,14 +1016,15 @@ OMJ.Game = class {
     if (inRun) this.abilities.drawBehindPlayer(ctx, this);
 
     ctx.globalAlpha = inRun ? this.abilities.playerAlpha(this.time) : 1;
-    this.player.draw(ctx, this.skin, this.time);
+    this.player.draw(ctx, this.skin, this.time, this.scarf);
+    this.sword.draw(ctx, this);
     ctx.globalAlpha = 1;
     if (inRun) this.abilities.drawInFrontOfPlayer(ctx, this);
 
     if (C.DEBUG_HITBOXES) this.drawHitboxes(ctx);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    if (inRun) this.abilities.drawScreenEffects(ctx);
+    if (inRun) this.abilities.drawScreenEffects(ctx, this);
 
     // Quick white flash (crashes, Supernova). Short and soft.
     if (this.flash > 0) {
@@ -899,7 +1035,8 @@ OMJ.Game = class {
     }
 
     if (this.state === 'menu') {
-      this.ui.drawSkinPreview(this.time);
+      this.ui.drawSkinPreview(this.time, this.scarf);
+      if (this.shopOpen) this.ui.animateShop(this.time);
     } else {
       this.drawHud(ctx);
       this.boss.drawHud(ctx);

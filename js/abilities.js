@@ -1,6 +1,12 @@
 // =============================================================
 // abilities.js — Each skin's ACTIVE ability (B / SHIFT / right-click)
-// and the system that runs abilities during a run.
+// and the system that runs every ability during a run.
+//
+// You can have up to four abilities at once, each in its own "slot":
+//   skin   B / SHIFT / right-click   from your skin (OMJ.ABILITIES)
+//   sword  Q                         from your sword (gear.js)
+//   scarf  E                         from your scarf (gear.js)
+//   bonus  V                         a rare boost card (boosts.js)
 //
 // To add an ability, add an entry to OMJ.ABILITIES:
 //   name, desc        shown on the start screen
@@ -87,80 +93,93 @@ OMJ.AbilitySystem = class {
       const y = Math.round(Math.sin(a) * 11);
       if (!seen[x + ',' + y]) { seen[x + ',' + y] = true; this.bubble.push(x, y); }
     }
+    this.order = ['skin', 'sword', 'scarf', 'bonus'];
+    this.slots = { skin: null, sword: null, scarf: null, bonus: null };
   }
 
-  reset(skin) {
+  // One ability slot: which ability, its timers, and how the HUD shows it.
+  makeSlot(id, def, keyLabel, color) {
+    return { id, def, keyLabel, color, label: def.name.toUpperCase(), cooldown: 0, timer: 0 };
+  }
+
+  reset(skin, sword, scarf) {
     this.skin = skin;
-    this.key = skin.active;
-    this.def = OMJ.ABILITIES[skin.active];
-    this.label = this.def.name.toUpperCase();
     this.passive = OMJ.getPassive(skin);
-    this.cooldown = 0;           // 0 = ready (every run starts with it ready)
-    this.activeTimer = 0;        // time left on a lasting effect
+    this.slots.skin = this.makeSlot(skin.active, OMJ.ABILITIES[skin.active], 'B', skin.light);
+    this.slots.sword = this.makeSlot(sword.power, OMJ.GEAR_ABILITIES[sword.power], 'Q', sword.edge);
+    this.slots.scarf = this.makeSlot(scarf.power, OMJ.GEAR_ABILITIES[scarf.power], 'E', scarf.color);
+    this.slots.bonus = null;   // a rare boost card can fill this
     this.invulnTimer = 0;
     this.secondChanceUsed = false;
-    for (let i = 0; i < this.stars.length; i++) this.stars[i].active = false;
-
-    // Bonus slot (V): a rare ability bought with coins (boosts.js).
-    this.bonusKey = null;
-    this.bonusDef = null;
-    this.bonusLabel = '';
-    this.bonusCooldown = 0;
-    this.bonusTimer = 0;
     this.rocketing = false;      // Rocket Jump: protected until you land
+    for (let i = 0; i < this.stars.length; i++) this.stars[i].active = false;
   }
 
   setBonus(key) {
-    this.bonusKey = key;
-    this.bonusDef = OMJ.BONUS_ABILITIES[key];
-    this.bonusLabel = this.bonusDef.name.toUpperCase();
-    this.bonusCooldown = 0;
-    this.bonusTimer = 0;
+    this.slots.bonus = this.makeSlot(key, OMJ.BONUS_ABILITIES[key], 'V', OMJ.PALETTE.gold);
   }
 
+  get bonusDef() { return this.slots.bonus && this.slots.bonus.def; }
+
   // ---- What the game asks each step ----
-  isActive(key) { return this.key === key && this.activeTimer > 0; }
-  isBonusActive(key) { return this.bonusKey === key && this.bonusTimer > 0; }
+  isActive(id) {
+    for (let i = 0; i < this.order.length; i++) {
+      const s = this.slots[this.order[i]];
+      if (s && s.id === id && s.timer > 0) return true;
+    }
+    return false;
+  }
+  slotTimer(id) {
+    for (let i = 0; i < this.order.length; i++) {
+      const s = this.slots[this.order[i]];
+      if (s && s.id === id && s.timer > 0) return s.timer;
+    }
+    return 0;
+  }
   get timeScale() { return this.isActive('slowmo') ? 0.5 : 1; }
   get speedScale() { return this.isActive('dash') ? 2.2 : 1; }
-  get smashing() { return this.isActive('dash') || this.isBonusActive('bulldozer'); }
-  get bonusReady() { return this.bonusDef && this.bonusCooldown <= 0 && this.bonusTimer <= 0; }
+  get smashing() { return this.isActive('dash') || this.isActive('bulldozer') || this.isActive('heroShield'); }
   get invulnerable() { return this.invulnTimer > 0; }
-  get ready() { return this.cooldown <= 0 && this.activeTimer <= 0; }
+  isReady(slot) { return !!slot && slot.cooldown <= 0 && slot.timer <= 0; }
+  get ready() { return this.isReady(this.slots.skin); }
 
   giveInvulnerability(seconds) {
     this.invulnTimer = Math.max(this.invulnTimer, seconds);
   }
 
-  tryActivate(g) {
-    if (!this.ready || (this.def.canUse && !this.def.canUse(g))) {
+  // Use the ability in a slot ('skin', 'sword', 'scarf' or 'bonus').
+  tryActivate(g, slotName) {
+    const slot = this.slots[slotName || 'skin'];
+    if (!slot) return;
+    if (!this.isReady(slot) || (slot.def.canUse && !slot.def.canUse(g))) {
       g.sound.play('denied');
       return;
     }
-    this.activeTimer = this.def.duration;
-    this.cooldown = this.def.cooldown;
-    this.def.activate(g, this);
+    slot.timer = slot.def.duration;
+    slot.cooldown = slot.def.cooldown;
+    slot.def.activate(g, this);
   }
 
-  tryActivateBonus(g) {
-    if (!this.bonusDef) return;
-    if (!this.bonusReady || (this.bonusDef.canUse && !this.bonusDef.canUse(g))) {
-      g.sound.play('denied');
-      return;
-    }
-    this.bonusTimer = this.bonusDef.duration;
-    this.bonusCooldown = this.bonusDef.cooldown;
-    this.bonusDef.activate(g, this);
+  tryActivateBonus(g) { this.tryActivate(g, 'bonus'); }
+
+  // Make an ability ready again right away (Rainbow Scarf).
+  refresh(slotName) {
+    const slot = this.slots[slotName];
+    if (slot) slot.cooldown = 0;
   }
 
-  // Shield or Second Chance can save you from a crash. Returns true if saved.
+  // Shield, Second Chance or an Extra Life can save you from a crash.
+  // Returns true if saved.
   tryRescue(g) {
-    if (this.isActive('shield')) {
-      this.activeTimer = 0;
-      this.giveInvulnerability(0.8);
-      g.sound.play('shieldBreak');
-      g.announce('SHIELD BROKEN!', OMJ.PALETTE.gold);
-      return true;
+    for (let i = 0; i < this.order.length; i++) {
+      const s = this.slots[this.order[i]];
+      if (s && s.id === 'shield' && s.timer > 0) {
+        s.timer = 0;
+        this.giveInvulnerability(0.8);
+        g.sound.play('shieldBreak');
+        g.announce('SHIELD BROKEN!', OMJ.PALETTE.gold);
+        return true;
+      }
     }
     if (this.passive.secondChance && !this.secondChanceUsed) {
       this.secondChanceUsed = true;
@@ -182,23 +201,20 @@ OMJ.AbilitySystem = class {
   // Timers run in REAL time (so Slow-Mo can't make itself last longer).
   update(dt, g) {
     const rechargeRate = this.passive.cooldownRate * g.mods.cooldownRate;
-    if (this.activeTimer > 0) {
-      this.activeTimer -= dt;
-    } else if (this.cooldown > 0) {
-      this.cooldown -= dt * rechargeRate;
-      if (this.cooldown <= 0) {
-        this.cooldown = 0;
-        g.sound.play('ready');
-        const p = g.player;
-        g.particles.burst(p.x + 5, p.y + 6, 6, 20, 50, 0, Math.PI * 2, 0.4, [this.skin.light], 0);
+    for (let i = 0; i < this.order.length; i++) {
+      const s = this.slots[this.order[i]];
+      if (!s) continue;
+      if (s.timer > 0) {
+        s.timer -= dt;
+      } else if (s.cooldown > 0) {
+        s.cooldown -= dt * rechargeRate;
+        if (s.cooldown <= 0) {
+          s.cooldown = 0;
+          g.sound.play('ready');
+          const p = g.player;
+          g.particles.burst(p.x + 5, p.y + 6, 6, 20, 50, 0, Math.PI * 2, 0.4, [s.color], 0);
+        }
       }
-    }
-    // Bonus slot timers
-    if (this.bonusTimer > 0) {
-      this.bonusTimer -= dt;
-    } else if (this.bonusCooldown > 0) {
-      this.bonusCooldown -= dt * rechargeRate;
-      if (this.bonusCooldown <= 0) { this.bonusCooldown = 0; g.sound.play('ready'); }
     }
     // Rocket Jump keeps you safe until you're back on your feet.
     if (this.rocketing) {
@@ -266,7 +282,7 @@ OMJ.AbilitySystem = class {
       for (let i = 3; i >= 1; i--) {
         p.x = x0 - i * 7;               // draw ghost copies a little behind
         ctx.globalAlpha = 0.12 * (4 - i);
-        p.draw(ctx, g.skin, g.time);
+        p.draw(ctx, g.skin, g.time, g.scarf);
       }
       p.x = x0;
       ctx.globalAlpha = 1;
@@ -279,7 +295,6 @@ OMJ.AbilitySystem = class {
       }
     }
     // Shuriken stars (they spin between a + and an x shape)
-    ctx.fillStyle = OMJ.PALETTE.metalLight;
     for (let i = 0; i < this.stars.length; i++) {
       const s = this.stars[i];
       if (!s.active) continue;
@@ -299,102 +314,84 @@ OMJ.AbilitySystem = class {
   }
 
   drawInFrontOfPlayer(ctx, g) {
-    if (!this.isActive('shield')) return;
+    const shieldLeft = this.slotTimer('shield') || this.slotTimer('heroShield');
+    if (shieldLeft <= 0) return;
     // Blink during the last 2 seconds so you know it's about to end.
-    if (this.activeTimer < 2 && Math.floor(g.time * 8) % 2) return;
+    if (shieldLeft < 2 && Math.floor(g.time * 8) % 2) return;
     const p = g.player;
     const cx = Math.round(p.x + 5);
     const cy = Math.round(p.y + 6);
-    ctx.fillStyle = OMJ.PALETTE.gold;
+    ctx.fillStyle = this.isActive('heroShield') ? OMJ.PALETTE.white : OMJ.PALETTE.gold;
     for (let i = 0; i < this.bubble.length; i += 2) ctx.fillRect(cx + this.bubble[i], cy + this.bubble[i + 1], 1, 1);
     ctx.fillStyle = OMJ.PALETTE.white;
     ctx.fillRect(cx - 6, cy - 8, 2, 1);
     ctx.fillRect(cx - 8, cy - 6, 1, 2);
   }
 
-  // Full-screen tint while Slow-Mo is on.
-  drawScreenEffects(ctx) {
-    if (!this.isActive('slowmo')) return;
+  // Full-screen tints while Slow-Mo or Time Freeze is on.
+  drawScreenEffects(ctx, g) {
     const C = OMJ.CONFIG;
-    ctx.globalAlpha = 0.16;
-    ctx.fillStyle = '#7a2fc2';
-    ctx.fillRect(0, 0, C.VIEW_W, C.VIEW_H);
-    ctx.globalAlpha = 1;
+    if (this.isActive('slowmo')) {
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = '#7a2fc2';
+      ctx.fillRect(0, 0, C.VIEW_W, C.VIEW_H);
+      ctx.globalAlpha = 1;
+    }
+    if (g.frozen) {
+      ctx.globalAlpha = 0.14;
+      ctx.fillStyle = '#7bd6ff';
+      ctx.fillRect(0, 0, C.VIEW_W, C.VIEW_H);
+      ctx.globalAlpha = 1;
+    }
   }
 
-  // The ability meter in the bottom-left corner.
+  // The ability meters along the bottom: one compact box per slot.
   drawHud(ctx, g) {
     const F = OMJ.PixelFont;
     const P = OMJ.PALETTE;
-    const x = 6;
-    const y = 191;
-
-    ctx.globalAlpha = 0.8;
-    ctx.fillStyle = P.ink;
-    ctx.fillRect(x, y, 98, 19);
-    ctx.globalAlpha = 1;
-
-    F.draw(ctx, this.label, x + 3, y + 3, 1, P.white, 'left');
-
-    // Bar: white = effect running, grey = recharging, skin color = ready
-    let fill = 1;
-    let color = this.skin.light;
-    if (this.activeTimer > 0 && this.def.duration > 0) {
-      fill = this.activeTimer / this.def.duration;
-      color = P.white;
-    } else if (this.cooldown > 0) {
-      fill = 1 - this.cooldown / this.def.cooldown;
-      color = P.metalDark;
+    let x = 4;
+    const y = 192;
+    for (let i = 0; i < this.order.length; i++) {
+      const s = this.slots[this.order[i]];
+      if (!s) continue;
+      this.drawSlot(ctx, g, s, x, y);
+      x += 95;
     }
-    ctx.fillStyle = '#4a4570';
-    ctx.fillRect(x + 3, y + 11, 72, 4);
-    ctx.fillStyle = color;
-    ctx.fillRect(x + 3, y + 11, Math.round(72 * fill), 4);
-
-    if (this.ready && Math.floor(g.time * 3) % 2 === 0) {
-      F.draw(ctx, 'READY', x + 75, y + 3, 1, color, 'right');
-    }
-
-    // Key hint
-    ctx.fillStyle = P.white;
-    ctx.fillRect(x + 81, y + 4, 11, 11);
-    F.draw(ctx, 'B', x + 85, y + 7, 1, P.ink, 'left');
-
     // Spare lives (Ghost's Second Chance and Extra Life boosts)
     const lives = (this.passive.secondChance && !this.secondChanceUsed ? 1 : 0) + g.mods.extraLives;
     if (lives > 0) {
-      F.drawShadowed(ctx, '+' + lives + (lives > 1 ? ' LIVES' : ' LIFE'), x + 3, y - 9, 1, '#7bd6ff', P.ink, 'left');
+      F.drawShadowed(ctx, '+' + lives + (lives > 1 ? ' LIVES' : ' LIFE'), 7, y - 9, 1, '#7bd6ff', P.ink, 'left');
     }
-
-    if (this.bonusDef) this.drawBonusHud(ctx, g, x + 102, y);
   }
 
-  // The bonus ability meter (V), next to the main one.
-  drawBonusHud(ctx, g, x, y) {
+  drawSlot(ctx, g, s, x, y) {
     const F = OMJ.PixelFont;
     const P = OMJ.PALETTE;
     ctx.globalAlpha = 0.8;
     ctx.fillStyle = P.ink;
-    ctx.fillRect(x, y, 98, 19);
+    ctx.fillRect(x, y, 92, 18);
     ctx.globalAlpha = 1;
-    ctx.fillStyle = P.gold;                       // gold frame: it's a rare one
-    ctx.fillRect(x, y, 98, 1);
-    F.draw(ctx, this.bonusLabel, x + 3, y + 3, 1, P.gold, 'left');
+    ctx.fillStyle = s.color;                    // colored top edge = which slot
+    ctx.fillRect(x, y, 92, 1);
+    const ready = this.isReady(s);
+    F.draw(ctx, s.label, x + 3, y + 3, 1, ready ? P.white : P.metal, 'left');
+    // Bar: white = effect running, grey = recharging, slot color = ready
     let fill = 1;
-    let color = P.gold;
-    if (this.bonusTimer > 0 && this.bonusDef.duration > 0) {
-      fill = this.bonusTimer / this.bonusDef.duration;
+    let color = s.color;
+    if (s.timer > 0 && s.def.duration > 0) {
+      fill = s.timer / s.def.duration;
       color = P.white;
-    } else if (this.bonusCooldown > 0) {
-      fill = 1 - this.bonusCooldown / this.bonusDef.cooldown;
+    } else if (s.cooldown > 0) {
+      fill = 1 - s.cooldown / s.def.cooldown;
       color = P.metalDark;
     }
     ctx.fillStyle = '#4a4570';
     ctx.fillRect(x + 3, y + 11, 72, 4);
     ctx.fillStyle = color;
     ctx.fillRect(x + 3, y + 11, Math.round(72 * fill), 4);
-    ctx.fillStyle = P.white;
-    ctx.fillRect(x + 81, y + 4, 11, 11);
-    F.draw(ctx, 'V', x + 85, y + 7, 1, P.ink, 'left');
+    // Key hint (blinks when ready)
+    ctx.fillStyle = ready && Math.floor(g.time * 3) % 2 === 0 ? s.color : P.white;
+    ctx.fillRect(x + 79, y + 4, 11, 11);
+    F.draw(ctx, s.keyLabel, x + 83, y + 7, 1, P.ink, 'left');
   }
 };

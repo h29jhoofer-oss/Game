@@ -129,6 +129,9 @@
   //                   top, press DOWN to drop through
   // isGap          -> true for holes in the ground
   // harmless       -> scenery that can't hurt you (e.g. the crossbow tower)
+  // toughness      -> a sword with `cut` >= this can cut it (gear.js).
+  //                   No toughness = a sword can never cut it.
+  // reflectable    -> a sword swing knocks it back at the boss
   // debris         -> colors of the pieces when it gets smashed
   // init(o)        -> optional: set up a new obstacle's own values
   // update(o, dt, game, speed) -> optional: make it move or act
@@ -141,6 +144,7 @@
     spike: {
       size: (count) => ({ w: 8 * count, h: 9 }),
       hitbox: { left: 2, right: 2, top: 4 },
+      toughness: 2,
       deathLines: ['Pointy end first. Ouch.', 'Spikes: 1, You: 0.', 'That one had your name on it.'],
       draw(ctx, o) {
         for (let i = 0; i < o.variant; i++) ctx.drawImage(SPIKE, o.drawX + i * 8, o.y);
@@ -152,6 +156,7 @@
       size: (stack) => ({ w: 16, h: 16 * stack }),
       hitbox: { left: 1, right: 1, top: 0 },
       solidTop: true,
+      toughness: 1,
       debris: [P.wood, P.woodLight, P.woodDark],
       deathLines: ['Bonk! Crates: 1, You: 0.', 'You tried to hug a crate.', 'Wood you believe it?'],
       draw(ctx, o) {
@@ -224,6 +229,8 @@
         o.solid = false;
       },
       update(o, dt, g) {
+        // Time Freeze holds it in the air (but never mid-slam).
+        if (g.frozen && o.phase === 0) return;
         const gapToPlayer = o.x - (g.player.x + g.player.w);
         if (o.phase === 0 && gapToPlayer <= 90) {
           o.phase = 1;
@@ -312,6 +319,7 @@
         o.bx = 0;
       },
       update(o, dt, g) {
+        if (g.frozen) return;                       // Time Freeze
         o.timer += dt;
         const range = o.w - SAW_SIZE;
         o.bx = (range / 2) * (1 - Math.cos(o.timer * 2.6 + o.phase));
@@ -330,6 +338,7 @@
         o.phase = Math.random() * Math.PI * 2;
       },
       update(o, dt, g) {
+        if (g.frozen) return;                       // Time Freeze
         o.timer += dt;
         // Blade top goes from 7 px (mostly hidden) to 26 px above the ground.
         const lift = (1 - Math.cos(o.timer * 3.4 + o.phase)) / 2;   // 0..1
@@ -352,6 +361,7 @@
       deathLines: ['Tower down. (You, not the tower.)'],
       init(o) { o.fired = false; },
       update(o, dt, g) {
+        if (g.frozen) return;              // Time Freeze: holds its fire
         if (o.timer > 0) o.timer -= dt;    // recoil animation after firing
         // Embers drift up from the loaded arrow's flame.
         if (!o.fired && Math.random() < 0.12) {
@@ -430,6 +440,7 @@
     bolt: {
       size: () => ({ w: 16, h: 4 }),
       hitbox: { left: 1, right: 2, top: 0 },
+      toughness: 1,
       debris: [P.woodLight, P.metal, P.gold, FIRE_ORANGE],
       deathLines: [
         'Bullseye. Unfortunately, you were the bullseye.',
@@ -523,6 +534,7 @@
     bomb: {
       size: () => ({ w: 10, h: 10 }),
       hitbox: { left: 2, right: 2, top: 2 },
+      reflectable: true,
       debris: ['#2a2540', P.danger, P.gold],
       deathLines: ['Kaboom! Bonk sends regards.', 'Bomb voyage!', 'Should have jumped. Big Bonk is laughing.'],
       init(o) { o.phase = 0; o.vy = 0; },
@@ -555,6 +567,7 @@
     spikeball: {
       size: () => ({ w: 12, h: 12 }),
       hitbox: { left: 2, right: 2, top: 2 },
+      toughness: 2,
       debris: [P.metal, P.metalDark],
       deathLines: ['Spiky AND round. The worst combo.', 'Big Bonk dropped that just for you.'],
       init(o) { o.phase = 0; o.vy = 0; },
@@ -622,6 +635,7 @@
     fireball: {
       size: () => ({ w: 10, h: 6 }),
       hitbox: { left: 1, right: 2, top: 1 },
+      reflectable: true,
       debris: [P.danger, P.gold, '#ff8a3d'],
       deathLines: ['Toasty!', 'Well done. (Like a steak.)', 'Hot hot hot!'],
       init(o) { o.extra = 150; },

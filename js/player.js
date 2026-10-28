@@ -30,6 +30,8 @@ OMJ.Player = class {
 
     // Ground smash (DOWN in the air): drop fast until you land.
     this.smashing = false;
+    // Float (Blue Scarf power): fall slowly while this is on.
+    this.floating = false;
     // Standing on a platform? (DOWN drops through it for a moment.)
     this.standingOn = null;      // the obstacle under your feet, or null for the ground
     this.dropTimer = 0;
@@ -108,6 +110,7 @@ OMJ.Player = class {
     this.y += this.vy * dt + 0.5 * gravity * dt * dt;
     this.vy += gravity * dt;
     if (this.vy > C.MAX_FALL_SPEED) this.vy = C.MAX_FALL_SPEED;
+    if (this.floating && !this.smashing && this.vy > 45) this.vy = 45;   // drift down gently
 
     // Animation timers
     this.runTime += dt * (runSpeed / 150);
@@ -142,8 +145,8 @@ OMJ.Player = class {
     this.vy = cause === 'gap' ? Math.max(this.vy, 60) : -260;
   }
 
-  draw(ctx, skin, time) {
-    OMJ.PlayerArt.draw(ctx, this, skin, time);
+  draw(ctx, skin, time, scarf) {
+    OMJ.PlayerArt.draw(ctx, this, skin, time, scarf);
   }
 };
 
@@ -197,7 +200,7 @@ OMJ.PlayerArt = (function () {
   }
 
   // Draws the character (un-scaled) into a small canvas context.
-  function drawPose(c, p, skin, time, ox, oy) {
+  function drawPose(c, p, skin, time, ox, oy, scarfItem) {
     // ---- Feet ----
     let bob = 0;
     c.fillStyle = INK;
@@ -224,8 +227,10 @@ OMJ.PlayerArt = (function () {
     c.drawImage(getBody(skin), bx, by);
 
     // ---- Scarf (band + flapping tail) ----
-    const scarf = skin.rainbow ? RAINBOW[Math.floor(time * 10) % 12] : skin.scarf;
-    const flap = Math.floor(time * 10) % 2;
+    const item = scarfItem || OMJ.SCARVES[0];
+    const scarf = item.rainbow ? RAINBOW[Math.floor(time * 10) % 12] : item.color;
+    // The tail flaps faster (and lifts) while floating.
+    const flap = Math.floor(time * (p.floating ? 24 : 10)) % 2;
     c.fillStyle = scarf;
     c.fillRect(bx + 1, by + 7, 10, 2);
     c.fillRect(bx - 1, by + 7, 2, 2);
@@ -260,10 +265,10 @@ OMJ.PlayerArt = (function () {
     }
   }
 
-  function draw(ctx, p, skin, time) {
+  function draw(ctx, p, skin, time, scarfItem) {
     ensureBuffer();
     bctx.clearRect(0, 0, BUF_W, BUF_H);
-    drawPose(bctx, p, skin, time, 0, 0);
+    drawPose(bctx, p, skin, time, 0, 0, scarfItem);
 
     // Squash & stretch: scale the buffer by whole pixels, anchored at the feet.
     const s = p.squash;
@@ -287,13 +292,13 @@ OMJ.PlayerArt = (function () {
 
   // Draw a still preview (used by the skin picker on the start screen).
   const previewPose = { grounded: true, dead: false, blinking: false, vy: 0, runTime: 0 };
-  function drawPreview(canvas, skin, locked, time) {
+  function drawPreview(canvas, skin, locked, time, scarfItem) {
     const c = canvas.getContext('2d');
     if (canvas.width !== BUF_W) canvas.width = BUF_W;
     if (canvas.height !== BUF_H) canvas.height = BUF_H;
     c.clearRect(0, 0, BUF_W, BUF_H);
     previewPose.runTime = time;
-    drawPose(c, previewPose, skin, time, 0, 0);
+    drawPose(c, previewPose, skin, time, 0, 0, scarfItem);
     if (locked) {
       // Show a dark silhouette for skins you haven't earned yet.
       c.globalCompositeOperation = 'source-atop';

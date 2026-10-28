@@ -29,6 +29,14 @@ OMJ.Coins = class {
     return null;
   }
 
+  // Coin Vacuum: every coin on screen flies to you.
+  pullAll() {
+    for (let i = 0; i < this.pool.length; i++) {
+      const c = this.pool[i];
+      if (c.active && c.x < OMJ.CONFIG.VIEW_W) c.pulled = true;
+    }
+  }
+
   // Move every coin left by `distance` (used by Blink).
   shift(distance) {
     for (let i = 0; i < this.pool.length; i++) if (this.pool[i].active) this.pool[i].x -= distance;

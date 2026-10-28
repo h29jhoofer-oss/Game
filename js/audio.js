@@ -225,6 +225,49 @@ OMJ.Sound = class {
         this.tone(900, 2400, 0.12, 'triangle', 0.04, 0.05);
         break;
 
+      // ---- Sword & scarf ----
+      case 'swing':
+        this.noise(0.08, 0.08, 3500, 'highpass');
+        this.tone(900, 500, 0.06, 'triangle', 0.03);
+        break;
+      case 'cut':
+        this.noise(0.1, 0.15, 2500, 'bandpass');
+        this.tone(1200, 800, 0.08, 'square', 0.03);
+        break;
+      case 'reflect':                    // the satisfying "TING!" of a parry
+        this.tone(1760, 1760, 0.05, 'square', 0.06);
+        this.tone(2637, 2637, 0.15, 'triangle', 0.06, 0.04);
+        break;
+      case 'beam':
+        this.tone(1500, 600, 0.2, 'sawtooth', 0.04);
+        break;
+      case 'fireWave':
+        this.noise(0.5, 0.2, 900, 'bandpass');
+        this.tone(200, 90, 0.4, 'sawtooth', 0.05);
+        break;
+      case 'thunder':
+        this.noise(0.6, 0.35, 3000);
+        this.tone(120, 40, 0.5, 'square', 0.08);
+        break;
+      case 'float':
+        this.tone(600, 900, 0.3, 'sine', 0.06);
+        break;
+      case 'vacuum':
+        this.tone(300, 1500, 0.3, 'triangle', 0.06);
+        break;
+      case 'freeze':
+        this.melody([1568, 0.05, 1319, 0.05, 1047, 0.05, 784, 0.2], 'sine', 0.07);
+        break;
+      case 'coinRush':
+        this.melody([988, 0.04, 1319, 0.04, 988, 0.04, 1319, 0.04, 1760, 0.15], 'square', 0.04);
+        break;
+      case 'buy':
+        this.melody([988, 0.05, 1319, 0.05, 1568, 0.05, 1976, 0.15], 'square', 0.05);
+        break;
+      case 'equip':
+        this.tone(700, 1000, 0.08, 'triangle', 0.06);
+        break;
+
       // ---- Abilities ----
       case 'ready':                      // ability recharged
         this.tone(1320, 1760, 0.08, 'sine', 0.06);

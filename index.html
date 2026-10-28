@@ -43,7 +43,7 @@
       <div class="omj-screen omj-screen--start" data-screen="start">
         <canvas class="omj-title omj-title--big" data-title="ONE MORE JUMP"></canvas>
         <p class="omj-text">Press <kbd>SPACE</kbd> to jump.</p>
-        <p class="omj-best">BEST <span data-field="best">0</span></p>
+        <p class="omj-best">BEST <span data-field="best">0</span> &nbsp;·&nbsp; <span class="omj-coin-icon"></span> <span data-field="bank">0</span></p>
 
         <div class="omj-skins">
           <button class="omj-arrow" data-action="skin-prev" aria-label="Previous skin">&lt;</button>
@@ -59,11 +59,13 @@
           <button class="omj-arrow" data-action="skin-next" aria-label="Next skin">&gt;</button>
         </div>
 
-        <button class="omj-btn" data-action="play">PLAY</button>
+        <div class="omj-row">
+          <button class="omj-btn" data-action="play">PLAY</button>
+          <button class="omj-btn omj-btn--small" data-action="shop">SHOP</button>
+        </div>
         <p class="omj-hint">
-          SPACE / &uarr; / W / CLICK = JUMP &nbsp;·&nbsp; &darr; / S (IN THE AIR) = GROUND SMASH<br>
-          B / SHIFT / RIGHT-CLICK = ABILITY &nbsp;·&nbsp; V = BONUS ABILITY &nbsp;·&nbsp; ESC = PAUSE<br>
-          COLLECT COINS TO PICK BOOSTS &nbsp;·&nbsp; M = MUTE &nbsp;·&nbsp; N = MUSIC
+          SPACE / &uarr; / W / CLICK = JUMP &nbsp;·&nbsp; &darr; / S = SMASH &nbsp;·&nbsp; F = SWORD &nbsp;·&nbsp; Q = SWORD POWER<br>
+          B = SKIN ABILITY &nbsp;·&nbsp; E = SCARF POWER &nbsp;·&nbsp; V = BONUS &nbsp;·&nbsp; ESC = PAUSE &nbsp;·&nbsp; M = MUTE &nbsp;·&nbsp; N = MUSIC
         </p>
       </div>
 
@@ -74,6 +76,18 @@
         <button class="omj-btn" data-action="resume">RESUME</button>
         <button class="omj-btn omj-btn--small" data-action="menu">MENU</button>
         <p class="omj-hint">Press <kbd>ESC</kbd> to resume</p>
+      </div>
+
+      <!-- SHOP (spend banked coins on swords and scarves) -->
+      <div class="omj-screen omj-screen--shop" data-screen="shop">
+        <canvas class="omj-title" data-title="SHOP"></canvas>
+        <p class="omj-best"><span class="omj-coin-icon"></span> <span data-field="shop-bank">0</span> &nbsp;<span class="omj-shop-note" data-field="shop-note"></span></p>
+        <div class="omj-tabs">
+          <button class="omj-tab is-active" data-action="shop-tab-swords">SWORDS</button>
+          <button class="omj-tab" data-action="shop-tab-scarves">SCARVES</button>
+        </div>
+        <div class="omj-shop-grid" data-field="shop-grid"></div>
+        <button class="omj-btn omj-btn--small" data-action="shop-back">BACK</button>
       </div>
 
       <!-- BOOST SCREEN (pick a card when you have enough coins) -->
@@ -95,6 +109,7 @@
           <div><span>COINS</span><strong data-field="coins">0</strong></div>
         </div>
         <p class="omj-unlock" data-field="unlock"></p>
+        <p class="omj-banked" data-field="banked"></p>
         <div class="omj-row">
           <button class="omj-btn" data-action="restart">RESTART</button>
           <button class="omj-btn omj-btn--small" data-action="menu">MENU</button>
@@ -118,6 +133,7 @@
   <script src="js/obstacles.js"></script>
   <script src="js/coins.js"></script>
   <script src="js/boosts.js"></script>
+  <script src="js/gear.js"></script>
   <script src="js/spawner.js"></script>
   <script src="js/abilities.js"></script>
   <script src="js/boss.js"></script>
