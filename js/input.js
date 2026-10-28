@@ -19,6 +19,9 @@ OMJ.Input = class {
     document.addEventListener('keydown', this.onKeyDown);
     document.addEventListener('keyup', this.onKeyUp);
     root.addEventListener('pointerdown', this.onPointerDown);
+    // A key released while the window is in the background never sends
+    // "keyup", so forget all held keys when the window loses focus.
+    window.addEventListener('blur', () => { this.held = {}; });
   }
 
   // Should this keyboard event belong to the game?
@@ -32,6 +35,13 @@ OMJ.Input = class {
     if (!this.isForGame(e) || e.ctrlKey || e.metaKey || e.altKey) return;
     const code = e.code;
     const g = this.game;
+
+    // A menu button focused with TAB: let ENTER/SPACE press that button,
+    // except mid-run, where SPACE must always jump.
+    if ((code === 'Enter' || code === 'Space') && e.target.tagName === 'BUTTON') {
+      if (g.state !== 'playing') return;
+      this.root.focus({ preventScroll: true });
+    }
     const firstPress = !this.held[code] && !e.repeat;
     this.held[code] = true;
     g.sound.unlock(); // browsers allow sound only after a key press/click

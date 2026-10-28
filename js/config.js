@@ -16,10 +16,11 @@ OMJ.CONFIG = {
   GROUND_Y: 184,            // y position of the top of the ground
 
   // ---- Timing ------------------------------------------------
-  // Physics always runs in fixed steps of this size, so the game
-  // behaves the same at 30, 60 or 144 frames per second.
-  FIXED_STEP: 1 / 120,
-  MAX_STEPS_PER_FRAME: 10,  // safety limit after a long lag spike
+  // Each frame is split into small physics steps no longer than this,
+  // so fast obstacles can't skip through the player. Movement uses exact
+  // formulas, so the game behaves the same at 30, 60 or 144 frames per second.
+  MAX_STEP: 1 / 120,
+  MAX_FRAME_TIME: 0.1,      // after a lag spike, don't jump ahead more than this
 
   // ---- Player ------------------------------------------------
   PLAYER_X: 56,             // the player stays at this x position

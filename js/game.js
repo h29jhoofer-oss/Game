@@ -56,29 +56,27 @@ OMJ.Game = class {
 
     // Start the ONE game loop.
     this.lastTime = 0;
-    this.accumulator = 0;
     this.frame = this.frame.bind(this);
     requestAnimationFrame(this.frame);
   }
 
   // ---------------------------------------------------------------
-  // Game loop: a fixed physics step + one draw per screen refresh.
+  // Game loop: one draw per screen refresh. The time since the last
+  // frame is split into equal small steps (at most MAX_STEP each), so
+  // every frame moves the game forward and motion stays smooth on
+  // 60 Hz and 144 Hz screens alike.
   // ---------------------------------------------------------------
   frame(now) {
     const C = OMJ.CONFIG;
     if (!this.lastTime) this.lastTime = now;
     let dt = (now - this.lastTime) / 1000;
     this.lastTime = now;
-    if (dt > 0.25) dt = 0.25;            // e.g. after the tab was hidden
+    if (dt > C.MAX_FRAME_TIME) dt = C.MAX_FRAME_TIME;   // e.g. after the tab was hidden
 
-    this.accumulator += dt;
-    let steps = 0;
-    while (this.accumulator >= C.FIXED_STEP && steps < C.MAX_STEPS_PER_FRAME) {
-      this.step(C.FIXED_STEP);
-      this.accumulator -= C.FIXED_STEP;
-      steps++;
+    if (dt > 0) {
+      const steps = Math.ceil(dt / C.MAX_STEP);
+      for (let i = 0; i < steps; i++) this.step(dt / steps);
     }
-    if (steps === C.MAX_STEPS_PER_FRAME) this.accumulator = 0;
 
     this.render();
     requestAnimationFrame(this.frame);
@@ -341,7 +339,6 @@ OMJ.Game = class {
       a.age += dt;
       if (a.age >= a.life) a.active = false;
     }
-    if (this.state === 'menu') this.ui.drawSkinPreview(this.time);
   }
 
   runningDust(dt) {
@@ -408,8 +405,12 @@ OMJ.Game = class {
       const oy1 = o.y + hb.top;
       const oy2 = C.GROUND_Y;
       if (px2 > ox1 && px1 < ox2 && py2 > oy1 && py1 < oy2) {
-        // Clipped the top corner of a crate? Be nice: step onto it.
-        if (o.type.solidTop && p.bottom <= o.y + 3) { p.land(o.y); continue; }
+        // Clipped the top corner of a crate? Be nice: keep rising if you're
+        // already going up, or step onto it if you're coming down.
+        if (o.type.solidTop && p.bottom <= o.y + 3) {
+          if (p.vy >= 0) p.land(o.y);
+          continue;
+        }
         return o;
       }
     }
@@ -521,6 +522,7 @@ OMJ.Game = class {
     }
 
     if (this.state !== 'menu') this.drawHud(ctx);
+    else this.ui.drawSkinPreview(this.time);
   }
 
   drawHud(ctx) {

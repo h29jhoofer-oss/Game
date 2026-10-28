@@ -64,10 +64,11 @@ OMJ.Player = class {
       }
     }
 
-    // Gravity
+    // Gravity. Using the exact formula (not just "speed * time") means the
+    // jump is identical at any frame rate and matches the math in physics.js.
+    this.y += this.vy * dt + 0.5 * C.GRAVITY * dt * dt;
     this.vy += C.GRAVITY * dt;
     if (this.vy > C.MAX_FALL_SPEED) this.vy = C.MAX_FALL_SPEED;
-    this.y += this.vy * dt;
 
     // Animation timers
     this.runTime += dt * (runSpeed / 150);

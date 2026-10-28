@@ -56,8 +56,8 @@ the top saying what it does.
 ## How it works (the short version)
 
 - **Game loop:** `requestAnimationFrame` calls `Game.frame()` once per screen refresh.
-  Physics runs in fixed 1/120-second steps (`Game.step()`), so jumps, speed and score are the
-  same at 30, 60 or 144 FPS.
+  Each frame's time is split into small steps of at most 1/120 s (`Game.step()`), and movement
+  uses exact formulas, so jumps, speed and score are the same at 30, 60 or 144 FPS.
 - **States:** `menu → playing ⇄ paused → dying → over → playing…`. Each state has its own
   update function in `game.js`.
 - **Pixel art:** everything is drawn on a 384×216 canvas, then scaled up with
