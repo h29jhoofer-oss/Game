@@ -15,11 +15,29 @@ Open `index.html` in any modern browser. You don't need to build or install anyt
 | Gas | ↑ or W |
 | Brake | ↓ or S |
 | Start / retry | Enter or Space |
+| Switch mode (title screen) | ↑ or W |
 | Pause | P or Esc |
 | Ability | B |
 | Mute | M |
 
-On phones and tablets, on-screen buttons appear (double-tap ◀ or ▶ to drift), and you tap the screen to start.
+On phones and tablets, on-screen buttons appear (double-tap ◀ or ▶ to drift), and you tap the screen to start. On the title screen, **GAS** switches the mode.
+
+## Modes
+
+Pick a mode on the title screen with **Up** (or **GAS**). Your choice is remembered.
+
+- **Endless:** the original game. Drive as far as you can through the levels while the cops, the chopper and the big rig close in.
+- **Race:** beat four rival racers to a finish line about a minute down the road.
+
+### Race
+
+- Every race runs on a random track from the four levels (construction zone, bridge, snowy pass or desert), with that track's hazards.
+- Everyone starts on a grid behind a chequered line. Wait for **3, 2, 1, GO!**
+- There are **no cops, no chopper and no big rig**: just traffic, ramps and the other racers. Drifting, jumps, close calls and your paint's ability all work as usual.
+- The rivals (orange **Blaze**, green **Viper**, purple **Nova** and yellow **Duke**) weave around traffic, sometimes cut into the oncoming lanes, and spin out if they hit a car. A rival that falls far behind finds a little extra speed, and one far ahead eases off, so races stay close.
+- Bumping a rival shoves you both but never wrecks you. Crashing into traffic, the barriers or the water ends the race: **DID NOT FINISH**.
+- The top of the screen shows your place (**P2/5**) and race time. A strip under the top bar shows everyone's progress, with rivals as coloured dots and you in white. Rivals just off screen show as small coloured markers at the top or bottom edge.
+- Crossing the line pays a prize on top of your points: **3,000** for 1st, 1,800 for 2nd, 1,000 for 3rd, 500 for 4th and 250 for 5th. Your best finishing time is saved and shown on the title screen.
 
 ## The road
 

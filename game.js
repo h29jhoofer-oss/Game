@@ -991,6 +991,19 @@
   // growing while you're out of the zone.
   let zoneMult, zoneTipShown;
   let stage = 1, stageFade = 0;
+  // Two ways to play: ENDLESS (the original run) or RACE (beat four rivals
+  // to a finish line, no cops). Picked with Up on the title screen.
+  let mode = store.get('mode', 'endless') === 'race' ? 'race' : 'endless';
+  let race = null;
+  let raceBest = store.get('raceBest', 0);
+  const RACE_LEN = 15000;
+  const RACE_PRIZES = [3000, 1800, 1000, 500, 250];
+  const RIVALS = [
+    { name: 'BLAZE', color: '#ff8a2a', body: 'muscle', top: 222 },
+    { name: 'VIPER', color: '#2fae4f', body: 'coupe', top: 232 },
+    { name: 'NOVA', color: '#b04ae0', body: 'racer', top: 242 },
+    { name: 'DUKE', color: '#f0c419', body: 'muscle', top: 250 },
+  ];
   // Desert hazards: sand drifts on the road, tumbleweeds rolling across it,
   // and sandstorms that hide the road ahead and shove you with crosswind.
   let sands = [], weeds = [], nextSand = 0, nextWeed = 0, desertTips = {};
@@ -1070,6 +1083,7 @@
     zoneTipShown = false;
     stage = 1;
     stageFade = 0;
+    race = null;
     resetDesert();
     if (theme !== 'construction') {
       setLayout('construction');
@@ -1130,7 +1144,157 @@
     state = 'play';
     store.set('paint', paintIdx);
     sfx.engineOn();
-    popup('GO GO GO!', W / 2, 80, '#ffd34d', 1.2);
+    if (mode === 'race') startRace();
+    else popup('GO GO GO!', W / 2, 80, '#ffd34d', 1.2);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Race mode
+  // ---------------------------------------------------------------------------
+  // A sprint on a random track against four rivals. No cops, no chopper and
+  // no big rig: just traffic, the track's own hazards, and the other racers.
+  function startRace() {
+    const t = pick(THEMES);
+    setLayout(t);
+    initDecor();
+    resetDesert();
+    const fwd = [...Array(LANES).keys()].filter((l) => laneDir(l) > 0);
+    const pl = fwd[Math.floor((fwd.length - 1) / 2)];
+    player.x = laneX(pl);
+    player.speed = 0;
+    // Starting grid: a row ahead of you, the rest beside and behind.
+    const slots = [];
+    for (const d of [30, 0, -30]) {
+      for (const l of fwd) if (!(d === 0 && l === pl)) slots.push({ l, d });
+    }
+    race = {
+      count: 3, time: 0, done: false, order: [],
+      rivals: RIVALS.map((r, i) => ({
+        ...r, lane: slots[i].l, x: laneX(slots[i].l), targetX: null, d: slots[i].d,
+        speed: 0, spin: 0, stuck: 0, finished: false,
+      })),
+    };
+    popup('TRACK: ' + LEVEL_NAMES[t], W / 2, 60, '#ffd34d', 1.6);
+  }
+
+  const racePlace = () => 1 + race.rivals.filter((r) => r.d > dist).length;
+  const ordinal = (n) => n + (n === 1 ? 'ST' : n === 2 ? 'ND' : n === 3 ? 'RD' : 'TH');
+  const fmtTime = (t) => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0') + '.' + Math.floor((t * 10) % 10);
+
+  function updateRace(dt) {
+    race.time += dt;
+    runTime += dt;
+    updateRivals(dt);
+    if (state !== 'play' || race.done || dist < RACE_LEN) return;
+    // Across the line.
+    race.done = true;
+    const place = race.order.length + 1;
+    const prize = RACE_PRIZES[place - 1];
+    score += prize;
+    race.place = place;
+    race.prize = prize;
+    if (!raceBest || race.time < raceBest) {
+      race.newBest = true;
+      raceBest = race.time;
+      store.set('raceBest', raceBest);
+    }
+    popup('FINISHED ' + ordinal(place) + '! +' + prize, W / 2, PLAYER_Y, place === 1 ? '#ffd34d' : '#ffffff', 2);
+    sfx.engineOff();
+    sfx.unlock();
+    state = 'crash';
+    endReason = 'finish';
+    crashTimer = 2;
+  }
+
+  function updateRivals(dt) {
+    const p = player;
+    for (const r of race.rivals) {
+      const gap = r.d - dist;
+      const ry = PLAYER_Y - gap;
+      const onScreen = ry > -70 && ry < H + 40;
+      let top = r.top;
+      // Keep it close: stragglers find a little extra, leaders ease off.
+      if (gap < -250) top *= 1.12;
+      else if (gap > 400) top *= 0.93;
+      if (r.finished) top = 140;
+      if (!onScreen && r.stuck <= 0 && Math.random() < 0.25 * dt) r.stuck = 1.2; // traffic you can't see
+      if (r.stuck > 0) {
+        r.stuck -= dt;
+        top *= 0.75;
+      }
+      if (r.spin > 0) {
+        r.spin -= dt;
+        top = 80;
+      }
+
+      if (onScreen && r.targetX === null) {
+        // Weave around traffic: look further ahead for oncoming cars.
+        const ahead = traffic.find((c) => !c.wrecked && Math.abs(c.x + c.w / 2 - (r.x + CAR_W / 2)) < 12 &&
+          c.y + c.h <= ry + 2 && ry - (c.y + c.h) < (c.dir < 0 ? 110 : 50));
+        const clear = (l) => laneClear(l, ry - 60, ry + CAR_H + 12, null) &&
+          !(Math.abs(laneX(l) - p.x) < CAR_W && Math.abs(ry - PLAYER_Y) < CAR_H + 6);
+        if (ahead) {
+          const opts = [r.lane - 1, r.lane + 1].filter((l) => l >= 0 && l < LANES)
+            .sort((a, b) => laneDir(b) - laneDir(a));
+          const l = opts.find(clear);
+          if (l !== undefined) {
+            r.lane = l;
+            r.targetX = laneX(l);
+          } else {
+            top = Math.min(top, ahead.dir > 0 ? ahead.speed : 40);
+          }
+        } else if (laneDir(r.lane) < 0) {
+          // Get back on the right side of the road when there's room.
+          const l = [r.lane + 1].find((n) => n < LANES && laneDir(n) > 0 && clear(n));
+          if (l !== undefined) {
+            r.lane = l;
+            r.targetX = laneX(l);
+          }
+        }
+      }
+      r.speed += clamp(top - r.speed, -220 * dt, 80 * dt);
+      r.d += r.speed * dt;
+      const tx = r.targetX !== null ? r.targetX : laneX(r.lane);
+      const step = 45 * dt;
+      if (Math.abs(tx - r.x) <= step) {
+        r.x = tx;
+        r.targetX = null;
+      } else {
+        r.x += Math.sign(tx - r.x) * step;
+      }
+      if (!r.finished && r.d >= RACE_LEN) {
+        r.finished = true;
+        race.order.push(r);
+        if (!race.done) popup(r.name + ' FINISHED ' + ordinal(race.order.length), -1, 0, r.color, 1.2);
+      }
+
+      if (!onScreen || state !== 'play') continue;
+      const ny = PLAYER_Y - (r.d - dist);
+      // Rivals that blunder into traffic spin out.
+      if (r.spin <= 0 && traffic.some((c) => overlaps(r.x + 1, ny + 1, CAR_W - 2, CAR_H - 2, c.x + 1, c.y + 1, c.w - 2, c.h - 2))) {
+        r.spin = 1.2;
+        r.speed *= 0.5;
+        for (let i = 0; i < 10; i++) particle(r.x + 5, ny + 8, rand(-40, 40), rand(-40, 40), 0.5, pick(['#fff3a0', '#ffb000', r.color]), 1);
+        sfx.bump();
+      }
+      // Trading paint with you: a shove, never a wreck.
+      if (p.air <= 0 && !invuln() && overlaps(p.x + 1, PLAYER_Y + 1, CAR_W - 2, CAR_H - 2, r.x + 1, ny + 1, CAR_W - 2, CAR_H - 2)) {
+        const side = Math.sign(p.x - r.x) || 1;
+        if (Math.abs(ny - PLAYER_Y) < CAR_H - 6) {
+          p.knock = side * 120;
+          r.x -= side * 3;
+          r.targetX = null;
+        } else if (ny < PLAYER_Y) {
+          p.speed = Math.max(MIN_SPEED, Math.min(p.speed, r.speed - 25));
+          r.d = dist + CAR_H;
+        } else {
+          r.speed = Math.max(60, Math.min(r.speed, p.speed - 25));
+          r.d = dist - CAR_H;
+        }
+        shake = Math.max(shake, 2);
+        sfx.bump();
+      }
+    }
   }
 
   // Messages stay out of the driving view. Announcements (no points, centred)
@@ -1776,9 +1940,6 @@
     if (!play || p.air > 0) return;
     // Crosswind shoves you sideways while the storm blows.
     if (storm.s > 0) p.x += storm.dir * 24 * storm.s * dt;
-    p.knock = (p.knock || 0) * Math.exp(-5 * dt);
-    p.x += p.knock * dt;
-
     const sd = sands.find((sd) => overlaps(p.x + 1, PLAYER_Y + 2, CAR_W - 2, CAR_H - 4, sd.x, sd.y, sd.w, sd.h));
     if (sd) {
       // Bogged down and squirrelly. Green's Off-Roader shrugs it off.
@@ -2229,6 +2390,11 @@
     const n = PAINTS.length;
     if (pressed.has('left')) { paintIdx = (paintIdx - 1 + n) % n; sfx.blip(); }
     if (pressed.has('right')) { paintIdx = (paintIdx + 1) % n; sfx.blip(); }
+    if (pressed.has('gas')) {
+      mode = mode === 'race' ? 'endless' : 'race';
+      store.set('mode', mode);
+      sfx.blip();
+    }
     if (pressed.has('brake')) {
       state = 'shop';
       shopSel = 0;
@@ -2306,6 +2472,19 @@
     }
     // Slow-mo slows the world down; your steering stays full speed.
     const wdt = abilityOn('slowmo') ? dt * 0.4 : dt;
+    if (race && race.count > 0) {
+      // On the grid: 3, 2, 1, GO.
+      const before = Math.ceil(race.count);
+      race.count -= dt;
+      const now = Math.ceil(race.count);
+      if (now !== before) {
+        if (now > 0) sfx.tone(440, 0.15, 'square', 0.1);
+        else sfx.tone(880, 0.35, 'square', 0.12);
+      }
+      p.speed = 0;
+      sfx.engineSet(keys.has('gas') ? 160 : 40);
+      return;
+    }
     if (stageFade > 0) {
       const before = stageFade;
       stageFade -= dt;
@@ -2380,6 +2559,9 @@
     const lateral = p.vx - push;
     const minX = ROAD_X - 8, maxX = ROAD_R + 8 - CAR_W;
     p.x += lateral * dt;
+    // Sideways shoves from tumbleweeds, sand and rivals fade out quickly.
+    p.knock = (p.knock || 0) * Math.exp(-5 * dt);
+    p.x += p.knock * dt;
     // A curve throwing you into the barriers at speed is a wreck.
     if (((p.x < minX && lateral < -45) || (p.x > maxX && lateral > 45)) && Math.abs(push) > 35 && !invuln()) {
       p.x = clamp(p.x, minX, maxX);
@@ -2519,9 +2701,13 @@
     updateTraffic(wdt);
     updateHazards(wdt);
     if (state === 'play') checkPlayerVsTraffic();
-    if (state === 'play') updateRig(wdt);
-    if (state === 'play') updatePolice(wdt);
-    updateHeli(wdt);
+    if (race) {
+      if (state === 'play') updateRace(wdt);
+    } else {
+      if (state === 'play') updateRig(wdt);
+      if (state === 'play') updatePolice(wdt);
+      updateHeli(wdt);
+    }
     hurtTimer = Math.max(0, hurtTimer - dt);
     if (hp <= 2 && state === 'play' && Math.random() < (hp === 1 ? 0.6 : 0.3)) {
       particle(p.x + rand(2, 8), PLAYER_Y + rand(0, 6), rand(-6, 6), rand(-25, -10), rand(0.4, 0.8),
@@ -2549,12 +2735,14 @@
     updateHeli(dt);
     if (endReason === 'wreck') burnParticles(0.9);
     if (endReason === 'fell') updateFall(dt);
+    if (race) updateRivals(dt);
     crashTimer -= dt;
     if (crashTimer <= 0) gameOver();
   }
 
   function updateOver(dt) {
     overTimer += dt;
+    if (race) updateRivals(dt);
     updateTraffic(dt);
     updateCops(dt);
     updateHazards(dt);
@@ -2732,6 +2920,10 @@
     const inMenu = state === 'title' || state === 'shop';
     if (!inMenu) {
       if (theme === 'desert') drawSands();
+      if (race) {
+        drawCheckerLine(0);
+        drawCheckerLine(RACE_LEN);
+      }
       for (const it of roadItems) {
         ctx.drawImage(rampSprite, sx(it.x, it.y + it.h / 2), Math.round(it.y));
       }
@@ -2759,6 +2951,14 @@
       for (const w of copWrecks) drawVehicle(policeWreckSprite, sx(w.x, w.y + w.h / 2), Math.round(w.y), w.w, w.h);
       for (const c of traffic) drawTrafficCar(c);
       for (const cop of cops) drawCop(cop);
+      if (race) {
+        for (const r of race.rivals) {
+          const ry = Math.round(PLAYER_Y - (r.d - dist));
+          if (ry < -CAR_H || ry > H) continue;
+          const j = r.spin > 0 ? (Math.floor(time * 20) % 2 ? 1 : -1) : 0;
+          drawVehicle(vehicleSprite('car', r.color, undefined, false, false, 'stripes', r.body), sx(r.x, ry + CAR_H / 2) + j, ry, CAR_W, CAR_H);
+        }
+      }
       if (rig) {
         const rx = sx(rig.x, rig.y + rig.h / 2), ry = Math.round(rig.y);
         drawVehicle(vehicleSprite('truck', '#5a1010', '#d8d8d8'), rx, ry, rig.w, rig.h);
@@ -2795,6 +2995,20 @@
     }
     if (theme === 'snow') drawSnowfall();
     if (theme === 'desert' && storm.s > 0 && !inMenu) drawSandstorm();
+  }
+
+  // Chequered line across the road at a race distance (the start or the finish).
+  function drawCheckerLine(d) {
+    const y = Math.round(PLAYER_Y - (d - dist));
+    if (y < -8 || y > H) return;
+    const x0 = sx(ROAD_X, y);
+    for (let x = 0; x < ROAD_W; x += 3) {
+      for (let r = 0; r < 2; r++) {
+        ctx.fillStyle = (x / 3 + r) % 2 ? '#111111' : '#f2f2f2';
+        ctx.fillRect(x0 + x, y + r * 3, 3, 3);
+      }
+    }
+    if (d > 0) drawText('FINISH', x0 + ROAD_W / 2, y - 8, '#ffffff', 1, 'center');
   }
 
   function drawSands() {
@@ -2883,7 +3097,8 @@
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(0, 0, W, 9);
     drawText('SCORE ' + Math.floor(score), 2, 2, '#ffffff');
-    drawText('LV' + stage, W / 2 + 6, 2, '#ffd34d', 1, 'center');
+    if (race) drawText('P' + (race.done ? race.place : racePlace()) + '/5', W / 2 + 6, 2, '#ffd34d', 1, 'center');
+    else drawText('LV' + stage, W / 2 + 6, 2, '#ffd34d', 1, 'center');
     const reckless = player.speed >= RECKLESS_SPEED;
     drawText(Math.round(player.speed * MPH) + ' MPH', W - 2, 2, reckless ? '#ff4d4d' : '#ffffff', 1, 'right');
     if (reckless) {
@@ -3009,6 +3224,40 @@
     ctx.fillRect(zx1, H - 4, 1, 4);
     ctx.fillStyle = '#ff9d3d';
     ctx.fillRect(1 + Math.round((W - 2) * (SLOW_SPEED - MIN_SPEED) / span), H - 4, 1, 4);
+    if (race) drawRaceHUD();
+  }
+
+  function drawRaceHUD() {
+    // Race progress along the bottom of the top bar: rivals as coloured dots, you in white.
+    const px = (d) => 1 + Math.round((W - 3) * clamp(d / RACE_LEN, 0, 1));
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 9, W, 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(W - 2, 9, 1, 2);
+    for (const r of race.rivals) {
+      ctx.fillStyle = r.color;
+      ctx.fillRect(px(r.d), 9, 2, 2);
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(px(dist), 9, 2, 2);
+    // Rivals just off screen: a marker at the top or bottom edge.
+    for (const r of race.rivals) {
+      const ry = PLAYER_Y - (r.d - dist);
+      if (ry > -6 && ry < H) continue;
+      if (Math.abs(r.d - dist) > 500) continue;
+      const x = Math.round(r.x + CAR_W / 2) - 1;
+      ctx.fillStyle = r.color;
+      if (ry <= -6) {
+        ctx.fillRect(x, 28, 3, 1);
+        ctx.fillRect(x + 1, 27, 1, 1);
+      } else {
+        ctx.fillRect(x, H - 7, 3, 1);
+        ctx.fillRect(x + 1, H - 6, 1, 1);
+      }
+    }
+    if (race.count > 0) drawText(String(Math.ceil(race.count)), W / 2, 70, '#ffffff', 4, 'center', '#000000');
+    else if (race.time < 0.7) drawText('GO!', W / 2, 70, '#57c062', 4, 'center', '#000000');
+    if (race.time > 0 && !race.done) drawText(fmtTime(race.time), W / 2, 12, '#ffffff', 1, 'center');
   }
 
   function dim(alpha) {
@@ -3067,12 +3316,25 @@
       cx += chipW + gap;
     }
 
+    const racing = mode === 'race';
     if (Math.floor(time * 2) % 2 === 0) {
-      drawText(isTouch ? 'TAP TO DRIVE' : 'PRESS ENTER TO DRIVE', W / 2, 157, '#ffd34d', 1, 'center');
+      const verb = racing ? 'RACE' : 'DRIVE';
+      drawText(isTouch ? 'TAP TO ' + verb : 'PRESS ENTER TO ' + verb, W / 2, 157, '#ffd34d', 1, 'center');
     }
-    drawText('DOUBLE-TAP LEFT/RIGHT: DRIFT', W / 2, 167, '#ffffff', 1, 'center');
-    drawText('OVER ' + POLICE_MPH + ' MPH = COPS!', W / 2, 175, '#6fa8ff', 1, 'center');
-    drawText(isTouch ? 'BRK: SHOP   B: ABILITY' : 'DOWN: SHOP   B: ABILITY', W / 2, 183,
+    // Mode picker: the selected mode is lit and underlined.
+    [['ENDLESS', W / 2 - 22, !racing], ['RACE', W / 2 + 24, racing]].forEach(([label, x, on]) => {
+      drawText(label, x, 166, on ? '#ffffff' : '#666666', 1, 'center');
+      if (on) {
+        ctx.fillStyle = '#ffd34d';
+        ctx.fillRect(Math.round(x - textWidth(label) / 2), 172, textWidth(label), 1);
+      }
+    });
+    if (racing) {
+      drawText(raceBest ? 'BEAT 4 RIVALS  BEST ' + fmtTime(raceBest) : 'BEAT 4 RIVALS TO THE FINISH', W / 2, 175, '#ff9d3d', 1, 'center');
+    } else {
+      drawText('OVER ' + POLICE_MPH + ' MPH = COPS!', W / 2, 175, '#6fa8ff', 1, 'center');
+    }
+    drawText(isTouch ? 'GAS: MODE   BRK: SHOP' : 'UP: MODE  DOWN: SHOP  B: ABILITY', W / 2, 183,
       Math.floor(time * 2) % 2 ? '#57c062' : '#aaaaaa', 1, 'center');
   }
 
@@ -3083,7 +3345,11 @@
 
   function drawOver() {
     dim(0.55);
-    if (endReason === 'busted') {
+    if (endReason === 'finish') {
+      const first = race.place === 1;
+      drawText(ordinal(race.place) + ' PLACE!', W / 2, 26, first ? '#ffd34d' : '#ffffff', 2, 'center', first ? '#5a3a00' : '#333333');
+      drawText('PRIZE +' + race.prize, W / 2, 42, '#57c062', 1, 'center');
+    } else if (endReason === 'busted') {
       drawText('BUSTED!', W / 2, 26, lightsOn() ? '#6fa8ff' : '#ff4d4d', 2, 'center', '#0a1030');
       drawText('PULLED OVER BY THE COPS', W / 2, 42, '#aaaaaa', 1, 'center');
     } else if (endReason === 'fell') {
@@ -3098,14 +3364,20 @@
       };
       drawText(why[crashCause] || why.traffic, W / 2, 42, '#aaaaaa', 1, 'center');
     }
-    drawText('LEVEL ' + stage + '  SCORE', W / 2, 54, '#aaaaaa', 1, 'center');
+    drawText(race ? 'RACE  SCORE' : 'LEVEL ' + stage + '  SCORE', W / 2, 54, '#aaaaaa', 1, 'center');
     drawText(Math.floor(score), W / 2, 62, '#ffffff', 2, 'center');
     if (isNewBest) {
       if (Math.floor(time * 4) % 2 === 0) drawText('NEW BEST!', W / 2, 80, '#ffd34d', 1, 'center');
     } else {
       drawText('BEST ' + best, W / 2, 80, '#ffffff', 1, 'center');
     }
-    if (copsShaken || copsWrecked) {
+    if (race) {
+      if (race.done) {
+        drawText('TIME ' + fmtTime(race.time) + (race.newBest ? '  NEW BEST!' : '  BEST ' + fmtTime(raceBest)), W / 2, 89, '#ff9d3d', 1, 'center');
+      } else {
+        drawText('DID NOT FINISH', W / 2, 89, '#ff7a7a', 1, 'center');
+      }
+    } else if (copsShaken || copsWrecked) {
       drawText('COPS: ' + copsShaken + ' SHAKEN ' + copsWrecked + ' WRECKED', W / 2, 89, '#6fa8ff', 1, 'center');
     }
     if (newUnlocks.length) {
