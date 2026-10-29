@@ -21,6 +21,9 @@ class Enemy {
     this.frameTime = settings.frameTime;
     this.width = settings.width;
     this.height = settings.height;
+    this.energyValue = settings.energyValue; // energy dropped when defeated
+    this.explosionColors = settings.explosionColors;
+    this.explosionSize = settings.explosionSize;
 
     // Knockback velocity: added on top of normal movement, fades quickly.
     this.pushX = 0;
@@ -53,6 +56,18 @@ class Enemy {
 
     this.animTime += dt;
     this.flashTime = Math.max(0, this.flashTime - dt);
+  }
+
+  // Called when a projectile hits. (dirX, dirY) is the direction the
+  // shot was travelling, so the enemy gets pushed the same way.
+  // Returns true if this hit defeated the enemy.
+  takeDamage(amount, dirX, dirY, knockback) {
+    this.health -= amount;
+    this.flashTime = 0.08;
+    this.pushX = dirX * knockback;
+    this.pushY = dirY * knockback;
+    if (this.health <= 0) this.dead = true;
+    return this.dead;
   }
 
   // Push the enemy away from a point (used when it hits the player).
@@ -102,6 +117,9 @@ class Chaser extends Enemy {
       frameTime: 0.18,
       width: 8,
       height: 8,
+      energyValue: 1,
+      explosionColors: SPARK_COLORS.enemy,
+      explosionSize: 1,
     });
   }
 

@@ -8,6 +8,7 @@
 
 const DYING_DURATION = 0.9; // seconds between the final hit and the results panel
 const GAMEOVER_INPUT_DELAY = 0.5; // seconds before restart input is accepted
+const GAMEOVER_PANEL = { width: 160, height: 104 };
 
 const Game = {
   canvas: null,
@@ -20,8 +21,13 @@ const Game = {
   //   'gameover' — results panel with a restart button
   state: 'playing',
   player: null,
+  weapon: null,
   enemies: [],
+  projectiles: [],
+  orbs: [],
   spawner: null,
+  energy: 0, // energy collected this run (becomes experience in Stage 4)
+  kills: 0, // enemies defeated this run
   survivalTime: 0, // seconds survived in the current run
   animTime: 0, // seconds of animation (keeps running on the game-over screen)
   stateTime: 0, // seconds since the current state started
@@ -73,8 +79,14 @@ const Game = {
     const centerX = ARENA.x + ARENA.width / 2;
     const centerY = ARENA.y + ARENA.height / 2;
     this.player = new Player(centerX, centerY);
+    this.weapon = new Weapon();
     this.enemies = [];
+    this.projectiles = [];
+    this.orbs = [];
     this.spawner = new Spawner();
+    this.energy = 0;
+    this.kills = 0;
+    Effects.reset();
     this.survivalTime = 0;
     this.shakeTime = 0;
     Input.clear(); // forget keys held from the previous run
@@ -117,6 +129,7 @@ const Game = {
     this.animTime += dt;
     this.shakeTime = Math.max(0, this.shakeTime - dt);
     Arena.update(dt);
+    Effects.update(dt); // explosions keep playing on the game-over screen
 
     if (this.state === 'playing') this.updatePlaying(dt);
     else if (this.state === 'dying') this.updateDying(dt);
@@ -130,14 +143,74 @@ const Game = {
     }
 
     this.survivalTime += dt;
+
+    // 1. Player moves and the blaster fires on its own.
     this.player.update(dt);
+    this.weapon.update(dt, this.player, this.enemies, this.projectiles);
+
+    // 2. Shots fly and hit enemies.
+    for (const projectile of this.projectiles) projectile.update(dt);
+    this.checkProjectileHits();
+
+    // 3. New enemies arrive, then everyone moves.
     this.spawner.update(dt, this.survivalTime, this.player, this.enemies);
     for (const enemy of this.enemies) enemy.update(dt, this.player);
     separateEnemies(this.enemies);
     this.checkPlayerCollisions();
 
-    // Remove defeated enemies (combat arrives in Stage 3).
+    // 4. Energy orbs drift toward the player and get collected.
+    this.updateOrbs(dt);
+
+    // 5. Throw away anything that is finished, so lists never grow forever.
     this.enemies = this.enemies.filter((enemy) => !enemy.dead);
+    this.projectiles = this.projectiles.filter((projectile) => !projectile.dead);
+  },
+
+  // Check every shot against every enemy.
+  checkProjectileHits() {
+    const stats = this.weapon.stats;
+    for (const projectile of this.projectiles) {
+      if (projectile.dead) continue;
+      for (const enemy of this.enemies) {
+        if (enemy.dead || projectile.alreadyHit.has(enemy)) continue;
+        if (!circlesOverlap(projectile, enemy)) continue;
+
+        projectile.alreadyHit.add(enemy);
+        Effects.burst(projectile.x, projectile.y, 3, SPARK_COLORS.hit, { maxSpeed: 50, life: 0.2 });
+        const defeated = enemy.takeDamage(projectile.damage, projectile.dirX, projectile.dirY, stats.hitKnockback);
+        if (defeated) this.onEnemyDefeated(enemy);
+
+        // A piercing shot keeps going; a normal shot stops here.
+        if (projectile.pierceLeft > 0) {
+          projectile.pierceLeft--;
+        } else {
+          projectile.dead = true;
+          break;
+        }
+      }
+    }
+  },
+
+  onEnemyDefeated(enemy) {
+    this.kills++;
+    Effects.explode(enemy.x, enemy.y, enemy.explosionColors, enemy.explosionSize);
+    this.shake(1, 0.08);
+    for (let i = 0; i < enemy.energyValue; i++) {
+      this.orbs.push(new Orb(enemy.x, enemy.y, 1));
+    }
+    // Too many orbs lying around? Remove the oldest ones.
+    if (this.orbs.length > ORB_CONFIG.maxOrbs) this.orbs.splice(0, this.orbs.length - ORB_CONFIG.maxOrbs);
+  },
+
+  updateOrbs(dt) {
+    for (const orb of this.orbs) {
+      orb.update(dt, this.player, ORB_CONFIG.magnetRadius);
+      if (orb.collected) {
+        this.energy += orb.value;
+        Effects.burst(orb.x, orb.y, 4, SPARK_COLORS.energy, { minSpeed: 10, maxSpeed: 35, life: 0.25 });
+      }
+    }
+    this.orbs = this.orbs.filter((orb) => !orb.collected && !orb.isExpired());
   },
 
   // Did any enemy touch the player this frame?
@@ -152,6 +225,7 @@ const Game = {
       this.shake(3, 0.2);
       if (fatal) {
         this.shake(4, 0.5);
+        Effects.explode(player.x, player.y, SPARK_COLORS.player, 3);
         this.setState('dying');
       }
     }
@@ -188,11 +262,17 @@ const Game = {
       const offsetY = randomInt(-this.shakeStrength, this.shakeStrength);
       ctx.translate(offsetX, offsetY);
     }
+    // Draw in layers, from the floor up.
     Arena.draw(ctx, this.animTime);
     this.spawner.draw(ctx);
-    // Draw enemies above the player's head first, so sprites overlap naturally.
+    for (const orb of this.orbs) orb.draw(ctx);
+    // Things higher on screen are drawn first, so lower ones overlap them
+    // naturally (like standing in front of someone).
     const things = [...this.enemies, this.player].sort((a, b) => a.y - b.y);
     for (const thing of things) thing.draw(ctx);
+    for (const projectile of this.projectiles) projectile.draw(ctx);
+    this.weapon.draw(ctx);
+    Effects.draw(ctx);
     ctx.restore();
 
     this.drawHud(ctx);
@@ -210,6 +290,11 @@ const Game = {
       const image = i < this.player.health ? Sprites.heart.full : Sprites.heart.empty;
       ctx.drawImage(image, ARENA.x + i * 9, 4);
     }
+
+    // Energy counter next to the hearts.
+    const energyX = ARENA.x + this.player.maxHealth * 9 + 6;
+    ctx.drawImage(Sprites.orb.bright, energyX, 4);
+    drawText(ctx, String(this.energy), energyX + 8, 5, PALETTE.yellow, { shadow: PALETTE.void });
 
     // Survival timer in the top middle.
     drawText(ctx, formatTime(this.survivalTime), VIEW_WIDTH / 2, 5, PALETTE.white, {
@@ -249,8 +334,8 @@ const Game = {
     ctx.drawImage(getDitherOverlay(), 0, 0);
 
     // Pixel transition: the panel grows open in 8-pixel steps.
-    const panelW = 160;
-    const panelH = 92;
+    const panelW = GAMEOVER_PANEL.width;
+    const panelH = GAMEOVER_PANEL.height;
     const reveal = Math.min(1, this.stateTime / 0.3);
     const shownH = Math.max(8, Math.floor((panelH * reveal) / 8) * 8);
     const panelX = Math.floor((VIEW_WIDTH - panelW) / 2);
@@ -263,9 +348,18 @@ const Game = {
     const titleColor = Math.floor(this.animTime * 4) % 2 === 0 ? PALETTE.red : PALETTE.pink;
     drawText(ctx, 'GAME OVER', cx, panelY + 9, titleColor, { align: 'center', scale: 2, shadow: PALETTE.void });
 
-    drawText(ctx, 'SURVIVED', cx - 4, panelY + 30, PALETTE.cyanDim, { align: 'right' });
-    drawText(ctx, formatTime(this.survivalTime), cx + 4, panelY + 30, PALETTE.white);
-    drawText(ctx, getGameOverMessage(this.survivalTime), cx, panelY + 42, PALETTE.yellow, { align: 'center' });
+    // Results: label on the left of the center line, value on the right.
+    const results = [
+      ['SURVIVED', formatTime(this.survivalTime)],
+      ['DEFEATED', String(this.kills)],
+      ['ENERGY', String(this.energy)],
+    ];
+    results.forEach(([label, value], i) => {
+      const rowY = panelY + 28 + i * 8;
+      drawText(ctx, label, cx - 4, rowY, PALETTE.cyanDim, { align: 'right' });
+      drawText(ctx, value, cx + 4, rowY, PALETTE.white);
+    });
+    drawText(ctx, getGameOverMessage(this.survivalTime), cx, panelY + 56, PALETTE.yellow, { align: 'center' });
 
     // Restart button: highlighted when hovered.
     const button = this.getRestartButton();
@@ -284,8 +378,8 @@ const Game = {
   getRestartButton() {
     const width = 60;
     const height = 15;
-    const panelY = Math.floor((VIEW_HEIGHT - 92) / 2);
-    return { x: Math.floor((VIEW_WIDTH - width) / 2), y: panelY + 54, width, height };
+    const panelY = Math.floor((VIEW_HEIGHT - GAMEOVER_PANEL.height) / 2);
+    return { x: Math.floor((VIEW_WIDTH - width) / 2), y: panelY + 67, width, height };
   },
 
   // ---------------------------------------------------------------
@@ -324,7 +418,8 @@ const Game = {
       'SCALE ' + currentScale + 'X',
       'X ' + p.x.toFixed(1) + ' Y ' + p.y.toFixed(1),
       'SPEED ' + Math.round(Math.hypot(p.vx, p.vy)),
-      'ENEMIES ' + this.enemies.length,
+      'ENEMIES ' + this.enemies.length + ' SHOTS ' + this.projectiles.length,
+      'ORBS ' + this.orbs.length + ' PARTICLES ' + Effects.particles.length,
       'SPAWN EVERY ' + this.spawner.getInterval(this.survivalTime).toFixed(2) + 'S',
     ];
     lines.forEach((line, i) => {

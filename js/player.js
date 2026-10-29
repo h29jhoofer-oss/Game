@@ -205,7 +205,7 @@ class Player {
     ctx.fillRect(drawX + 1, drawY + this.height, 6, 1);
 
     // Defeated: flicker between white and normal, then vanish.
-    // (Stage 3 adds a proper pixel explosion here.)
+    // (The pixel explosion itself is spawned by game.js.)
     if (this.isDead()) {
       const sprite = Sprites.player.idle;
       const white = Math.floor(this.deathTime / 0.06) % 2 === 0;

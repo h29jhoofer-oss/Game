@@ -32,7 +32,18 @@ class Spawner {
       // Small random variation so spawns don't feel like a metronome.
       this.timer = this.getInterval(survivalTime) * randomRange(0.75, 1.25);
       const spot = this.pickSpawnPoint(player);
-      this.warnings.push({ x: spot.x, y: spot.y, time: SPAWN_CONFIG.warningTime });
+      // Sometimes a small pack arrives together from the same spot.
+      // Packs become more common the longer you survive.
+      const groupChance = SPAWN_CONFIG.groupChanceMax * Math.min(1, survivalTime / SPAWN_CONFIG.groupChanceRampTime);
+      const groupSize = Math.random() < groupChance ? randomInt(2, 3) : 1;
+      for (let i = 0; i < Math.min(groupSize, roomLeft); i++) {
+        const spread = i === 0 ? 0 : SPAWN_CONFIG.groupSpread;
+        this.warnings.push({
+          x: clamp(spot.x + randomRange(-spread, spread), ARENA.x + 6, ARENA.x + ARENA.width - 6),
+          y: clamp(spot.y + randomRange(-spread, spread), ARENA.y + 6, ARENA.y + ARENA.height - 6),
+          time: SPAWN_CONFIG.warningTime,
+        });
+      }
     }
 
     // 2. Turn finished warnings into real enemies.

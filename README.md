@@ -2,7 +2,7 @@
 
 A pixel-art arcade survival game built with plain HTML, CSS, and JavaScript. It has no frameworks and nothing to install.
 
-**Current progress: Stage 2, basic survival.** Red slimes hunt you down and you have three hearts. You can't fight back yet (shooting comes in Stage 3), so for now the goal is to dodge for as long as you can.
+**Current progress: Stage 3, combat.** Your blaster fires on its own at the nearest slime. Defeated slimes explode and drop yellow energy orbs for you to collect. Energy will power level-ups in Stage 4.
 
 ## How to run it
 
@@ -29,6 +29,17 @@ Then visit <http://localhost:8000> in your browser.
 | ESC | Pause / resume |
 | ENTER or R | Restart from the game-over screen (or click RESTART) |
 | G | Toggle debug info (FPS, scale, position) |
+
+## Stage 3 test checklist
+
+1. **Auto-fire:** when a slime gets within range, the blaster fires a small cyan bolt at the *nearest* one about every 0.6 seconds. You'll see a tiny white flash at the muzzle. With no slime in range, it doesn't fire.
+2. **Enemy damage:** a slime takes two hits. The first makes it flash white and knocks it back. The second makes it explode in a ring of pixels and chunky sparks, with a one-pixel screen bump.
+3. **Energy orbs:** each defeated slime drops a bobbing yellow orb. Walk near one and it gets pulled in, sparkles, and the counter next to your hearts goes up.
+4. **Orb timeout:** orbs you leave alone start blinking after 15 seconds and vanish at 18.
+5. **Missed shots:** bolts that reach a wall fizzle with a small spark.
+6. **Standing still loses:** groups of 2–3 slimes start appearing over time, so you can't win by standing in the middle. Move, kite, and grab orbs.
+7. **Death:** your final hit makes a big cyan explosion. The results show time survived, slimes defeated, and energy collected.
+8. **Debug (G):** shows live counts of shots, orbs, and particles. Leave the game running for a while and confirm the numbers go up and down rather than growing forever.
 
 ## Stage 2 test checklist
 
@@ -64,6 +75,9 @@ The scripts in `js/` load in this order. Each file has one job:
 | `font.js` | A hand-made 3×5 pixel font, because normal fonts are smooth and look wrong in pixel art. |
 | `sprites.js` | Pixel art written as text grids (`'.'` = empty, letters = colors). Each grid is "baked" once into a small canvas. |
 | `arena.js` | Draws the space background, floor tiles, and walls once, then animates the glowing tiles and stars. |
+| `effects.js` | Particles and pixel shockwave rings. Purely visual, with a hard cap on how many can exist. |
+| `projectiles.js` | The `Weapon` (auto-aim, fire rate, damage, all in a `stats` object that upgrades will change) and the `Projectile` bolts. |
+| `orbs.js` | Energy orbs: popping out, the magnet pull, collection, and the timeout. |
 | `player.js` | The `Player` class: movement, diagonal normalization, wall collision, dash, health, invulnerability, and animation frames. |
 | `enemies.js` | The shared `Enemy` class, the `Chaser`, enemy separation, and circle collision. |
 | `spawner.js` | Decides when and where enemies appear and shows warning markers. It also controls the difficulty ramp. |
@@ -79,6 +93,8 @@ The scripts in `js/` load in this order. Each file has one job:
 - **Game states.** The game is always in exactly one state: `playing`, `paused`, `dying`, or `gameover`. `update()` checks the state and only runs the code for it, which keeps pausing and restarting reliable.
 - **Circle hitboxes.** Collisions compare the distance between two centers with the sum of their radii. Hitboxes are slightly smaller than the sprites, so near-misses feel fair.
 - **Enemy inheritance.** `Chaser extends Enemy`, so it only has to say *where it wants to go* (`think()`). Movement, knockback, and drawing are shared. New enemy types will reuse all of that.
+- **Cleaning up.** Shots, orbs, particles, and enemies each get a `dead`, `collected`, or age flag. At the end of every frame, the game filters finished items out of their lists, so memory never piles up. Each list also has a maximum size in `config.js`.
+- **Upgrade-ready weapon.** Every number the blaster uses lives in `weapon.stats`. A future "Rapid Fire" upgrade only needs to do `weapon.stats.fireInterval *= 0.85`.
 - **No blur effects.** Glows change through a few fixed palette colors in steps, and the pause overlay is a checkerboard "dither". There are no gradients or soft shadows.
 
 ### Drawing your own sprite

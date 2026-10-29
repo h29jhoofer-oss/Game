@@ -147,6 +147,30 @@ const HEART_SPRITE_DATA = {
   ],
 };
 
+// Energy orb: a glowing yellow gem with a shimmering center.
+const ORB_COLORS = {
+  o: '#b07a12', // dark gold edge
+  y: PALETTE.yellow,
+  l: '#fffbd0', // bright core
+};
+
+const ORB_SPRITE_DATA = {
+  bright: [
+    '.oyo.',
+    'oylyo',
+    'yllly',
+    'oylyo',
+    '.oyo.',
+  ],
+  dim: [
+    '.oyo.',
+    'oyyyo',
+    'yylyy',
+    'oyyyo',
+    '.oyo.',
+  ],
+};
+
 // Turn a list of text rows into a canvas.
 // If `solidColor` is given, every pixel uses that color (a silhouette).
 function bakeSprite(rows, colors, solidColor = null) {
@@ -198,11 +222,15 @@ const Sprites = {
   player: {},
   chaser: {},
   heart: {},
+  orb: {},
 
   init() {
     for (const name in CHASER_SPRITE_DATA) {
       // The white silhouette is used to flash enemies when they get hit.
       this.chaser[name] = bakeSpriteSet(CHASER_SPRITE_DATA[name], CHASER_COLORS, [PALETTE.white]);
+    }
+    for (const name in ORB_SPRITE_DATA) {
+      this.orb[name] = bakeSprite(ORB_SPRITE_DATA[name], ORB_COLORS);
     }
     for (const name in HEART_SPRITE_DATA) {
       this.heart[name] = bakeSprite(HEART_SPRITE_DATA[name], HEART_COLORS);
