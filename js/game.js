@@ -1213,6 +1213,7 @@ OMJ.Game = class {
     }
     ctx.globalAlpha = 1;
     this.drawBlink(ctx);
+    this.sword.drawBoom(ctx);               // Sonic Boom rings
     if (inRun) this.abilities.drawInFrontOfPlayer(ctx, this);
 
     if (C.DEBUG_HITBOXES) this.drawHitboxes(ctx);

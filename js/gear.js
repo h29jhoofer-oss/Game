@@ -153,6 +153,7 @@ OMJ.SwordSystem = class {
     for (let i = 0; i < 4; i++) this.shots.push({ active: false, kind: '', x: 0, y: 0, hits: 0, age: 0 });
     this.strikes = [];         // lightning bolts, just for drawing
     for (let i = 0; i < 12; i++) this.strikes.push({ life: 0, x: 0, y: 0 });
+    this.boom = { age: -1, x: 0, y: 0 };   // Sonic Boom rings (age < 0 = none)
     this.reset(OMJ.SWORDS[0]);
   }
 
@@ -165,7 +166,9 @@ OMJ.SwordSystem = class {
     this.plungeCooldownMax = this.PLUNGE_COOLDOWN;
     this.spinTimer = 0;
     this.plunging = false;     // falling sword-first after a mid-air attack
+    this.rocketPlunge = false; // ...straight out of a Rocket Jump (lands with a Sonic Boom)
     this.slamTimer = 0;        // sword stuck in the ground after a plunge
+    this.boom.age = -1;
     for (let i = 0; i < this.shots.length; i++) this.shots[i].active = false;
     for (let i = 0; i < this.strikes.length; i++) this.strikes[i].life = 0;
   }
@@ -202,6 +205,7 @@ OMJ.SwordSystem = class {
     this.plungeCooldownMax = this.PLUNGE_COOLDOWN / g.passive.plungeRate;   // Robo recharges faster
     this.plungeCooldown = this.plungeCooldownMax;
     this.plunging = true;
+    this.rocketPlunge = g.abilities.rocketing;          // plunging out of a Rocket Jump?
     this.swingTimer = 0;
     p.smashing = true;                                   // fall like a ground smash
     p.vy = Math.max(p.vy, OMJ.CONFIG.SMASH_SPEED * 1.1);
@@ -210,6 +214,33 @@ OMJ.SwordSystem = class {
   }
 
   startSpin(seconds) { this.spinTimer = seconds; }
+
+  // SONIC BOOM: Rocket Jump, then plunge. You hit the ground so hard that
+  // a sound wave breaks every obstacle on screen (pits stay pits) and
+  // hurts the boss for your sword's damage + 2.
+  sonicBoom(g) {
+    const C = OMJ.CONFIG;
+    const p = g.player;
+    const pool = g.obstacles.pool;
+    for (let i = 0; i < pool.length; i++) {
+      const o = pool[i];
+      if (!o.active || o.type.isGap || o.x > C.VIEW_W) continue;
+      // Harmless things are left alone, except crossbow towers (they shoot).
+      if (o.type.harmless && o.typeName !== 'crossbow') continue;
+      if (o.type.harmless) o.active = false;
+      else g.smash(o);
+    }
+    if (g.boss.fighting) g.boss.hit(this.damage(g) + 2, g);
+    this.boom.age = 0;
+    this.boom.x = p.x + p.w / 2;
+    this.boom.y = p.bottom;
+    g.flash = 0.2;
+    g.shake = Math.max(g.shake, 7);
+    g.sound.play('sonicBoom');
+    g.announce('SONIC BOOM!', OMJ.PALETTE.gold);
+    g.particles.burst(this.boom.x, C.GROUND_Y - 1, 30, 80, 220, Math.PI, Math.PI * 2, 0.7,
+      [OMJ.PALETTE.white, OMJ.PALETTE.gold, OMJ.PALETTE.dust], 300);
+  }
 
   fire(kind, g) {
     const p = g.player;
@@ -262,6 +293,10 @@ OMJ.SwordSystem = class {
     }
     if (this.spinTimer > 0) this.spinTimer -= dt;
     if (this.slamTimer > 0) this.slamTimer -= dt;
+    if (this.boom.age >= 0) {
+      this.boom.age += dt;
+      if (this.boom.age > 0.6) this.boom.age = -1;
+    }
     for (let i = 0; i < this.strikes.length; i++) if (this.strikes[i].life > 0) this.strikes[i].life -= dt;
 
     const p = g.player;
@@ -273,12 +308,15 @@ OMJ.SwordSystem = class {
         this.plunging = false;
         this.slamTimer = 0.18;
         this.hitZone(g, p.x - 14, p.x + p.w + 18, p.bottom - 18, p.bottom + 1, 1);
+        if (this.rocketPlunge) this.sonicBoom(g);
+        this.rocketPlunge = false;
         g.shake = Math.max(g.shake, 3);
         g.sound.play('slam');
         g.particles.burst(p.x + 5, p.bottom - 1, 12, 50, 130, Math.PI * 1.05, Math.PI * 1.95, 0.4,
           this.sword.sparkColors || OMJ.SPARK_COLORS, 400);
       } else if (!p.smashing) {
         this.plunging = false;                           // cancelled (e.g. a Double Jump)
+        this.rocketPlunge = false;
       } else {
         this.hitZone(g, p.x - 2, p.x + p.w + 4, p.y + 4, p.bottom + 12, 1);   // the blade below you
       }
@@ -570,6 +608,25 @@ OMJ.SwordSystem = class {
         ctx.fillRect(left, baseY - 1 - row, Math.max(1, right - left), 1);
       }
     }
+  }
+
+  // The Sonic Boom: three rings of sound racing outward across the screen.
+  drawBoom(ctx) {
+    const b = this.boom;
+    if (b.age < 0) return;
+    for (let k = 0; k < 3; k++) {
+      const age = b.age - k * 0.08;
+      if (age <= 0) continue;
+      const r = age * 700;
+      ctx.globalAlpha = Math.max(0, 1 - b.age / 0.6) * (k === 0 ? 1 : 0.6);
+      ctx.fillStyle = k === 1 ? OMJ.PALETTE.gold : OMJ.PALETTE.white;
+      const steps = Math.min(240, Math.round(r * 0.8) + 16);
+      for (let i = 0; i <= steps; i++) {
+        const a = Math.PI + (i / steps) * Math.PI;    // the top half (the ground blocks the rest)
+        ctx.fillRect(Math.round(b.x + Math.cos(a) * r), Math.round(b.y + Math.sin(a) * r * 0.7), 2, 2);
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   drawStrikes(ctx, time) {

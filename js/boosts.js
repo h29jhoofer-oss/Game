@@ -64,7 +64,7 @@ OMJ.BOOSTS = [
 // Rare ACTIVE abilities (key 4). Same format as OMJ.ABILITIES in abilities.js.
 OMJ.BONUS_ABILITIES = {
   rocket: {
-    name: 'Rocket Jump', desc: 'Blast sky-high. You can\'t crash until you land', cooldown: 12, duration: 0,
+    name: 'Rocket Jump', desc: 'Blast sky-high. You can\'t crash until you land. Plunge on the way down for a SONIC BOOM!', cooldown: 12, duration: 0,
     canUse(g) { return !g.player.dead; },
     activate(g, a) {
       const p = g.player;

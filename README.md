@@ -108,7 +108,7 @@ You can own one per run.
 
 | Rare ability | Effect | Cooldown |
 | --- | --- | --- |
-| Rocket Jump | Blast sky-high; you can't crash until you land | 12 s |
+| Rocket Jump | Blast sky-high; you can't crash until you land. Plunge on the way down for a **Sonic Boom** | 12 s |
 | Blink | Stop for a beat, blink out in a blue star, blink back in past the next obstacle | 10 s |
 | Bulldozer | Charge ahead at 1.6x speed, red-hot and furious, smashing everything for 4 s | 18 s |
 
@@ -157,6 +157,10 @@ and ahead. Swings recharge for 1.1 s and plunges for 1.5 s (tiny gold and blue b
 head show the wait). **SPACE in the air** is a **plunge**: you drop fast with the sword pointing down,
 cutting what's below you, then slam the ground and hit everything close by. A plunge cuts one
 level tougher than a swing, so even a Wooden Sword plunge breaks spikes.
+
+**SONIC BOOM:** use **Rocket Jump** (a rare card, key `4`) and then **plunge** before you land.
+You hit the ground so hard that a sound wave races across the screen, breaking **every obstacle
+on screen** (pits stay pits) and hitting the boss for your sword's damage + 2.
 
 A swing cuts what it hits, if the sword is strong enough. Crates and crossbow
 arrows can be cut by any sword; spikes and spiky balls need a stronger one. **Barriers, saws,

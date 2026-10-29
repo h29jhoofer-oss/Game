@@ -265,6 +265,12 @@ OMJ.Sound = class {
         this.noise(0.08, 0.08, 5000, 'highpass');
         this.tone(1800, 300, 0.08, 'square', 0.03);
         break;
+      case 'sonicBoom':                  // Rocket Jump + plunge: KA-BOOM
+        this.noise(0.9, 0.45, 1200);
+        this.tone(220, 30, 0.8, 'square', 0.12);
+        this.tone(880, 110, 0.5, 'sawtooth', 0.05);
+        this.tone(55, 30, 0.9, 'sine', 0.2);
+        break;
       case 'grateFire':                  // a fire grate blasts
         this.noise(0.5, 0.12, 800, 'bandpass');
         this.tone(90, 60, 0.4, 'sawtooth', 0.04);
