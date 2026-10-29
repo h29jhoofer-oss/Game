@@ -82,10 +82,11 @@ const TitleScreen = {
     const members = [
       { sprite: Sprites.player[WALK_CYCLE[Math.floor(t / 0.12) % 4]], label: 'YOU', color: PALETTE.cyan, facing: 'right' },
       { sprite: Sprites.chaser[Math.floor(t / 0.2) % 2 === 0 ? 'hopA' : 'hopB'], label: 'CHASER', color: PALETTE.red, facing: 'left' },
+      { sprite: Sprites.toxic[Math.floor(t / 0.2 + 1) % 2 === 0 ? 'hopA' : 'hopB'], label: 'TOXIC', color: PALETTE.green, facing: 'left' },
       { sprite: Sprites.shooter[Math.floor(t / 0.25) % 2 === 0 ? 'floatA' : 'floatB'], label: 'SHOOTER', color: PALETTE.purple, facing: 'left' },
       { sprite: Sprites.brute[Math.floor(t / 0.35) % 2 === 0 ? 'stepA' : 'stepB'], label: 'BRUTE', color: PALETTE.orange, facing: 'left' },
     ];
-    const spacing = 52;
+    const spacing = 48;
     const startX = VIEW_WIDTH / 2 - (spacing * (members.length - 1)) / 2;
     members.forEach((member, i) => {
       const image = member.sprite[member.facing];

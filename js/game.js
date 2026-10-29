@@ -29,6 +29,7 @@ const Game = {
   enemies: [],
   projectiles: [],
   enemyShots: [],
+  gasClouds: [], // poison clouds left by Toxic Slimes
   orbs: [],
   spawner: null,
   kills: 0, // enemies defeated this run
@@ -107,6 +108,7 @@ const Game = {
     this.enemies = [];
     this.projectiles = [];
     this.enemyShots = [];
+    this.gasClouds = [];
     this.orbs = [];
     this.spawner = new Spawner();
     this.kills = 0;
@@ -253,6 +255,7 @@ const Game = {
     for (const enemy of this.enemies) enemy.update(dt, this.player, this);
     separateEnemies(this.enemies);
     for (const shot of this.enemyShots) shot.update(dt);
+    for (const cloud of this.gasClouds) cloud.update(dt);
     this.checkPlayerCollisions();
 
     // 4. Energy orbs drift toward the player and get collected.
@@ -262,6 +265,7 @@ const Game = {
     this.enemies = this.enemies.filter((enemy) => !enemy.dead);
     this.projectiles = this.projectiles.filter((projectile) => !projectile.dead);
     this.enemyShots = this.enemyShots.filter((shot) => !shot.dead);
+    this.gasClouds = this.gasClouds.filter((cloud) => !cloud.dead);
 
     // 6. Enough energy for a new level? Open the upgrade cards.
     if (this.state === 'playing' && this.pendingLevelUps > 0) this.startLevelUp();
@@ -344,6 +348,9 @@ const Game = {
       this.shake(3, 0.2);
       Effects.text(enemy.x, enemy.y - 8, '+' + enemy.scoreValue, PALETTE.orange);
       Sound.play('bruteDie');
+    } else if (enemy.type === 'toxic') {
+      this.shake(1, 0.08);
+      this.releaseGas(enemy.x, enemy.y);
     } else if (enemy.type === 'shooter') {
       this.shake(2, 0.1);
       Effects.text(enemy.x, enemy.y - 7, '+' + enemy.scoreValue, PALETTE.pink, 0.6);
@@ -374,6 +381,14 @@ const Game = {
     this.orbs = this.orbs.filter((orb) => !orb.collected && !orb.isExpired());
   },
 
+  // A defeated Toxic Slime leaves a poison cloud behind.
+  releaseGas(x, y) {
+    this.gasClouds.push(new GasCloud(x, y));
+    // Too many clouds? The oldest one vanishes.
+    if (this.gasClouds.length > GAS_CONFIG.maxClouds) this.gasClouds.shift();
+    Sound.play('gas');
+  },
+
   // Shooters call this to fire.
   spawnEnemyShot(x, y, dirX, dirY) {
     if (this.enemyShots.length >= ENEMY_SHOT_CONFIG.max) return;
@@ -386,7 +401,7 @@ const Game = {
     const player = this.player;
     for (const enemy of this.enemies) {
       if (!player.canBeHit()) return;
-      if (!circlesOverlap(player, enemy)) continue;
+      if (enemy.dead || !circlesOverlap(player, enemy)) continue; // just-defeated enemies can't hurt you
       enemy.knockBackFrom(player.x, player.y, CHASER_CONFIG.knockback);
       this.hurtPlayer();
     }
@@ -395,6 +410,12 @@ const Game = {
       if (shot.dead || !circlesOverlap(player, shot)) continue;
       shot.dead = true;
       Effects.burst(shot.x, shot.y, 4, SPARK_COLORS.shooter, { maxSpeed: 40, life: 0.2 });
+      this.hurtPlayer();
+    }
+    for (const cloud of this.gasClouds) {
+      if (!player.canBeHit()) return;
+      if (!cloud.isHarmful() || !cloud.touches(player)) continue;
+      Effects.burst(player.x, player.y, 5, SPARK_COLORS.toxic, { maxSpeed: 30, life: 0.3 });
       this.hurtPlayer();
     }
   },
@@ -476,6 +497,7 @@ const Game = {
     Arena.draw(ctx, this.animTime);
     this.spawner.draw(ctx);
     for (const orb of this.orbs) orb.draw(ctx);
+    for (const cloud of this.gasClouds) cloud.draw(ctx);
     // Things higher on screen are drawn first, so lower ones overlap them
     // naturally (like standing in front of someone).
     const things = [...this.enemies, this.player].sort((a, b) => a.y - b.y);
@@ -566,7 +588,7 @@ const Game = {
       'X ' + p.x.toFixed(1) + ' Y ' + p.y.toFixed(1),
       'SPEED ' + Math.round(Math.hypot(p.vx, p.vy)),
       'ENEMIES ' + this.enemies.length + ' SHOTS ' + this.projectiles.length + ' ENEMY SHOTS ' + this.enemyShots.length,
-      'ORBS ' + this.orbs.length + ' PARTICLES ' + Effects.particles.length,
+      'ORBS ' + this.orbs.length + ' PARTICLES ' + Effects.particles.length + ' GAS ' + this.gasClouds.length,
       'XP ' + this.xp + '/' + this.xpToNext + ' NEXT SURGE ' + Math.ceil(this.spawner.surgeTimer) + 'S',
       'FIRE ' + this.weapon.stats.fireInterval.toFixed(2) + 'S DMG ' + this.weapon.stats.damage + ' PIERCE ' + this.weapon.stats.pierce + ' BOLTS ' + this.weapon.stats.projectileCount,
       'SPAWN EVERY ' + this.spawner.getInterval(this.survivalTime).toFixed(2) + 'S',

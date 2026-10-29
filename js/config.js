@@ -44,6 +44,7 @@ const PALETTE = {
   red: '#ff3b4f',
   orange: '#ff8a1f',
   purple: '#a23dff',
+  green: '#39ff6a', // toxic neon green
 };
 
 // Player tuning.
@@ -174,6 +175,7 @@ const HEALTH_GROWTH = {
   chaser: 1, // extra health per step
   shooter: 1,
   brute: 5,
+  toxic: 0.75,
 };
 
 // Shots fired by enemies.
@@ -192,3 +194,22 @@ const SHIELD_CONFIG = {
 
 // Multi-shot: angle between neighbouring bolts, in radians (~12 degrees).
 const MULTISHOT_SPREAD = 0.21;
+
+// Toxic Slime: a green chaser that leaves a poison gas cloud when defeated.
+const TOXIC_CONFIG = {
+  healthRatio: 0.75, // 3/4 of a chaser's health (1.5 at the start)
+  radius: 3,
+  score: 30,
+  energy: 1,
+  introduceAt: 25, // seconds before toxic slimes can appear
+  maxAlive: 8,
+};
+
+// The gas cloud a Toxic Slime leaves behind.
+const GAS_CONFIG = {
+  duration: 10, // seconds the cloud stays (including fading away)
+  formTime: 0.5, // harmless while it puffs up, so a point-blank kill is fair
+  fadeTime: 2.5, // the last seconds, while it thins out and disappears
+  radius: 10, // rough size of the cloud
+  maxClouds: 12, // oldest clouds vanish if there are too many
+};

@@ -59,6 +59,14 @@ const SOUND_RECIPES = {
       s.tone({ type: 'square', freq: 2100, endFreq: 1800, duration: 0.08, volume: 0.04 });
     },
   },
+  // A low, bubbly hiss when a Toxic Slime pops.
+  gas: {
+    minGap: 0.1,
+    play: (s) => {
+      s.noise({ duration: 0.5, volume: 0.16, filter: 700, endFilter: 250 });
+      s.tone({ type: 'triangle', freq: 180, endFreq: 260, duration: 0.25, volume: 0.06, delay: 0.05 });
+    },
+  },
   shieldReady: { minGap: 0.2, play: (s) => s.tone({ type: 'triangle', freq: 900, endFreq: 1500, duration: 0.12, volume: 0.08 }) },
   dash: { minGap: 0.1, play: (s) => s.noise({ duration: 0.12, volume: 0.12, filter: 600, endFilter: 3500 }) },
   enemyShoot: { minGap: 0.08, play: (s) => s.tone({ type: 'triangle', freq: 330, endFreq: 180, duration: 0.12, volume: 0.08 }) },

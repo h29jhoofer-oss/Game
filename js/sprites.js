@@ -120,6 +120,39 @@ const CHASER_SPRITE_DATA = {
   ],
 };
 
+// Toxic Slime: the chaser's shape in neon green, with darker sick spots
+// and a little bubble of gas floating off its head.
+const TOXIC_COLORS = {
+  k: PALETTE.void,
+  g: PALETTE.green,
+  d: '#139a3c', // dark green spots and shading
+  l: '#b6ffc8', // highlight and bubble
+  w: PALETTE.white,
+};
+
+const TOXIC_SPRITE_DATA = {
+  hopA: [
+    '...kk.l.',
+    '..kggk..',
+    '.klgggk.',
+    'kgwggwgk',
+    'kgkggkgk',
+    'kggdgggk',
+    'kdggdgdk',
+    '.kddddk.',
+  ],
+  hopB: [
+    '......l.',
+    '........',
+    '..kkkk..',
+    '.klgggk.',
+    'kgwggwgk',
+    'kgkggkgk',
+    'kdgdggdk',
+    'kkddddkk',
+  ],
+};
+
 // Heart icons for the health display.
 const HEART_COLORS = {
   k: PALETTE.void,
@@ -316,6 +349,7 @@ function bakeSpriteSet(rows, colors, ghostColors) {
 const Sprites = {
   player: {},
   chaser: {},
+  toxic: {},
   heart: {},
   orb: {},
   shooter: {},
@@ -327,6 +361,9 @@ const Sprites = {
     for (const name in CHASER_SPRITE_DATA) {
       // The white silhouette is used to flash enemies when they get hit.
       this.chaser[name] = bakeSpriteSet(CHASER_SPRITE_DATA[name], CHASER_COLORS, [PALETTE.white]);
+    }
+    for (const name in TOXIC_SPRITE_DATA) {
+      this.toxic[name] = bakeSpriteSet(TOXIC_SPRITE_DATA[name], TOXIC_COLORS, [PALETTE.white]);
     }
     for (const name in SHOOTER_SPRITE_DATA) {
       this.shooter[name] = bakeSpriteSet(SHOOTER_SPRITE_DATA[name], SHOOTER_COLORS, [PALETTE.white]);

@@ -10,7 +10,7 @@
 //   - Spawns get more frequent over time.
 //   - Chasers get faster; every enemy gets tougher every 100 seconds.
 //   - Small packs of 2-3 chasers become more common.
-//   - Shooters join after 40 seconds, Brutes after 90 seconds.
+//   - Toxic Slimes join after 25 s, Shooters after 40 s, Brutes after 90 s.
 //   - Every 40-55 seconds a "swarm surge" rings the player from all sides.
 // =====================================================================
 
@@ -44,14 +44,22 @@ class Spawner {
   // Every enemy type gets a little tougher every HEALTH_GROWTH.interval seconds.
   getHealth(type, survivalTime) {
     const steps = Math.floor(survivalTime / HEALTH_GROWTH.interval);
-    const base = { chaser: CHASER_CONFIG.health, shooter: SHOOTER_CONFIG.health, brute: BRUTE_CONFIG.health }[type];
+    const base = {
+      chaser: CHASER_CONFIG.health,
+      toxic: CHASER_CONFIG.health * TOXIC_CONFIG.healthRatio,
+      shooter: SHOOTER_CONFIG.health,
+      brute: BRUTE_CONFIG.health,
+    }[type];
     return base + steps * HEALTH_GROWTH[type];
   }
 
   // How likely each enemy type is to be picked for a regular spawn.
   // Bigger number = more likely. Zero = not allowed yet.
   getTypeWeights(survivalTime, enemies) {
-    const weights = { chaser: 10, shooter: 0, brute: 0 };
+    const weights = { chaser: 10, toxic: 0, shooter: 0, brute: 0 };
+    if (survivalTime >= TOXIC_CONFIG.introduceAt) {
+      weights.toxic = Math.min(3, 1 + (survivalTime - TOXIC_CONFIG.introduceAt) / 30);
+    }
     if (survivalTime >= SHOOTER_CONFIG.introduceAt) {
       weights.shooter = Math.min(2.5, 0.6 + (survivalTime - SHOOTER_CONFIG.introduceAt) / 30);
     }
@@ -59,6 +67,7 @@ class Spawner {
       weights.brute = Math.min(1.5, 0.6 + (survivalTime - BRUTE_CONFIG.introduceAt) / 60);
     }
     // Never too many of the special enemies at once, so it stays fair.
+    if (this.countType('toxic', enemies) >= TOXIC_CONFIG.maxAlive) weights.toxic = 0;
     if (this.countType('shooter', enemies) >= SHOOTER_CONFIG.maxAlive) weights.shooter = 0;
     if (this.countType('brute', enemies) >= BRUTE_CONFIG.maxAlive) weights.brute = 0;
     return weights;
@@ -84,6 +93,7 @@ class Spawner {
     const health = this.getHealth(type, survivalTime);
     if (type === 'shooter') return new Shooter(x, y, health);
     if (type === 'brute') return new Brute(x, y, health);
+    if (type === 'toxic') return new ToxicSlime(x, y, this.getChaserSpeed(survivalTime), health);
     return new Chaser(x, y, this.getChaserSpeed(survivalTime), health);
   }
 
@@ -127,6 +137,7 @@ class Spawner {
       // The first time a new enemy type shows up, announce it.
       if (!this.introduced.has(type)) {
         this.introduced.add(type);
+        if (type === 'toxic') this.showBanner('NEW ENEMY: TOXIC SLIME', PALETTE.green, 2.2);
         if (type === 'shooter') this.showBanner('NEW ENEMY: SHOOTER', PALETTE.purple, 2.2);
         if (type === 'brute') this.showBanner('NEW ENEMY: BRUTE', PALETTE.orange, 2.2);
       }
@@ -204,7 +215,7 @@ class Spawner {
   // Warning marker: four little corner brackets that blink, colored
   // like the enemy that's coming. Brutes get a bigger marker.
   draw(ctx) {
-    const colors = { chaser: PALETTE.red, shooter: PALETTE.purple, brute: PALETTE.orange };
+    const colors = { chaser: PALETTE.red, toxic: PALETTE.green, shooter: PALETTE.purple, brute: PALETTE.orange };
     for (const warning of this.warnings) {
       if (Math.floor(warning.time / 0.08) % 2 === 0) continue; // blink
       const x = Math.round(warning.x);

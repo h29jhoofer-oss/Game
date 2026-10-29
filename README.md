@@ -38,9 +38,9 @@ The mouse works everywhere too: the PLAY button, menu buttons, upgrade cards, an
 ## How to play
 
 - **Survive.** You earn 10 points every second you're alive.
-- **Defeat enemies.** Your blaster auto-aims at the nearest enemy in range. Chasers are worth 25 points, Shooters 50, and Brutes 120.
+- **Defeat enemies.** Your blaster auto-aims at the nearest enemy in range. Chasers are worth 25 points, Toxic Slimes 30, Shooters 50, and Brutes 120.
 - **Collect energy.** Yellow orbs fill your experience bar. A full bar is a **level-up**: the game freezes and you choose one of three random upgrades.
-- **Watch for warnings.** Blinking brackets show where enemies will appear (red for Chaser, purple for Shooter, orange for Brute). A Shooter's eye glows pink right before it fires. "SWARM INCOMING!" means a ring of enemies is about to surround you, so dash out.
+- **Watch for warnings.** Blinking brackets show where enemies will appear (red for Chaser, green for Toxic Slime, purple for Shooter, orange for Brute). A Shooter's eye glows pink right before it fires. "SWARM INCOMING!" means a ring of enemies is about to surround you, so dash out.
 - **Beat your best.** Your top score is saved in the browser and shown on the title screen.
 
 ### Enemies
@@ -48,6 +48,7 @@ The mouse works everywhere too: the PLAY button, menu buttons, upgrade cards, an
 | Enemy | Appears | Behavior |
 | --- | --- | --- |
 | **Chaser** (red slime) | From the start | Hops straight at you. Comes in packs later on. |
+| **Toxic Slime** (green slime) | After ~25 s | Hops at you like a Chaser with 3/4 of its health. When defeated it bursts into a **poison gas cloud** that stays for about 10 seconds. Touching the gas costs a heart, but it is harmless for the first half-second while it puffs up, and dashing or a shield protects you as usual. |
 | **Shooter** (purple drone) | After ~40 s | Keeps its distance, circles you, and fires slow pink shots. |
 | **Brute** (orange monster) | After ~90 s | Slow, huge, very tough, and barely flinches when shot. |
 
@@ -100,7 +101,8 @@ The scripts in `js/` load in this order. Each file has one job:
 | `player.js` | Movement, dash, health, shield, and animation. |
 | `projectiles.js` | The auto-aiming weapon and its bolts. |
 | `orbs.js` | Energy orbs and the magnet pull. |
-| `enemies.js` | The `Enemy` base class, `Chaser`, `Shooter`, `Brute`, and enemy shots. |
+| `enemies.js` | The `Enemy` base class, `Chaser`, `ToxicSlime`, `Shooter`, `Brute`, and enemy shots. |
+| `hazards.js` | The Toxic Slime's gas cloud: its shape, three life phases (forming, active, fading), collision, and dithered drawing. |
 | `spawner.js` | When, where, and which enemies appear, plus swarm surges and banners. |
 | `upgrades.js` | The list of upgrades. |
 | `levelup.js` | The level-up card screen. |
@@ -118,12 +120,13 @@ The scripts in `js/` load in this order. Each file has one job:
 - **One game loop only.** `Game.start()` refuses to start a second loop.
 - **Game states.** The game is always in exactly one state: `title`, `playing`, `paused`, `levelup`, `dying`, or `gameover`. `update()` runs only the code for that state. That's what makes pausing, level-ups, and restarting reliable.
 - **Cleaning up.** Shots, orbs, particles, and enemies are flagged when finished and filtered out every frame. Each list also has a maximum size, so memory never piles up.
-- **Inheritance for enemies.** `Chaser`, `Shooter`, and `Brute` all `extend Enemy`. Each only describes what makes it different, like where it wants to go (`think()`) or shooting.
+- **Inheritance for enemies.** `Chaser`, `Shooter`, and `Brute` all `extend Enemy`, and `ToxicSlime` extends `Chaser`, so it reuses all of the Chaser's movement and only changes its look, numbers, and what happens when it dies. Each only describes what makes it different, like where it wants to go (`think()`) or shooting.
 - **Data-driven upgrades.** Each upgrade is a small object with an `apply(game)` function. Add a new one by adding one entry to the list in `upgrades.js`.
 - **Weighted random spawns.** Each enemy type has a weight that grows with time. Picking a spawn is like drawing from a bag of tickets, so every run is different.
 - **Telegraphs.** Every danger warns you first: spawn markers, the Shooter's pink charge-up, and the swarm banner. Hard but fair means you can always react.
 - **Sound without files.** The Web Audio API creates waves and noise and shapes their pitch and volume, just like old arcade hardware. Browsers only allow sound after the player interacts, so audio starts on the first key press or click.
 - **Saving safely.** `localStorage` can be unavailable (private windows, for example), so every read and write is wrapped in `try/catch`. The game works fine without it; it just won't remember your best.
+- **Ordered dithering.** The gas cloud fades by drawing fewer pixels in a fixed 4×4 pattern (a "Bayer matrix") instead of becoming see-through. It's the same trick old consoles used, and it keeps every pixel crisp.
 - **No blur effects.** Glows step through palette colors, overlays use a checkerboard "dither", and every effect lands on whole pixels.
 
 ### Ideas for changing the game

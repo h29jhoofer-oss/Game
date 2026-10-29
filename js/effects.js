@@ -17,6 +17,7 @@ const SPARK_COLORS = {
   dust: [PALETTE.speck, PALETTE.gridLine],
   shield: [PALETTE.white, PALETTE.cyan, PALETTE.blue],
   levelUp: [PALETTE.white, PALETTE.yellow, PALETTE.orange],
+  toxic: [PALETTE.white, '#b6ffc8', PALETTE.green, '#139a3c', '#0b4a20'],
 };
 
 const Effects = {

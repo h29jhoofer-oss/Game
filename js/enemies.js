@@ -6,13 +6,14 @@
 // "extends" Enemy and only adds what makes it different:
 //
 //   Chaser  — runs straight at you
+//   Toxic   — a weaker green chaser that leaves poison gas when defeated
 //   Shooter — keeps its distance, circles you, and fires slow shots
 //   Brute   — big, slow, very tough, barely flinches
 // =====================================================================
 
 class Enemy {
   constructor(x, y, settings) {
-    this.type = settings.type; // 'chaser', 'shooter' or 'brute'
+    this.type = settings.type; // 'chaser', 'toxic', 'shooter' or 'brute'
     this.x = x;
     this.y = y;
     this.radius = settings.radius;
@@ -146,6 +147,23 @@ class Chaser extends Enemy {
 
   think(player) {
     return directionTo(this.x, this.y, player.x, player.y);
+  }
+}
+
+// ---------------------------------------------------------------------
+// Toxic Slime: moves exactly like a Chaser but is a bit weaker. The
+// danger comes after you defeat it: game.js turns its death into a
+// cloud of poison gas (see hazards.js) that lingers for a while.
+// ---------------------------------------------------------------------
+class ToxicSlime extends Chaser {
+  constructor(x, y, speed, health) {
+    super(x, y, speed, health);
+    this.type = 'toxic';
+    this.sprites = Sprites.toxic;
+    this.frameNames = Object.keys(Sprites.toxic);
+    this.energyValue = TOXIC_CONFIG.energy;
+    this.scoreValue = TOXIC_CONFIG.score;
+    this.explosionColors = SPARK_COLORS.toxic;
   }
 }
 
