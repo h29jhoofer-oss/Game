@@ -103,7 +103,8 @@ const WEAPON_CONFIG = {
   projectileSpeed: 190, // pixels per second
   projectileLifetime: 1.2, // seconds before a missed shot fizzles out
   pierce: 0, // how many extra enemies one shot can pass through
-  projectileCount: 1, // bolts fired per shot (Multi-Shot adds more)
+  projectileCount: 1, // bolts fired per shot, fanned out (Multi-Shot adds more)
+  burstExtra: 0, // extra bolts fired in a line at the same target (Twin Shot adds more)
   hitKnockback: 45, // how far a shot pushes an enemy back
 };
 
@@ -194,6 +195,10 @@ const SHIELD_CONFIG = {
 
 // Multi-shot: angle between neighbouring bolts, in radians (~12 degrees).
 const MULTISHOT_SPREAD = 0.21;
+
+// Twin Shot: seconds between the bolts of one burst. Short enough that
+// they look like a quick "pew-pew", long enough to see two separate bolts.
+const TWIN_SHOT_GAP = 0.08;
 
 // Toxic Slime: a green chaser that leaves a poison gas cloud when defeated.
 const TOXIC_CONFIG = {

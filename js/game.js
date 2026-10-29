@@ -590,7 +590,7 @@ const Game = {
       'ENEMIES ' + this.enemies.length + ' SHOTS ' + this.projectiles.length + ' ENEMY SHOTS ' + this.enemyShots.length,
       'ORBS ' + this.orbs.length + ' PARTICLES ' + Effects.particles.length + ' GAS ' + this.gasClouds.length,
       'XP ' + this.xp + '/' + this.xpToNext + ' NEXT SURGE ' + Math.ceil(this.spawner.surgeTimer) + 'S',
-      'FIRE ' + this.weapon.stats.fireInterval.toFixed(2) + 'S DMG ' + this.weapon.stats.damage + ' PIERCE ' + this.weapon.stats.pierce + ' BOLTS ' + this.weapon.stats.projectileCount,
+      'FIRE ' + this.weapon.stats.fireInterval.toFixed(2) + 'S DMG ' + this.weapon.stats.damage + ' PIERCE ' + this.weapon.stats.pierce + ' BOLTS ' + this.weapon.stats.projectileCount + ' TWIN ' + this.weapon.stats.burstExtra,
       'SPAWN EVERY ' + this.spawner.getInterval(this.survivalTime).toFixed(2) + 'S',
     ];
     lines.forEach((line, i) => {

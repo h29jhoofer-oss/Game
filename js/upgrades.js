@@ -141,7 +141,7 @@ const UPGRADES = [
   {
     id: 'multiShot',
     name: 'MULTI-SHOT',
-    lines: ['+1 BOLT', 'EVERY SHOT'],
+    lines: ['+1 BOLT', 'FANNED OUT'],
     maxLevel: 3,
     icon: [
       'c......',
@@ -154,6 +154,24 @@ const UPGRADES = [
     ],
     apply(game) {
       game.weapon.stats.projectileCount += 1;
+    },
+  },
+  {
+    id: 'twinShot',
+    name: 'TWIN SHOT',
+    lines: ['+1 BOLT IN A', 'LINE AT THE', 'SAME TARGET'],
+    maxLevel: 2,
+    icon: [
+      '.......',
+      '.......',
+      '......r',
+      'bcwbcwr',
+      '......r',
+      '.......',
+      '.......',
+    ],
+    apply(game) {
+      game.weapon.stats.burstExtra += 1;
     },
   },
   {

@@ -56,11 +56,14 @@ class Weapon {
     this.muzzleFlash = 0; // > 0 while the little flash is visible
     this.flashX = 0;
     this.flashY = 0;
+    // Twin Shot: follow-up volleys waiting to fire, each { delay, target, aim }.
+    this.followUps = [];
   }
 
   update(dt, player, enemies, projectiles) {
     this.cooldown -= dt;
     this.muzzleFlash = Math.max(0, this.muzzleFlash - dt);
+    this.updateFollowUps(dt, player, projectiles);
     if (this.cooldown > 0) return;
 
     const target = findNearestEnemy(player.x, player.y, enemies, this.stats.range);
@@ -70,10 +73,38 @@ class Weapon {
     }
     if (projectiles.length >= MAX_PROJECTILES) return;
 
-    // Aim from the player's chest toward the target.
+    const aim = this.aimAt(player, target);
+    this.fireVolley(player, aim, projectiles);
+    this.cooldown = this.stats.fireInterval;
+
+    // Twin Shot: queue extra volleys that fire a split second later along
+    // the same line, at the same monster.
+    for (let i = 1; i <= this.stats.burstExtra; i++) {
+      this.followUps.push({ delay: i * TWIN_SHOT_GAP, target, aim });
+    }
+  }
+
+  // Angle from the player's chest to a target.
+  aimAt(player, target) {
+    return Math.atan2(target.y - (player.y - 1), target.x - player.x);
+  }
+
+  updateFollowUps(dt, player, projectiles) {
+    for (const followUp of this.followUps) {
+      followUp.delay -= dt;
+      if (followUp.delay > 0) continue;
+      // Re-aim at the same monster if it's still alive (you or it may have
+      // moved a little). If it already died, keep the original direction.
+      if (!followUp.target.dead) followUp.aim = this.aimAt(player, followUp.target);
+      this.fireVolley(player, followUp.aim, projectiles);
+    }
+    this.followUps = this.followUps.filter((followUp) => followUp.delay > 0);
+  }
+
+  // One volley: a single bolt, or a fan of bolts with Multi-Shot.
+  fireVolley(player, aim, projectiles) {
     const startX = player.x;
     const startY = player.y - 1;
-    const aim = Math.atan2(target.y - startY, target.x - startX);
 
     // Multi-shot: extra bolts fan out evenly on both sides of the aim.
     // For 3 bolts the offsets are -1, 0, +1 times the spread angle.
@@ -84,7 +115,6 @@ class Weapon {
       projectiles.push(new Projectile(startX, startY, Math.cos(angle), Math.sin(angle), this.stats));
     }
 
-    this.cooldown = this.stats.fireInterval;
     this.muzzleFlash = 0.05;
     Sound.play('shoot');
     this.flashX = startX + Math.cos(aim) * 5;

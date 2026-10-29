@@ -64,7 +64,8 @@ All enemies gain health every 100 seconds, and spawns speed up over time.
 | Extra Health | Restore 1 heart (only offered when you're hurt) | ∞ |
 | Magnet | Pull energy from farther away | 4 |
 | Piercing | Shots pass through +1 enemy | 3 |
-| Multi-Shot | +1 bolt per shot, fanned out | 3 |
+| Multi-Shot | +1 bolt per shot, fanned out to cover a wider area | 3 |
+| Twin Shot | +1 bolt fired right behind the first, in a line at the same target | 2 |
 | Shield | Blocks one hit, then recharges (faster each level) | 3 |
 
 ## Final test checklist
