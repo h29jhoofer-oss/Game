@@ -171,11 +171,106 @@ const ORB_SPRITE_DATA = {
   ],
 };
 
+// Shooter enemy: a floating purple eye-drone with little thrusters.
+const SHOOTER_COLORS = {
+  k: PALETTE.void,
+  p: PALETTE.purple,
+  d: '#5a1a9a', // shadow purple
+  l: '#d08aff', // highlight
+  w: PALETTE.white, // eye
+};
+
+// While charging a shot, its eye turns pink: same picture, different colors.
+const SHOOTER_CHARGE_COLORS = { ...SHOOTER_COLORS, w: PALETTE.pink, l: PALETTE.pink };
+
+const SHOOTER_SPRITE_DATA = {
+  floatA: [
+    '..kkkkk..',
+    '.kpplppk.',
+    'kpplllppk',
+    'kplwwwlpk',
+    'kplwkwlpk',
+    'kplwwwlpk',
+    'kpplllppk',
+    '.kdpppdk.',
+    '..k.k.k..',
+  ],
+  floatB: [
+    '..kkkkk..',
+    '.kpplppk.',
+    'kpplllppk',
+    'kplwwwlpk',
+    'kplwkwlpk',
+    'kplwwwlpk',
+    'kpplllppk',
+    '.kdpppdk.',
+    '.k.k.k.k.',
+  ],
+};
+
+// Brute enemy: a horned orange monster that stomps along.
+const BRUTE_COLORS = {
+  k: PALETTE.void,
+  o: PALETTE.orange,
+  d: '#a34a0a', // dark orange
+  y: '#ffc23d', // horns
+  r: PALETTE.red, // eyes
+  w: PALETTE.white,
+};
+
+const BRUTE_BODY = [
+  '.kk......kk.',
+  '.kyk....kyk.',
+  '..kykkkkyk..',
+  '.kooooooook.',
+  'koddooooddok',
+  'kowroooorwok',
+  'kooooooooook',
+  'kodkwkkwkdok',
+  'koddddddddok',
+  '.kooddddook.',
+];
+
+const BRUTE_SPRITE_DATA = {
+  // Standing tall on its legs...
+  stepA: [...BRUTE_BODY, '.kook..kook.', '.kkkk..kkkk.'],
+  // ...then stomping down (body drops a pixel, legs squash).
+  stepB: ['............', ...BRUTE_BODY, '.kkkk..kkkk.'],
+};
+
+// Small shield icon for the HUD.
+const SHIELD_ICON_COLORS = { k: PALETTE.void, c: PALETTE.cyan, w: PALETTE.white, b: PALETTE.blue };
+const SHIELD_ICON_DATA = {
+  ready: [
+    'kkkkkkk',
+    'kcwccck',
+    'kwcccck',
+    'kccccck',
+    '.kccck.',
+    '..kck..',
+    '...k...',
+  ],
+  // Recharging: the same shape in dark blue.
+  empty: [
+    'kkkkkkk',
+    'kbbbbbk',
+    'kbbbbbk',
+    'kbbbbbk',
+    '.kbbbk.',
+    '..kbk..',
+    '...k...',
+  ],
+};
+
 // Turn a list of text rows into a canvas.
 // If `solidColor` is given, every pixel uses that color (a silhouette).
 function bakeSprite(rows, colors, solidColor = null) {
   const height = rows.length;
   const width = rows[0].length;
+  // Catch typos early: every row of a sprite must be the same length.
+  rows.forEach((row, i) => {
+    if (row.length !== width) throw new Error('Sprite row ' + i + ' is ' + row.length + ' wide, expected ' + width + ': ' + row);
+  });
   const { canvas, ctx } = createOffscreenCanvas(width, height);
 
   for (let y = 0; y < height; y++) {
@@ -223,11 +318,25 @@ const Sprites = {
   chaser: {},
   heart: {},
   orb: {},
+  shooter: {},
+  shooterCharge: {},
+  brute: {},
+  shieldIcon: {},
 
   init() {
     for (const name in CHASER_SPRITE_DATA) {
       // The white silhouette is used to flash enemies when they get hit.
       this.chaser[name] = bakeSpriteSet(CHASER_SPRITE_DATA[name], CHASER_COLORS, [PALETTE.white]);
+    }
+    for (const name in SHOOTER_SPRITE_DATA) {
+      this.shooter[name] = bakeSpriteSet(SHOOTER_SPRITE_DATA[name], SHOOTER_COLORS, [PALETTE.white]);
+      this.shooterCharge[name] = bakeSpriteSet(SHOOTER_SPRITE_DATA[name], SHOOTER_CHARGE_COLORS, [PALETTE.white]);
+    }
+    for (const name in BRUTE_SPRITE_DATA) {
+      this.brute[name] = bakeSpriteSet(BRUTE_SPRITE_DATA[name], BRUTE_COLORS, [PALETTE.white]);
+    }
+    for (const name in SHIELD_ICON_DATA) {
+      this.shieldIcon[name] = bakeSprite(SHIELD_ICON_DATA[name], SHIELD_ICON_COLORS);
     }
     for (const name in ORB_SPRITE_DATA) {
       this.orb[name] = bakeSprite(ORB_SPRITE_DATA[name], ORB_COLORS);

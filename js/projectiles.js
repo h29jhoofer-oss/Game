@@ -73,15 +73,21 @@ class Weapon {
     // Aim from the player's chest toward the target.
     const startX = player.x;
     const startY = player.y - 1;
-    const dx = target.x - startX;
-    const dy = target.y - startY;
-    const length = Math.hypot(dx, dy) || 1;
-    projectiles.push(new Projectile(startX, startY, dx / length, dy / length, this.stats));
+    const aim = Math.atan2(target.y - startY, target.x - startX);
+
+    // Multi-shot: extra bolts fan out evenly on both sides of the aim.
+    // For 3 bolts the offsets are -1, 0, +1 times the spread angle.
+    const count = this.stats.projectileCount;
+    for (let i = 0; i < count; i++) {
+      if (projectiles.length >= MAX_PROJECTILES) break;
+      const angle = aim + (i - (count - 1) / 2) * MULTISHOT_SPREAD;
+      projectiles.push(new Projectile(startX, startY, Math.cos(angle), Math.sin(angle), this.stats));
+    }
 
     this.cooldown = this.stats.fireInterval;
     this.muzzleFlash = 0.05;
-    this.flashX = startX + (dx / length) * 5;
-    this.flashY = startY + (dy / length) * 5;
+    this.flashX = startX + Math.cos(aim) * 5;
+    this.flashY = startY + Math.sin(aim) * 5;
   }
 
   draw(ctx) {

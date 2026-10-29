@@ -12,15 +12,28 @@ const SPARK_COLORS = {
   energy: [PALETTE.white, '#fffbd0', PALETTE.yellow],
   player: [PALETTE.white, PALETTE.cyan, PALETTE.cyanDim, PALETTE.blue, PALETTE.darkBlue],
   wall: [PALETTE.cyan, PALETTE.cyanDim],
+  shooter: [PALETTE.white, PALETTE.pink, PALETTE.purple, '#5a1a9a'],
+  brute: [PALETTE.white, PALETTE.yellow, PALETTE.orange, '#a34a0a', PALETTE.void],
+  dust: [PALETTE.speck, PALETTE.gridLine],
+  shield: [PALETTE.white, PALETTE.cyan, PALETTE.blue],
+  levelUp: [PALETTE.white, PALETTE.yellow, PALETTE.orange],
 };
 
 const Effects = {
   particles: [],
   rings: [],
+  texts: [], // floating words like "+120" or "BLOCKED!"
 
   reset() {
     this.particles = [];
     this.rings = [];
+    this.texts = [];
+  },
+
+  // Words that float upward and blink out, drawn with the pixel font.
+  text(x, y, message, color, duration = 0.8) {
+    if (this.texts.length >= 20) this.texts.shift();
+    this.texts.push({ x, y, message, color, age: 0, duration });
   },
 
   // Throw `count` particles out from a point in random directions.
@@ -73,6 +86,9 @@ const Effects = {
 
     for (const r of this.rings) r.age += dt;
     this.rings = this.rings.filter((r) => r.age < r.duration);
+
+    for (const t of this.texts) t.age += dt;
+    this.texts = this.texts.filter((t) => t.age < t.duration);
   },
 
   draw(ctx) {
@@ -88,6 +104,14 @@ const Effects = {
       const radius = Math.max(1, Math.round(progress * r.maxRadius));
       const index = Math.min(r.colors.length - 1, Math.floor(progress * r.colors.length));
       drawPixelCircle(ctx, Math.round(r.x), Math.round(r.y), radius, r.colors[index]);
+    }
+
+    for (const t of this.texts) {
+      // Rise one pixel at a time; blink during the last third.
+      const progress = t.age / t.duration;
+      if (progress > 0.66 && Math.floor(t.age / 0.05) % 2 === 0) continue;
+      const rise = Math.floor(Math.min(progress * 3, 1) * 8);
+      drawText(ctx, t.message, t.x, t.y - rise, t.color, { align: 'center', shadow: PALETTE.void });
     }
   },
 };

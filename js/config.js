@@ -72,7 +72,6 @@ const HEALTH_CONFIG = {
 // Chaser enemy: a small red slime that walks straight at the player.
 const CHASER_CONFIG = {
   health: 2, // two basic shots to defeat
-  healthGrowthTime: 100, // every this many seconds, chasers get +1 health
   score: 25, // points for defeating one
   radius: 3, // hitbox size
   baseSpeed: 28, // pixels per second at the start of a run
@@ -103,6 +102,7 @@ const WEAPON_CONFIG = {
   projectileSpeed: 190, // pixels per second
   projectileLifetime: 1.2, // seconds before a missed shot fizzles out
   pierce: 0, // how many extra enemies one shot can pass through
+  projectileCount: 1, // bolts fired per shot (Multi-Shot adds more)
   hitKnockback: 45, // how far a shot pushes an enemy back
 };
 
@@ -139,3 +139,56 @@ const PROGRESSION_CONFIG = {
   levelUpInputDelay: 0.6, // seconds before upgrade cards accept input
   postUpgradeSafety: 0.6, // seconds of invulnerability after choosing
 };
+
+// Shooter enemy: a purple drone that keeps its distance and fires slow shots.
+const SHOOTER_CONFIG = {
+  health: 3,
+  radius: 4,
+  speed: 26,
+  preferredMin: 55, // backs away if the player gets closer than this
+  preferredMax: 85, // moves closer if the player is farther than this
+  fireInterval: 2.4, // seconds between shots
+  chargeTime: 0.5, // its eye glows pink this long before firing (the warning)
+  fireRange: 150, // only fires when the player is this close
+  score: 50,
+  energy: 2,
+  introduceAt: 40, // seconds before shooters can appear
+  maxAlive: 5,
+};
+
+// Brute enemy: a big, slow, tough orange monster.
+const BRUTE_CONFIG = {
+  health: 14,
+  radius: 5,
+  speed: 17,
+  knockbackScale: 0.25, // brutes barely flinch when shot
+  score: 120,
+  energy: 5,
+  introduceAt: 90,
+  maxAlive: 3,
+};
+
+// Every this many seconds, all enemies get tougher.
+const HEALTH_GROWTH = {
+  interval: 100,
+  chaser: 1, // extra health per step
+  shooter: 1,
+  brute: 5,
+};
+
+// Shots fired by enemies.
+const ENEMY_SHOT_CONFIG = {
+  speed: 55, // slow enough to dodge
+  radius: 2,
+  lifetime: 4,
+  max: 80,
+};
+
+// Shield upgrade: blocks one hit, then recharges.
+const SHIELD_CONFIG = {
+  rechargeTimes: [12, 9, 6.5], // seconds to recharge at shield level 1, 2, 3
+  radius: 8, // size of the bubble drawn around the player
+};
+
+// Multi-shot: angle between neighbouring bolts, in radians (~12 degrees).
+const MULTISHOT_SPREAD = 0.21;

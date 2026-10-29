@@ -2,7 +2,7 @@
 
 A pixel-art arcade survival game built with plain HTML, CSS, and JavaScript. It has no frameworks and nothing to install.
 
-**Current progress: Stage 4, progression.** Energy fills your experience bar. Each level-up freezes the game and offers three random upgrade cards. Your score grows as you survive and defeat enemies, and the arena gets steadily harder, with periodic swarm surges.
+**Current progress: Stage 5, more content.** Three enemy types (Chasers, Shooters, Brutes), eight upgrades including Multi-Shot and Shield, and more effects: floating score numbers, a red hurt flash, stomping dust, and a spinning shield bubble.
 
 ## How to run it
 
@@ -31,6 +31,16 @@ Then visit <http://localhost:8000> in your browser.
 | 1 / 2 / 3 | Pick an upgrade card |
 | ← → (or A D) then ENTER / SPACE | Choose a card with the keyboard (or hover and click with the mouse) |
 | G | Toggle debug info (FPS, scale, position) |
+
+## Stage 5 test checklist
+
+1. **Shooter (after about 40 s):** the first time one appears, "NEW ENEMY: SHOOTER" flashes and its spawn marker is purple. Shooters keep their distance, circle you (sometimes switching direction), and their eye **blinks pink for half a second before they fire** a slow pink shot. Dodge it or dash through it. Defeating one shows a floating "+50".
+2. **Brute (after about 90 s):** an orange marker that's larger than the others, then "NEW ENEMY: BRUTE". Brutes are slow, take many hits, barely move when shot, and puff dust with every stomp. Their explosion is big, with a heavier screen shake and "+120".
+3. **Fair limits:** never more than 5 Shooters or 3 Brutes at once. Press **G** to see enemy and enemy-shot counts.
+4. **Multi-Shot:** each level adds a bolt, fanned out about 12° apart (up to 4 bolts).
+5. **Shield:** after taking it, a ring of dots spins around you and a shield icon appears next to your hearts. The next hit shows "BLOCKED!" instead of costing a heart. The icon turns dark blue while recharging (12 s, then 9 s, then 6.5 s with more levels) and a ring flashes when it's back.
+6. **Hurt flash:** losing a heart flashes a crisp red border around the screen.
+7. **Tougher over time:** every 100 seconds all enemies gain health (Brutes gain the most).
 
 ## Stage 4 test checklist
 
@@ -99,8 +109,8 @@ The scripts in `js/` load in this order. Each file has one job:
 | `projectiles.js` | The `Weapon` (auto-aim, fire rate, damage, all in a `stats` object that upgrades will change) and the `Projectile` bolts. |
 | `orbs.js` | Energy orbs: popping out, the magnet pull, collection, and the timeout. |
 | `player.js` | The `Player` class: movement, diagonal normalization, wall collision, dash, health, invulnerability, and animation frames. |
-| `enemies.js` | The shared `Enemy` class, the `Chaser`, enemy separation, and circle collision. |
-| `spawner.js` | Decides when and where enemies appear and shows warning markers. It also controls the difficulty ramp. |
+| `enemies.js` | The shared `Enemy` class, the three enemy types (`Chaser`, `Shooter`, `Brute`), enemy shots, enemy separation, and circle collision. |
+| `spawner.js` | Decides when, where, and which enemies appear (weighted by time, with caps). Shows warning markers and banners, and controls the difficulty ramp. |
 | `upgrades.js` | The list of upgrades: name, description, pixel icon, maximum level, and what each one does. Add a new upgrade by adding one entry. |
 | `levelup.js` | The level-up screen: picking three random cards, keyboard and mouse selection, and the card animations. |
 | `game.js` | The game loop, game states (playing, paused, dying, game over), collisions, screen shake, HUD, and menus. |
@@ -117,6 +127,8 @@ The scripts in `js/` load in this order. Each file has one job:
 - **Enemy inheritance.** `Chaser extends Enemy`, so it only has to say *where it wants to go* (`think()`). Movement, knockback, and drawing are shared. New enemy types will reuse all of that.
 - **Cleaning up.** Shots, orbs, particles, and enemies each get a `dead`, `collected`, or age flag. At the end of every frame, the game filters finished items out of their lists, so memory never piles up. Each list also has a maximum size in `config.js`.
 - **Upgrade-ready weapon.** Every number the blaster uses lives in `weapon.stats`. A future "Rapid Fire" upgrade only needs to do `weapon.stats.fireInterval *= 0.85`.
+- **Weighted random spawns.** Each enemy type has a weight that grows with time, for example `{ chaser: 10, shooter: 2, brute: 1 }`. Picking an enemy is like drawing from a bag with 10 chaser tickets, 2 shooter tickets, and 1 brute ticket, so each run's sequence is different.
+- **Telegraphs.** Every danger warns you first: spawn markers, the Shooter's pink charge-up, the swarm banner. Hard but fair means you can always react.
 - **Data-driven upgrades.** Each upgrade is a small object with an `apply(game)` function, for example `game.weapon.stats.damage += 1`. The level-up screen doesn't know what any upgrade does. It just shows the card and calls `apply`.
 - **A difficulty curve you can tune.** Spawn rate, enemy speed, enemy health (+1 every 100 s), pack chance, and swarm surges all depend on survival time, and every number is in `config.js`.
 - **No blur effects.** Glows change through a few fixed palette colors in steps, and the pause overlay is a checkerboard "dither". There are no gradients or soft shadows.

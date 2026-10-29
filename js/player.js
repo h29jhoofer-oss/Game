@@ -42,6 +42,11 @@ class Player {
     this.hitFlashTime = 0; // > 0 while the player flashes white
     this.deathTime = 0; // seconds since the final hit
 
+    // Shield (from the Shield upgrade): blocks one hit, then recharges.
+    this.shieldLevel = 0; // 0 = no shield yet
+    this.shieldReady = false;
+    this.shieldRecharge = 0; // seconds until the shield is back
+
     // Animation state
     this.isMoving = false;
     this.animTime = 0;
@@ -100,6 +105,7 @@ class Player {
     // --- 5. Timers ---
     this.invulnerableTime = Math.max(0, this.invulnerableTime - dt);
     this.hitFlashTime = Math.max(0, this.hitFlashTime - dt);
+    this.updateShield(dt);
     this.updateGhosts(dt);
     this.animTime += dt;
     this.blinkTimer -= dt;
@@ -132,6 +138,33 @@ class Player {
   // Get one health point back (never above the maximum).
   heal(amount) {
     this.health = Math.min(this.maxHealth, this.health + amount);
+  }
+
+  getShieldRechargeTime() {
+    const times = SHIELD_CONFIG.rechargeTimes;
+    return times[Math.min(this.shieldLevel, times.length) - 1];
+  }
+
+  updateShield(dt) {
+    if (this.shieldLevel === 0 || this.shieldReady) return;
+    this.shieldRecharge -= dt;
+    if (this.shieldRecharge <= 0) {
+      this.shieldReady = true;
+      Effects.ring(this.x, this.y, SHIELD_CONFIG.radius, SPARK_COLORS.shield, 0.25);
+    }
+  }
+
+  // Called by the Shield upgrade.
+  addShieldLevel() {
+    this.shieldLevel++;
+    this.shieldReady = true;
+  }
+
+  // The shield takes the hit instead of a heart.
+  breakShield() {
+    this.shieldReady = false;
+    this.shieldRecharge = this.getShieldRechargeTime();
+    this.invulnerableTime = HEALTH_CONFIG.invulnerableTime * 0.6;
   }
 
   // Lose one health point. Returns true if this hit was fatal.
@@ -229,6 +262,8 @@ class Player {
       if (Math.floor(this.invulnerableTime / 0.08) % 2 === 0) return;
     }
 
+    if (this.shieldReady) this.drawShield(ctx);
+
     const sprite = Sprites.player[this.getFrameName()];
     if (this.hitFlashTime > 0) {
       const flash = sprite.ghosts[HIT_FLASH_INDEX];
@@ -236,5 +271,18 @@ class Player {
       return;
     }
     ctx.drawImage(this.facing === 1 ? sprite.right : sprite.left, drawX, drawY);
+  }
+
+  // The shield: 8 pixel "dots" spinning around the player in a circle.
+  drawShield(ctx) {
+    const cx = Math.round(this.x);
+    const cy = Math.round(this.y);
+    const spin = Math.floor(this.animTime * 8); // turns in whole steps
+    const steps = 16; // possible dot positions around the circle
+    for (let i = 0; i < 8; i++) {
+      const angle = (((i * 2 + spin) % steps) / steps) * Math.PI * 2;
+      ctx.fillStyle = i % 2 === 0 ? PALETTE.cyan : PALETTE.blue;
+      ctx.fillRect(cx + Math.round(Math.cos(angle) * SHIELD_CONFIG.radius), cy + Math.round(Math.sin(angle) * SHIELD_CONFIG.radius), 1, 1);
+    }
   }
 }

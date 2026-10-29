@@ -8,8 +8,9 @@
 //
 // The difficulty curve (all numbers are in config.js):
 //   - Spawns get more frequent over time.
-//   - Chasers get faster, then tougher (+1 health every 100 seconds).
-//   - Small packs of 2-3 become more common.
+//   - Chasers get faster; every enemy gets tougher every 100 seconds.
+//   - Small packs of 2-3 chasers become more common.
+//   - Shooters join after 40 seconds, Brutes after 90 seconds.
 //   - Every 40-55 seconds a "swarm surge" rings the player from all sides.
 // =====================================================================
 
@@ -18,7 +19,13 @@ class Spawner {
     this.timer = 1.0; // the first enemy comes after 1 second
     this.warnings = []; // spots where an enemy is about to appear
     this.surgeTimer = SURGE_CONFIG.firstSurge;
-    this.surgeBannerTime = 0; // > 0 while "SWARM!" is shown
+    // A message shown at the top of the arena, like "SWARM INCOMING!".
+    this.banner = { text: '', color: PALETTE.red, time: 0 };
+    this.introduced = new Set(); // enemy types we've already announced
+  }
+
+  showBanner(text, color, time = 1.6) {
+    this.banner = { text, color, time };
   }
 
   // How many seconds between spawns, given how long the run has lasted.
@@ -33,9 +40,50 @@ class Spawner {
     return CHASER_CONFIG.baseSpeed + CHASER_CONFIG.maxExtraSpeed * progress;
   }
 
-  // Chasers gain 1 health every `healthGrowthTime` seconds.
-  getChaserHealth(survivalTime) {
-    return CHASER_CONFIG.health + Math.floor(survivalTime / CHASER_CONFIG.healthGrowthTime);
+  // Every enemy type gets a little tougher every HEALTH_GROWTH.interval seconds.
+  getHealth(type, survivalTime) {
+    const steps = Math.floor(survivalTime / HEALTH_GROWTH.interval);
+    const base = { chaser: CHASER_CONFIG.health, shooter: SHOOTER_CONFIG.health, brute: BRUTE_CONFIG.health }[type];
+    return base + steps * HEALTH_GROWTH[type];
+  }
+
+  // How likely each enemy type is to be picked for a regular spawn.
+  // Bigger number = more likely. Zero = not allowed yet.
+  getTypeWeights(survivalTime, enemies) {
+    const weights = { chaser: 10, shooter: 0, brute: 0 };
+    if (survivalTime >= SHOOTER_CONFIG.introduceAt) {
+      weights.shooter = Math.min(2.5, 0.6 + (survivalTime - SHOOTER_CONFIG.introduceAt) / 30);
+    }
+    if (survivalTime >= BRUTE_CONFIG.introduceAt) {
+      weights.brute = Math.min(1.5, 0.6 + (survivalTime - BRUTE_CONFIG.introduceAt) / 60);
+    }
+    // Never too many of the special enemies at once, so it stays fair.
+    if (this.countType('shooter', enemies) >= SHOOTER_CONFIG.maxAlive) weights.shooter = 0;
+    if (this.countType('brute', enemies) >= BRUTE_CONFIG.maxAlive) weights.brute = 0;
+    return weights;
+  }
+
+  // Living enemies plus ones that are about to appear.
+  countType(type, enemies) {
+    return enemies.filter((e) => e.type === type).length + this.warnings.filter((w) => w.type === type).length;
+  }
+
+  // Pick a random key from { name: weight }, where heavier weights win more often.
+  pickWeighted(weights) {
+    const total = Object.values(weights).reduce((sum, w) => sum + w, 0);
+    let roll = Math.random() * total;
+    for (const [name, weight] of Object.entries(weights)) {
+      roll -= weight;
+      if (roll < 0) return name;
+    }
+    return 'chaser';
+  }
+
+  createEnemy(type, x, y, survivalTime) {
+    const health = this.getHealth(type, survivalTime);
+    if (type === 'shooter') return new Shooter(x, y, health);
+    if (type === 'brute') return new Brute(x, y, health);
+    return new Chaser(x, y, this.getChaserSpeed(survivalTime), health);
   }
 
   roomLeft(enemies) {
@@ -53,7 +101,7 @@ class Spawner {
 
     // 2. Swarm surges.
     this.surgeTimer -= dt;
-    this.surgeBannerTime = Math.max(0, this.surgeBannerTime - dt);
+    this.banner.time = Math.max(0, this.banner.time - dt);
     if (this.surgeTimer <= 0) {
       this.surgeTimer = randomRange(SURGE_CONFIG.minGap, SURGE_CONFIG.maxGap);
       this.spawnSurge(survivalTime, player, enemies);
@@ -63,22 +111,35 @@ class Spawner {
     for (const warning of this.warnings) {
       warning.time -= dt;
       if (warning.time <= 0) {
-        enemies.push(new Chaser(warning.x, warning.y, this.getChaserSpeed(survivalTime), this.getChaserHealth(survivalTime)));
+        enemies.push(this.createEnemy(warning.type, warning.x, warning.y, survivalTime));
       }
     }
     this.warnings = this.warnings.filter((warning) => warning.time > 0);
   }
 
-  // One enemy, or sometimes a small pack, near a wall.
+  // One enemy, or sometimes a small pack of chasers, near a wall.
   spawnGroup(survivalTime, player, enemies) {
     const spot = this.pickSpawnPoint(player);
+    const type = this.pickWeighted(this.getTypeWeights(survivalTime, enemies));
+
+    if (type !== 'chaser') {
+      // The first time a new enemy type shows up, announce it.
+      if (!this.introduced.has(type)) {
+        this.introduced.add(type);
+        if (type === 'shooter') this.showBanner('NEW ENEMY: SHOOTER', PALETTE.purple, 2.2);
+        if (type === 'brute') this.showBanner('NEW ENEMY: BRUTE', PALETTE.orange, 2.2);
+      }
+      this.addWarning(spot.x, spot.y, SPAWN_CONFIG.warningTime, type);
+      return;
+    }
+
     // Packs become more common the longer you survive.
     const groupChance = SPAWN_CONFIG.groupChanceMax * Math.min(1, survivalTime / SPAWN_CONFIG.groupChanceRampTime);
     const groupSize = Math.random() < groupChance ? randomInt(2, 3) : 1;
     const count = Math.min(groupSize, this.roomLeft(enemies));
     for (let i = 0; i < count; i++) {
       const spread = i === 0 ? 0 : SPAWN_CONFIG.groupSpread;
-      this.addWarning(spot.x + randomRange(-spread, spread), spot.y + randomRange(-spread, spread), SPAWN_CONFIG.warningTime);
+      this.addWarning(spot.x + randomRange(-spread, spread), spot.y + randomRange(-spread, spread), SPAWN_CONFIG.warningTime, 'chaser');
     }
   }
 
@@ -97,13 +158,15 @@ class Spawner {
         player.x + Math.cos(angle) * SURGE_CONFIG.ringRadius,
         player.y + Math.sin(angle) * SURGE_CONFIG.ringRadius,
         SURGE_CONFIG.warningTime,
+        'chaser',
       );
     }
-    this.surgeBannerTime = 1.6;
+    this.showBanner('SWARM INCOMING!', PALETTE.red);
   }
 
-  addWarning(x, y, time) {
+  addWarning(x, y, time, type) {
     this.warnings.push({
+      type,
       x: clamp(x, ARENA.x + 6, ARENA.x + ARENA.width - 6),
       y: clamp(y, ARENA.y + 6, ARENA.y + ARENA.height - 6),
       time,
@@ -137,15 +200,18 @@ class Spawner {
     return best;
   }
 
-  // Warning marker: four little red corner brackets that blink.
+  // Warning marker: four little corner brackets that blink, colored
+  // like the enemy that's coming. Brutes get a bigger marker.
   draw(ctx) {
+    const colors = { chaser: PALETTE.red, shooter: PALETTE.purple, brute: PALETTE.orange };
     for (const warning of this.warnings) {
       if (Math.floor(warning.time / 0.08) % 2 === 0) continue; // blink
       const x = Math.round(warning.x);
       const y = Math.round(warning.y);
       // The brackets close in as the enemy is about to arrive.
-      const size = 3 + Math.ceil((warning.time / warning.totalTime) * 3);
-      ctx.fillStyle = PALETTE.red;
+      const baseSize = warning.type === 'brute' ? 6 : 3;
+      const size = baseSize + Math.ceil((warning.time / warning.totalTime) * 3);
+      ctx.fillStyle = colors[warning.type];
       for (const sx of [-1, 1]) {
         for (const sy of [-1, 1]) {
           const cx = x + sx * size;

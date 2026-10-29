@@ -138,6 +138,42 @@ const UPGRADES = [
       game.weapon.stats.pierce += 1;
     },
   },
+  {
+    id: 'multiShot',
+    name: 'MULTI-SHOT',
+    lines: ['+1 BOLT', 'EVERY SHOT'],
+    maxLevel: 3,
+    icon: [
+      'c......',
+      '.cw....',
+      '..c....',
+      'cwcwccw',
+      '..c....',
+      '.cw....',
+      'c......',
+    ],
+    apply(game) {
+      game.weapon.stats.projectileCount += 1;
+    },
+  },
+  {
+    id: 'shield',
+    name: 'SHIELD',
+    lines: ['BLOCKS 1 HIT', 'THEN', 'RECHARGES'],
+    maxLevel: 3,
+    icon: [
+      'kkkkkkk',
+      'kcwccck',
+      'kwcccck',
+      'kccccck',
+      '.kccck.',
+      '..kck..',
+      '...k...',
+    ],
+    apply(game) {
+      game.player.addShieldLevel();
+    },
+  },
 ];
 
 // Used only when every other upgrade is maxed out.

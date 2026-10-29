@@ -25,6 +25,7 @@ const Game = {
   weapon: null,
   enemies: [],
   projectiles: [],
+  enemyShots: [],
   orbs: [],
   spawner: null,
   kills: 0, // enemies defeated this run
@@ -44,6 +45,7 @@ const Game = {
   // Screen shake
   shakeTime: 0,
   shakeStrength: 0,
+  hurtFlashTime: 0, // > 0 while the red screen border shows after a hit
 
   // Mouse position in game pixels (for the restart button)
   mouseX: -1,
@@ -91,6 +93,7 @@ const Game = {
     this.weapon = new Weapon();
     this.enemies = [];
     this.projectiles = [];
+    this.enemyShots = [];
     this.orbs = [];
     this.spawner = new Spawner();
     this.kills = 0;
@@ -103,6 +106,7 @@ const Game = {
     Effects.reset();
     this.survivalTime = 0;
     this.shakeTime = 0;
+    this.hurtFlashTime = 0;
     Input.clear(); // forget keys held from the previous run
     this.setState('playing');
   },
@@ -146,6 +150,7 @@ const Game = {
     // Everything below keeps animating in every state except 'paused'.
     this.animTime += dt;
     this.shakeTime = Math.max(0, this.shakeTime - dt);
+    this.hurtFlashTime = Math.max(0, this.hurtFlashTime - dt);
     Arena.update(dt);
     Effects.update(dt); // explosions keep playing on the game-over screen
 
@@ -173,8 +178,9 @@ const Game = {
 
     // 3. New enemies arrive, then everyone moves.
     this.spawner.update(dt, this.survivalTime, this.player, this.enemies);
-    for (const enemy of this.enemies) enemy.update(dt, this.player);
+    for (const enemy of this.enemies) enemy.update(dt, this.player, this);
     separateEnemies(this.enemies);
+    for (const shot of this.enemyShots) shot.update(dt);
     this.checkPlayerCollisions();
 
     // 4. Energy orbs drift toward the player and get collected.
@@ -183,6 +189,7 @@ const Game = {
     // 5. Throw away anything that is finished, so lists never grow forever.
     this.enemies = this.enemies.filter((enemy) => !enemy.dead);
     this.projectiles = this.projectiles.filter((projectile) => !projectile.dead);
+    this.enemyShots = this.enemyShots.filter((shot) => !shot.dead);
 
     // 6. Enough energy for a new level? Open the upgrade cards.
     if (this.state === 'playing' && this.pendingLevelUps > 0) this.startLevelUp();
@@ -203,7 +210,8 @@ const Game = {
   },
 
   startLevelUp() {
-    Effects.ring(this.player.x, this.player.y, 14, [PALETTE.white, PALETTE.yellow, PALETTE.orange], 0.3);
+    Effects.ring(this.player.x, this.player.y, 14, SPARK_COLORS.levelUp, 0.3);
+    Effects.burst(this.player.x, this.player.y, 12, SPARK_COLORS.levelUp, { maxSpeed: 60, life: 0.5 });
     LevelUpScreen.open(this);
     this.setState('levelup');
   },
@@ -254,7 +262,16 @@ const Game = {
     this.kills++;
     this.score += enemy.scoreValue;
     Effects.explode(enemy.x, enemy.y, enemy.explosionColors, enemy.explosionSize);
-    this.shake(1, 0.08);
+    // Bigger enemies shake the screen harder and show their points.
+    if (enemy.type === 'brute') {
+      this.shake(3, 0.2);
+      Effects.text(enemy.x, enemy.y - 8, '+' + enemy.scoreValue, PALETTE.orange);
+    } else if (enemy.type === 'shooter') {
+      this.shake(2, 0.1);
+      Effects.text(enemy.x, enemy.y - 7, '+' + enemy.scoreValue, PALETTE.pink, 0.6);
+    } else {
+      this.shake(1, 0.08);
+    }
     for (let i = 0; i < enemy.energyValue; i++) {
       this.orbs.push(new Orb(enemy.x, enemy.y, 1));
     }
@@ -273,21 +290,51 @@ const Game = {
     this.orbs = this.orbs.filter((orb) => !orb.collected && !orb.isExpired());
   },
 
-  // Did any enemy touch the player this frame?
+  // Shooters call this to fire.
+  spawnEnemyShot(x, y, dirX, dirY) {
+    if (this.enemyShots.length >= ENEMY_SHOT_CONFIG.max) return;
+    this.enemyShots.push(new EnemyShot(x, y, dirX, dirY));
+  },
+
+  // Did any enemy or enemy shot touch the player this frame?
   checkPlayerCollisions() {
     const player = this.player;
     for (const enemy of this.enemies) {
       if (!player.canBeHit()) return;
       if (!circlesOverlap(player, enemy)) continue;
-
-      const fatal = player.takeHit();
       enemy.knockBackFrom(player.x, player.y, CHASER_CONFIG.knockback);
-      this.shake(3, 0.2);
-      if (fatal) {
-        this.shake(4, 0.5);
-        Effects.explode(player.x, player.y, SPARK_COLORS.player, 3);
-        this.setState('dying');
-      }
+      this.hurtPlayer();
+    }
+    for (const shot of this.enemyShots) {
+      if (!player.canBeHit()) return;
+      if (shot.dead || !circlesOverlap(player, shot)) continue;
+      shot.dead = true;
+      Effects.burst(shot.x, shot.y, 4, SPARK_COLORS.shooter, { maxSpeed: 40, life: 0.2 });
+      this.hurtPlayer();
+    }
+  },
+
+  // Everything that happens when the player gets hit, in one place.
+  hurtPlayer() {
+    const player = this.player;
+
+    // A ready shield takes the hit instead of a heart.
+    if (player.shieldReady) {
+      player.breakShield();
+      Effects.ring(player.x, player.y, SHIELD_CONFIG.radius + 6, SPARK_COLORS.shield, 0.25);
+      Effects.burst(player.x, player.y, 10, SPARK_COLORS.shield, { maxSpeed: 60, life: 0.35 });
+      Effects.text(player.x, player.y - 10, 'BLOCKED!', PALETTE.cyan);
+      this.shake(2, 0.12);
+      return;
+    }
+
+    const fatal = player.takeHit();
+    this.shake(3, 0.2);
+    this.hurtFlashTime = 0.15;
+    if (fatal) {
+      this.shake(4, 0.5);
+      Effects.explode(player.x, player.y, SPARK_COLORS.player, 3);
+      this.setState('dying');
     }
   },
 
@@ -331,9 +378,19 @@ const Game = {
     const things = [...this.enemies, this.player].sort((a, b) => a.y - b.y);
     for (const thing of things) thing.draw(ctx);
     for (const projectile of this.projectiles) projectile.draw(ctx);
+    for (const shot of this.enemyShots) shot.draw(ctx);
     this.weapon.draw(ctx);
     Effects.draw(ctx);
     ctx.restore();
+
+    // Red border flash when you lose a heart: crisp 2-pixel frame, no blur.
+    if (this.hurtFlashTime > 0) {
+      ctx.fillStyle = PALETTE.red;
+      ctx.fillRect(0, 0, VIEW_WIDTH, 2);
+      ctx.fillRect(0, VIEW_HEIGHT - 2, VIEW_WIDTH, 2);
+      ctx.fillRect(0, 0, 2, VIEW_HEIGHT);
+      ctx.fillRect(VIEW_WIDTH - 2, 0, 2, VIEW_HEIGHT);
+    }
 
     this.drawHud(ctx);
     if (this.showDebug) this.drawDebug(ctx);
@@ -354,11 +411,19 @@ const Game = {
       ctx.drawImage(image, ARENA.x + i * 9, top);
     }
 
+    // Shield icon after the hearts (only once you have the upgrade).
+    let afterHearts = ARENA.x + this.player.maxHealth * 9;
+    if (this.player.shieldLevel > 0) {
+      const icon = this.player.shieldReady ? Sprites.shieldIcon.ready : Sprites.shieldIcon.empty;
+      ctx.drawImage(icon, afterHearts + 1, top - 1);
+      afterHearts += 9;
+    }
+
     // Level and experience bar next to the hearts.
-    const levelX = ARENA.x + this.player.maxHealth * 9 + 5;
+    const levelX = afterHearts + 5;
     drawText(ctx, 'LV' + this.level, levelX, top + 1, PALETTE.yellow, { shadow: PALETTE.void });
     const barX = levelX + measureText('LV' + this.level) + 4;
-    drawPixelBar(ctx, barX, top + 2, 56, 3, this.xp / this.xpToNext, PALETTE.yellow);
+    drawPixelBar(ctx, barX, top + 2, 48, 3, this.xp / this.xpToNext, PALETTE.yellow);
 
     // Survival timer in the top middle.
     drawText(ctx, formatTime(this.survivalTime), VIEW_WIDTH / 2, top + 1, PALETTE.white, {
@@ -378,9 +443,10 @@ const Game = {
     drawPixelBar(ctx, ARENA.x + 20, bottom + 1, 30, 3, charge, charge >= 1 ? PALETTE.cyan : PALETTE.blue);
     drawText(ctx, 'WASD MOVE  SPACE DASH  ESC PAUSE', VIEW_WIDTH - ARENA.x, bottom, PALETTE.darkBlue, { align: 'right' });
 
-    // Swarm warning banner.
-    if (this.spawner.surgeBannerTime > 0 && Math.floor(this.spawner.surgeBannerTime * 8) % 2 === 0) {
-      drawText(ctx, 'SWARM INCOMING!', VIEW_WIDTH / 2, ARENA.y + 6, PALETTE.red, { align: 'center', shadow: PALETTE.void });
+    // Banner messages ("SWARM INCOMING!", "NEW ENEMY: ...").
+    const banner = this.spawner.banner;
+    if (banner.time > 0 && Math.floor(banner.time * 8) % 2 === 0) {
+      drawText(ctx, banner.text, VIEW_WIDTH / 2, ARENA.y + 6, banner.color, { align: 'center', shadow: PALETTE.void });
     }
   },
 
@@ -504,10 +570,10 @@ const Game = {
       'SCALE ' + currentScale + 'X',
       'X ' + p.x.toFixed(1) + ' Y ' + p.y.toFixed(1),
       'SPEED ' + Math.round(Math.hypot(p.vx, p.vy)),
-      'ENEMIES ' + this.enemies.length + ' SHOTS ' + this.projectiles.length,
+      'ENEMIES ' + this.enemies.length + ' SHOTS ' + this.projectiles.length + ' ENEMY SHOTS ' + this.enemyShots.length,
       'ORBS ' + this.orbs.length + ' PARTICLES ' + Effects.particles.length,
       'XP ' + this.xp + '/' + this.xpToNext + ' NEXT SURGE ' + Math.ceil(this.spawner.surgeTimer) + 'S',
-      'FIRE ' + this.weapon.stats.fireInterval.toFixed(2) + 'S DMG ' + this.weapon.stats.damage + ' PIERCE ' + this.weapon.stats.pierce,
+      'FIRE ' + this.weapon.stats.fireInterval.toFixed(2) + 'S DMG ' + this.weapon.stats.damage + ' PIERCE ' + this.weapon.stats.pierce + ' BOLTS ' + this.weapon.stats.projectileCount,
       'SPAWN EVERY ' + this.spawner.getInterval(this.survivalTime).toFixed(2) + 'S',
     ];
     lines.forEach((line, i) => {
