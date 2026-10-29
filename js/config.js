@@ -184,6 +184,7 @@ const HEALTH_GROWTH = {
   shooter: 1,
   brute: 5,
   toxic: 0.75,
+  sprinter: 0.5,
 };
 
 // Shots fired by enemies.
@@ -226,7 +227,7 @@ const GAS_CONFIG = {
 // Hearts that defeated monsters sometimes drop. They fill you up to
 // HEALTH_CONFIG.maxHealth; at full health they wait on the floor.
 const HEART_DROP_CONFIG = {
-  chance: { chaser: 0.05, toxic: 0.075, shooter: 0.1, brute: 0.15 }, // 0.05 = 5%
+  chance: { chaser: 0.05, toxic: 0.075, sprinter: 0.05, shooter: 0.1, brute: 0.15, boss: 0.25 }, // 0.05 = 5%
   bonusPerHeartLost: 0.05, // +5% to every chance each time you lose a heart
   maxChance: 0.25, // no monster ever has more than a 25% chance
   fullHealthMultiplier: 0.5, // with full hearts, every chance is halved
@@ -237,4 +238,28 @@ const HEART_DROP_CONFIG = {
 // chance to drop one you don't own yet. All your guns fire at once.
 const GUN_DROP_CONFIG = {
   chance: 0.005, // 0.5%
+};
+
+// Sprinter: a small yellow monster that is always faster than you.
+const SPRINTER_CONFIG = {
+  speedVsPlayer: 1.25, // 1.25x YOUR current speed, so you can't outrun it
+  health: 1, // fragile: one Blaster shot
+  radius: 3,
+  score: 40,
+  energy: 1,
+  introduceAt: 60, // seconds before sprinters can appear
+  maxAlive: 3,
+};
+
+// The boss: a giant crowned Chaser that arrives once, at 90 seconds.
+const BOSS_CONFIG = {
+  spawnAt: 90, // seconds
+  sizeScale: 4, // 4x the size of a normal Chaser
+  health: 60,
+  speedVsChaser: 0.75, // 0.75x a Chaser's speed
+  contactDamage: 2, // touching it costs 2 hearts
+  knockbackScale: 0.1, // shots barely push it
+  score: 1000,
+  energy: 15,
+  warningTime: 2, // a long warning before it appears
 };

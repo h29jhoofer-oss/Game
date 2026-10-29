@@ -154,6 +154,44 @@ const TOXIC_SPRITE_DATA = {
   ],
 };
 
+// Sprinter: a small, sleek yellow critter leaning forward as it runs.
+const SPRINTER_COLORS = {
+  k: PALETTE.void,
+  y: PALETTE.yellow,
+  o: '#b07a12', // darker underside
+  w: PALETTE.white,
+};
+
+const SPRINTER_SPRITE_DATA = {
+  runA: [
+    '...kkk.',
+    '..kyyyk',
+    '.kyywyk',
+    'kyyykyk',
+    'kyyyyyk',
+    '.kooook',
+    '..kkkk.',
+  ],
+  runB: [
+    '.......',
+    '...kkk.',
+    '..kyyyk',
+    '.kyywyk',
+    'kyyykyk',
+    'kooooyk',
+    '.kkkkk.',
+  ],
+};
+
+// The boss's crown, drawn on top of a giant Chaser.
+const CROWN_COLORS = { k: PALETTE.void, y: PALETTE.yellow, o: '#b07a12', r: PALETTE.pink };
+const CROWN_SPRITE = [
+  'k.k.k.k',
+  'kykykyk',
+  'kyyryyk',
+  'koooook',
+];
+
 // Heart icons for the health display.
 const HEART_COLORS = {
   k: PALETTE.void,
@@ -351,6 +389,8 @@ const Sprites = {
   players: {}, // one set of frames per hero, e.g. Sprites.players.brute.idle
   chaser: {},
   toxic: {},
+  sprinter: {},
+  crown: null,
   heart: {},
   orb: {},
   shooter: {},
@@ -363,6 +403,10 @@ const Sprites = {
       // The white silhouette is used to flash enemies when they get hit.
       this.chaser[name] = bakeSpriteSet(CHASER_SPRITE_DATA[name], CHASER_COLORS, [PALETTE.white]);
     }
+    for (const name in SPRINTER_SPRITE_DATA) {
+      this.sprinter[name] = bakeSpriteSet(SPRINTER_SPRITE_DATA[name], SPRINTER_COLORS, [PALETTE.white]);
+    }
+    this.crown = bakeSprite(CROWN_SPRITE, CROWN_COLORS);
     for (const name in TOXIC_SPRITE_DATA) {
       this.toxic[name] = bakeSpriteSet(TOXIC_SPRITE_DATA[name], TOXIC_COLORS, [PALETTE.white]);
     }

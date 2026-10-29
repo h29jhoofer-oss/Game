@@ -440,7 +440,17 @@ const Game = {
     this.score += enemy.scoreValue;
     Effects.explode(enemy.x, enemy.y, enemy.explosionColors, enemy.explosionSize);
     // Bigger enemies shake the screen harder and show their points.
-    if (enemy.type === 'brute') {
+    if (enemy.type === 'boss') {
+      // A huge finale: several explosions, a big shake, and a banner.
+      for (let i = 0; i < 4; i++) {
+        Effects.explode(enemy.x + randomRange(-12, 12), enemy.y + randomRange(-12, 12), enemy.explosionColors, 4);
+      }
+      this.shake(5, 0.6);
+      Effects.text(enemy.x, enemy.y - 20, '+' + enemy.scoreValue, PALETTE.yellow, 1.5);
+      this.spawner.showBanner('BOSS DEFEATED!', PALETTE.yellow, 2.5);
+      Sound.play('bruteDie');
+      Sound.play('newBest');
+    } else if (enemy.type === 'brute') {
       this.shake(3, 0.2);
       Effects.text(enemy.x, enemy.y - 8, '+' + enemy.scoreValue, PALETTE.orange);
       Sound.play('bruteDie');
@@ -554,7 +564,7 @@ const Game = {
       if (!player.canBeHit()) return;
       if (enemy.dead || !circlesOverlap(player, enemy)) continue; // just-defeated enemies can't hurt you
       enemy.knockBackFrom(player.x, player.y, CHASER_CONFIG.knockback);
-      this.hurtPlayer();
+      this.hurtPlayer(enemy.contactDamage);
     }
     for (const shot of this.enemyShots) {
       if (!player.canBeHit()) return;
@@ -572,7 +582,8 @@ const Game = {
   },
 
   // Everything that happens when the player gets hit, in one place.
-  hurtPlayer() {
+  // `hearts` is how many hearts the hit costs (the boss takes 2).
+  hurtPlayer(hearts = 1) {
     const player = this.player;
 
     // A ready shield takes the hit instead of a heart.
@@ -586,8 +597,9 @@ const Game = {
       return;
     }
 
-    const fatal = player.takeHit();
-    this.heartsLost++; // makes heart drops more likely from now on
+    const fatal = player.takeHit(hearts);
+    this.heartsLost += hearts; // makes heart drops more likely from now on
+    if (hearts > 1) Effects.text(player.x, player.y - 10, '-' + hearts + ' HEARTS', PALETTE.red);
     this.shake(3, 0.2);
     this.hurtFlashTime = 0.15;
     if (fatal) {
@@ -730,6 +742,16 @@ const Game = {
       const icon = button.id === 'pause' ? 'pause' : Sound.muted ? 'soundOff' : 'soundOn';
       const hovered = this.state === 'playing' && pointInBox(this.mouseX, this.mouseY, button.box);
       ctx.drawImage(UI.icons[icon][hovered ? 'hover' : 'normal'], button.box.x, button.box.y + 1);
+    }
+
+    // Boss health bar along the bottom of the arena while the boss is alive.
+    const boss = this.enemies.find((enemy) => enemy.type === 'boss' && !enemy.dead);
+    if (boss) {
+      const barWidth = 120;
+      const barX = Math.floor((VIEW_WIDTH - barWidth) / 2);
+      const barY = ARENA.y + ARENA.height - 7;
+      drawText(ctx, 'KING SLIME', VIEW_WIDTH / 2, barY - 7, PALETTE.red, { align: 'center', shadow: PALETTE.void });
+      drawPixelBar(ctx, barX, barY, barWidth, 3, boss.health / boss.maxHealth, PALETTE.red);
     }
 
     // Banner messages ("SWARM INCOMING!", "NEW ENEMY: ...").

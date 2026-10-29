@@ -38,7 +38,7 @@ The mouse works everywhere too: the PLAY button, menu buttons, upgrade cards, an
 ## How to play
 
 - **Survive.** You earn 10 points every second you're alive.
-- **Defeat enemies.** Your blaster auto-aims at the nearest enemy in range. Chasers are worth 25 points, Toxic Slimes 30, Shooters 50, and Brutes 120.
+- **Defeat enemies.** Your blaster auto-aims at the nearest enemy in range. Chasers are worth 25 points, Toxic Slimes 30, Sprinters 40, Shooters 50, Brutes 120, and the boss 1000.
 - **Grab hearts.** Defeated monsters sometimes drop a heart: Chasers 5% of the time, Toxic Slimes 7.5%, Shooters 10%, Brutes 15%. Every heart you lose adds +5% to all of these for the rest of the run, up to a cap of 25%. While your hearts are full, every chance is halved. Hearts never disappear from the floor and get pulled in by the magnet like energy. When your hearts are full, dropped hearts stay where they are, saved for later.
 - **Collect energy.** Yellow orbs fill your experience bar. A full bar is a **level-up**: the game freezes and you choose one of three random upgrades.
 - **Watch for warnings.** Blinking brackets show where enemies will appear (red for Chaser, green for Toxic Slime, purple for Shooter, orange for Brute). A Shooter's eye glows pink right before it fires. "SWARM INCOMING!" means a ring of enemies is about to surround you, so dash out.
@@ -62,8 +62,10 @@ The multipliers keep working on top of upgrades: the Brute's Heavy Shots hit for
 | --- | --- | --- |
 | **Chaser** (red slime) | From the start | Hops straight at you. Comes in packs later on. |
 | **Toxic Slime** (green slime) | After ~25 s | Hops at you like a Chaser with 3/4 of its health. When defeated it bursts into a **poison gas cloud** that stays for about 10 seconds. Touching the gas costs a heart, but it is harmless for the first half-second while it puffs up, and dashing or a shield protects you as usual. |
+| **Sprinter** (yellow) | After ~60 s | Tiny and fragile (1 hit), but always **1.25× faster than you**. It checks your speed constantly, so you can't outrun it, even with Speed Boost. Shoot it or dash past it. |
 | **Shooter** (purple drone) | After ~40 s | Keeps its distance, circles you, and fires slow pink shots. |
 | **Brute** (orange monster) | After ~90 s | Slow, huge, very tough, and barely flinches when shot. |
+| **King Slime** (boss) | Once, at 90 s | A crowned Chaser at **4× the size**. Moves at 0.75× a Chaser's speed, has 60 health (shown in a bar at the bottom of the arena), and touching it costs **2 hearts**. It gets a 2-second warning and appears on the far side of the arena. Defeating it gives 1000 points and 15 energy. |
 
 All enemies gain health every 100 seconds, and spawns speed up over time.
 
@@ -151,7 +153,7 @@ The scripts in `js/` load in this order. Each file has one job:
 | `player.js` | Movement, dash, health, shield, and animation. |
 | `projectiles.js` | The `Weapon` class (one per gun you own) and its bullets, including the Sniper's homing. |
 | `orbs.js` | Energy orbs and the magnet pull. |
-| `enemies.js` | The `Enemy` base class, `Chaser`, `ToxicSlime`, `Shooter`, `Brute`, and enemy shots. |
+| `enemies.js` | The `Enemy` base class, `Chaser`, `ToxicSlime`, `Sprinter`, `Shooter`, `Brute`, the `Boss`, and enemy shots. |
 | `hazards.js` | The Toxic Slime's gas cloud: its shape, three life phases (forming, active, fading), collision, and dithered drawing. |
 | `spawner.js` | When, where, and which enemies appear, plus swarm surges and banners. |
 | `upgrades.js` | The list of upgrades. Weapon upgrades describe how they change one gun's stats (`improveWeapon`), and one with a `weapons` list only appears once you own those guns. |

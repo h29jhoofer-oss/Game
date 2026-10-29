@@ -7,13 +7,15 @@
 //
 //   Chaser  — runs straight at you
 //   Toxic   — a weaker green chaser that leaves poison gas when defeated
+//   Sprinter — tiny, fragile, and always faster than you
+//   Boss    — a giant crowned Chaser (King Slime) that arrives at 90 seconds
 //   Shooter — keeps its distance, circles you, and fires slow shots
 //   Brute   — big, slow, very tough, barely flinches
 // =====================================================================
 
 class Enemy {
   constructor(x, y, settings) {
-    this.type = settings.type; // 'chaser', 'toxic', 'shooter' or 'brute'
+    this.type = settings.type; // 'chaser', 'toxic', 'sprinter', 'shooter', 'brute' or 'boss'
     this.x = x;
     this.y = y;
     this.radius = settings.radius;
@@ -29,6 +31,7 @@ class Enemy {
     this.explosionColors = settings.explosionColors;
     this.explosionSize = settings.explosionSize;
     this.knockbackScale = settings.knockbackScale ?? 1; // 1 = normal, 0 = can't be pushed
+    this.contactDamage = settings.contactDamage ?? 1; // hearts lost when it touches you
 
     // Knockback velocity: added on top of normal movement, fades quickly.
     this.pushX = 0;
@@ -164,6 +167,108 @@ class ToxicSlime extends Chaser {
     this.energyValue = TOXIC_CONFIG.energy;
     this.scoreValue = TOXIC_CONFIG.score;
     this.explosionColors = SPARK_COLORS.toxic;
+  }
+}
+
+// ---------------------------------------------------------------------
+// Sprinter: always 1.25x faster than you (it checks your speed every
+// frame, so Speed Boost won't let you outrun it). Shoot it or dash past.
+// ---------------------------------------------------------------------
+class Sprinter extends Enemy {
+  constructor(x, y, health) {
+    super(x, y, {
+      type: 'sprinter',
+      radius: SPRINTER_CONFIG.radius,
+      health: health,
+      speed: 0, // set from the player's speed every frame
+      sprites: Sprites.sprinter,
+      frameTime: 0.08, // quick little legs
+      width: 7,
+      height: 7,
+      energyValue: SPRINTER_CONFIG.energy,
+      scoreValue: SPRINTER_CONFIG.score,
+      explosionColors: SPARK_COLORS.sprinter,
+      explosionSize: 1,
+    });
+    this.trailTimer = 0;
+  }
+
+  think(player) {
+    return directionTo(this.x, this.y, player.x, player.y);
+  }
+
+  update(dt, player, world) {
+    this.speed = player.speed * SPRINTER_CONFIG.speedVsPlayer;
+    super.update(dt, player, world);
+    // Leave a short yellow speed trail.
+    this.trailTimer -= dt;
+    if (this.trailTimer <= 0) {
+      this.trailTimer = 0.05;
+      Effects.particles.push({ x: this.x, y: this.y + 1, vx: 0, vy: 0, age: 0, life: 0.2, colors: ['#b07a12', PALETTE.gridLine], size: 1 });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------
+// Boss (King Slime): a Chaser drawn 4x as big, with a crown. Slow, very
+// tough, barely pushed by shots, and touching it costs 2 hearts.
+// ---------------------------------------------------------------------
+class Boss extends Enemy {
+  constructor(x, y, chaserSpeed) {
+    const scale = BOSS_CONFIG.sizeScale;
+    super(x, y, {
+      type: 'boss',
+      radius: CHASER_CONFIG.radius * scale,
+      health: BOSS_CONFIG.health,
+      speed: chaserSpeed * BOSS_CONFIG.speedVsChaser,
+      sprites: Sprites.chaser,
+      frameTime: 0.32, // big, slow hops
+      width: 8 * scale,
+      height: 8 * scale,
+      energyValue: BOSS_CONFIG.energy,
+      scoreValue: BOSS_CONFIG.score,
+      explosionColors: SPARK_COLORS.enemy,
+      explosionSize: 8,
+      knockbackScale: BOSS_CONFIG.knockbackScale,
+      contactDamage: BOSS_CONFIG.contactDamage,
+    });
+    this.maxHealth = BOSS_CONFIG.health;
+    this.lastFrame = 0;
+  }
+
+  think(player) {
+    return directionTo(this.x, this.y, player.x, player.y);
+  }
+
+  update(dt, player, world) {
+    super.update(dt, player, world);
+    // Every time it lands from a hop, the ground shakes a little.
+    const frame = this.getFrameIndex();
+    if (frame !== this.lastFrame && frame === 1) {
+      world.shake(1, 0.08);
+      Effects.burst(this.x, this.y + this.height / 2, 6, SPARK_COLORS.dust, { minSpeed: 10, maxSpeed: 30, life: 0.35 });
+    }
+    this.lastFrame = frame;
+  }
+
+  // Same picture as a Chaser, drawn at exactly 4x, plus a crown.
+  draw(ctx) {
+    const scale = BOSS_CONFIG.sizeScale;
+    const drawX = Math.round(this.x - this.width / 2);
+    const drawY = Math.round(this.y - this.height / 2);
+
+    ctx.fillStyle = PALETTE.void; // shadow
+    ctx.fillRect(drawX + 4, drawY + this.height, this.width - 8, 2);
+
+    const sprite = this.getSpriteSet();
+    const image = this.flashTime > 0 ? sprite.ghosts[0] : sprite;
+    const frame = this.facing === 1 ? image.right : image.left;
+    ctx.drawImage(frame, drawX, drawY, frame.width * scale, frame.height * scale);
+
+    // The crown sits on top of the head, which is lower when squashed.
+    const headTop = this.getFrameIndex() === 0 ? 0 : 2 * scale;
+    const crown = Sprites.crown;
+    ctx.drawImage(crown, Math.round(this.x - crown.width), drawY + headTop - crown.height * 2 + 2, crown.width * 2, crown.height * 2);
   }
 }
 

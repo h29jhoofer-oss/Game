@@ -10,7 +10,9 @@
 //   - Spawns get more frequent over time.
 //   - Chasers get faster; every enemy gets tougher every 100 seconds.
 //   - Small packs of 2-3 chasers become more common.
-//   - Toxic Slimes join after 25 s, Shooters after 40 s, Brutes after 90 s.
+//   - Toxic Slimes join after 25 s, Shooters after 40 s, Sprinters after
+//     60 s, Brutes after 90 s.
+//   - At 90 s the boss (King Slime) arrives, once.
 //   - Every 40-55 seconds a "swarm surge" rings the player from all sides.
 // =====================================================================
 
@@ -22,6 +24,7 @@ class Spawner {
     // A message shown at the top of the arena, like "SWARM INCOMING!".
     this.banner = { text: '', color: PALETTE.red, time: 0 };
     this.introduced = new Set(); // enemy types we've already announced
+    this.bossSpawned = false;
   }
 
   showBanner(text, color, time = 1.6) {
@@ -49,6 +52,7 @@ class Spawner {
       toxic: CHASER_CONFIG.health * TOXIC_CONFIG.healthRatio,
       shooter: SHOOTER_CONFIG.health,
       brute: BRUTE_CONFIG.health,
+      sprinter: SPRINTER_CONFIG.health,
     }[type];
     return base + steps * HEALTH_GROWTH[type];
   }
@@ -56,7 +60,10 @@ class Spawner {
   // How likely each enemy type is to be picked for a regular spawn.
   // Bigger number = more likely. Zero = not allowed yet.
   getTypeWeights(survivalTime, enemies) {
-    const weights = { chaser: 10, toxic: 0, shooter: 0, brute: 0 };
+    const weights = { chaser: 10, toxic: 0, sprinter: 0, shooter: 0, brute: 0 };
+    if (survivalTime >= SPRINTER_CONFIG.introduceAt) {
+      weights.sprinter = Math.min(1.5, 0.6 + (survivalTime - SPRINTER_CONFIG.introduceAt) / 60);
+    }
     if (survivalTime >= TOXIC_CONFIG.introduceAt) {
       weights.toxic = Math.min(3, 1 + (survivalTime - TOXIC_CONFIG.introduceAt) / 30);
     }
@@ -68,6 +75,7 @@ class Spawner {
     }
     // Never too many of the special enemies at once, so it stays fair.
     if (this.countType('toxic', enemies) >= TOXIC_CONFIG.maxAlive) weights.toxic = 0;
+    if (this.countType('sprinter', enemies) >= SPRINTER_CONFIG.maxAlive) weights.sprinter = 0;
     if (this.countType('shooter', enemies) >= SHOOTER_CONFIG.maxAlive) weights.shooter = 0;
     if (this.countType('brute', enemies) >= BRUTE_CONFIG.maxAlive) weights.brute = 0;
     return weights;
@@ -90,7 +98,9 @@ class Spawner {
   }
 
   createEnemy(type, x, y, survivalTime) {
+    if (type === 'boss') return new Boss(x, y, this.getChaserSpeed(survivalTime));
     const health = this.getHealth(type, survivalTime);
+    if (type === 'sprinter') return new Sprinter(x, y, health);
     if (type === 'shooter') return new Shooter(x, y, health);
     if (type === 'brute') return new Brute(x, y, health);
     if (type === 'toxic') return new ToxicSlime(x, y, this.getChaserSpeed(survivalTime), health);
@@ -110,7 +120,15 @@ class Spawner {
       this.spawnGroup(survivalTime, player, enemies);
     }
 
-    // 2. Swarm surges.
+    // 2. The boss arrives once, at 90 seconds, on the far side from you.
+    if (!this.bossSpawned && survivalTime >= BOSS_CONFIG.spawnAt) {
+      this.bossSpawned = true;
+      const spot = this.pickFarSpot(player);
+      this.addWarning(spot.x, spot.y, BOSS_CONFIG.warningTime, 'boss');
+      this.showBanner('BOSS INCOMING!', PALETTE.red, BOSS_CONFIG.warningTime + 0.6);
+    }
+
+    // 3. Swarm surges.
     this.surgeTimer -= dt;
     this.banner.time = Math.max(0, this.banner.time - dt);
     if (this.surgeTimer <= 0) {
@@ -118,7 +136,7 @@ class Spawner {
       this.spawnSurge(survivalTime, player, enemies);
     }
 
-    // 3. Turn finished warnings into real enemies.
+    // 4. Turn finished warnings into real enemies.
     for (const warning of this.warnings) {
       warning.time -= dt;
       if (warning.time <= 0) {
@@ -138,6 +156,7 @@ class Spawner {
       if (!this.introduced.has(type)) {
         this.introduced.add(type);
         if (type === 'toxic') this.showBanner('NEW ENEMY: TOXIC SLIME', PALETTE.green, 2.2);
+        if (type === 'sprinter') this.showBanner('NEW ENEMY: SPRINTER', PALETTE.yellow, 2.2);
         if (type === 'shooter') this.showBanner('NEW ENEMY: SHOOTER', PALETTE.purple, 2.2);
         if (type === 'brute') this.showBanner('NEW ENEMY: BRUTE', PALETTE.orange, 2.2);
       }
@@ -186,6 +205,13 @@ class Spawner {
     });
   }
 
+  // The middle of whichever half of the arena the player is NOT in.
+  pickFarSpot(player) {
+    const centerX = ARENA.x + ARENA.width / 2;
+    const x = player.x < centerX ? ARENA.x + ARENA.width - 30 : ARENA.x + 30;
+    return { x, y: ARENA.y + ARENA.height / 2 };
+  }
+
   // Choose a random point near one of the four walls, far enough from the player.
   pickSpawnPoint(player) {
     const m = SPAWN_CONFIG.edgeMargin;
@@ -215,13 +241,13 @@ class Spawner {
   // Warning marker: four little corner brackets that blink, colored
   // like the enemy that's coming. Brutes get a bigger marker.
   draw(ctx) {
-    const colors = { chaser: PALETTE.red, toxic: PALETTE.green, shooter: PALETTE.purple, brute: PALETTE.orange };
+    const colors = { chaser: PALETTE.red, toxic: PALETTE.green, sprinter: PALETTE.yellow, shooter: PALETTE.purple, brute: PALETTE.orange, boss: PALETTE.red };
     for (const warning of this.warnings) {
       if (Math.floor(warning.time / 0.08) % 2 === 0) continue; // blink
       const x = Math.round(warning.x);
       const y = Math.round(warning.y);
       // The brackets close in as the enemy is about to arrive.
-      const baseSize = warning.type === 'brute' ? 6 : 3;
+      const baseSize = warning.type === 'boss' ? 16 : warning.type === 'brute' ? 6 : 3;
       const size = baseSize + Math.ceil((warning.time / warning.totalTime) * 3);
       ctx.fillStyle = colors[warning.type];
       for (const sx of [-1, 1]) {

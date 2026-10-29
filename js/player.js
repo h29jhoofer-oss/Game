@@ -188,9 +188,9 @@ class Player {
     this.invulnerableTime = HEALTH_CONFIG.invulnerableTime * 0.6;
   }
 
-  // Lose one health point. Returns true if this hit was fatal.
-  takeHit() {
-    this.health = Math.max(0, this.health - 1);
+  // Lose health (usually 1 heart; the boss takes 2). Returns true if fatal.
+  takeHit(amount = 1) {
+    this.health = Math.max(0, this.health - amount);
     this.invulnerableTime = HEALTH_CONFIG.invulnerableTime;
     this.hitFlashTime = HEALTH_CONFIG.hitFlashTime;
     return this.health === 0;
