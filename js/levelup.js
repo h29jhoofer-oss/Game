@@ -96,7 +96,8 @@ const LevelUpScreen = {
     for (let i = 0; i < this.choices.length; i++) this.drawCard(ctx, game, i);
 
     if (this.isReady()) {
-      drawText(ctx, 'PRESS 1 2 3  OR  ARROWS + ENTER  OR  CLICK', cx, 161, PALETTE.blue, { align: 'center' });
+      const hint = Touch.active ? 'TAP A CARD' : 'PRESS 1 2 3  OR  ARROWS + ENTER  OR  CLICK';
+      drawText(ctx, hint, cx, 161, PALETTE.blue, { align: 'center' });
     }
   },
 

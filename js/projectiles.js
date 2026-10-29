@@ -11,6 +11,7 @@ const BULLET_SPARKS = {
   bolt: [PALETTE.white, PALETTE.cyan, PALETTE.cyanDim],
   pellet: [PALETTE.white, PALETTE.yellow, PALETTE.orange],
   sniper: [PALETTE.white, '#b6ffc8', PALETTE.green],
+  smg: [PALETTE.white, '#d08aff', PALETTE.purple],
 };
 
 class Projectile {
@@ -90,6 +91,14 @@ class Projectile {
       ctx.fillRect(x - 1, y - 1, 2, 2);
       ctx.fillStyle = PALETTE.yellow;
       ctx.fillRect(x - 1, y - 1, 1, 1);
+      return;
+    }
+    if (this.style === 'smg') {
+      // Small and quick: just 2 pixels, light purple tip, purple tail.
+      ctx.fillStyle = PALETTE.purple;
+      ctx.fillRect(Math.round(this.x - this.dirX), Math.round(this.y - this.dirY), 1, 1);
+      ctx.fillStyle = '#d08aff';
+      ctx.fillRect(Math.round(this.x), Math.round(this.y), 1, 1);
       return;
     }
     const colors = this.style === 'sniper'

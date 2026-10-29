@@ -12,7 +12,7 @@
 //   - Small packs of 2-3 chasers become more common.
 //   - Toxic Slimes join after 25 s, Shooters after 40 s, Sprinters after
 //     60 s, Brutes after 90 s.
-//   - At 90 s the boss (King Slime) arrives, once.
+//   - Every 90 s the boss (King Slime) arrives, stronger each time.
 //   - Every 40-55 seconds a "swarm surge" rings the player from all sides.
 // =====================================================================
 
@@ -24,7 +24,8 @@ class Spawner {
     // A message shown at the top of the arena, like "SWARM INCOMING!".
     this.banner = { text: '', color: PALETTE.red, time: 0 };
     this.introduced = new Set(); // enemy types we've already announced
-    this.bossSpawned = false;
+    this.nextBossAt = BOSS_CONFIG.spawnEvery;
+    this.bossLevel = 0; // how many bosses have arrived so far
   }
 
   showBanner(text, color, time = 1.6) {
@@ -98,7 +99,7 @@ class Spawner {
   }
 
   createEnemy(type, x, y, survivalTime) {
-    if (type === 'boss') return new Boss(x, y, this.getChaserSpeed(survivalTime));
+    if (type === 'boss') return new Boss(x, y, this.getChaserSpeed(survivalTime), this.bossLevel);
     const health = this.getHealth(type, survivalTime);
     if (type === 'sprinter') return new Sprinter(x, y, health);
     if (type === 'shooter') return new Shooter(x, y, health);
@@ -120,12 +121,18 @@ class Spawner {
       this.spawnGroup(survivalTime, player, enemies);
     }
 
-    // 2. The boss arrives once, at 90 seconds, on the far side from you.
-    if (!this.bossSpawned && survivalTime >= BOSS_CONFIG.spawnAt) {
-      this.bossSpawned = true;
+    // 2. Every 90 seconds the boss arrives on the far side from you. If the
+    //    last one is still alive, the next waits until it's defeated.
+    const bossAround = enemies.some((e) => e.type === 'boss') || this.warnings.some((w) => w.type === 'boss');
+    if (survivalTime >= this.nextBossAt && !bossAround) {
+      // Next one 90 s later, but never sooner than 45 s from now (if this
+      // one was late because the previous boss lived a long time).
+      this.nextBossAt = Math.max(this.nextBossAt + BOSS_CONFIG.spawnEvery, survivalTime + BOSS_CONFIG.spawnEvery / 2);
+      this.bossLevel++;
       const spot = this.pickFarSpot(player);
       this.addWarning(spot.x, spot.y, BOSS_CONFIG.warningTime, 'boss');
-      this.showBanner('BOSS INCOMING!', PALETTE.red, BOSS_CONFIG.warningTime + 0.6);
+      const title = this.bossLevel === 1 ? 'BOSS INCOMING!' : 'BOSS RETURNS! LV ' + this.bossLevel;
+      this.showBanner(title, PALETTE.red, BOSS_CONFIG.warningTime + 0.6);
     }
 
     // 3. Swarm surges.

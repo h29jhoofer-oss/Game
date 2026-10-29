@@ -1,6 +1,6 @@
 // =====================================================================
-// guns.js — the three guns. Every run starts with the Blaster; the
-// Shotgun and Sniper are rare monster drops (see GUN_DROP_CONFIG).
+// guns.js — the guns. Every run starts with the Blaster; the Shotgun,
+// Sniper and SMG are rare monster drops (see GUN_DROP_CONFIG).
 // All the guns you own fire at the same time.
 //
 // Each gun is one object:
@@ -9,7 +9,7 @@
 //              'movement' — the way you are moving (Shotgun)
 //              'sniper'   — at a Shooter if there is one, otherwise the
 //                           farthest enemy in range (Sniper)
-//   style  : how its bullets look ('bolt', 'pellet' or 'sniper')
+//   style  : how its bullets look ('bolt', 'pellet', 'sniper' or 'smg')
 //   sound  : which sound recipe (audio.js) it plays when firing
 //   stats  : the numbers the Weapon uses. They start from WEAPON_CONFIG
 //            (the Blaster) and change only what is different.
@@ -91,6 +91,29 @@ const GUNS = [
       '.kk.........',
     ],
     spriteColors: { k: PALETTE.void, d: '#0b4a20', g: PALETTE.green, w: PALETTE.white },
+  },
+  {
+    id: 'smg',
+    name: 'SMG',
+    uiColor: PALETTE.purple,
+    aim: 'nearest',
+    style: 'smg',
+    sound: 'smg',
+    stats: {
+      ...WEAPON_CONFIG,
+      fireInterval: WEAPON_CONFIG.fireInterval / 2, // twice as fast as the Blaster
+      gunDamage: 0.5, // half damage per bullet
+      spread: 0.12, // a tighter fan if it gets extra bullets
+    },
+    sprite: [
+      '..kkkkkkk...',
+      '.kpppppplk..',
+      'kpplllllwk..',
+      'kpkkpkkkk...',
+      '.k..pk......',
+      '....kk......',
+    ],
+    spriteColors: { k: PALETTE.void, p: PALETTE.purple, l: '#d08aff', w: PALETTE.white },
   },
 ];
 

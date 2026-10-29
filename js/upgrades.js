@@ -30,6 +30,8 @@ const ICON_COLORS = {
   b: PALETTE.blue,
   r: PALETTE.red,
   p: '#ff8a9a',
+  v: PALETTE.purple,
+  l: '#d08aff',
 };
 
 const UPGRADES = [
@@ -295,6 +297,64 @@ const UPGRADES = [
     ],
     improveWeapon(stats) {
       stats.critChance += 0.25;
+    },
+  },
+  // ---------------- SMG upgrades ----------------
+  {
+    id: 'bulletHose',
+    name: 'BULLET HOSE',
+    weapons: ['smg'],
+    lines: ['SMG FIRES', '20% FASTER'],
+    maxLevel: 3,
+    icon: [
+      '.......',
+      'l.l.l.l',
+      '.......',
+      'v.v.v.v',
+      '.......',
+      'l.l.l.l',
+      '.......',
+    ],
+    improveWeapon(stats) {
+      stats.fireInterval *= 0.8;
+    },
+  },
+  {
+    id: 'hollowPoints',
+    name: 'HOLLOW POINTS',
+    weapons: ['smg'],
+    lines: ['SMG BULLETS', 'HIT 50% HARDER'],
+    maxLevel: 3,
+    icon: [
+      '..vvv..',
+      '.vlllv.',
+      'vll.llv',
+      'vl...lv',
+      'vll.llv',
+      '.vlllv.',
+      '..vvv..',
+    ],
+    improveWeapon(stats) {
+      stats.gunDamage += 0.25; // 0.5 -> 0.75 is +50% of the starting damage
+    },
+  },
+  {
+    id: 'spray',
+    name: 'SPRAY',
+    weapons: ['smg'],
+    lines: ['+1 SMG BULLET', 'IN A TIGHT FAN'],
+    maxLevel: 2,
+    icon: [
+      '.....l.',
+      '...l...',
+      'vvv..l.',
+      'vvvl...',
+      'vvv..l.',
+      '...l...',
+      '.....l.',
+    ],
+    improveWeapon(stats) {
+      stats.projectileCount += 1;
     },
   },
 ];

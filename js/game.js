@@ -311,6 +311,7 @@ const Game = {
     this.animTime += dt;
     this.shakeTime = Math.max(0, this.shakeTime - dt);
     this.hurtFlashTime = Math.max(0, this.hurtFlashTime - dt);
+    Touch.update(dt);
     Arena.update(dt);
     Effects.update(dt); // explosions keep playing on the game-over screen
 
@@ -504,7 +505,7 @@ const Game = {
         Sound.play('heal');
       }
     }
-    this.heartPickups = this.heartPickups.filter((heart) => !heart.collected);
+    this.heartPickups = this.heartPickups.filter((heart) => !heart.collected && !heart.isExpired());
   },
 
   updateOrbs(dt) {
@@ -642,6 +643,7 @@ const Game = {
     } else {
       this.drawWorld(ctx);
       this.drawHud(ctx);
+      Touch.draw(ctx, this.player);
       if (this.showDebug) this.drawDebug(ctx);
       if (this.state === 'paused') PauseMenu.draw(ctx, this);
       if (this.state === 'levelup') LevelUpScreen.draw(ctx, this);
@@ -737,7 +739,8 @@ const Game = {
     drawPixelBar(ctx, ARENA.x + 20, bottom + 1, 30, 3, charge, charge >= 1 ? PALETTE.cyan : PALETTE.blue);
     // The guns you own, side by side.
     this.weapons.forEach((weapon, i) => ctx.drawImage(weapon.gun.image, ARENA.x + 56 + i * 14, bottom));
-    drawText(ctx, 'WASD MOVE  SPACE DASH  M MUTE  ESC PAUSE', VIEW_WIDTH - ARENA.x - 26, bottom, PALETTE.darkBlue, { align: 'right' });
+    const hint = Touch.active ? 'DRAG LEFT TO MOVE  TAP RIGHT TO DASH' : 'WASD MOVE  SPACE DASH  M MUTE  ESC PAUSE';
+    drawText(ctx, hint, VIEW_WIDTH - ARENA.x - 26, bottom, PALETTE.darkBlue, { align: 'right' });
     for (const button of this.getHudButtons()) {
       const icon = button.id === 'pause' ? 'pause' : Sound.muted ? 'soundOff' : 'soundOn';
       const hovered = this.state === 'playing' && pointInBox(this.mouseX, this.mouseY, button.box);
@@ -750,7 +753,8 @@ const Game = {
       const barWidth = 120;
       const barX = Math.floor((VIEW_WIDTH - barWidth) / 2);
       const barY = ARENA.y + ARENA.height - 7;
-      drawText(ctx, 'KING SLIME', VIEW_WIDTH / 2, barY - 7, PALETTE.red, { align: 'center', shadow: PALETTE.void });
+      const name = boss.level > 1 ? 'KING SLIME LV ' + boss.level : 'KING SLIME';
+      drawText(ctx, name, VIEW_WIDTH / 2, barY - 7, PALETTE.red, { align: 'center', shadow: PALETTE.void });
       drawPixelBar(ctx, barX, barY, barWidth, 3, boss.health / boss.maxHealth, PALETTE.red);
     }
 

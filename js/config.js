@@ -232,6 +232,7 @@ const HEART_DROP_CONFIG = {
   maxChance: 0.25, // no monster ever has more than a 25% chance
   fullHealthMultiplier: 0.5, // with full hearts, every chance is halved
   maxOnFloor: 30, // performance limit for hearts lying around
+  lifetime: 10, // seconds a dropped heart stays on the floor (it blinks for the last 3)
 };
 
 // The Shotgun and Sniper are rare drops: any defeated monster has this
@@ -251,11 +252,14 @@ const SPRINTER_CONFIG = {
   maxAlive: 3,
 };
 
-// The boss: a giant crowned Chaser that arrives once, at 90 seconds.
+// The boss: a giant crowned Chaser that arrives every 90 seconds, a
+// little stronger each time it returns.
 const BOSS_CONFIG = {
-  spawnAt: 90, // seconds
+  spawnEvery: 90, // seconds (90, 180, 270...)
   sizeScale: 4, // 4x the size of a normal Chaser
-  health: 60,
+  health: 60, // at level 1
+  extraHealthPerLevel: 30, // +50% of the first boss's health per return
+  extraSpeedPerLevel: 0.1, // +10% speed per return
   speedVsChaser: 0.75, // 0.75x a Chaser's speed
   contactDamage: 2, // touching it costs 2 hearts
   knockbackScale: 0.1, // shots barely push it

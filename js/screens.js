@@ -65,7 +65,7 @@ const TitleScreen = {
     drawIconButton(ctx, sound.box, Sound.muted ? 'soundOff' : 'soundOn', pointInBox(game.mouseX, game.mouseY, sound.box));
 
     const cx = VIEW_WIDTH / 2;
-    drawText(ctx, 'PRESS ENTER', cx, 144, PALETTE.blue, { align: 'center' });
+    drawText(ctx, Touch.active ? 'TAP PLAY' : 'PRESS ENTER', cx, 144, PALETTE.blue, { align: 'center' });
 
     const best = game.best;
     const bestText = best.score > 0
@@ -256,7 +256,7 @@ function makePickScreen({ title, getItems, getCurrentId, drawCardBody, onPick, o
 
       const back = this.getButtons().find((button) => button.id === 'back');
       drawButton(ctx, back.box, 'BACK', { active: pointInBox(game.mouseX, game.mouseY, back.box) });
-      drawText(ctx, '1 2 3 OR ARROWS + ENTER', cx + 20, 161, PALETTE.blue, { align: 'center' });
+      drawText(ctx, Touch.active ? 'TAP A CARD' : '1 2 3 OR ARROWS + ENTER', cx + 20, 161, PALETTE.blue, { align: 'center' });
     },
 
     drawCard(ctx, item, index) {
@@ -505,7 +505,7 @@ const GameOverScreen = {
     const [restart, menu] = this.getButtons();
     drawButton(ctx, restart.box, 'RESTART', { primary: true, active: this.selected === 0 });
     drawButton(ctx, menu.box, 'MENU', { active: this.selected === 1 });
-    drawText(ctx, 'ENTER/R RESTART   ESC MENU', cx, panel.y + 108, PALETTE.blue, { align: 'center' });
+    drawText(ctx, Touch.active ? 'TAP RESTART OR MENU' : 'ENTER/R RESTART   ESC MENU', cx, panel.y + 108, PALETTE.blue, { align: 'center' });
   },
 };
 

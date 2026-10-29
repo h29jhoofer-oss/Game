@@ -22,6 +22,10 @@ Then visit <http://localhost:8000> in your browser.
 
 ## Controls
 
+**Touchscreen (phones and tablets, best in landscape):** drag on the left side of the screen to move (a joystick appears under your thumb), and tap the right side to dash. Tap menus, cards and buttons directly. The touch controls only appear once you touch the screen.
+
+**Keyboard and mouse:**
+
 | Key | Action |
 | --- | --- |
 | W A S D / Arrow keys | Move |
@@ -38,8 +42,8 @@ The mouse works everywhere too: the PLAY button, menu buttons, upgrade cards, an
 ## How to play
 
 - **Survive.** You earn 10 points every second you're alive.
-- **Defeat enemies.** Your blaster auto-aims at the nearest enemy in range. Chasers are worth 25 points, Toxic Slimes 30, Sprinters 40, Shooters 50, Brutes 120, and the boss 1000.
-- **Grab hearts.** Defeated monsters sometimes drop a heart: Chasers 5% of the time, Toxic Slimes 7.5%, Shooters 10%, Brutes 15%. Every heart you lose adds +5% to all of these for the rest of the run, up to a cap of 25%. While your hearts are full, every chance is halved. Hearts never disappear from the floor and get pulled in by the magnet like energy. When your hearts are full, dropped hearts stay where they are, saved for later.
+- **Defeat enemies.** Your blaster auto-aims at the nearest enemy in range. Chasers are worth 25 points, Toxic Slimes 30, Sprinters 40, Shooters 50, Brutes 120, and the boss 1000 per level.
+- **Grab hearts.** Defeated monsters sometimes drop a heart: Chasers 5% of the time, Toxic Slimes 7.5%, Shooters 10%, Brutes 15%. Every heart you lose adds +5% to all of these for the rest of the run, up to a cap of 25%. While your hearts are full, every chance is halved. A dropped heart **disappears after 10 seconds** (it blinks for the last 3), and the magnet pulls it in like energy. While your hearts are full, dropped hearts stay where they are.
 - **Collect energy.** Yellow orbs fill your experience bar. A full bar is a **level-up**: the game freezes and you choose one of three random upgrades.
 - **Watch for warnings.** Blinking brackets show where enemies will appear (red for Chaser, green for Toxic Slime, purple for Shooter, orange for Brute). A Shooter's eye glows pink right before it fires. "SWARM INCOMING!" means a ring of enemies is about to surround you, so dash out.
 - **Beat your best.** Your top score is saved in the browser and shown on the title screen.
@@ -65,18 +69,19 @@ The multipliers keep working on top of upgrades: the Brute's Heavy Shots hit for
 | **Sprinter** (yellow) | After ~60 s | Tiny and fragile (1 hit), but always **1.25× faster than you**. It checks your speed constantly, so you can't outrun it, even with Speed Boost. Shoot it or dash past it. |
 | **Shooter** (purple drone) | After ~40 s | Keeps its distance, circles you, and fires slow pink shots. |
 | **Brute** (orange monster) | After ~90 s | Slow, huge, very tough, and barely flinches when shot. |
-| **King Slime** (boss) | Once, at 90 s | A crowned Chaser at **4× the size**. Moves at 0.75× a Chaser's speed, has 60 health (shown in a bar at the bottom of the arena), and touching it costs **2 hearts**. It gets a 2-second warning and appears on the far side of the arena. Defeating it gives 1000 points and 15 energy. |
+| **King Slime** (boss) | Every 90 s | A crowned Chaser at **4× the size**. Moves at 0.75× a Chaser's speed, and touching it costs **2 hearts**. It gets a 2-second warning and appears on the far side of the arena. **It comes back every 90 seconds, stronger each time:** 60 health, then 90, 120… and 10% faster per return, with bigger rewards (1000 points × its level). Its health bar shows its level. If one is still alive, the next waits until it's defeated (and always at least 45 s). |
 
 All enemies gain health every 100 seconds, and spawns speed up over time.
 
 ### Weapons
 
-Every run starts with the **Blaster**. Any defeated monster has a **0.5% chance** to drop the **Shotgun** or the **Sniper** (one you don't have yet). A dropped gun sits on the floor inside a pulsing ring until you pick it up, and it never disappears. **All the guns you own fire at the same time**, and the bottom bar shows which ones you have.
+Every run starts with the **Blaster**. Any defeated monster has a **0.5% chance** to drop the **Shotgun**, the **Sniper** or the **SMG** (one you don't have yet). A dropped gun sits on the floor inside a pulsing ring until you pick it up, and it never disappears. **All the guns you own fire at the same time**, and the bottom bar shows which ones you have.
 
 | Gun | Damage | Fire rate | Range | How it aims |
 | --- | --- | --- | --- | --- |
 | **Blaster** (cyan) | ×1 | ×1 | medium | At the nearest enemy |
 | **Shotgun** (orange) | ×2 per pellet, 4 pellets | ×0.5 | short (pellets vanish close to you) | The way you're moving, whenever an enemy is close |
+| **SMG** (purple) | ×0.5 per bullet (small purple bullets) | ×2 | medium | At the nearest enemy |
 | **Sniper** (green) | ×1.5 | ×0.75 | long | At a Shooter if there is one, otherwise the farthest enemy. Bullets curve slightly toward their target. |
 
 Hero and gun multipliers stack: a Brute hero's Shotgun pellets hit for 1 × 1.5 × 2 = 3.
@@ -108,6 +113,14 @@ Hero and gun multipliers stack: a Brute hero's Shotgun pellets hit for 1 × 1.5 
 | Extra Pellets | +2 pellets every blast | 3 |
 | Long Barrel | Pellets fly 25% farther | 3 |
 | Stopping Power | Blasts knock enemies much farther back | 2 |
+
+**SMG only** (offered once you've picked up the SMG):
+
+| Upgrade | Effect | Max |
+| --- | --- | --- |
+| Bullet Hose | SMG fires 20% faster | 3 |
+| Hollow Points | SMG bullets hit 50% harder | 3 |
+| Spray | +1 SMG bullet in a tight fan | 2 |
 
 **Sniper only** (offered once you've picked up the Sniper):
 
@@ -143,6 +156,7 @@ The scripts in `js/` load in this order. Each file has one job:
 | `utils.js` | Small helpers: `clamp`, random numbers, off-screen canvases. |
 | `storage.js` | Saves and loads the personal best and the mute setting with `localStorage`. |
 | `audio.js` | Synthesized retro sounds. Each sound is a short "recipe" of beeps and noise. |
+| `touch.js` | Touchscreen controls: the drag joystick, tap-to-dash, bigger tap areas for the small HUD icons, and drawing them. |
 | `input.js` | Remembers which keys are held and which were just pressed. Blocks page scrolling for game keys only. |
 | `guns.js` | The three guns: how each aims, how its bullets look, and its stats. Add a gun by adding one entry; it automatically becomes a possible drop. |
 | `characters.js` | The playable heroes: name, colors, and stat multipliers. Add a hero by adding one entry. |

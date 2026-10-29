@@ -211,28 +211,32 @@ class Sprinter extends Enemy {
 
 // ---------------------------------------------------------------------
 // Boss (King Slime): a Chaser drawn 4x as big, with a crown. Slow, very
-// tough, barely pushed by shots, and touching it costs 2 hearts.
+// tough, barely pushed by shots, and touching it costs 2 hearts. It
+// returns every 90 seconds; each `level` adds health, speed and rewards.
 // ---------------------------------------------------------------------
 class Boss extends Enemy {
-  constructor(x, y, chaserSpeed) {
+  constructor(x, y, chaserSpeed, level = 1) {
     const scale = BOSS_CONFIG.sizeScale;
+    const extra = level - 1; // how many times it has come back
+    const health = BOSS_CONFIG.health + extra * BOSS_CONFIG.extraHealthPerLevel;
     super(x, y, {
       type: 'boss',
       radius: CHASER_CONFIG.radius * scale,
-      health: BOSS_CONFIG.health,
-      speed: chaserSpeed * BOSS_CONFIG.speedVsChaser,
+      health: health,
+      speed: chaserSpeed * BOSS_CONFIG.speedVsChaser * (1 + extra * BOSS_CONFIG.extraSpeedPerLevel),
       sprites: Sprites.chaser,
       frameTime: 0.32, // big, slow hops
       width: 8 * scale,
       height: 8 * scale,
-      energyValue: BOSS_CONFIG.energy,
-      scoreValue: BOSS_CONFIG.score,
+      energyValue: BOSS_CONFIG.energy + extra * 5,
+      scoreValue: BOSS_CONFIG.score * level,
       explosionColors: SPARK_COLORS.enemy,
       explosionSize: 8,
       knockbackScale: BOSS_CONFIG.knockbackScale,
       contactDamage: BOSS_CONFIG.contactDamage,
     });
-    this.maxHealth = BOSS_CONFIG.health;
+    this.maxHealth = health;
+    this.level = level;
     this.lastFrame = 0;
   }
 

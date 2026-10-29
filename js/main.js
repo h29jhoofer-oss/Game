@@ -34,6 +34,7 @@ window.addEventListener('load', () => {
 
   Input.init();
   Game.init(canvas);
+  Touch.init(canvas, Game);
 
   resizeCanvas(canvas, container);
   window.addEventListener('resize', () => resizeCanvas(canvas, container));

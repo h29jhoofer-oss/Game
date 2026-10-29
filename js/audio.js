@@ -31,6 +31,8 @@ const SOUND_RECIPES = {
       s.tone({ type: 'triangle', freq: 1500, endFreq: 1400, duration: 0.2, volume: 0.05, delay: 0.02 });
     },
   },
+  // A light, fast "tik" for the SMG (it fires a lot, so it's quiet).
+  smg: { minGap: 0.04, play: (s) => s.tone({ type: 'square', freq: 1600 * s.vary(0.08), endFreq: 900, duration: 0.03, volume: 0.04 }) },
   hit: { minGap: 0.03, play: (s) => s.noise({ duration: 0.04, volume: 0.12, filter: 3000 }) },
   enemyDie: {
     minGap: 0.04,

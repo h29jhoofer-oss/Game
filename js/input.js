@@ -72,6 +72,8 @@ const Input = {
     if (this.isDown('KeyD') || this.isDown('ArrowRight')) x += 1;
     if (this.isDown('KeyW') || this.isDown('ArrowUp')) y -= 1;
     if (this.isDown('KeyS') || this.isDown('ArrowDown')) y += 1;
+    // No keys held? Use the touchscreen joystick, if a finger is on it.
+    if (x === 0 && y === 0) return Touch.getDirection();
     return { x, y };
   },
 };

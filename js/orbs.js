@@ -77,8 +77,9 @@ class Orb {
 // ---------------------------------------------------------------------
 // Heart pickup: sometimes dropped by a defeated monster. It moves just
 // like an energy orb (pops out, gets pulled in by the magnet), but it
-// restores a heart instead of giving energy, and it never disappears.
-// When your hearts are full it stays on the floor, saved for later.
+// restores a heart instead of giving energy. It disappears after 10
+// seconds (blinking for the last 3). While your hearts are full it
+// stays put instead of flying to you.
 // ---------------------------------------------------------------------
 class HeartPickup extends Orb {
   constructor(x, y) {
@@ -97,10 +98,14 @@ class HeartPickup extends Orb {
   }
 
   isExpired() {
-    return false; // hearts wait for you as long as it takes
+    return this.age > HEART_DROP_CONFIG.lifetime;
   }
 
   draw(ctx) {
+    // Blink during the last 3 seconds as a warning that it will vanish.
+    const timeLeft = HEART_DROP_CONFIG.lifetime - this.age;
+    if (timeLeft < 3 && Math.floor(timeLeft / 0.1) % 2 === 0) return;
+
     const t = this.age + this.animOffset;
     const bob = Math.floor(t * 2.5) % 2; // bob up and down by one pixel
     const drawX = Math.round(this.x) - 3;
