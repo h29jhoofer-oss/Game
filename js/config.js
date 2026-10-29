@@ -72,6 +72,8 @@ const HEALTH_CONFIG = {
 // Chaser enemy: a small red slime that walks straight at the player.
 const CHASER_CONFIG = {
   health: 2, // two basic shots to defeat
+  healthGrowthTime: 100, // every this many seconds, chasers get +1 health
+  score: 25, // points for defeating one
   radius: 3, // hitbox size
   baseSpeed: 28, // pixels per second at the start of a run
   maxExtraSpeed: 22, // speed added gradually as time goes on
@@ -82,12 +84,12 @@ const CHASER_CONFIG = {
 // How enemies appear over time.
 const SPAWN_CONFIG = {
   startInterval: 1.3, // seconds between spawns at the start
-  minInterval: 0.45, // fastest spawn rate allowed
-  intervalDropPerSecond: 0.008, // how much faster spawning gets each second
+  minInterval: 0.35, // fastest spawn rate allowed
+  intervalDropPerSecond: 0.007, // how much faster spawning gets each second
   warningTime: 0.7, // a flashing marker shows where an enemy is about to appear
   minDistanceFromPlayer: 70, // never spawn right on top of the player
   edgeMargin: 24, // how far from the walls enemies may appear
-  maxEnemies: 40, // performance + fairness limit
+  maxEnemies: 50, // performance + fairness limit
   groupChanceMax: 0.45, // highest chance that a spawn is a small group
   groupChanceRampTime: 90, // seconds until groups reach that chance
   groupSpread: 10, // how far apart group members appear
@@ -116,3 +118,24 @@ const ORB_CONFIG = {
 // Limits that protect performance.
 const MAX_PROJECTILES = 120;
 const MAX_PARTICLES = 400;
+
+// Swarm surges: every so often a ring of enemies closes in from all sides.
+const SURGE_CONFIG = {
+  firstSurge: 45, // seconds until the first surge
+  minGap: 40, // seconds between surges (random between min and max)
+  maxGap: 55,
+  baseCount: 6, // enemies in the first surge
+  extraPerMinute: 2, // more enemies per surge for every minute survived
+  maxCount: 14,
+  ringRadius: 85, // how far from the player the ring appears
+  warningTime: 1.2, // surges get a longer warning, so they stay fair
+};
+
+// Experience and score.
+const PROGRESSION_CONFIG = {
+  xpBase: 5, // energy needed to go from level 1 to level 2
+  xpPerLevel: 4, // each level after that needs this much more
+  scorePerSecond: 10, // points for simply staying alive
+  levelUpInputDelay: 0.6, // seconds before upgrade cards accept input
+  postUpgradeSafety: 0.6, // seconds of invulnerability after choosing
+};

@@ -22,6 +22,7 @@ class Enemy {
     this.width = settings.width;
     this.height = settings.height;
     this.energyValue = settings.energyValue; // energy dropped when defeated
+    this.scoreValue = settings.scoreValue; // points for defeating it
     this.explosionColors = settings.explosionColors;
     this.explosionSize = settings.explosionSize;
 
@@ -108,16 +109,17 @@ class Enemy {
 // Chaser: walks straight toward the player. Simple, but dangerous in groups.
 // ---------------------------------------------------------------------
 class Chaser extends Enemy {
-  constructor(x, y, speed) {
+  constructor(x, y, speed, health) {
     super(x, y, {
       radius: CHASER_CONFIG.radius,
-      health: CHASER_CONFIG.health,
+      health: health,
       speed: speed,
       sprites: Sprites.chaser,
       frameTime: 0.18,
       width: 8,
       height: 8,
       energyValue: 1,
+      scoreValue: CHASER_CONFIG.score,
       explosionColors: SPARK_COLORS.enemy,
       explosionSize: 1,
     });

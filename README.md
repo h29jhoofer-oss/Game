@@ -2,7 +2,7 @@
 
 A pixel-art arcade survival game built with plain HTML, CSS, and JavaScript. It has no frameworks and nothing to install.
 
-**Current progress: Stage 3, combat.** Your blaster fires on its own at the nearest slime. Defeated slimes explode and drop yellow energy orbs for you to collect. Energy will power level-ups in Stage 4.
+**Current progress: Stage 4, progression.** Energy fills your experience bar. Each level-up freezes the game and offers three random upgrade cards. Your score grows as you survive and defeat enemies, and the arena gets steadily harder, with periodic swarm surges.
 
 ## How to run it
 
@@ -28,7 +28,27 @@ Then visit <http://localhost:8000> in your browser.
 | SPACE | Dash (short cooldown, shown by the DASH meter) |
 | ESC | Pause / resume |
 | ENTER or R | Restart from the game-over screen (or click RESTART) |
+| 1 / 2 / 3 | Pick an upgrade card |
+| ← → (or A D) then ENTER / SPACE | Choose a card with the keyboard (or hover and click with the mouse) |
 | G | Toggle debug info (FPS, scale, position) |
+
+## Stage 4 test checklist
+
+1. **Experience bar:** the yellow bar next to `LV1` fills as you collect orbs. You need 5 energy for level 2, then 9, 13, 17… (4 more each time).
+2. **Level-up freeze:** when the bar fills, a ring flashes around you and **everything stops**: enemies, shots, orbs, the timer, even the floor lights. "LEVEL UP!" appears and three cards rise in one after another.
+3. **Choosing:** for the first 0.6 seconds the cards ignore input, so mashing SPACE can't pick one by accident. Then:
+   - **1, 2, 3** pick a card right away
+   - **← →** move the yellow highlight (the card lifts up and an arrow blinks above it), and **ENTER** or **SPACE** confirms
+   - with the mouse, hover highlights a card and a click picks it
+
+   The chosen card flashes white and the others go dark.
+4. **Upgrades work:** press **G** and watch `FIRE`, `DMG`, and `PIERCE` change after taking Rapid Fire, Heavy Shots, or Piercing. Speed Boost makes you visibly faster. Magnet pulls orbs from farther away. Extra Health refills a heart.
+5. **Card details:** each card shows `NEW!` or `LV 1 > 2`, plus pips for how many times it can be taken. Maxed upgrades stop appearing. Extra Health only appears when you're missing a heart.
+6. **Double level-up:** if one pickup fills the bar twice, a second set of cards appears right after the first.
+7. **Safety after choosing:** you blink for about half a second after picking, so a slime that crept close can't hit you instantly.
+8. **Score:** the 7-digit score in the top-right goes up by 10 per second alive and 25 per slime defeated.
+9. **Swarm surges:** at about 45 seconds, "SWARM INCOMING!" flashes and a ring of warning markers surrounds you. Dash out before it closes. Surges repeat every 40–55 seconds and get bigger each minute.
+10. **Results:** the game-over panel now shows score, time, slimes defeated, and level.
 
 ## Stage 3 test checklist
 
@@ -81,6 +101,8 @@ The scripts in `js/` load in this order. Each file has one job:
 | `player.js` | The `Player` class: movement, diagonal normalization, wall collision, dash, health, invulnerability, and animation frames. |
 | `enemies.js` | The shared `Enemy` class, the `Chaser`, enemy separation, and circle collision. |
 | `spawner.js` | Decides when and where enemies appear and shows warning markers. It also controls the difficulty ramp. |
+| `upgrades.js` | The list of upgrades: name, description, pixel icon, maximum level, and what each one does. Add a new upgrade by adding one entry. |
+| `levelup.js` | The level-up screen: picking three random cards, keyboard and mouse selection, and the card animations. |
 | `game.js` | The game loop, game states (playing, paused, dying, game over), collisions, screen shake, HUD, and menus. |
 | `main.js` | Starts everything and scales the canvas. |
 
@@ -95,6 +117,8 @@ The scripts in `js/` load in this order. Each file has one job:
 - **Enemy inheritance.** `Chaser extends Enemy`, so it only has to say *where it wants to go* (`think()`). Movement, knockback, and drawing are shared. New enemy types will reuse all of that.
 - **Cleaning up.** Shots, orbs, particles, and enemies each get a `dead`, `collected`, or age flag. At the end of every frame, the game filters finished items out of their lists, so memory never piles up. Each list also has a maximum size in `config.js`.
 - **Upgrade-ready weapon.** Every number the blaster uses lives in `weapon.stats`. A future "Rapid Fire" upgrade only needs to do `weapon.stats.fireInterval *= 0.85`.
+- **Data-driven upgrades.** Each upgrade is a small object with an `apply(game)` function, for example `game.weapon.stats.damage += 1`. The level-up screen doesn't know what any upgrade does. It just shows the card and calls `apply`.
+- **A difficulty curve you can tune.** Spawn rate, enemy speed, enemy health (+1 every 100 s), pack chance, and swarm surges all depend on survival time, and every number is in `config.js`.
 - **No blur effects.** Glows change through a few fixed palette colors in steps, and the pause overlay is a checkerboard "dither". There are no gradients or soft shadows.
 
 ### Drawing your own sprite

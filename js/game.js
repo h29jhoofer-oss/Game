@@ -8,7 +8,7 @@
 
 const DYING_DURATION = 0.9; // seconds between the final hit and the results panel
 const GAMEOVER_INPUT_DELAY = 0.5; // seconds before restart input is accepted
-const GAMEOVER_PANEL = { width: 160, height: 104 };
+const GAMEOVER_PANEL = { width: 160, height: 112 };
 
 const Game = {
   canvas: null,
@@ -17,6 +17,7 @@ const Game = {
   // Which "mode" the game is in:
   //   'playing'  — normal gameplay
   //   'paused'   — frozen, waiting for ESC
+  //   'levelup'  — frozen, choosing an upgrade card
   //   'dying'    — short dramatic moment after the last heart is lost
   //   'gameover' — results panel with a restart button
   state: 'playing',
@@ -26,8 +27,15 @@ const Game = {
   projectiles: [],
   orbs: [],
   spawner: null,
-  energy: 0, // energy collected this run (becomes experience in Stage 4)
   kills: 0, // enemies defeated this run
+  score: 0,
+
+  // Experience: collecting energy fills the bar; a full bar = level up.
+  level: 1,
+  xp: 0,
+  xpToNext: 0,
+  pendingLevelUps: 0, // level-ups waiting to be shown (you can gain two at once)
+  upgradeLevels: {}, // how many times each upgrade was taken, e.g. { rapidFire: 2 }
   survivalTime: 0, // seconds survived in the current run
   animTime: 0, // seconds of animation (keeps running on the game-over screen)
   stateTime: 0, // seconds since the current state started
@@ -55,6 +63,7 @@ const Game = {
     this.ctx.imageSmoothingEnabled = false;
 
     Sprites.init();
+    Upgrades.init();
     Arena.init();
     this.resetRun();
 
@@ -84,8 +93,13 @@ const Game = {
     this.projectiles = [];
     this.orbs = [];
     this.spawner = new Spawner();
-    this.energy = 0;
     this.kills = 0;
+    this.score = 0;
+    this.level = 1;
+    this.xp = 0;
+    this.xpToNext = xpNeededForLevel(1);
+    this.pendingLevelUps = 0;
+    this.upgradeLevels = {};
     Effects.reset();
     this.survivalTime = 0;
     this.shakeTime = 0;
@@ -124,6 +138,10 @@ const Game = {
       if (Input.wasPressed('Escape')) this.setState('playing');
       return; // nothing in the world moves while paused
     }
+    if (this.state === 'levelup') {
+      LevelUpScreen.update(dt, this);
+      return; // the world is frozen while choosing an upgrade
+    }
 
     // Everything below keeps animating in every state except 'paused'.
     this.animTime += dt;
@@ -143,6 +161,7 @@ const Game = {
     }
 
     this.survivalTime += dt;
+    this.score += dt * PROGRESSION_CONFIG.scorePerSecond;
 
     // 1. Player moves and the blaster fires on its own.
     this.player.update(dt);
@@ -164,6 +183,46 @@ const Game = {
     // 5. Throw away anything that is finished, so lists never grow forever.
     this.enemies = this.enemies.filter((enemy) => !enemy.dead);
     this.projectiles = this.projectiles.filter((projectile) => !projectile.dead);
+
+    // 6. Enough energy for a new level? Open the upgrade cards.
+    if (this.state === 'playing' && this.pendingLevelUps > 0) this.startLevelUp();
+  },
+
+  // ---------------------------------------------------------------
+  // Experience and upgrades
+  // ---------------------------------------------------------------
+  gainXp(amount) {
+    this.xp += amount;
+    // A "while" loop, because one big pickup could fill the bar twice.
+    while (this.xp >= this.xpToNext) {
+      this.xp -= this.xpToNext;
+      this.level++;
+      this.xpToNext = xpNeededForLevel(this.level);
+      this.pendingLevelUps++;
+    }
+  },
+
+  startLevelUp() {
+    Effects.ring(this.player.x, this.player.y, 14, [PALETTE.white, PALETTE.yellow, PALETTE.orange], 0.3);
+    LevelUpScreen.open(this);
+    this.setState('levelup');
+  },
+
+  // Called by the level-up screen once a card has been chosen.
+  finishLevelUp(upgrade) {
+    upgrade.apply(this);
+    this.upgradeLevels[upgrade.id] = (this.upgradeLevels[upgrade.id] || 0) + 1;
+    this.pendingLevelUps--;
+
+    if (this.pendingLevelUps > 0) {
+      LevelUpScreen.open(this); // another level-up is waiting
+      this.setState('levelup');
+      return;
+    }
+    // A moment of safety so enemies that crept close can't hit you instantly.
+    const player = this.player;
+    player.invulnerableTime = Math.max(player.invulnerableTime, PROGRESSION_CONFIG.postUpgradeSafety);
+    this.setState('playing');
   },
 
   // Check every shot against every enemy.
@@ -193,6 +252,7 @@ const Game = {
 
   onEnemyDefeated(enemy) {
     this.kills++;
+    this.score += enemy.scoreValue;
     Effects.explode(enemy.x, enemy.y, enemy.explosionColors, enemy.explosionSize);
     this.shake(1, 0.08);
     for (let i = 0; i < enemy.energyValue; i++) {
@@ -204,9 +264,9 @@ const Game = {
 
   updateOrbs(dt) {
     for (const orb of this.orbs) {
-      orb.update(dt, this.player, ORB_CONFIG.magnetRadius);
+      orb.update(dt, this.player, this.player.magnetRadius);
       if (orb.collected) {
-        this.energy += orb.value;
+        this.gainXp(orb.value);
         Effects.burst(orb.x, orb.y, 4, SPARK_COLORS.energy, { minSpeed: 10, maxSpeed: 35, life: 0.25 });
       }
     }
@@ -278,6 +338,7 @@ const Game = {
     this.drawHud(ctx);
     if (this.showDebug) this.drawDebug(ctx);
     if (this.state === 'paused') this.drawPauseScreen(ctx);
+    if (this.state === 'levelup') LevelUpScreen.draw(ctx, this);
     if (this.state === 'gameover') this.drawGameOverScreen(ctx);
   },
 
@@ -285,35 +346,42 @@ const Game = {
   // Interface
   // ---------------------------------------------------------------
   drawHud(ctx) {
+    const top = 4;
+
     // Hearts in the top-left corner.
     for (let i = 0; i < this.player.maxHealth; i++) {
       const image = i < this.player.health ? Sprites.heart.full : Sprites.heart.empty;
-      ctx.drawImage(image, ARENA.x + i * 9, 4);
+      ctx.drawImage(image, ARENA.x + i * 9, top);
     }
 
-    // Energy counter next to the hearts.
-    const energyX = ARENA.x + this.player.maxHealth * 9 + 6;
-    ctx.drawImage(Sprites.orb.bright, energyX, 4);
-    drawText(ctx, String(this.energy), energyX + 8, 5, PALETTE.yellow, { shadow: PALETTE.void });
+    // Level and experience bar next to the hearts.
+    const levelX = ARENA.x + this.player.maxHealth * 9 + 5;
+    drawText(ctx, 'LV' + this.level, levelX, top + 1, PALETTE.yellow, { shadow: PALETTE.void });
+    const barX = levelX + measureText('LV' + this.level) + 4;
+    drawPixelBar(ctx, barX, top + 2, 56, 3, this.xp / this.xpToNext, PALETTE.yellow);
 
     // Survival timer in the top middle.
-    drawText(ctx, formatTime(this.survivalTime), VIEW_WIDTH / 2, 5, PALETTE.white, {
+    drawText(ctx, formatTime(this.survivalTime), VIEW_WIDTH / 2, top + 1, PALETTE.white, {
       align: 'center',
       shadow: PALETTE.darkBlue,
     });
 
-    // Dash meter in the top-right: fills up while the dash recharges.
-    const meterWidth = 30;
-    const meterX = VIEW_WIDTH - ARENA.x - meterWidth - 1;
-    const meterY = 6;
-    drawText(ctx, 'DASH', meterX - 4, 5, PALETTE.cyanDim, { align: 'right' });
-    const charge = 1 - this.player.dashCooldown / PLAYER_CONFIG.dashCooldown;
-    drawPixelBar(ctx, meterX, meterY, meterWidth, 3, charge, charge >= 1 ? PALETTE.cyan : PALETTE.blue);
+    // Score in the top-right, padded with zeros like an arcade cabinet.
+    const scoreText = String(Math.floor(this.score)).padStart(7, '0');
+    drawText(ctx, scoreText, VIEW_WIDTH - ARENA.x, top + 1, PALETTE.white, { align: 'right', shadow: PALETTE.darkBlue });
+    drawText(ctx, 'SCORE', VIEW_WIDTH - ARENA.x - measureText(scoreText) - 4, top + 1, PALETTE.cyanDim, { align: 'right' });
 
-    // Control reminder under the arena.
-    drawText(ctx, 'WASD/ARROWS MOVE   SPACE DASH   ESC PAUSE', VIEW_WIDTH / 2, VIEW_HEIGHT - 7, PALETTE.darkBlue, {
-      align: 'center',
-    });
+    // Bottom row: dash meter on the left, controls on the right.
+    const bottom = VIEW_HEIGHT - 7;
+    drawText(ctx, 'DASH', ARENA.x, bottom, PALETTE.cyanDim);
+    const charge = 1 - this.player.dashCooldown / PLAYER_CONFIG.dashCooldown;
+    drawPixelBar(ctx, ARENA.x + 20, bottom + 1, 30, 3, charge, charge >= 1 ? PALETTE.cyan : PALETTE.blue);
+    drawText(ctx, 'WASD MOVE  SPACE DASH  ESC PAUSE', VIEW_WIDTH - ARENA.x, bottom, PALETTE.darkBlue, { align: 'right' });
+
+    // Swarm warning banner.
+    if (this.spawner.surgeBannerTime > 0 && Math.floor(this.spawner.surgeBannerTime * 8) % 2 === 0) {
+      drawText(ctx, 'SWARM INCOMING!', VIEW_WIDTH / 2, ARENA.y + 6, PALETTE.red, { align: 'center', shadow: PALETTE.void });
+    }
   },
 
   drawPauseScreen(ctx) {
@@ -350,16 +418,17 @@ const Game = {
 
     // Results: label on the left of the center line, value on the right.
     const results = [
+      ['SCORE', String(Math.floor(this.score))],
       ['SURVIVED', formatTime(this.survivalTime)],
       ['DEFEATED', String(this.kills)],
-      ['ENERGY', String(this.energy)],
+      ['LEVEL', String(this.level)],
     ];
     results.forEach(([label, value], i) => {
       const rowY = panelY + 28 + i * 8;
       drawText(ctx, label, cx - 4, rowY, PALETTE.cyanDim, { align: 'right' });
       drawText(ctx, value, cx + 4, rowY, PALETTE.white);
     });
-    drawText(ctx, getGameOverMessage(this.survivalTime), cx, panelY + 56, PALETTE.yellow, { align: 'center' });
+    drawText(ctx, getGameOverMessage(this.survivalTime), cx, panelY + 64, PALETTE.yellow, { align: 'center' });
 
     // Restart button: highlighted when hovered.
     const button = this.getRestartButton();
@@ -379,7 +448,7 @@ const Game = {
     const width = 60;
     const height = 15;
     const panelY = Math.floor((VIEW_HEIGHT - GAMEOVER_PANEL.height) / 2);
-    return { x: Math.floor((VIEW_WIDTH - width) / 2), y: panelY + 67, width, height };
+    return { x: Math.floor((VIEW_WIDTH - width) / 2), y: panelY + 75, width, height };
   },
 
   // ---------------------------------------------------------------
@@ -391,12 +460,29 @@ const Game = {
     const rect = this.canvas.getBoundingClientRect();
     this.mouseX = ((event.clientX - rect.left) / rect.width) * VIEW_WIDTH;
     this.mouseY = ((event.clientY - rect.top) / rect.height) * VIEW_HEIGHT;
-    const overButton = this.state === 'gameover' && this.isMouseOver(this.getRestartButton());
-    this.canvas.style.cursor = overButton ? 'pointer' : 'default';
+    let pointer = this.state === 'gameover' && this.isMouseOver(this.getRestartButton());
+
+    // Hovering a level-up card selects it.
+    if (this.state === 'levelup' && LevelUpScreen.isReady()) {
+      const card = LevelUpScreen.cardAt(this.mouseX, this.mouseY);
+      if (card !== -1) {
+        LevelUpScreen.selected = card;
+        pointer = true;
+      }
+    }
+    this.canvas.style.cursor = pointer ? 'pointer' : 'default';
   },
 
   onClick(event) {
     this.onMouseMove(event);
+    if (this.state === 'levelup' && LevelUpScreen.isReady()) {
+      const card = LevelUpScreen.cardAt(this.mouseX, this.mouseY);
+      if (card !== -1) {
+        this.canvas.style.cursor = 'default';
+        LevelUpScreen.confirm(card);
+      }
+      return;
+    }
     if (this.state !== 'gameover' || this.stateTime < GAMEOVER_INPUT_DELAY) return;
     if (this.isMouseOver(this.getRestartButton())) {
       this.canvas.style.cursor = 'default';
@@ -420,6 +506,8 @@ const Game = {
       'SPEED ' + Math.round(Math.hypot(p.vx, p.vy)),
       'ENEMIES ' + this.enemies.length + ' SHOTS ' + this.projectiles.length,
       'ORBS ' + this.orbs.length + ' PARTICLES ' + Effects.particles.length,
+      'XP ' + this.xp + '/' + this.xpToNext + ' NEXT SURGE ' + Math.ceil(this.spawner.surgeTimer) + 'S',
+      'FIRE ' + this.weapon.stats.fireInterval.toFixed(2) + 'S DMG ' + this.weapon.stats.damage + ' PIERCE ' + this.weapon.stats.pierce,
       'SPAWN EVERY ' + this.spawner.getInterval(this.survivalTime).toFixed(2) + 'S',
     ];
     lines.forEach((line, i) => {
@@ -437,6 +525,11 @@ const Game = {
     }
   },
 };
+
+// Energy needed to go from `level` to the next level: 5, 9, 13, 17...
+function xpNeededForLevel(level) {
+  return PROGRESSION_CONFIG.xpBase + (level - 1) * PROGRESSION_CONFIG.xpPerLevel;
+}
 
 // Turn seconds into a clock like 1:05.
 function formatTime(seconds) {

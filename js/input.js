@@ -16,6 +16,7 @@ const Input = {
     'KeyW', 'KeyA', 'KeyS', 'KeyD',
     'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
     'Space', 'Escape', 'Enter', 'KeyR', 'KeyG',
+    'Digit1', 'Digit2', 'Digit3',
   ]),
 
   init() {

@@ -22,6 +22,10 @@ class Player {
     this.height = 10;
     this.facing = 1; // 1 = right, -1 = left
 
+    // Stats that upgrades can improve.
+    this.speed = PLAYER_CONFIG.speed;
+    this.magnetRadius = ORB_CONFIG.magnetRadius;
+
     // Dash state
     this.dashTime = 0; // > 0 while dashing
     this.dashCooldown = 0; // > 0 while waiting to dash again
@@ -73,14 +77,14 @@ class Player {
       this.vy = this.dashDirY * PLAYER_CONFIG.dashSpeed;
       if (this.dashTime === 0) {
         // Dash finished: drop back to normal running speed.
-        this.vx = this.dashDirX * PLAYER_CONFIG.speed;
-        this.vy = this.dashDirY * PLAYER_CONFIG.speed;
+        this.vx = this.dashDirX * this.speed;
+        this.vy = this.dashDirY * this.speed;
       }
     } else {
       // Ease the velocity toward the target speed. Using Math.exp makes
       // the easing behave the same at 30, 60 or 144 frames per second.
-      const targetVX = dirX * PLAYER_CONFIG.speed;
-      const targetVY = dirY * PLAYER_CONFIG.speed;
+      const targetVX = dirX * this.speed;
+      const targetVY = dirY * this.speed;
       const blend = 1 - Math.exp(-PLAYER_CONFIG.acceleration * dt);
       this.vx += (targetVX - this.vx) * blend;
       this.vy += (targetVY - this.vy) * blend;
@@ -123,6 +127,11 @@ class Player {
   // carry you straight through an enemy.
   canBeHit() {
     return this.invulnerableTime === 0 && !this.isDashing();
+  }
+
+  // Get one health point back (never above the maximum).
+  heal(amount) {
+    this.health = Math.min(this.maxHealth, this.health + amount);
   }
 
   // Lose one health point. Returns true if this hit was fatal.
