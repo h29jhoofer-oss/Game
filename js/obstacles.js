@@ -438,10 +438,10 @@
     },
 
     // ---- CRUSHER: a gunmetal block floating high up that slams down ----
-    // Its yellow eyes turn red just before it drops. It is always out of
-    // reach while floating, and slams while still ~90 px
-    // ahead of you, so it can never land on you. Once down, jump over it
-    // (or stand on it, like a crate).
+    // It rattles as you get close, its yellow eyes turn red, then it slams
+    // down just in front of you. It hangs above the highest jump, and it
+    // always starts falling far enough ahead that it can never land on
+    // you. Once down, jump over it (or land on it, like a crate).
     crusher: {
       size: () => ({ w: 20, h: 26 }),
       hitbox: { left: 1, right: 1, top: 0 },
@@ -455,8 +455,12 @@
       update(o, dt, g) {
         // Time Freeze holds it in the air (but never mid-slam).
         if (g.frozen && o.phase === 0) return;
+        // It waits until you're nearly there, then slams down right in
+        // front of you: jump onto it or over it straight away. The fall takes
+        // about 0.12 s and it always starts far enough ahead that it can
+        // never land on you, even if you jumped early.
         const gapToPlayer = o.x - (g.player.x + g.player.w);
-        if (o.phase === 0 && gapToPlayer <= 90) {
+        if (o.phase === 0 && gapToPlayer <= g.worldSpeed * 0.3 + 14) {
           o.phase = 1;
           o.vy = 400;
         } else if (o.phase === 1) {
@@ -473,9 +477,9 @@
       draw(ctx, o, g) {
         const gapToPlayer = o.x - (g.player.x + g.player.w);
         // Rattle a little when you're getting close (a warning)...
-        const shaking = o.phase === 0 && gapToPlayer < 160;
+        const shaking = o.phase === 0 && gapToPlayer < g.worldSpeed * 0.9 + 14;
         // ...and the eyes go red right before it falls.
-        const aboutToFall = (o.phase === 0 && gapToPlayer < 140) || o.phase === 1;
+        const aboutToFall = (o.phase === 0 && gapToPlayer < g.worldSpeed * 0.6 + 14) || o.phase === 1;
         const x = o.drawX + (shaking && Math.floor(g.time * 30) % 2 ? 1 : 0);
         const y = Math.round(o.y);
 
@@ -799,10 +803,11 @@
     },
 
     // ---- FIRE GRATE: a metal grate in the ground that blasts fire ----
-    // It glows and spits sparks for half a second before every blast, and
-    // never starts one when you're close, so the fire never comes up right
-    // under you. While it's blasting, jump over the flames (34 px tall,
-    // well under a jump). While it's quiet, just run over it.
+    // A trap: while you're far away it puffs now and then, but as you
+    // run up to it, it sparks for a quarter of a second and then BLASTS
+    // just as you arrive. Jump the flames (34 px tall, well under a jump).
+    // The blast always starts while you're still ahead of it, so the fire
+    // never comes up right under you.
     fireGrate: {
       size: () => ({ w: 16, h: 34 }),
       hitbox: { left: 1, right: 1, top: 3 },
@@ -811,6 +816,7 @@
       init(o) {
         o.phase = 0;                           // 0 quiet, 1 warning, 2 blasting
         o.timer = Math.random() * 0.8;
+        o.fired = false;                       // sprung the trap on you yet?
         o.bx = 3;                              // the flames are narrower than the grate
         o.bw = 10;
         o.y = C.GROUND_Y;                      // nothing to hit while quiet
@@ -819,10 +825,18 @@
         if (g.frozen) return;                  // Time Freeze
         o.timer += dt;
         const p = g.player;
+        const gap = o.x + o.bx - (p.x + p.w);      // from you to the flames
+        // The trap: as you run up to it, warn for 0.25 s, then blast so the
+        // flames come up about 0.3 s before you'd reach them.
+        if (!o.fired && gap <= g.worldSpeed * 0.55 + 4 && gap > 0) {
+          o.fired = true;
+          if (o.phase === 0) { o.phase = 1; o.timer = 0.25; }   // a short warning (0.25 s)
+          else if (o.phase === 1) o.timer = Math.max(o.timer, 0.25);
+          else o.timer = Math.min(o.timer, 0.1);                  // already blasting: keep it going
+        }
         if (o.phase === 0) {
-          // Don't start a blast if you're about to reach it (or on top of it).
-          const close = o.x - (p.x + p.w) < g.worldSpeed * 0.7 + 10 && o.x + o.w > p.x - 2;
-          if (o.timer > 1.4 && o.x < C.VIEW_W - 8 && !close) { o.phase = 1; o.timer = 0; }
+          // Far away: puff now and then, just for show.
+          if (!o.fired && o.timer > 1.4 && o.x < C.VIEW_W - 8 && gap > g.worldSpeed * 1.4) { o.phase = 1; o.timer = 0; }
         } else if (o.phase === 1) {
           if (Math.random() < 0.5) g.particles.spawn(o.x + OMJ.rand(4, 12), C.GROUND_Y - 2, OMJ.rand(-10, 10), OMJ.rand(-90, -40), 0.35, 1, Math.random() < 0.5 ? P.gold : '#ff8a3d', -50);
           if (o.timer > 0.5) { o.phase = 2; o.timer = 0; g.sound.play('grateFire'); }

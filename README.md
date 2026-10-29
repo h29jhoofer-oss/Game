@@ -70,16 +70,16 @@ bonuses don't make the game speed up faster: difficulty follows distance travell
 | Barrier | Tall: jump at the right moment. |
 | Saw | A big spinning blade half-sunk in the ground, sliding side to side. Watch where it is and jump it. |
 | Pop-up saw | A big blade that rises and sinks in the ground. Jump it, or time it and run over it while it's low. |
-| Crusher | A spiked gunmetal block floating high up. It rattles as you approach, its yellow eyes turn red, then it slams down while still ahead of you. Jump it (or stand on it). |
+| Crusher | A spiked gunmetal block floating high up. It rattles as you approach, its yellow eyes turn red, then it slams down **just in front of you**. Jump onto it or over it straight away. |
 | Crossbow | A big tower with a flaming arrow loaded. The tower is scenery; when nothing else is in the way, it fires the arrow along the ground: jump the arrow. |
 | Boulder (small or big) | A mossy rock that rolls at you once the way is clear. Too heavy to cut: jump it. |
-| Fire grate | A metal grate in the ground. Every so often it glows, spits sparks for half a second, then blasts a column of fire. Run over it while it's quiet, or jump the flames. |
+| Fire grate | A trap in the ground. Far away it puffs now and then, but as you run up to it, it sparks for a quarter of a second and then **blasts a column of fire just as you arrive**. Jump the flames. |
 
 Moving obstacles are still fair. The sliding saw never moves faster than the world, so it can't
-chase you. The pop-up saw never rises higher than a normal jump clears. The crusher always slams before you reach it. The crossbow waits until nothing else is
+chase you. The pop-up saw never rises higher than a normal jump clears. The crusher always starts falling far enough ahead that it can never land on you. The crossbow waits until nothing else is
 between you, and its arrow always gives you at least ¾ of a second. The boulder also waits until
-the way is clear. A fire grate never starts a blast when you're close to it (or above it), its
-flames are always low enough to jump, and it always warns you first.
+the way is clear. A fire grate always warns you first, its blast
+starts while you're still ahead of it, and its flames are always low enough to jump.
 
 ## Coins and boosts
 
