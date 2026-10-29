@@ -9,7 +9,8 @@
 // During the game we simply copy those canvases to the screen.
 // =====================================================================
 
-// Color key shared by the player sprites.
+// Color key shared by the player sprites. Each hero in characters.js
+// swaps in their own c / b / d colors.
 const PLAYER_COLORS = {
   k: PALETTE.void, // dark outline
   c: PALETTE.cyan, // bright body
@@ -347,7 +348,7 @@ function bakeSpriteSet(rows, colors, ghostColors) {
 
 // Filled in by Sprites.init() once the page has loaded.
 const Sprites = {
-  player: {},
+  players: {}, // one set of frames per hero, e.g. Sprites.players.brute.idle
   chaser: {},
   toxic: {},
   heart: {},
@@ -381,13 +382,20 @@ const Sprites = {
     for (const name in HEART_SPRITE_DATA) {
       this.heart[name] = bakeSprite(HEART_SPRITE_DATA[name], HEART_COLORS);
     }
-    for (const name in PLAYER_SPRITE_DATA) {
-      this.player[name] = bakeSpriteSet(PLAYER_SPRITE_DATA[name], PLAYER_COLORS, [
-        PALETTE.cyanDim,
-        PALETTE.blue,
-        PALETTE.darkBlue,
-        PALETTE.white, // last one: the white "I got hit" flash
-      ]);
+    // Each hero gets the same body baked in their own colors, plus
+    // silhouettes for the dash trail (bright -> dark) and the white hit flash.
+    for (const character of CHARACTERS) {
+      const colors = { ...PLAYER_COLORS, ...character.colors };
+      const set = {};
+      for (const name in PLAYER_SPRITE_DATA) {
+        set[name] = bakeSpriteSet(PLAYER_SPRITE_DATA[name], colors, [
+          character.colors.c,
+          character.colors.b,
+          character.colors.d,
+          PALETTE.white, // last one: the white "I got hit" flash
+        ]);
+      }
+      this.players[character.id] = set;
     }
   },
 };

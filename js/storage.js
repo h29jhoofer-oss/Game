@@ -42,6 +42,15 @@ const Save = {
     return true;
   },
 
+  // The last hero you picked, so the select screen remembers it.
+  loadCharacter() {
+    return this.read('character', 'runner');
+  },
+
+  saveCharacter(id) {
+    this.write('character', id);
+  },
+
   loadMuted() {
     return this.read('muted', false) === true;
   },

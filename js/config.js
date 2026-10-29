@@ -101,6 +101,7 @@ const WEAPON_CONFIG = {
   fireInterval: 0.6, // seconds between shots
   range: 95, // only shoot at enemies closer than this
   damage: 1,
+  damageMultiplier: 1, // set by the chosen hero (the Brute hero has 1.5)
   projectileSpeed: 190, // pixels per second
   projectileLifetime: 1.2, // seconds before a missed shot fizzles out
   pierce: 0, // how many extra enemies one shot can pass through
@@ -225,5 +226,7 @@ const GAS_CONFIG = {
 const HEART_DROP_CONFIG = {
   chance: { chaser: 0.05, toxic: 0.075, shooter: 0.1, brute: 0.15 }, // 0.05 = 5%
   bonusPerHeartLost: 0.05, // +5% to every chance each time you lose a heart
+  maxChance: 0.25, // no monster ever has more than a 25% chance
+  fullHealthMultiplier: 0.5, // with full hearts, every chance is halved
   maxOnFloor: 30, // performance limit for hearts lying around
 };

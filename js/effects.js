@@ -10,7 +10,6 @@ const SPARK_COLORS = {
   enemy: [PALETTE.white, PALETTE.yellow, PALETTE.orange, PALETTE.red, '#a3173a'],
   hit: [PALETTE.white, PALETTE.cyan, PALETTE.cyanDim],
   energy: [PALETTE.white, '#fffbd0', PALETTE.yellow],
-  player: [PALETTE.white, PALETTE.cyan, PALETTE.cyanDim, PALETTE.blue, PALETTE.darkBlue],
   wall: [PALETTE.cyan, PALETTE.cyanDim],
   shooter: [PALETTE.white, PALETTE.pink, PALETTE.purple, '#5a1a9a'],
   brute: [PALETTE.white, PALETTE.yellow, PALETTE.orange, '#a34a0a', PALETTE.void],

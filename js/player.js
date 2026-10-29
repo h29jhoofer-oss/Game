@@ -9,7 +9,7 @@ const TRAIL_COLOR_COUNT = 3; // the first 3 silhouette colors are for the dash t
 const HIT_FLASH_INDEX = 3; // the 4th silhouette is the white "hit" flash
 
 class Player {
-  constructor(x, y) {
+  constructor(x, y, character) {
     // Position of the CENTER of the player, in internal pixels.
     // We keep decimals here so movement is smooth, and only round
     // to whole pixels when drawing.
@@ -22,8 +22,12 @@ class Player {
     this.height = 10;
     this.facing = 1; // 1 = right, -1 = left
 
+    // Which hero this is (see characters.js), and their pictures.
+    this.character = character;
+    this.sprites = Sprites.players[character.id];
+
     // Stats that upgrades can improve.
-    this.speed = PLAYER_CONFIG.speed;
+    this.speed = PLAYER_CONFIG.speed * character.speed;
     this.magnetRadius = ORB_CONFIG.magnetRadius;
 
     // Dash state
@@ -35,8 +39,8 @@ class Player {
     this.ghostTimer = 0;
 
     // Health state
-    this.health = HEALTH_CONFIG.startHealth;
-    this.maxHealth = HEALTH_CONFIG.maxHealth;
+    this.health = character.startHealth;
+    this.maxHealth = character.maxHealth;
     this.radius = HEALTH_CONFIG.hitRadius;
     this.invulnerableTime = 0; // > 0 while the player can't be hurt
     this.hitFlashTime = 0; // > 0 while the player flashes white
@@ -234,7 +238,7 @@ class Player {
   draw(ctx) {
     // Dash trail first, so it appears behind the player.
     for (const ghost of this.ghosts) {
-      const sprite = Sprites.player[ghost.frame];
+      const sprite = this.sprites[ghost.frame];
       // Older ghosts use darker colors. No transparency or blur needed.
       const colorIndex = Math.min(TRAIL_COLOR_COUNT - 1, Math.floor((ghost.age / GHOST_LIFETIME) * TRAIL_COLOR_COUNT));
       const image = ghost.facing === 1 ? sprite.ghosts[colorIndex].right : sprite.ghosts[colorIndex].left;
@@ -255,7 +259,7 @@ class Player {
     // Defeated: flicker between white and normal, then vanish.
     // (The pixel explosion itself is spawned by game.js.)
     if (this.isDead()) {
-      const sprite = Sprites.player.idle;
+      const sprite = this.sprites.idle;
       const white = Math.floor(this.deathTime / 0.06) % 2 === 0;
       const image = white ? sprite.ghosts[HIT_FLASH_INDEX] : sprite;
       ctx.drawImage(this.facing === 1 ? image.right : image.left, drawX, drawY);
@@ -270,7 +274,7 @@ class Player {
 
     if (this.shieldReady) this.drawShield(ctx);
 
-    const sprite = Sprites.player[this.getFrameName()];
+    const sprite = this.sprites[this.getFrameName()];
     if (this.hitFlashTime > 0) {
       const flash = sprite.ghosts[HIT_FLASH_INDEX];
       ctx.drawImage(this.facing === 1 ? flash.right : flash.left, drawX, drawY);

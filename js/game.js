@@ -18,6 +18,7 @@ const Game = {
 
   // Which "mode" the game is in:
   //   'title'    — the start screen
+  //   'select'   — choosing a hero
   //   'playing'  — normal gameplay
   //   'paused'   — frozen, pause menu open
   //   'levelup'  — frozen, choosing an upgrade card
@@ -37,6 +38,7 @@ const Game = {
   kills: 0, // enemies defeated this run
   score: 0,
   best: null, // personal best, loaded from storage
+  characterId: 'runner', // the chosen hero (see characters.js)
   isNewBest: false, // did the last run beat the record?
   runRecorded: false, // makes sure one run is only saved once
 
@@ -81,6 +83,7 @@ const Game = {
     Arena.init();
     Sound.init();
     this.best = Save.loadBest();
+    this.characterId = getCharacter(Save.loadCharacter()).id;
     this.resetRun();
     this.setState('title');
     TitleScreen.open();
@@ -105,8 +108,12 @@ const Game = {
   resetRun() {
     const centerX = ARENA.x + ARENA.width / 2;
     const centerY = ARENA.y + ARENA.height / 2;
-    this.player = new Player(centerX, centerY);
+    const character = getCharacter(this.characterId);
+    this.player = new Player(centerX, centerY, character);
     this.weapon = new Weapon();
+    // The hero's weapon bonuses.
+    this.weapon.stats.range *= character.range;
+    this.weapon.stats.damageMultiplier = character.damage;
     this.enemies = [];
     this.projectiles = [];
     this.enemyShots = [];
@@ -139,6 +146,27 @@ const Game = {
     Transition.start(() => {
       this.resetRun();
       this.setState('playing');
+    });
+  },
+
+  openCharacterSelect() {
+    Transition.start(() => {
+      CharacterSelect.open(this);
+      this.setState('select');
+    });
+  },
+
+  chooseCharacter(id) {
+    this.characterId = id;
+    Save.saveCharacter(id);
+    this.startGame();
+  },
+
+  backToTitle() {
+    Transition.start(() => {
+      this.resetRun(); // so the title screen shows the chosen hero
+      this.setState('title');
+      TitleScreen.open();
     });
   },
 
@@ -230,6 +258,7 @@ const Game = {
     Effects.update(dt); // explosions keep playing on the game-over screen
 
     if (this.state === 'title') TitleScreen.update(dt, this);
+    else if (this.state === 'select') CharacterSelect.update(dt, this);
     else if (this.state === 'playing') this.updatePlaying(dt);
     else if (this.state === 'dying') this.updateDying(dt);
     else if (this.state === 'gameover') GameOverScreen.update(dt, this);
@@ -372,10 +401,17 @@ const Game = {
     if (this.orbs.length > ORB_CONFIG.maxOrbs) this.orbs.splice(0, this.orbs.length - ORB_CONFIG.maxOrbs);
   },
 
-  // Every monster type has its own chance to drop a heart, and each heart
-  // you've lost this run adds +5% to all of them.
+  // Every monster type has its own chance to drop a heart:
+  //   1. start from that monster's base chance
+  //   2. add +5% for every heart you've lost this run
+  //   3. never go above 25%
+  //   4. if your hearts are full, cut it in half
   getHeartDropChance(type) {
-    return HEART_DROP_CONFIG.chance[type] + this.heartsLost * HEART_DROP_CONFIG.bonusPerHeartLost;
+    const config = HEART_DROP_CONFIG;
+    let chance = config.chance[type] + this.heartsLost * config.bonusPerHeartLost;
+    chance = Math.min(chance, config.maxChance);
+    if (this.player.hasFullHealth()) chance *= config.fullHealthMultiplier;
+    return chance;
   },
 
   maybeDropHeart(enemy) {
@@ -473,7 +509,7 @@ const Game = {
     this.hurtFlashTime = 0.15;
     if (fatal) {
       this.shake(4, 0.5);
-      Effects.explode(player.x, player.y, SPARK_COLORS.player, 3);
+      Effects.explode(player.x, player.y, getCharacterExplosionColors(player.character), 3);
       Sound.play('death');
       this.setState('dying');
     } else {
@@ -506,6 +542,8 @@ const Game = {
 
     if (this.state === 'title') {
       TitleScreen.draw(ctx, this);
+    } else if (this.state === 'select') {
+      CharacterSelect.draw(ctx, this);
     } else {
       this.drawWorld(ctx);
       this.drawHud(ctx);
@@ -626,7 +664,7 @@ const Game = {
       'ORBS ' + this.orbs.length + ' PARTICLES ' + Effects.particles.length + ' GAS ' + this.gasClouds.length,
       'XP ' + this.xp + '/' + this.xpToNext + ' NEXT SURGE ' + Math.ceil(this.spawner.surgeTimer) + 'S',
       'HEARTS LOST ' + this.heartsLost + ' CHASER HEART DROP ' + Math.round(this.getHeartDropChance('chaser') * 1000) / 10 + '%',
-      'FIRE ' + this.weapon.stats.fireInterval.toFixed(2) + 'S DMG ' + this.weapon.stats.damage + ' PIERCE ' + this.weapon.stats.pierce + ' BOLTS ' + this.weapon.stats.projectileCount + ' TWIN ' + this.weapon.stats.burstExtra,
+      'FIRE ' + this.weapon.stats.fireInterval.toFixed(2) + 'S DMG ' + this.weapon.stats.damage * this.weapon.stats.damageMultiplier + ' PIERCE ' + this.weapon.stats.pierce + ' BOLTS ' + this.weapon.stats.projectileCount + ' TWIN ' + this.weapon.stats.burstExtra,
       'SPAWN EVERY ' + this.spawner.getInterval(this.survivalTime).toFixed(2) + 'S',
     ];
     lines.forEach((line, i) => {
@@ -641,6 +679,7 @@ const Game = {
   getActiveScreen() {
     if (Transition.active) return null;
     if (this.state === 'title') return TitleScreen;
+    if (this.state === 'select') return CharacterSelect;
     if (this.state === 'paused') return PauseMenu;
     if (this.state === 'gameover' && GameOverScreen.isReady(this)) return GameOverScreen;
     return null;

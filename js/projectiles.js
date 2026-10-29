@@ -9,7 +9,7 @@ class Projectile {
     this.dirX = dirX; // direction, length 1
     this.dirY = dirY;
     this.speed = stats.projectileSpeed;
-    this.damage = stats.damage;
+    this.damage = stats.damage * stats.damageMultiplier; // the hero's multiplier applies to upgrades too
     this.pierceLeft = stats.pierce; // extra enemies it may pass through
     this.life = stats.projectileLifetime;
     this.radius = 2;

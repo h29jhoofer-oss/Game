@@ -1,6 +1,7 @@
 // =====================================================================
 // screens.js — the menus around the gameplay:
 //   TitleScreen    — logo, character lineup, PLAY, personal best
+//   CharacterSelect — choose your hero before a run
 //   PauseMenu      — resume / restart / sound / quit
 //   GameOverScreen — results, personal best, restart
 //
@@ -37,7 +38,7 @@ const TitleScreen = {
   activate(id, game) {
     if (id === 'play') {
       Sound.play('uiSelect');
-      game.startGame();
+      game.openCharacterSelect();
     }
     if (id === 'sound') Sound.toggleMute();
   },
@@ -57,7 +58,7 @@ const TitleScreen = {
     const logoX = Math.floor((VIEW_WIDTH - LOGO.width) / 2);
     ctx.drawImage(this.getShinyLogo(), logoX, LOGO.y - drop);
 
-    this.drawLineup(ctx);
+    this.drawLineup(ctx, game);
 
     const [play, sound] = this.getButtons();
     drawButton(ctx, play.box, 'PLAY', { primary: true, active: pointInBox(game.mouseX, game.mouseY, play.box) || Math.floor(this.time * 2) % 2 === 0 });
@@ -76,11 +77,12 @@ const TitleScreen = {
   },
 
   // Four characters standing in a row, drawn at exactly 2x size.
-  drawLineup(ctx) {
+  drawLineup(ctx, game) {
     const t = this.time;
+    const hero = getCharacter(game.characterId); // your last-picked hero leads the lineup
     const baseline = 110; // where their feet touch the floor
     const members = [
-      { sprite: Sprites.player[WALK_CYCLE[Math.floor(t / 0.12) % 4]], label: 'YOU', color: PALETTE.cyan, facing: 'right' },
+      { sprite: Sprites.players[hero.id][WALK_CYCLE[Math.floor(t / 0.12) % 4]], label: 'YOU', color: hero.uiColor, facing: 'right' },
       { sprite: Sprites.chaser[Math.floor(t / 0.2) % 2 === 0 ? 'hopA' : 'hopB'], label: 'CHASER', color: PALETTE.red, facing: 'left' },
       { sprite: Sprites.toxic[Math.floor(t / 0.2 + 1) % 2 === 0 ? 'hopA' : 'hopB'], label: 'TOXIC', color: PALETTE.green, facing: 'left' },
       { sprite: Sprites.shooter[Math.floor(t / 0.25) % 2 === 0 ? 'floatA' : 'floatB'], label: 'SHOOTER', color: PALETTE.purple, facing: 'left' },
@@ -181,6 +183,127 @@ function bakeLogoWord(ctx, text, centerX, y, scale, bands, shadowColor) {
   face.ctx.fillRect(0, y + height - scale, ctx.canvas.width, scale); // dark bottom band
   ctx.drawImage(face.canvas, 0, 0);
 }
+
+// ---------------------------------------------------------------------
+// Character select
+// ---------------------------------------------------------------------
+const HERO_CARD = { width: 92, height: 112, gap: 8, y: 34 };
+
+const CharacterSelect = {
+  selected: 0,
+  time: 0,
+
+  open(game) {
+    this.time = 0;
+    // Start on the hero you picked last time.
+    this.selected = Math.max(0, CHARACTERS.findIndex((c) => c.id === game.characterId));
+  },
+
+  getCardBox(index) {
+    const totalWidth = CHARACTERS.length * HERO_CARD.width + (CHARACTERS.length - 1) * HERO_CARD.gap;
+    const startX = Math.floor((VIEW_WIDTH - totalWidth) / 2);
+    return { x: startX + index * (HERO_CARD.width + HERO_CARD.gap), y: HERO_CARD.y, width: HERO_CARD.width, height: HERO_CARD.height };
+  },
+
+  getButtons() {
+    const buttons = CHARACTERS.map((character, index) => ({ id: 'hero', index, box: this.getCardBox(index) }));
+    buttons.push({ id: 'back', box: { x: ARENA.x + 4, y: 157, width: 36, height: 13 } });
+    return buttons;
+  },
+
+  activate(id, game) {
+    Sound.play('uiSelect');
+    if (id === 'hero') game.chooseCharacter(CHARACTERS[this.selected].id);
+    if (id === 'back') game.backToTitle();
+  },
+
+  update(dt, game) {
+    this.time += dt;
+    if (this.time < 0.25) return; // ignore the key press that opened this screen
+    const count = CHARACTERS.length;
+    if (Input.wasPressed('ArrowLeft') || Input.wasPressed('KeyA')) {
+      this.selected = (this.selected + count - 1) % count;
+      Sound.play('uiMove');
+    }
+    if (Input.wasPressed('ArrowRight') || Input.wasPressed('KeyD')) {
+      this.selected = (this.selected + 1) % count;
+      Sound.play('uiMove');
+    }
+    ['Digit1', 'Digit2', 'Digit3'].forEach((key, index) => {
+      if (index < count && Input.wasPressed(key)) {
+        this.selected = index;
+        this.activate('hero', game);
+      }
+    });
+    if (Input.wasPressed('Enter') || Input.wasPressed('Space')) this.activate('hero', game);
+    if (Input.wasPressed('Escape')) this.activate('back', game);
+  },
+
+  draw(ctx, game) {
+    Arena.draw(ctx, game.animTime);
+    ctx.drawImage(getDitherOverlay(), 0, 0);
+    const cx = VIEW_WIDTH / 2;
+    drawText(ctx, 'CHOOSE YOUR HERO', cx, 12, PALETTE.cyan, { align: 'center', scale: 2, shadow: PALETTE.darkBlue });
+
+    CHARACTERS.forEach((character, index) => this.drawCard(ctx, character, index));
+
+    const back = this.getButtons().find((button) => button.id === 'back');
+    drawButton(ctx, back.box, 'BACK', { active: pointInBox(game.mouseX, game.mouseY, back.box) });
+    drawText(ctx, '1 2 3 OR ARROWS + ENTER', cx + 20, 161, PALETTE.blue, { align: 'center' });
+  },
+
+  drawCard(ctx, character, index) {
+    const box = this.getCardBox(index);
+    const isSelected = index === this.selected;
+    const x = box.x;
+    const y = box.y - (isSelected ? 3 : 0); // the selected card lifts up
+    const w = box.width;
+    const h = box.height;
+    const ccx = x + Math.floor(w / 2);
+
+    drawCardFrame(ctx, x, y, w, h, isSelected ? PALETTE.yellow : PALETTE.wallDark, isSelected ? PALETTE.navy : PALETTE.void);
+    drawText(ctx, String(index + 1), x + 4, y + 4, isSelected ? PALETTE.yellow : PALETTE.blue);
+
+    // The hero at exactly 3x size: walking if selected, idle otherwise.
+    const frames = Sprites.players[character.id];
+    const frameName = isSelected
+      ? WALK_CYCLE[Math.floor(this.time / 0.12) % 4]
+      : Math.floor(this.time / 0.5) % 2 === 0 ? 'idle' : 'idleBreath';
+    const image = frames[frameName].right;
+    const spriteX = ccx - Math.floor((image.width * 3) / 2);
+    ctx.fillStyle = PALETTE.black;
+    ctx.fillRect(spriteX + 3, y + 39, image.width * 3 - 6, 2); // shadow
+    ctx.drawImage(image, spriteX, y + 9, image.width * 3, image.height * 3);
+
+    drawText(ctx, character.name, ccx, y + 45, character.uiColor, { align: 'center', shadow: PALETTE.black });
+    drawText(ctx, character.tagline, ccx, y + 53, PALETTE.cyanDim, { align: 'center' });
+
+    // Stats compared with normal: green = better, red = worse.
+    const stats = [['SPEED', character.speed], ['DAMAGE', character.damage], ['RANGE', character.range]];
+    stats.forEach(([label, value], i) => {
+      const rowY = y + 65 + i * 8;
+      const color = value > 1 ? PALETTE.green : value < 1 ? PALETTE.red : PALETTE.white;
+      drawText(ctx, label, x + 6, rowY, PALETTE.blue);
+      drawText(ctx, 'X' + value, x + w - 6, rowY, color, { align: 'right' });
+    });
+
+    // Hearts: one icon per possible heart, filled for the ones you start with.
+    const rowY = y + 92;
+    drawText(ctx, 'HEARTS', x + 6, rowY + 1, PALETTE.blue);
+    for (let i = 0; i < character.maxHealth; i++) {
+      const heart = i < character.startHealth ? Sprites.heart.full : Sprites.heart.empty;
+      ctx.drawImage(heart, x + w - 6 - character.maxHealth * 8 + i * 8 + 1, rowY);
+    }
+
+    // Blinking arrow above the selected card.
+    if (isSelected && Math.floor(this.time * 4) % 2 === 0) {
+      ctx.fillStyle = PALETTE.yellow;
+      ctx.fillRect(ccx - 2, y - 6, 5, 1);
+      ctx.fillRect(ccx - 1, y - 5, 3, 1);
+      ctx.fillRect(ccx, y - 4, 1, 1);
+    }
+  },
+};
 
 // ---------------------------------------------------------------------
 // Pause menu

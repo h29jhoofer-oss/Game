@@ -39,10 +39,22 @@ The mouse works everywhere too: the PLAY button, menu buttons, upgrade cards, an
 
 - **Survive.** You earn 10 points every second you're alive.
 - **Defeat enemies.** Your blaster auto-aims at the nearest enemy in range. Chasers are worth 25 points, Toxic Slimes 30, Shooters 50, and Brutes 120.
-- **Grab hearts.** Defeated monsters sometimes drop a heart: Chasers 5% of the time, Toxic Slimes 7.5%, Shooters 10%, Brutes 15%. Every heart you lose adds +5% to all of these for the rest of the run, so the game helps you when you're struggling. You start with 3 hearts and can hold up to 5. Hearts never disappear from the floor and get pulled in by the magnet like energy. When your hearts are full, dropped hearts stay where they are, saved for later.
+- **Grab hearts.** Defeated monsters sometimes drop a heart: Chasers 5% of the time, Toxic Slimes 7.5%, Shooters 10%, Brutes 15%. Every heart you lose adds +5% to all of these for the rest of the run, up to a cap of 25%. While your hearts are full, every chance is halved. Hearts never disappear from the floor and get pulled in by the magnet like energy. When your hearts are full, dropped hearts stay where they are, saved for later.
 - **Collect energy.** Yellow orbs fill your experience bar. A full bar is a **level-up**: the game freezes and you choose one of three random upgrades.
 - **Watch for warnings.** Blinking brackets show where enemies will appear (red for Chaser, green for Toxic Slime, purple for Shooter, orange for Brute). A Shooter's eye glows pink right before it fires. "SWARM INCOMING!" means a ring of enemies is about to surround you, so dash out.
 - **Beat your best.** Your top score is saved in the browser and shown on the title screen.
+
+### Heroes
+
+After pressing PLAY you choose a hero with ← → and ENTER, keys 1–3, or the mouse. Your choice is remembered, and restarting keeps the same hero.
+
+| Hero | Speed | Damage | Range | Hearts (start / max) |
+| --- | --- | --- | --- | --- |
+| **Runner** (blue) | ×1 | ×1 | ×1 | 3 / 5 |
+| **Brute** (orange) | ×0.75 | ×1.5 | ×1 | 3 / 5 |
+| **Speeder** (purple) | ×1.75 | ×1 | ×1.5 | 3 / 3 |
+
+The multipliers keep working on top of upgrades: the Brute's Heavy Shots hit for (1 + 1) × 1.5 = 3.
 
 ### Enemies
 
@@ -95,6 +107,7 @@ The scripts in `js/` load in this order. Each file has one job:
 | `storage.js` | Saves and loads the personal best and the mute setting with `localStorage`. |
 | `audio.js` | Synthesized retro sounds. Each sound is a short "recipe" of beeps and noise. |
 | `input.js` | Remembers which keys are held and which were just pressed. Blocks page scrolling for game keys only. |
+| `characters.js` | The playable heroes: name, colors, and stat multipliers. Add a hero by adding one entry. |
 | `font.js` | A hand-made 3×5 pixel font. |
 | `sprites.js` | All character pixel art, written as text grids and baked into tiny canvases at startup. |
 | `arena.js` | The background, floor tiles, walls, glowing tiles, and stars. |
@@ -109,7 +122,7 @@ The scripts in `js/` load in this order. Each file has one job:
 | `levelup.js` | The level-up card screen. |
 | `ui.js` | Shared interface pieces: panels, bars, buttons, icons. |
 | `transition.js` | The pixel wipe between screens. |
-| `screens.js` | The title screen (with its big logo), the pause menu, and the results screen. |
+| `screens.js` | The title screen (with its big logo), the hero select screen, the pause menu, and the results screen. |
 | `game.js` | The game loop, game states, combat, collisions, and HUD. It ties everything together. |
 | `main.js` | Starts everything and scales the canvas. |
 
@@ -119,7 +132,7 @@ The scripts in `js/` load in this order. Each file has one job:
 - **Delta time (`dt`).** Every frame, the loop measures how many seconds have passed. Movement is `speed × dt`, so the game runs at the same speed on 60 Hz and 144 Hz screens. `dt` is capped so a frozen tab doesn't cause a jump.
 - **Decimal positions, whole-pixel drawing.** Positions keep their decimals for smooth movement but are rounded with `Math.round` when drawn, so sprites always sit exactly on the pixel grid.
 - **One game loop only.** `Game.start()` refuses to start a second loop.
-- **Game states.** The game is always in exactly one state: `title`, `playing`, `paused`, `levelup`, `dying`, or `gameover`. `update()` runs only the code for that state. That's what makes pausing, level-ups, and restarting reliable.
+- **Game states.** The game is always in exactly one state: `title`, `select`, `playing`, `paused`, `levelup`, `dying`, or `gameover`. `update()` runs only the code for that state. That's what makes pausing, level-ups, and restarting reliable.
 - **Cleaning up.** Shots, orbs, particles, and enemies are flagged when finished and filtered out every frame. Each list also has a maximum size, so memory never piles up.
 - **Inheritance for enemies.** `Chaser`, `Shooter`, and `Brute` all `extend Enemy`, and `ToxicSlime` extends `Chaser`, so it reuses all of the Chaser's movement and only changes its look, numbers, and what happens when it dies. Each only describes what makes it different, like where it wants to go (`think()`) or shooting.
 - **Data-driven upgrades.** Each upgrade is a small object with an `apply(game)` function. Add a new one by adding one entry to the list in `upgrades.js`.
