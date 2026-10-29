@@ -914,7 +914,8 @@ OMJ.Game = class {
     this.sound.play('kick');
     this.particles.burst(o.x + o.w / 2, o.y + o.h / 2, 8, 30, 90, -Math.PI, 0, 0.35, o.type.debris, 200);
     o.origType = o.type;
-    o.type = OMJ.SHELL;
+    o.type = o.type.defeated ? OMJ[o.type.defeated] : OMJ.SHELL;   // most monsters flip over; Shellbacks leave a shell
+    o.vy = -200;
     o.timer = 0;
   }
 

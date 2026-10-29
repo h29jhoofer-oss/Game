@@ -219,6 +219,126 @@
     },
   };
 
+  // ---- Pits ---------------------------------------------------
+  // A hole dug into the ground: rough dirt walls that get darker the
+  // deeper they go, the far wall in shadow, roots and stones sticking
+  // out, and torn grass hanging over the edges.
+  const PIT_BANDS = ['#5a3518', '#4a2b16', '#3a2214', '#2c1a16', '#20131a', P.pit];   // far wall, top to bottom
+  const WALL = [P.dirt, P.dirtDark, '#553317', '#40261a'];                             // side walls, by depth
+  // A little repeatable "random" number from a few whole numbers.
+  function pitNoise(a, b, c) {
+    let h = (a * 374761393 + b * 668265263 + c * 2147483647) | 0;
+    h = (h ^ (h >>> 13)) * 1274126177;
+    return ((h ^ (h >>> 16)) >>> 0) % 1000 / 1000;
+  }
+  function drawPit(ctx, x, w, g) {
+    const top = C.GROUND_Y;
+    const depth = C.VIEW_H - top;
+    // The far wall, fading into the dark
+    for (let i = 0; i < PIT_BANDS.length; i++) {
+      ctx.fillStyle = PIT_BANDS[i];
+      const y = top + (i === 0 ? 0 : 3 + i * 4);
+      ctx.fillRect(x, y, w, i === PIT_BANDS.length - 1 ? depth : 7);
+    }
+    // A shadow under the near lip, and the dirt line of the far wall
+    ctx.fillStyle = '#2a1a14';
+    ctx.fillRect(x + 2, top + 3, w - 4, 1);
+    ctx.fillStyle = '#6b4220';
+    for (let i = 4; i < w - 6; i += 7) ctx.fillRect(x + i + Math.floor(pitNoise(w, i, 7) * 3), top + 6, 2, 1);
+    // Pebbles and clumps in the far wall (fading out with depth)
+    for (let i = 0; i < w; i += 5) {
+      const n = pitNoise(w, i, 5);
+      const r = 8 + Math.floor(n * 14);
+      ctx.fillStyle = r < 14 ? '#6b4220' : '#40261a';
+      ctx.fillRect(x + i + Math.floor(n * 4), top + r, n > 0.5 ? 2 : 1, 1);
+    }
+    // Rough side walls: uneven row by row, wider near the top
+    // (that's where you can see more of them), with a lit edge.
+    let lastLeft = 0;
+    let lastRight = 0;
+    for (let r = 0; r < depth; r++) {
+      const shade = WALL[Math.min(WALL.length - 1, Math.floor(r / 8))];
+      const flare = r < 4 ? 3 - r : 0;                // the edge crumbles in at the very top
+      const left = 3 + flare + Math.floor(pitNoise(w, r >> 1, 1) * 3);
+      const right = 3 + flare + Math.floor(pitNoise(w, r >> 1, 2) * 3);
+      ctx.fillStyle = shade;
+      ctx.fillRect(x, top + r, left, 1);
+      ctx.fillRect(x + w - right, top + r, right, 1);
+      if (r < 16) {                                   // light catching the top of each wall
+        ctx.fillStyle = r < 8 ? P.dirtLight : P.dirt;
+        if (left > lastLeft || r === 0) ctx.fillRect(x + left - 1, top + r, 1, 1);
+        if (right > lastRight || r === 0) ctx.fillRect(x + w - right, top + r, 1, 1);
+      }
+      ctx.fillStyle = '#24151a';                      // dark edge where wall meets hole
+      ctx.fillRect(x + left, top + r, 1, 1);
+      ctx.fillRect(x + w - right - 1, top + r, 1, 1);
+      lastLeft = left;
+      lastRight = right;
+    }
+    // Stones stuck in the walls
+    ctx.fillStyle = P.dirtLight;
+    ctx.fillRect(x + 1, top + 10, 2, 2);
+    ctx.fillRect(x + w - 3, top + 17, 2, 1);
+    ctx.fillStyle = '#8f8a9e';
+    ctx.fillRect(x + w - 4, top + 8, 3, 2);
+    ctx.fillRect(x + 1, top + 21, 2, 1);
+    // Roots dangling from each side
+    ctx.fillStyle = P.woodDark;
+    for (let side = 0; side < 2; side++) {
+      let rx = side ? x + w - 4 : x + 3;
+      const len = 6 + Math.floor(pitNoise(w, side, 3) * 6);
+      for (let k = 0; k < len; k++) {
+        ctx.fillRect(rx, top + 4 + k, 1, 1);
+        if (k % 3 === 2) rx += side ? -1 : 1;      // wiggles into the hole
+      }
+    }
+    // Torn grass edge folding over the lip, with tufts hanging down
+    ctx.fillStyle = P.grass;
+    ctx.fillRect(x, top, 3, 2); ctx.fillRect(x + w - 3, top, 3, 2);
+    ctx.fillStyle = P.grassDark;
+    ctx.fillRect(x, top + 2, 2, 1); ctx.fillRect(x + w - 2, top + 2, 2, 1);
+    ctx.fillRect(x + 2, top + 2, 1, 3); ctx.fillRect(x + 3, top + 2, 1, 1);
+    ctx.fillRect(x + w - 3, top + 2, 1, 2); ctx.fillRect(x + w - 4, top + 2, 1, 1);
+    ctx.fillStyle = P.grassLight;
+    ctx.fillRect(x, top, 2, 1); ctx.fillRect(x + w - 2, top, 2, 1);
+    // A dust speck drifting down, now and then
+    if (g) {
+      const t = (g.time * 0.8 + pitNoise(w, 9, 9)) % 1;
+      ctx.fillStyle = P.dirtLight;
+      ctx.fillRect(x + 6 + Math.floor(pitNoise(w, 4, 4) * (w - 12)), top + 4 + Math.floor(t * 20), 1, 1);
+      // Match the darker ground at sunset and night
+      const tint = g.background.groundTint;
+      if (tint > 0) {
+        ctx.globalAlpha = tint;
+        ctx.fillStyle = '#0b0f2b';
+        ctx.fillRect(x, top, w, depth);
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  // ---- Knocked out monster ------------------------------------
+  // Defeated Buzzbees and Bristleboars flip over and fall off the screen.
+  OMJ.KO = {
+    harmless: true,
+    debris: [P.white],
+    deathLines: [''],
+    update(o, dt, g, speed) {
+      o.x += speed * 0.4 * dt;                 // tumbles back a little
+      o.vy += 900 * dt;
+      o.y += o.vy * dt;
+      if (o.y > C.VIEW_H + 4) o.active = false;
+    },
+    draw(ctx, o, g) {
+      const cy = Math.round(o.y + o.h / 2);
+      ctx.save();
+      ctx.translate(0, cy * 2);
+      ctx.scale(1, -1);                        // upside down
+      o.origType.draw(ctx, o, g);
+      ctx.restore();
+    },
+  };
+
   // ---- Fire (for the crossbow's flaming arrows) --------------
   const FIRE_ORANGE = '#ff8a3d';
 
@@ -314,22 +434,7 @@
       size: (width) => ({ w: width, h: 0 }),
       isGap: true,
       deathLines: ['You found the void. It found you back.', 'Mind the gap!', 'Down you go! Wheee...'],
-      draw(ctx, o) {
-        const x = o.drawX;
-        const depth = C.VIEW_H - C.GROUND_Y;
-        ctx.fillStyle = P.pit;
-        ctx.fillRect(x, C.GROUND_Y, o.w, depth);
-        ctx.fillStyle = P.pitTop;
-        ctx.fillRect(x, C.GROUND_Y, o.w, 3);
-        // Dirt walls on both sides
-        ctx.fillStyle = P.dirtDark;
-        ctx.fillRect(x, C.GROUND_Y + 2, 2, depth);
-        ctx.fillRect(x + o.w - 2, C.GROUND_Y + 2, 2, depth);
-        // Little grass lips hanging over the edge
-        ctx.fillStyle = P.grassDark;
-        ctx.fillRect(x, C.GROUND_Y, 1, 3);
-        ctx.fillRect(x + o.w - 1, C.GROUND_Y, 1, 3);
-      },
+      draw(ctx, o, g) { drawPit(ctx, o.drawX, o.w, g); },
     },
 
     // ---- CRUSHER: a gunmetal block floating high up that slams down ----
@@ -648,6 +753,145 @@
         ctx.fillStyle = SHELL_BEAK;
         ctx.fillRect(x, hy + 4, 2, 1);                  // beak
         drawShell(ctx, x + 3, y, 0);
+      },
+    },
+
+    // ---- BUZZBEE: a grumpy bee buzzing just above the ground ----
+    // It flies too low to run under, so jump over it, STOMP it (bounce
+    // off its back), or swing at it. Like the Shellback, it only flies
+    // at you once nothing else is in the way.
+    buzzbee: {
+      size: () => ({ w: 14, h: 11 }),
+      hitbox: { left: 2, right: 2, top: 2 },
+      enemy: true,
+      stompable: true,
+      defeated: 'KO',
+      debris: [P.gold, P.ink, P.white],
+      deathLines: ['Stung!', 'Buzz off! (It did not.)', 'Bee-ten.', 'That bee meant business.'],
+      init(o) {
+        o.timer = Math.random() * 3;
+        o.extra = C.GROUND_Y - 11 - 6;         // hovers 6 px above the ground
+        o.y = o.extra;
+      },
+      update(o, dt, g) {
+        if (g.frozen) return;                  // Time Freeze
+        o.timer += dt;
+        o.y = o.extra - Math.round(Math.sin(o.timer * 5) * 2);
+        if (o.x < C.VIEW_W - 4 && !g.hasDangerBefore(o.x)) o.x -= 50 * dt;   // flies at you
+      },
+      draw(ctx, o) {
+        const x = o.drawX;
+        const y = Math.round(o.y);
+        const flap = Math.floor(o.timer * 30) % 2;
+        // Wings (a blur of white)
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 5, y - 3 + flap, 4, 4);
+        ctx.fillRect(x + 8, y - 4 + flap * 2, 4, 4);
+        ctx.fillStyle = '#e8f6ff';
+        ctx.fillRect(x + 6, y - 2 + flap, 2, 2);
+        ctx.fillRect(x + 9, y - 3 + flap * 2, 2, 2);
+        // Striped body
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 1, y + 1, 12, 9);
+        ctx.fillRect(x + 2, y, 10, 11);
+        ctx.fillStyle = P.gold;
+        ctx.fillRect(x + 2, y + 1, 10, 9);
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 6, y + 1, 2, 9);
+        ctx.fillRect(x + 10, y + 1, 1, 9);
+        ctx.fillStyle = '#fff2a8';
+        ctx.fillRect(x + 3, y + 2, 2, 1);
+        // Stinger at the back
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 13, y + 5, 2, 1);
+        // Big angry eye and a frown, facing you
+        ctx.fillStyle = P.white;
+        ctx.fillRect(x + 2, y + 3, 3, 3);
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 2, y + 4, 1, 2);
+        ctx.fillRect(x + 2, y + 2, 3, 1);
+        ctx.fillRect(x + 3, y + 7, 2, 1);
+        // Little dangling legs
+        ctx.fillRect(x + 4, y + 11, 1, 1); ctx.fillRect(x + 8, y + 11, 1, 1);
+      },
+    },
+
+    // ---- BRISTLEBOAR: a spiky boar that CHARGES ----
+    // It waits, then (once nothing else is in the way and you're on the
+    // ground) it scrapes its hoof, snorts... and charges. The spikes on
+    // its back mean no stomping: jump over it, or swing at it.
+    bristleboar: {
+      size: () => ({ w: 20, h: 13 }),
+      hitbox: { left: 2, right: 2, top: 4 },
+      enemy: true,
+      defeated: 'KO',
+      debris: ['#7a5a48', '#4e382c', P.white],
+      deathLines: ['Run over by a boar.', 'Hogwash!', 'It charged. You paid.', 'Pointy AND fast. Rude.'],
+      init(o) { o.phase = 0; o.timer = Math.random(); },
+      update(o, dt, g) {
+        if (g.frozen) return;                  // Time Freeze
+        o.timer += dt;
+        const p = g.player;
+        if (o.phase === 0) {
+          // Close enough, nothing in between and you're on your feet: get ready!
+          if (o.x < p.x + 210 && o.x > p.x + 40 && p.grounded && !g.hasDangerBefore(o.x)) {
+            o.phase = 1;
+            o.timer = 0;
+            g.sound.play('snort');
+          }
+        } else if (o.phase === 1) {
+          if (Math.random() < 0.5) g.particles.spawn(o.x + 16, C.GROUND_Y - 1, OMJ.rand(20, 60), OMJ.rand(-40, -15), 0.3, 1, P.dust, 200);
+          if (o.timer > 0.35) { o.phase = 2; o.timer = 0; }
+        } else {
+          o.x -= 140 * dt;                     // CHARGE!
+          if (Math.random() < 0.6) g.particles.spawn(o.x + 18, C.GROUND_Y - 1, 60, OMJ.rand(-30, -5), 0.25, OMJ.randInt(1, 2), P.dust, 200);
+        }
+      },
+      draw(ctx, o) {
+        const x = o.drawX;
+        const y = Math.round(o.y);
+        const charging = o.phase === 2;
+        const leg = charging ? Math.floor(o.timer * 16) % 2 : o.phase === 1 ? Math.floor(o.timer * 12) % 2 : 0;
+        const FUR = '#7a5a48';
+        const DARK = '#4e382c';
+        // Spikes along its back
+        ctx.fillStyle = P.ink;
+        for (let i = 0; i < 5; i++) ctx.fillRect(x + 6 + i * 3, y + 1 - (i % 2), 2, 4);
+        ctx.fillStyle = P.metalLight;
+        for (let i = 0; i < 5; i++) ctx.fillRect(x + 6 + i * 3, y + 2 - (i % 2), 1, 2);
+        // Legs
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 5 - leg, y + 10, 3, 3);
+        ctx.fillRect(x + 14 + leg, y + 10, 3, 3);
+        // Body
+        ctx.fillRect(x + 4, y + 3, 16, 8);
+        ctx.fillStyle = FUR;
+        ctx.fillRect(x + 5, y + 4, 14, 6);
+        ctx.fillStyle = DARK;
+        ctx.fillRect(x + 5, y + 8, 14, 2);
+        ctx.fillRect(x + 19, y + 4, 1, 1);                    // tail
+        // Head (lowered when charging)
+        const hy = y + (charging ? 5 : 4);
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x, hy, 7, 7);
+        ctx.fillStyle = FUR;
+        ctx.fillRect(x + 1, hy + 1, 5, 5);
+        ctx.fillStyle = '#d99a8a';                            // snout
+        ctx.fillRect(x, hy + 3, 2, 3);
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x, hy + 4, 1, 1);
+        ctx.fillStyle = P.white;                              // tusk
+        ctx.fillRect(x + 2, hy + 5, 1, 2);
+        ctx.fillStyle = o.phase ? P.danger : P.ink;           // eye goes red
+        ctx.fillRect(x + 3, hy + 2, 1, 1);
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 2, hy + 1, 3, 1);                    // brow
+        ctx.fillRect(x + 4, hy - 1, 2, 2);                    // ear
+        if (o.phase === 1) {                                  // steam from its snout
+          ctx.fillStyle = P.white;
+          ctx.fillRect(x - 3, hy + 3, 2, 1);
+          ctx.fillRect(x - 5, hy + 2, 1, 1);
+        }
       },
     },
 

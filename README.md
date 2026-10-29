@@ -66,7 +66,7 @@ bonuses don't make the game speed up faster: difficulty follows distance travell
 | --- | --- |
 | Spikes | Jump over. |
 | Crate (1 or 2 high) | Jump over, or land on top and jump off. |
-| Gap | Jump across. |
+| Gap | A hole dug into the ground. Jump across. |
 | Barrier | Tall: jump at the right moment. |
 | Saw | A big spinning blade half-sunk in the ground, sliding side to side. Watch where it is and jump it. |
 | Pop-up saw | A big blade that rises and sinks in the ground. Jump it, or time it and run over it while it's low. |
@@ -124,10 +124,14 @@ Any swing or plunge defeats a monster. Touching one any other way still ends you
 | Monster | What it does |
 | --- | --- |
 | Shellback | A grumpy little turtle that waddles toward you. Jump over it, **stomp on its head** (you bounce up), or hit it with your sword. Then it hides in its shell, which shoots forward and smashes what's ahead. |
+| Buzzbee (air) | A grumpy bee buzzing just above the ground, flying at you. It's too low to run under: jump over it, **stomp it** (you bounce up), or swing at it. It flips over and falls away. |
+| Bristleboar (ground) | A spiky boar that waits, scrapes its hoof and snorts (its eye turns red)... then **charges** at you. The spikes on its back mean no stomping: jump over it or swing at it. |
 
-Like the crossbow, a monster only starts walking once nothing else is between you, so it
-never arrives at an unfair moment. Add your own in `js/obstacles.js` (see `shellback`): give
-it `enemy: true` and, if you can stomp it, `stompable: true`.
+Like the crossbow, a monster only starts walking (or charging) once nothing else is between
+you, so it never arrives at an unfair moment. A Bristleboar also waits until you're on the
+ground and gives you at least half a second of warning. Add your own in `js/obstacles.js` (see
+`shellback`): give it `enemy: true`, `stompable: true` if you can stomp it, and
+`defeated: 'KO'` to make it flip over and fall when beaten (instead of leaving a shell).
 
 ## Ground smash
 

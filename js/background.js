@@ -304,8 +304,12 @@
 
     // Darken the ground a little at sunset/night (drawn before obstacles,
     // so obstacles always stay bright and easy to see).
+    get groundTint() {
+      return OMJ.lerp(this.themes[this.current].tint, this.themes[this.next].tint, this.fade);
+    }
+
     drawGroundTint(ctx) {
-      const a = OMJ.lerp(this.themes[this.current].tint, this.themes[this.next].tint, this.fade);
+      const a = this.groundTint;
       if (a <= 0) return;
       ctx.globalAlpha = a;
       ctx.fillStyle = '#0b0f2b';

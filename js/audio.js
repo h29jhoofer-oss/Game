@@ -265,6 +265,10 @@ OMJ.Sound = class {
         this.noise(0.08, 0.08, 5000, 'highpass');
         this.tone(1800, 300, 0.08, 'square', 0.03);
         break;
+      case 'snort':                      // a Bristleboar gets ready to charge
+        this.noise(0.18, 0.1, 700, 'bandpass');
+        this.tone(140, 90, 0.15, 'sawtooth', 0.04);
+        break;
       case 'bat':                        // Gloomwing sends a bat
         this.tone(2400, 1800, 0.05, 'square', 0.03);
         this.tone(2600, 2000, 0.05, 'square', 0.03, 0.07);
