@@ -78,10 +78,22 @@ class Orb {
 // Heart pickup: sometimes dropped by a defeated monster. It moves just
 // like an energy orb (pops out, gets pulled in by the magnet), but it
 // restores a heart instead of giving energy, and it never disappears.
+// When your hearts are full it stays on the floor, saved for later.
 // ---------------------------------------------------------------------
 class HeartPickup extends Orb {
   constructor(x, y) {
     super(x, y, 1);
+  }
+
+  update(dt, player, magnetRadius) {
+    if (!player.hasFullHealth()) {
+      super.update(dt, player, magnetRadius);
+      return;
+    }
+    // Full health: no magnet pull and no pickup, just settle in place.
+    this.attracted = false;
+    super.update(dt, player, 0);
+    this.collected = false;
   }
 
   isExpired() {

@@ -35,7 +35,7 @@ class Player {
     this.ghostTimer = 0;
 
     // Health state
-    this.health = HEALTH_CONFIG.maxHealth;
+    this.health = HEALTH_CONFIG.startHealth;
     this.maxHealth = HEALTH_CONFIG.maxHealth;
     this.radius = HEALTH_CONFIG.hitRadius;
     this.invulnerableTime = 0; // > 0 while the player can't be hurt
@@ -136,9 +136,13 @@ class Player {
     return this.invulnerableTime === 0 && !this.isDashing();
   }
 
-  // Get health back. There's no upper limit: hearts stack.
+  // Get health back, up to the maximum.
   heal(amount) {
-    this.health += amount;
+    this.health = Math.min(this.maxHealth, this.health + amount);
+  }
+
+  hasFullHealth() {
+    return this.health >= this.maxHealth;
   }
 
   getShieldRechargeTime() {

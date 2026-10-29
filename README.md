@@ -39,7 +39,7 @@ The mouse works everywhere too: the PLAY button, menu buttons, upgrade cards, an
 
 - **Survive.** You earn 10 points every second you're alive.
 - **Defeat enemies.** Your blaster auto-aims at the nearest enemy in range. Chasers are worth 25 points, Toxic Slimes 30, Shooters 50, and Brutes 120.
-- **Grab hearts.** Defeated monsters sometimes drop a heart: Chasers 5% of the time, Toxic Slimes 7.5%, Shooters 10%, Brutes 15%. Every heart you lose adds +5% to all of these for the rest of the run, so the game helps you when you're struggling. Hearts stack with no limit, never disappear from the floor, and get pulled in by the magnet like energy.
+- **Grab hearts.** Defeated monsters sometimes drop a heart: Chasers 5% of the time, Toxic Slimes 7.5%, Shooters 10%, Brutes 15%. Every heart you lose adds +5% to all of these for the rest of the run, so the game helps you when you're struggling. You start with 3 hearts and can hold up to 5. Hearts never disappear from the floor and get pulled in by the magnet like energy. When your hearts are full, dropped hearts stay where they are, saved for later.
 - **Collect energy.** Yellow orbs fill your experience bar. A full bar is a **level-up**: the game freezes and you choose one of three random upgrades.
 - **Watch for warnings.** Blinking brackets show where enemies will appear (red for Chaser, green for Toxic Slime, purple for Shooter, orange for Brute). A Shooter's eye glows pink right before it fires. "SWARM INCOMING!" means a ring of enemies is about to surround you, so dash out.
 - **Beat your best.** Your top score is saved in the browser and shown on the title screen.

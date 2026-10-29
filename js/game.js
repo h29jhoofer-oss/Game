@@ -564,24 +564,13 @@ const Game = {
   drawHud(ctx) {
     const top = 4;
 
-    // Hearts in the top-left corner. Below the starting 3 you see empty
-    // slots for the lost ones; above it, extra hearts are added. With
-    // lots of hearts it switches to one heart and a number.
-    const health = this.player.health;
-    let afterHearts;
-    if (health <= HUD_MAX_HEART_ICONS) {
-      const slots = Math.max(health, this.player.maxHealth);
-      for (let i = 0; i < slots; i++) {
-        const image = i < health ? Sprites.heart.full : Sprites.heart.empty;
-        ctx.drawImage(image, ARENA.x + i * 9, top);
-      }
-      afterHearts = ARENA.x + slots * 9;
-    } else {
-      ctx.drawImage(Sprites.heart.full, ARENA.x, top);
-      const countText = 'X' + health;
-      drawText(ctx, countText, ARENA.x + 9, top + 1, PALETTE.red, { shadow: PALETTE.void });
-      afterHearts = ARENA.x + 9 + measureText(countText) + 2;
+    // Hearts in the top-left corner: one slot per possible heart (5),
+    // full or empty. You start with 3 full and 2 empty.
+    for (let i = 0; i < this.player.maxHealth; i++) {
+      const image = i < this.player.health ? Sprites.heart.full : Sprites.heart.empty;
+      ctx.drawImage(image, ARENA.x + i * 9, top);
     }
+    let afterHearts = ARENA.x + this.player.maxHealth * 9;
 
     // Shield icon after the hearts (only once you have the upgrade).
     if (this.player.shieldLevel > 0) {
