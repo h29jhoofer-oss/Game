@@ -23,6 +23,9 @@ const CHARACTERS = [
     range: 1,
     startHealth: HEALTH_CONFIG.startHealth,
     maxHealth: 4,
+    dashDistance: 1, // 1 = normal dash
+    dashDamage: 0, // damage the dash does to monsters you run into (0 = none)
+    perk: '', // one short line shown on the select screen
   },
   {
     id: 'brute',
@@ -35,6 +38,9 @@ const CHARACTERS = [
     range: 1,
     startHealth: HEALTH_CONFIG.startHealth,
     maxHealth: HEALTH_CONFIG.maxHealth,
+    dashDistance: 1,
+    dashDamage: 4, // ramming! Enough to destroy a fresh Chaser
+    perk: 'DASH RAMS ENEMIES',
   },
   {
     id: 'speeder',
@@ -47,6 +53,9 @@ const CHARACTERS = [
     range: 1.5,
     startHealth: 3,
     maxHealth: 3,
+    dashDistance: 2, // dashes twice as far (twice as fast, same short time)
+    dashDamage: 0,
+    perk: 'DASH GOES 2X FAR',
   },
 ];
 

@@ -89,8 +89,11 @@ class Player {
     // --- 3. Velocity ---
     if (this.dashTime > 0) {
       this.dashTime = Math.max(0, this.dashTime - dt);
-      this.vx = this.dashDirX * PLAYER_CONFIG.dashSpeed;
-      this.vy = this.dashDirY * PLAYER_CONFIG.dashSpeed;
+      // Dash distance = speed x time. Heroes with a longer dash move faster
+      // during the same short dash, so they aren't untouchable for longer.
+      const dashSpeed = PLAYER_CONFIG.dashSpeed * this.character.dashDistance;
+      this.vx = this.dashDirX * dashSpeed;
+      this.vy = this.dashDirY * dashSpeed;
       if (this.dashTime === 0) {
         // Dash finished: drop back to normal running speed.
         this.vx = this.dashDirX * this.speed;
@@ -134,6 +137,7 @@ class Player {
     this.dashTime = PLAYER_CONFIG.dashDuration;
     this.dashCooldown = PLAYER_CONFIG.dashCooldown;
     this.ghostTimer = 0;
+    this.dashHits = new Set(); // monsters already rammed during this dash
     Sound.play('dash');
   }
 

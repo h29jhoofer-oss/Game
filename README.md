@@ -48,11 +48,11 @@ The mouse works everywhere too: the PLAY button, menu buttons, upgrade cards, an
 
 After pressing PLAY you choose a hero with ← → and ENTER, keys 1–3, or the mouse. Your choice is remembered, and restarting keeps the same hero.
 
-| Hero | Speed | Damage | Range | Hearts (start / max) |
-| --- | --- | --- | --- | --- |
-| **Runner** (blue) | ×1 | ×1 | ×1 | 3 / 4 |
-| **Brute** (orange) | ×0.75 | ×1.5 | ×1 | 3 / 5 |
-| **Speeder** (purple) | ×1.75 | ×1 | ×1.5 | 3 / 3 |
+| Hero | Speed | Damage | Range | Hearts (start / max) | Dash perk |
+| --- | --- | --- | --- | --- | --- |
+| **Runner** (blue) | ×1 | ×1 | ×1 | 3 / 4 | — |
+| **Brute** (orange) | ×0.75 | ×1.5 | ×1 | 3 / 5 | Rams: dashing into a monster deals 4 damage and knocks it back (once per monster per dash) |
+| **Speeder** (purple) | ×1.75 | ×1 | ×1.5 | 3 / 3 | Dashes twice as far (twice as fast, so the untouchable moment stays the same length) |
 
 The multipliers keep working on top of upgrades: the Brute's Heavy Shots hit for (1 + 1) × 1.5 = 3.
 

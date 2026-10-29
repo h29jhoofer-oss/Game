@@ -334,6 +334,7 @@ const Game = {
 
     // 1. Player moves and the blaster fires on its own.
     this.player.update(dt);
+    this.checkDashRam();
     for (const weapon of this.weapons) weapon.update(dt, this.player, this.enemies, this.projectiles);
 
     // 2. Shots fly and hit enemies.
@@ -517,6 +518,26 @@ const Game = {
     // Too many clouds? The oldest one vanishes.
     if (this.gasClouds.length > GAS_CONFIG.maxClouds) this.gasClouds.shift();
     Sound.play('gas');
+  },
+
+  // The Brute hero's perk: dashing into monsters damages them. Each
+  // monster can only be hit once per dash.
+  checkDashRam() {
+    const player = this.player;
+    const damage = player.character.dashDamage;
+    if (damage === 0 || !player.isDashing()) return;
+    for (const enemy of this.enemies) {
+      if (enemy.dead || player.dashHits.has(enemy)) continue;
+      // A slightly bigger reach than normal contact, so ramming feels solid.
+      if (!circlesOverlap({ x: player.x, y: player.y, radius: player.radius + 3 }, enemy)) continue;
+      player.dashHits.add(enemy);
+      Effects.burst(enemy.x, enemy.y, 8, SPARK_COLORS.ram, { maxSpeed: 70, life: 0.3 });
+      Effects.text(enemy.x, enemy.y - 8, 'RAM!', PALETTE.orange, 0.5);
+      this.shake(2, 0.1);
+      const defeated = enemy.takeDamage(damage, player.dashDirX, player.dashDirY, 140);
+      if (defeated) this.onEnemyDefeated(enemy);
+      else Sound.play('hit');
+    }
   },
 
   // Shooters call this to fire.

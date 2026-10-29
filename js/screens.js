@@ -320,6 +320,9 @@ const CharacterSelect = makePickScreen({
       const heart = i < character.startHealth ? Sprites.heart.full : Sprites.heart.empty;
       ctx.drawImage(heart, x + w - 6 - character.maxHealth * 8 + i * 8 + 1, rowY);
     }
+
+    // The hero's special perk, if any.
+    if (character.perk) drawText(ctx, character.perk, ccx, y + 102, PALETTE.green, { align: 'center' });
   },
 });
 
