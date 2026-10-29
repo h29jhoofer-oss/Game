@@ -15,6 +15,22 @@ const MASTER_VOLUME = 0.22;
 // playing too often (40 shots in one second would be noise, not fun).
 const SOUND_RECIPES = {
   shoot: { minGap: 0.05, play: (s) => s.tone({ type: 'square', freq: 1150 * s.vary(0.06), endFreq: 520, duration: 0.05, volume: 0.07 }) },
+  // A heavy, crunchy boom for the Shotgun.
+  shotgun: {
+    minGap: 0.05,
+    play: (s) => {
+      s.noise({ duration: 0.16, volume: 0.22, filter: 2400, endFilter: 300 });
+      s.tone({ type: 'square', freq: 180 * s.vary(0.05), endFreq: 60, duration: 0.12, volume: 0.1 });
+    },
+  },
+  // A sharp, high "zing" that rings out for the Sniper.
+  sniper: {
+    minGap: 0.05,
+    play: (s) => {
+      s.tone({ type: 'sawtooth', freq: 2200 * s.vary(0.03), endFreq: 500, duration: 0.14, volume: 0.07 });
+      s.tone({ type: 'triangle', freq: 1500, endFreq: 1400, duration: 0.2, volume: 0.05, delay: 0.02 });
+    },
+  },
   hit: { minGap: 0.03, play: (s) => s.noise({ duration: 0.04, volume: 0.12, filter: 3000 }) },
   enemyDie: {
     minGap: 0.04,

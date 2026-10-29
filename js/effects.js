@@ -8,7 +8,6 @@
 // Color sets for different explosions (bright first, dark last).
 const SPARK_COLORS = {
   enemy: [PALETTE.white, PALETTE.yellow, PALETTE.orange, PALETTE.red, '#a3173a'],
-  hit: [PALETTE.white, PALETTE.cyan, PALETTE.cyanDim],
   energy: [PALETTE.white, '#fffbd0', PALETTE.yellow],
   wall: [PALETTE.cyan, PALETTE.cyanDim],
   shooter: [PALETTE.white, PALETTE.pink, PALETTE.purple, '#5a1a9a'],

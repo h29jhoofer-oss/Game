@@ -2,6 +2,7 @@
 // screens.js — the menus around the gameplay:
 //   TitleScreen    — logo, character lineup, PLAY, personal best
 //   CharacterSelect — choose your hero before a run
+//   WeaponSelect   — then choose your gun
 //   PauseMenu      — resume / restart / sound / quit
 //   GameOverScreen — results, personal best, restart
 //
@@ -185,107 +186,133 @@ function bakeLogoWord(ctx, text, centerX, y, scale, bands, shadowColor) {
 }
 
 // ---------------------------------------------------------------------
-// Character select
+// Pick screens: "Choose your hero" and "Choose your weapon"
+//
+// Both work the same way (cards in a row, arrows / 1-3 / mouse, ESC to
+// go back), so one function builds both. Each screen only supplies its
+// title, its list of items, and how to draw the inside of a card.
 // ---------------------------------------------------------------------
-const HERO_CARD = { width: 92, height: 112, gap: 8, y: 34 };
+const PICK_CARD = { width: 92, height: 112, gap: 8, y: 34 };
 
-const CharacterSelect = {
-  selected: 0,
-  time: 0,
+function makePickScreen({ title, getItems, getCurrentId, drawCardBody, onPick, onBack }) {
+  return {
+    selected: 0,
+    time: 0,
 
-  open(game) {
-    this.time = 0;
-    // Start on the hero you picked last time.
-    this.selected = Math.max(0, CHARACTERS.findIndex((c) => c.id === game.characterId));
-  },
+    open(game) {
+      this.time = 0;
+      // Start on whatever you picked last time.
+      this.selected = Math.max(0, getItems().findIndex((item) => item.id === getCurrentId(game)));
+    },
 
-  getCardBox(index) {
-    const totalWidth = CHARACTERS.length * HERO_CARD.width + (CHARACTERS.length - 1) * HERO_CARD.gap;
-    const startX = Math.floor((VIEW_WIDTH - totalWidth) / 2);
-    return { x: startX + index * (HERO_CARD.width + HERO_CARD.gap), y: HERO_CARD.y, width: HERO_CARD.width, height: HERO_CARD.height };
-  },
+    getCardBox(index) {
+      const count = getItems().length;
+      const totalWidth = count * PICK_CARD.width + (count - 1) * PICK_CARD.gap;
+      const startX = Math.floor((VIEW_WIDTH - totalWidth) / 2);
+      return { x: startX + index * (PICK_CARD.width + PICK_CARD.gap), y: PICK_CARD.y, width: PICK_CARD.width, height: PICK_CARD.height };
+    },
 
-  getButtons() {
-    const buttons = CHARACTERS.map((character, index) => ({ id: 'hero', index, box: this.getCardBox(index) }));
-    buttons.push({ id: 'back', box: { x: ARENA.x + 4, y: 157, width: 36, height: 13 } });
-    return buttons;
-  },
+    getButtons() {
+      const buttons = getItems().map((item, index) => ({ id: 'pick', index, box: this.getCardBox(index) }));
+      buttons.push({ id: 'back', box: { x: ARENA.x + 4, y: 157, width: 36, height: 13 } });
+      return buttons;
+    },
 
-  activate(id, game) {
-    Sound.play('uiSelect');
-    if (id === 'hero') game.chooseCharacter(CHARACTERS[this.selected].id);
-    if (id === 'back') game.backToTitle();
-  },
+    activate(id, game) {
+      Sound.play('uiSelect');
+      if (id === 'pick') onPick(game, getItems()[this.selected]);
+      if (id === 'back') onBack(game);
+    },
 
-  update(dt, game) {
-    this.time += dt;
-    if (this.time < 0.25) return; // ignore the key press that opened this screen
-    const count = CHARACTERS.length;
-    if (Input.wasPressed('ArrowLeft') || Input.wasPressed('KeyA')) {
-      this.selected = (this.selected + count - 1) % count;
-      Sound.play('uiMove');
-    }
-    if (Input.wasPressed('ArrowRight') || Input.wasPressed('KeyD')) {
-      this.selected = (this.selected + 1) % count;
-      Sound.play('uiMove');
-    }
-    ['Digit1', 'Digit2', 'Digit3'].forEach((key, index) => {
-      if (index < count && Input.wasPressed(key)) {
-        this.selected = index;
-        this.activate('hero', game);
+    update(dt, game) {
+      this.time += dt;
+      if (this.time < 0.25) return; // ignore the key press that opened this screen
+      const count = getItems().length;
+      if (Input.wasPressed('ArrowLeft') || Input.wasPressed('KeyA')) {
+        this.selected = (this.selected + count - 1) % count;
+        Sound.play('uiMove');
       }
-    });
-    if (Input.wasPressed('Enter') || Input.wasPressed('Space')) this.activate('hero', game);
-    if (Input.wasPressed('Escape')) this.activate('back', game);
-  },
+      if (Input.wasPressed('ArrowRight') || Input.wasPressed('KeyD')) {
+        this.selected = (this.selected + 1) % count;
+        Sound.play('uiMove');
+      }
+      ['Digit1', 'Digit2', 'Digit3'].forEach((key, index) => {
+        if (index < count && Input.wasPressed(key)) {
+          this.selected = index;
+          this.activate('pick', game);
+        }
+      });
+      if (Input.wasPressed('Enter') || Input.wasPressed('Space')) this.activate('pick', game);
+      if (Input.wasPressed('Escape')) this.activate('back', game);
+    },
 
-  draw(ctx, game) {
-    Arena.draw(ctx, game.animTime);
-    ctx.drawImage(getDitherOverlay(), 0, 0);
-    const cx = VIEW_WIDTH / 2;
-    drawText(ctx, 'CHOOSE YOUR HERO', cx, 12, PALETTE.cyan, { align: 'center', scale: 2, shadow: PALETTE.darkBlue });
+    draw(ctx, game) {
+      Arena.draw(ctx, game.animTime);
+      ctx.drawImage(getDitherOverlay(), 0, 0);
+      const cx = VIEW_WIDTH / 2;
+      drawText(ctx, title, cx, 12, PALETTE.cyan, { align: 'center', scale: 2, shadow: PALETTE.darkBlue });
 
-    CHARACTERS.forEach((character, index) => this.drawCard(ctx, character, index));
+      getItems().forEach((item, index) => this.drawCard(ctx, item, index));
 
-    const back = this.getButtons().find((button) => button.id === 'back');
-    drawButton(ctx, back.box, 'BACK', { active: pointInBox(game.mouseX, game.mouseY, back.box) });
-    drawText(ctx, '1 2 3 OR ARROWS + ENTER', cx + 20, 161, PALETTE.blue, { align: 'center' });
-  },
+      const back = this.getButtons().find((button) => button.id === 'back');
+      drawButton(ctx, back.box, 'BACK', { active: pointInBox(game.mouseX, game.mouseY, back.box) });
+      drawText(ctx, '1 2 3 OR ARROWS + ENTER', cx + 20, 161, PALETTE.blue, { align: 'center' });
+    },
 
-  drawCard(ctx, character, index) {
-    const box = this.getCardBox(index);
-    const isSelected = index === this.selected;
-    const x = box.x;
-    const y = box.y - (isSelected ? 3 : 0); // the selected card lifts up
-    const w = box.width;
-    const h = box.height;
+    drawCard(ctx, item, index) {
+      const box = this.getCardBox(index);
+      const isSelected = index === this.selected;
+      const x = box.x;
+      const y = box.y - (isSelected ? 3 : 0); // the selected card lifts up
+      const w = box.width;
+      const ccx = x + Math.floor(w / 2);
+
+      drawCardFrame(ctx, x, y, w, box.height, isSelected ? PALETTE.yellow : PALETTE.wallDark, isSelected ? PALETTE.navy : PALETTE.void);
+      drawText(ctx, String(index + 1), x + 4, y + 4, isSelected ? PALETTE.yellow : PALETTE.blue);
+      drawText(ctx, item.name, ccx, y + 45, item.uiColor, { align: 'center', shadow: PALETTE.black });
+      drawText(ctx, item.tagline, ccx, y + 53, PALETTE.cyanDim, { align: 'center' });
+      drawCardBody(ctx, item, x, y, w, isSelected, this.time);
+
+      // Blinking arrow above the selected card.
+      if (isSelected && Math.floor(this.time * 4) % 2 === 0) {
+        ctx.fillStyle = PALETTE.yellow;
+        ctx.fillRect(ccx - 2, y - 6, 5, 1);
+        ctx.fillRect(ccx - 1, y - 5, 3, 1);
+        ctx.fillRect(ccx, y - 4, 1, 1);
+      }
+    },
+  };
+}
+
+// One "LABEL ... X1.5" row on a card. Green = better than normal, red = worse.
+function drawStatRow(ctx, x, y, w, label, valueText, quality) {
+  const color = quality > 0 ? PALETTE.green : quality < 0 ? PALETTE.red : PALETTE.white;
+  drawText(ctx, label, x + 6, y, PALETTE.blue);
+  drawText(ctx, valueText, x + w - 6, y, color, { align: 'right' });
+}
+
+const CharacterSelect = makePickScreen({
+  title: 'CHOOSE YOUR HERO',
+  getItems: () => CHARACTERS,
+  getCurrentId: (game) => game.characterId,
+  onPick: (game, character) => game.chooseCharacter(character.id),
+  onBack: (game) => game.backToTitle(),
+
+  drawCardBody(ctx, character, x, y, w, isSelected, time) {
     const ccx = x + Math.floor(w / 2);
-
-    drawCardFrame(ctx, x, y, w, h, isSelected ? PALETTE.yellow : PALETTE.wallDark, isSelected ? PALETTE.navy : PALETTE.void);
-    drawText(ctx, String(index + 1), x + 4, y + 4, isSelected ? PALETTE.yellow : PALETTE.blue);
-
     // The hero at exactly 3x size: walking if selected, idle otherwise.
     const frames = Sprites.players[character.id];
     const frameName = isSelected
-      ? WALK_CYCLE[Math.floor(this.time / 0.12) % 4]
-      : Math.floor(this.time / 0.5) % 2 === 0 ? 'idle' : 'idleBreath';
+      ? WALK_CYCLE[Math.floor(time / 0.12) % 4]
+      : Math.floor(time / 0.5) % 2 === 0 ? 'idle' : 'idleBreath';
     const image = frames[frameName].right;
     const spriteX = ccx - Math.floor((image.width * 3) / 2);
     ctx.fillStyle = PALETTE.black;
     ctx.fillRect(spriteX + 3, y + 39, image.width * 3 - 6, 2); // shadow
     ctx.drawImage(image, spriteX, y + 9, image.width * 3, image.height * 3);
 
-    drawText(ctx, character.name, ccx, y + 45, character.uiColor, { align: 'center', shadow: PALETTE.black });
-    drawText(ctx, character.tagline, ccx, y + 53, PALETTE.cyanDim, { align: 'center' });
-
-    // Stats compared with normal: green = better, red = worse.
     const stats = [['SPEED', character.speed], ['DAMAGE', character.damage], ['RANGE', character.range]];
-    stats.forEach(([label, value], i) => {
-      const rowY = y + 65 + i * 8;
-      const color = value > 1 ? PALETTE.green : value < 1 ? PALETTE.red : PALETTE.white;
-      drawText(ctx, label, x + 6, rowY, PALETTE.blue);
-      drawText(ctx, 'X' + value, x + w - 6, rowY, color, { align: 'right' });
-    });
+    stats.forEach(([label, value], i) => drawStatRow(ctx, x, y + 65 + i * 8, w, label, 'X' + value, value - 1));
 
     // Hearts: one icon per possible heart, filled for the ones you start with.
     const rowY = y + 92;
@@ -294,16 +321,43 @@ const CharacterSelect = {
       const heart = i < character.startHealth ? Sprites.heart.full : Sprites.heart.empty;
       ctx.drawImage(heart, x + w - 6 - character.maxHealth * 8 + i * 8 + 1, rowY);
     }
-
-    // Blinking arrow above the selected card.
-    if (isSelected && Math.floor(this.time * 4) % 2 === 0) {
-      ctx.fillStyle = PALETTE.yellow;
-      ctx.fillRect(ccx - 2, y - 6, 5, 1);
-      ctx.fillRect(ccx - 1, y - 5, 3, 1);
-      ctx.fillRect(ccx, y - 4, 1, 1);
-    }
   },
-};
+});
+
+const WeaponSelect = makePickScreen({
+  title: 'CHOOSE YOUR WEAPON',
+  getItems: () => GUNS,
+  getCurrentId: (game) => game.gunId,
+  onPick: (game, gun) => game.chooseGun(gun.id),
+  onBack: (game) => game.backToCharacterSelect(),
+
+  drawCardBody(ctx, gun, x, y, w, isSelected, time) {
+    const ccx = x + Math.floor(w / 2);
+    // The gun at exactly 4x size. The selected one bobs and flashes its muzzle.
+    const bob = isSelected && Math.floor(time * 3) % 2 === 0 ? 1 : 0;
+    const gunX = ccx - (gun.image.width * 4) / 2;
+    const gunY = y + 12 - bob;
+    ctx.drawImage(gun.image, gunX, gunY, gun.image.width * 4, gun.image.height * 4);
+    if (isSelected && Math.floor(time * 3) % 2 === 0) {
+      ctx.fillStyle = gun.uiColor;
+      const mx = gunX + gun.image.width * 4 + 2;
+      const my = gunY + 10;
+      ctx.fillRect(mx, my, 6, 2);
+      ctx.fillRect(mx + 2, my - 2, 2, 6);
+    }
+
+    // Stats compared with the Blaster.
+    const blaster = WEAPON_CONFIG;
+    const fireRate = Math.round((blaster.fireInterval / gun.stats.fireInterval) * 100) / 100;
+    const rangeQuality = Math.sign(gun.stats.range - blaster.range);
+    const rangeText = rangeQuality > 0 ? 'LONG' : rangeQuality < 0 ? 'SHORT' : 'MEDIUM';
+    drawStatRow(ctx, x, y + 65, w, 'DAMAGE', 'X' + gun.stats.gunDamage, gun.stats.gunDamage - 1);
+    drawStatRow(ctx, x, y + 73, w, 'FIRE RATE', 'X' + fireRate, fireRate - 1);
+    drawStatRow(ctx, x, y + 81, w, 'RANGE', rangeText, rangeQuality);
+    drawStatRow(ctx, x, y + 89, w, 'BULLETS', String(gun.stats.projectileCount), gun.stats.projectileCount - 1);
+    drawText(ctx, gun.stats.homing > 0 ? 'CURVES TO TARGET' : '', ccx, y + 100, PALETTE.green, { align: 'center' });
+  },
+});
 
 // ---------------------------------------------------------------------
 // Pause menu

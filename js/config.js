@@ -96,16 +96,21 @@ const SPAWN_CONFIG = {
   groupSpread: 10, // how far apart group members appear
 };
 
-// The player's automatic blaster. Stage 4 upgrades will change these.
+// The weapon numbers for the Blaster. The other guns in guns.js start
+// from these and change only what's different. Upgrades change them too.
 const WEAPON_CONFIG = {
   fireInterval: 0.6, // seconds between shots
   range: 95, // only shoot at enemies closer than this
   damage: 1,
   damageMultiplier: 1, // set by the chosen hero (the Brute hero has 1.5)
+  gunDamage: 1, // the gun's own damage multiplier (Shotgun 2, Sniper 1.5)
   projectileSpeed: 190, // pixels per second
   projectileLifetime: 1.2, // seconds before a missed shot fizzles out
   pierce: 0, // how many extra enemies one shot can pass through
-  projectileCount: 1, // bolts fired per shot, fanned out (Multi-Shot adds more)
+  projectileCount: 1, // bullets fired per shot, fanned out (Multi-Shot adds more)
+  spread: 0.21, // angle between fanned-out bullets, in radians (~12 degrees)
+  homing: 0, // how sharply bullets curve toward their target (Sniper only)
+  critChance: 0, // chance of a triple-damage critical hit (Sniper upgrade)
   burstExtra: 0, // extra bolts fired in a line at the same target (Twin Shot adds more)
   hitKnockback: 45, // how far a shot pushes an enemy back
 };
@@ -194,9 +199,6 @@ const SHIELD_CONFIG = {
   rechargeTimes: [12, 9, 6.5], // seconds to recharge at shield level 1, 2, 3
   radius: 8, // size of the bubble drawn around the player
 };
-
-// Multi-shot: angle between neighbouring bolts, in radians (~12 degrees).
-const MULTISHOT_SPREAD = 0.21;
 
 // Twin Shot: seconds between the bolts of one burst. Short enough that
 // they look like a quick "pew-pew", long enough to see two separate bolts.

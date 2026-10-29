@@ -19,6 +19,7 @@ const Game = {
   // Which "mode" the game is in:
   //   'title'    — the start screen
   //   'select'   — choosing a hero
+  //   'weapon'   — choosing a gun
   //   'playing'  — normal gameplay
   //   'paused'   — frozen, pause menu open
   //   'levelup'  — frozen, choosing an upgrade card
@@ -39,6 +40,7 @@ const Game = {
   score: 0,
   best: null, // personal best, loaded from storage
   characterId: 'runner', // the chosen hero (see characters.js)
+  gunId: 'blaster', // the chosen gun (see guns.js)
   isNewBest: false, // did the last run beat the record?
   runRecorded: false, // makes sure one run is only saved once
 
@@ -79,11 +81,13 @@ const Game = {
 
     Sprites.init();
     Upgrades.init();
+    Guns.init();
     UI.init();
     Arena.init();
     Sound.init();
     this.best = Save.loadBest();
     this.characterId = getCharacter(Save.loadCharacter()).id;
+    this.gunId = getGun(Save.loadGun()).id;
     this.resetRun();
     this.setState('title');
     TitleScreen.open();
@@ -110,9 +114,10 @@ const Game = {
     const centerY = ARENA.y + ARENA.height / 2;
     const character = getCharacter(this.characterId);
     this.player = new Player(centerX, centerY, character);
-    this.weapon = new Weapon();
-    // The hero's weapon bonuses.
+    this.weapon = new Weapon(getGun(this.gunId));
+    // The hero's weapon bonuses. Range also stretches how far bullets fly.
     this.weapon.stats.range *= character.range;
+    this.weapon.stats.projectileLifetime *= character.range;
     this.weapon.stats.damageMultiplier = character.damage;
     this.enemies = [];
     this.projectiles = [];
@@ -156,10 +161,23 @@ const Game = {
     });
   },
 
+  // After picking a hero, you pick a gun.
   chooseCharacter(id) {
     this.characterId = id;
     Save.saveCharacter(id);
+    WeaponSelect.open(this);
+    this.setState('weapon');
+  },
+
+  chooseGun(id) {
+    this.gunId = id;
+    Save.saveGun(id);
     this.startGame();
+  },
+
+  backToCharacterSelect() {
+    CharacterSelect.open(this);
+    this.setState('select');
   },
 
   backToTitle() {
@@ -259,6 +277,7 @@ const Game = {
 
     if (this.state === 'title') TitleScreen.update(dt, this);
     else if (this.state === 'select') CharacterSelect.update(dt, this);
+    else if (this.state === 'weapon') WeaponSelect.update(dt, this);
     else if (this.state === 'playing') this.updatePlaying(dt);
     else if (this.state === 'dying') this.updateDying(dt);
     else if (this.state === 'gameover') GameOverScreen.update(dt, this);
@@ -357,7 +376,11 @@ const Game = {
         if (!circlesOverlap(projectile, enemy)) continue;
 
         projectile.alreadyHit.add(enemy);
-        Effects.burst(projectile.x, projectile.y, 3, SPARK_COLORS.hit, { maxSpeed: 50, life: 0.2 });
+        Effects.burst(projectile.x, projectile.y, 3, projectile.getSparkColors(), { maxSpeed: 50, life: 0.2 });
+        if (projectile.crit) Effects.text(enemy.x, enemy.y - 8, 'CRIT!', PALETTE.yellow, 0.5);
+        // A homing bullet stops curving once it has hit its target, so a
+        // piercing bullet flies on instead of circling back.
+        if (projectile.target === enemy) projectile.target = null;
         const defeated = enemy.takeDamage(projectile.damage, projectile.dirX, projectile.dirY, stats.hitKnockback);
         if (defeated) this.onEnemyDefeated(enemy);
         else Sound.play('hit');
@@ -544,6 +567,8 @@ const Game = {
       TitleScreen.draw(ctx, this);
     } else if (this.state === 'select') {
       CharacterSelect.draw(ctx, this);
+    } else if (this.state === 'weapon') {
+      WeaponSelect.draw(ctx, this);
     } else {
       this.drawWorld(ctx);
       this.drawHud(ctx);
@@ -639,6 +664,7 @@ const Game = {
     drawText(ctx, 'DASH', ARENA.x, bottom, PALETTE.cyanDim);
     const charge = 1 - this.player.dashCooldown / PLAYER_CONFIG.dashCooldown;
     drawPixelBar(ctx, ARENA.x + 20, bottom + 1, 30, 3, charge, charge >= 1 ? PALETTE.cyan : PALETTE.blue);
+    ctx.drawImage(this.weapon.gun.image, ARENA.x + 56, bottom); // which gun you're holding
     drawText(ctx, 'WASD MOVE  SPACE DASH  M MUTE  ESC PAUSE', VIEW_WIDTH - ARENA.x - 26, bottom, PALETTE.darkBlue, { align: 'right' });
     for (const button of this.getHudButtons()) {
       const icon = button.id === 'pause' ? 'pause' : Sound.muted ? 'soundOff' : 'soundOn';
@@ -664,7 +690,8 @@ const Game = {
       'ORBS ' + this.orbs.length + ' PARTICLES ' + Effects.particles.length + ' GAS ' + this.gasClouds.length,
       'XP ' + this.xp + '/' + this.xpToNext + ' NEXT SURGE ' + Math.ceil(this.spawner.surgeTimer) + 'S',
       'HEARTS LOST ' + this.heartsLost + ' CHASER HEART DROP ' + Math.round(this.getHeartDropChance('chaser') * 1000) / 10 + '%',
-      'FIRE ' + this.weapon.stats.fireInterval.toFixed(2) + 'S DMG ' + this.weapon.stats.damage * this.weapon.stats.damageMultiplier + ' PIERCE ' + this.weapon.stats.pierce + ' BOLTS ' + this.weapon.stats.projectileCount + ' TWIN ' + this.weapon.stats.burstExtra,
+      'GUN ' + this.weapon.id.toUpperCase() + ' RANGE ' + Math.round(this.weapon.stats.range) + ' HOMING ' + this.weapon.stats.homing + ' CRIT ' + Math.round(this.weapon.stats.critChance * 100) + '%',
+      'FIRE ' + this.weapon.stats.fireInterval.toFixed(2) + 'S DMG ' + this.weapon.stats.damage * this.weapon.stats.damageMultiplier * this.weapon.stats.gunDamage + ' PIERCE ' + this.weapon.stats.pierce + ' BOLTS ' + this.weapon.stats.projectileCount + ' TWIN ' + this.weapon.stats.burstExtra,
       'SPAWN EVERY ' + this.spawner.getInterval(this.survivalTime).toFixed(2) + 'S',
     ];
     lines.forEach((line, i) => {
@@ -680,6 +707,7 @@ const Game = {
     if (Transition.active) return null;
     if (this.state === 'title') return TitleScreen;
     if (this.state === 'select') return CharacterSelect;
+    if (this.state === 'weapon') return WeaponSelect;
     if (this.state === 'paused') return PauseMenu;
     if (this.state === 'gameover' && GameOverScreen.isReady(this)) return GameOverScreen;
     return null;

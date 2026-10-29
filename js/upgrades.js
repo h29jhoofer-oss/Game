@@ -7,6 +7,8 @@
 //   lines       : the short description (one string per line on the card)
 //   icon        : 7x7 pixel art, same format as sprites.js
 //   maxLevel    : how many times it can be taken (Infinity = no limit)
+//   weapons     : optional list of guns it belongs to, e.g. ['shotgun'].
+//                 Without it, the upgrade works for every gun.
 //   canOffer()  : optional extra rule for when it may appear
 //   apply()     : what it actually does to the game
 //
@@ -18,6 +20,7 @@ const ICON_COLORS = {
   k: PALETTE.void,
   y: PALETTE.yellow,
   w: PALETTE.white,
+  g: PALETTE.green,
   o: PALETTE.orange,
   c: PALETTE.cyan,
   b: PALETTE.blue,
@@ -100,6 +103,7 @@ const UPGRADES = [
   },
   {
     id: 'piercing',
+    weapons: ['blaster'],
     name: 'PIERCING',
     lines: ['SHOTS PASS', 'THROUGH +1', 'ENEMY'],
     maxLevel: 3,
@@ -118,6 +122,7 @@ const UPGRADES = [
   },
   {
     id: 'multiShot',
+    weapons: ['blaster'],
     name: 'MULTI-SHOT',
     lines: ['+1 BOLT', 'FANNED OUT'],
     maxLevel: 3,
@@ -136,6 +141,7 @@ const UPGRADES = [
   },
   {
     id: 'twinShot',
+    weapons: ['blaster'],
     name: 'TWIN SHOT',
     lines: ['+1 BOLT IN A', 'LINE AT THE', 'SAME TARGET'],
     maxLevel: 2,
@@ -168,6 +174,123 @@ const UPGRADES = [
     ],
     apply(game) {
       game.player.addShieldLevel();
+    },
+  },
+  // ---------------- Shotgun upgrades ----------------
+  {
+    id: 'extraPellets',
+    name: 'EXTRA PELLETS',
+    weapons: ['shotgun'],
+    lines: ['+2 PELLETS', 'EVERY BLAST'],
+    maxLevel: 3,
+    icon: [
+      '.......',
+      '.yo.yo.',
+      '.oo.oo.',
+      '.......',
+      '.yo.yo.',
+      '.oo.oo.',
+      '.......',
+    ],
+    apply(game) {
+      game.weapon.stats.projectileCount += 2;
+    },
+  },
+  {
+    id: 'longBarrel',
+    name: 'LONG BARREL',
+    weapons: ['shotgun'],
+    lines: ['PELLETS FLY', '25% FARTHER'],
+    maxLevel: 3,
+    icon: [
+      '.......',
+      '.......',
+      'wwwwwwy',
+      'ooooo..',
+      'oo.....',
+      'oo.....',
+      '.......',
+    ],
+    apply(game) {
+      game.weapon.stats.range *= 1.25;
+      game.weapon.stats.projectileLifetime *= 1.25;
+    },
+  },
+  {
+    id: 'stoppingPower',
+    name: 'STOPPING POWER',
+    weapons: ['shotgun'],
+    lines: ['BLASTS KNOCK', 'ENEMIES FAR', 'BACK'],
+    maxLevel: 2,
+    icon: [
+      '...o...',
+      '...oo..',
+      'ooooyo.',
+      'oooooyo',
+      'ooooyo.',
+      '...oo..',
+      '...o...',
+    ],
+    apply(game) {
+      game.weapon.stats.hitKnockback += 60;
+    },
+  },
+  // ---------------- Sniper upgrades ----------------
+  {
+    id: 'seekerRounds',
+    name: 'SEEKER ROUNDS',
+    weapons: ['sniper'],
+    lines: ['BULLETS CURVE', 'HARDER TOWARD', 'TARGETS'],
+    maxLevel: 3,
+    icon: [
+      '.....rr',
+      '...g.rr',
+      '..g....',
+      '.g.....',
+      '.g.....',
+      'g......',
+      'g......',
+    ],
+    apply(game) {
+      game.weapon.stats.homing += 2;
+    },
+  },
+  {
+    id: 'penetrator',
+    name: 'PENETRATOR',
+    weapons: ['sniper'],
+    lines: ['BULLETS PIERCE', '+1 ENEMY'],
+    maxLevel: 3,
+    icon: [
+      '.r..r..',
+      '.r..r..',
+      '.r..r..',
+      'gggggww',
+      '.r..r..',
+      '.r..r..',
+      '.r..r..',
+    ],
+    apply(game) {
+      game.weapon.stats.pierce += 1;
+    },
+  },
+  {
+    id: 'criticalHit',
+    name: 'CRITICAL HIT',
+    weapons: ['sniper'],
+    lines: ['25% CHANCE OF', 'TRIPLE DAMAGE'],
+    maxLevel: 2,
+    icon: [
+      '...r...',
+      '.rrrrr.',
+      '.r...r.',
+      'rr.w.rr',
+      '.r...r.',
+      '.rrrrr.',
+      '...r...',
+    ],
+    apply(game) {
+      game.weapon.stats.critChance += 0.25;
     },
   },
 ];
@@ -205,6 +328,7 @@ const Upgrades = {
     const available = UPGRADES.filter((upgrade) => {
       const taken = game.upgradeLevels[upgrade.id] || 0;
       if (taken >= upgrade.maxLevel) return false;
+      if (upgrade.weapons && !upgrade.weapons.includes(game.weapon.id)) return false; // another gun's upgrade
       if (upgrade.canOffer && !upgrade.canOffer(game)) return false;
       return true;
     });

@@ -21,6 +21,9 @@ class Player {
     this.width = 8;
     this.height = 10;
     this.facing = 1; // 1 = right, -1 = left
+    // The last direction you moved in (length 1). The Shotgun fires this way.
+    this.aimX = 1;
+    this.aimY = 0;
 
     // Which hero this is (see characters.js), and their pictures.
     this.character = character;
@@ -71,6 +74,10 @@ class Player {
       dirY /= length;
     }
     this.isMoving = length > 0;
+    if (this.isMoving) {
+      this.aimX = dirX;
+      this.aimY = dirY;
+    }
     if (dirX !== 0) this.facing = Math.sign(dirX);
 
     // --- 2. Dash ---
