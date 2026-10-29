@@ -60,3 +60,32 @@ const PLAYER_CONFIG = {
 // Longest time step we allow in one update (in seconds).
 // If the tab freezes for a second, we don't want the player to teleport.
 const MAX_DELTA = 0.05;
+
+// Health and getting hit.
+const HEALTH_CONFIG = {
+  maxHealth: 3,
+  invulnerableTime: 1.0, // seconds of safety after taking a hit
+  hitFlashTime: 0.1, // seconds the player flashes white when hit
+  hitRadius: 3, // the player's hitbox is smaller than the sprite to feel fair
+};
+
+// Chaser enemy: a small red slime that walks straight at the player.
+const CHASER_CONFIG = {
+  health: 1,
+  radius: 3, // hitbox size
+  baseSpeed: 28, // pixels per second at the start of a run
+  maxExtraSpeed: 22, // speed added gradually as time goes on
+  speedRampTime: 150, // seconds until the full extra speed is reached
+  knockback: 70, // how hard an enemy bounces off after hitting you
+};
+
+// How enemies appear over time.
+const SPAWN_CONFIG = {
+  startInterval: 1.6, // seconds between spawns at the start
+  minInterval: 0.45, // fastest spawn rate allowed
+  intervalDropPerSecond: 0.008, // how much faster spawning gets each second
+  warningTime: 0.7, // a flashing marker shows where an enemy is about to appear
+  minDistanceFromPlayer: 70, // never spawn right on top of the player
+  edgeMargin: 24, // how far from the walls enemies may appear
+  maxEnemies: 40, // performance + fairness limit
+};

@@ -2,7 +2,7 @@
 
 A pixel-art arcade survival game built with plain HTML, CSS, and JavaScript. It has no frameworks and nothing to install.
 
-**Current progress: Stage 1, the pixel-art foundation.** You can walk and dash around a neon arena. Enemies come in Stage 2.
+**Current progress: Stage 2, basic survival.** Red slimes hunt you down and you have three hearts. You can't fight back yet (shooting comes in Stage 3), so for now the goal is to dodge for as long as you can.
 
 ## How to run it
 
@@ -27,7 +27,19 @@ Then visit <http://localhost:8000> in your browser.
 | W A S D / Arrow keys | Move |
 | SPACE | Dash (short cooldown, shown by the DASH meter) |
 | ESC | Pause / resume |
+| ENTER or R | Restart from the game-over screen (or click RESTART) |
 | G | Toggle debug info (FPS, scale, position) |
+
+## Stage 2 test checklist
+
+1. **Warning markers:** blinking red brackets appear near the walls about 0.7 seconds before each slime arrives. Slimes never appear right next to you.
+2. **Chasers:** red slimes bounce toward you and spread out instead of stacking into one blob.
+3. **Getting hit:** touching a slime flashes you white, removes a heart, shakes the screen, and knocks the slime back. For one second you blink and can't be hurt again.
+4. **Dash through enemies:** you can't be hurt while dashing, so SPACE lets you slip through a gap.
+5. **Difficulty:** slimes appear more often and move faster the longer you survive. Press **G** to watch `SPAWN EVERY` shrink over time.
+6. **Game over:** after the last heart, you flicker and vanish, then the GAME OVER panel opens. It shows your survival time and a message.
+7. **Restart:** click RESTART (the cursor turns into a hand) or press ENTER / R. Hearts, timer, and enemies all reset.
+8. **Pause:** ESC still freezes everything, including the timer.
 
 ## Stage 1 test checklist
 
@@ -52,8 +64,10 @@ The scripts in `js/` load in this order. Each file has one job:
 | `font.js` | A hand-made 3×5 pixel font, because normal fonts are smooth and look wrong in pixel art. |
 | `sprites.js` | Pixel art written as text grids (`'.'` = empty, letters = colors). Each grid is "baked" once into a small canvas. |
 | `arena.js` | Draws the space background, floor tiles, and walls once, then animates the glowing tiles and stars. |
-| `player.js` | The `Player` class: movement, diagonal normalization, wall collision, dash, and animation frames. |
-| `game.js` | The game loop, game state (playing or paused), the HUD, and the pause screen. |
+| `player.js` | The `Player` class: movement, diagonal normalization, wall collision, dash, health, invulnerability, and animation frames. |
+| `enemies.js` | The shared `Enemy` class, the `Chaser`, enemy separation, and circle collision. |
+| `spawner.js` | Decides when and where enemies appear and shows warning markers. It also controls the difficulty ramp. |
+| `game.js` | The game loop, game states (playing, paused, dying, game over), collisions, screen shake, HUD, and menus. |
 | `main.js` | Starts everything and scales the canvas. |
 
 ### Key ideas
@@ -62,6 +76,9 @@ The scripts in `js/` load in this order. Each file has one job:
 - **Delta time (`dt`).** Every frame, the loop measures how many seconds have passed. Movement is `speed × dt`, so the game runs at the same speed on 60 Hz and 144 Hz screens. `dt` is capped so a frozen tab doesn't make the player teleport.
 - **Decimal positions, whole-pixel drawing.** The player's position keeps its decimals for smooth movement. When drawing, it's rounded with `Math.round`, so sprites always sit exactly on the pixel grid.
 - **One game loop only.** `Game.start()` won't start a second loop if one is already running. Two loops would make the game run at double speed.
+- **Game states.** The game is always in exactly one state: `playing`, `paused`, `dying`, or `gameover`. `update()` checks the state and only runs the code for it, which keeps pausing and restarting reliable.
+- **Circle hitboxes.** Collisions compare the distance between two centers with the sum of their radii. Hitboxes are slightly smaller than the sprites, so near-misses feel fair.
+- **Enemy inheritance.** `Chaser extends Enemy`, so it only has to say *where it wants to go* (`think()`). Movement, knockback, and drawing are shared. New enemy types will reuse all of that.
 - **No blur effects.** Glows change through a few fixed palette colors in steps, and the pause overlay is a checkerboard "dither". There are no gradients or soft shadows.
 
 ### Drawing your own sprite

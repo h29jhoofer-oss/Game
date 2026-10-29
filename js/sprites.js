@@ -86,6 +86,67 @@ const PLAYER_SPRITE_DATA = {
   ],
 };
 
+// Chaser enemy: a red slime with angry white eyes.
+const CHASER_COLORS = {
+  k: PALETTE.void,
+  r: PALETTE.red,
+  m: '#a3173a', // darker red for shading
+  p: '#ff8a9a', // highlight
+  w: PALETTE.white,
+};
+
+const CHASER_SPRITE_DATA = {
+  // Stretched tall...
+  hopA: [
+    '...kk...',
+    '..krrk..',
+    '.kprrrk.',
+    'krwrrwrk',
+    'krkrrkrk',
+    'krrrrrrk',
+    'kmrrrrmk',
+    '.kmmmmk.',
+  ],
+  // ...then squashed flat, which makes it look like it's bouncing.
+  hopB: [
+    '........',
+    '........',
+    '..kkkk..',
+    '.kprrrk.',
+    'krwrrwrk',
+    'krkrrkrk',
+    'kmrrrrmk',
+    'kkmmmmkk',
+  ],
+};
+
+// Heart icons for the health display.
+const HEART_COLORS = {
+  k: PALETTE.void,
+  r: PALETTE.red,
+  p: '#ff8a9a',
+  e: PALETTE.wallDark, // empty heart fill
+};
+
+const HEART_SPRITE_DATA = {
+  full: [
+    '.kk.kk.',
+    'kprkrrk',
+    'krrrrrk',
+    '.krrrk.',
+    '..krk..',
+    '...k...',
+  ],
+  empty: [
+    '.kk.kk.',
+    'keekeek',
+    'keeeeek',
+    '.keeek.',
+    '..kek..',
+    '...k...',
+  ],
+};
+
 // Turn a list of text rows into a canvas.
 // If `solidColor` is given, every pixel uses that color (a silhouette).
 function bakeSprite(rows, colors, solidColor = null) {
@@ -135,13 +196,23 @@ function bakeSpriteSet(rows, colors, ghostColors) {
 // Filled in by Sprites.init() once the page has loaded.
 const Sprites = {
   player: {},
+  chaser: {},
+  heart: {},
 
   init() {
+    for (const name in CHASER_SPRITE_DATA) {
+      // The white silhouette is used to flash enemies when they get hit.
+      this.chaser[name] = bakeSpriteSet(CHASER_SPRITE_DATA[name], CHASER_COLORS, [PALETTE.white]);
+    }
+    for (const name in HEART_SPRITE_DATA) {
+      this.heart[name] = bakeSprite(HEART_SPRITE_DATA[name], HEART_COLORS);
+    }
     for (const name in PLAYER_SPRITE_DATA) {
       this.player[name] = bakeSpriteSet(PLAYER_SPRITE_DATA[name], PLAYER_COLORS, [
         PALETTE.cyanDim,
         PALETTE.blue,
         PALETTE.darkBlue,
+        PALETTE.white, // last one: the white "I got hit" flash
       ]);
     }
   },

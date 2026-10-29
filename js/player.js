@@ -5,6 +5,8 @@
 const WALK_CYCLE = ['walkA', 'idle', 'walkB', 'idle'];
 const GHOST_INTERVAL = 0.025; // seconds between dash trail images
 const GHOST_LIFETIME = 0.15; // how long each trail image stays
+const TRAIL_COLOR_COUNT = 3; // the first 3 silhouette colors are for the dash trail
+const HIT_FLASH_INDEX = 3; // the 4th silhouette is the white "hit" flash
 
 class Player {
   constructor(x, y) {
@@ -27,6 +29,14 @@ class Player {
     this.dashDirY = 0;
     this.ghosts = []; // trail images left behind by the dash
     this.ghostTimer = 0;
+
+    // Health state
+    this.health = HEALTH_CONFIG.maxHealth;
+    this.maxHealth = HEALTH_CONFIG.maxHealth;
+    this.radius = HEALTH_CONFIG.hitRadius;
+    this.invulnerableTime = 0; // > 0 while the player can't be hurt
+    this.hitFlashTime = 0; // > 0 while the player flashes white
+    this.deathTime = 0; // seconds since the final hit
 
     // Animation state
     this.isMoving = false;
@@ -83,7 +93,9 @@ class Player {
     this.y += this.vy * dt;
     this.keepInsideArena();
 
-    // --- 5. Dash trail and animation timers ---
+    // --- 5. Timers ---
+    this.invulnerableTime = Math.max(0, this.invulnerableTime - dt);
+    this.hitFlashTime = Math.max(0, this.hitFlashTime - dt);
     this.updateGhosts(dt);
     this.animTime += dt;
     this.blinkTimer -= dt;
@@ -105,6 +117,29 @@ class Player {
 
   isDashing() {
     return this.dashTime > 0;
+  }
+
+  // Dashing makes you briefly untouchable, so a well-timed dash can
+  // carry you straight through an enemy.
+  canBeHit() {
+    return this.invulnerableTime === 0 && !this.isDashing();
+  }
+
+  // Lose one health point. Returns true if this hit was fatal.
+  takeHit() {
+    this.health = Math.max(0, this.health - 1);
+    this.invulnerableTime = HEALTH_CONFIG.invulnerableTime;
+    this.hitFlashTime = HEALTH_CONFIG.hitFlashTime;
+    return this.health === 0;
+  }
+
+  isDead() {
+    return this.health === 0;
+  }
+
+  // While the game shows the death moment, only the death timer runs.
+  updateDeath(dt) {
+    this.deathTime += dt;
   }
 
   keepInsideArena() {
@@ -153,7 +188,7 @@ class Player {
     for (const ghost of this.ghosts) {
       const sprite = Sprites.player[ghost.frame];
       // Older ghosts use darker colors. No transparency or blur needed.
-      const colorIndex = Math.min(sprite.ghosts.length - 1, Math.floor((ghost.age / GHOST_LIFETIME) * sprite.ghosts.length));
+      const colorIndex = Math.min(TRAIL_COLOR_COUNT - 1, Math.floor((ghost.age / GHOST_LIFETIME) * TRAIL_COLOR_COUNT));
       const image = ghost.facing === 1 ? sprite.ghosts[colorIndex].right : sprite.ghosts[colorIndex].left;
       ctx.drawImage(image, Math.round(ghost.x - this.width / 2), Math.round(ghost.y - this.height / 2));
     }
@@ -162,11 +197,35 @@ class Player {
     const drawX = Math.round(this.x - this.width / 2);
     const drawY = Math.round(this.y - this.height / 2);
 
+    // After the death flicker the player is gone (shadow included).
+    if (this.isDead() && this.deathTime > 0.6) return;
+
     // Small shadow under the feet.
     ctx.fillStyle = PALETTE.void;
     ctx.fillRect(drawX + 1, drawY + this.height, 6, 1);
 
+    // Defeated: flicker between white and normal, then vanish.
+    // (Stage 3 adds a proper pixel explosion here.)
+    if (this.isDead()) {
+      const sprite = Sprites.player.idle;
+      const white = Math.floor(this.deathTime / 0.06) % 2 === 0;
+      const image = white ? sprite.ghosts[HIT_FLASH_INDEX] : sprite;
+      ctx.drawImage(this.facing === 1 ? image.right : image.left, drawX, drawY);
+      return;
+    }
+
+    // While invulnerable, blink on and off every 0.08 seconds so the
+    // player can see they are safe for a moment.
+    if (this.invulnerableTime > 0 && this.hitFlashTime === 0) {
+      if (Math.floor(this.invulnerableTime / 0.08) % 2 === 0) return;
+    }
+
     const sprite = Sprites.player[this.getFrameName()];
+    if (this.hitFlashTime > 0) {
+      const flash = sprite.ghosts[HIT_FLASH_INDEX];
+      ctx.drawImage(this.facing === 1 ? flash.right : flash.left, drawX, drawY);
+      return;
+    }
     ctx.drawImage(this.facing === 1 ? sprite.right : sprite.left, drawX, drawY);
   }
 }

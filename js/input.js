@@ -15,7 +15,7 @@ const Input = {
   gameKeys: new Set([
     'KeyW', 'KeyA', 'KeyS', 'KeyD',
     'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-    'Space', 'Escape', 'KeyG',
+    'Space', 'Escape', 'Enter', 'KeyR', 'KeyG',
   ]),
 
   init() {
