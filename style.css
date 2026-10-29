@@ -1,0 +1,33 @@
+/* The page is just a black frame around the game canvas. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;           /* no scrollbars */
+  background: #05050f;
+}
+
+body {
+  display: flex;
+  align-items: center;        /* center the canvas vertically */
+  justify-content: center;    /* center the canvas horizontally */
+
+  /* Stop the browser from scrolling, zooming or selecting text
+     while the player drags a finger or the mouse over the game. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+canvas {
+  display: block;
+
+  /* Keep pixels as hard squares when the canvas is scaled up.
+     Without this the browser would blur the pixel art. */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
