@@ -22,7 +22,7 @@ const CHARACTERS = [
     damage: 1,
     range: 1,
     startHealth: HEALTH_CONFIG.startHealth,
-    maxHealth: HEALTH_CONFIG.maxHealth,
+    maxHealth: 4,
   },
   {
     id: 'brute',

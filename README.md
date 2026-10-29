@@ -50,7 +50,7 @@ After pressing PLAY you choose a hero with ← → and ENTER, keys 1–3, or the
 
 | Hero | Speed | Damage | Range | Hearts (start / max) |
 | --- | --- | --- | --- | --- |
-| **Runner** (blue) | ×1 | ×1 | ×1 | 3 / 5 |
+| **Runner** (blue) | ×1 | ×1 | ×1 | 3 / 4 |
 | **Brute** (orange) | ×0.75 | ×1.5 | ×1 | 3 / 5 |
 | **Speeder** (purple) | ×1.75 | ×1 | ×1.5 | 3 / 3 |
 
