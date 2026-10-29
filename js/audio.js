@@ -275,6 +275,13 @@ OMJ.Sound = class {
         this.noise(0.5, 0.12, 800, 'bandpass');
         this.tone(90, 60, 0.4, 'sawtooth', 0.04);
         break;
+      case 'dive':                       // a Divebird swoops
+        this.tone(1800, 500, 0.3, 'triangle', 0.05);
+        break;
+      case 'pop':                        // Digby pops out of the ground
+        this.tone(300, 900, 0.08, 'square', 0.05);
+        this.noise(0.12, 0.08, 900, 'bandpass');
+        break;
       case 'snort':                      // a Bristleboar gets ready to charge
         this.noise(0.18, 0.1, 700, 'bandpass');
         this.tone(140, 90, 0.15, 'sawtooth', 0.04);

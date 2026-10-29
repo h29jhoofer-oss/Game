@@ -1040,6 +1040,229 @@
       },
     },
 
+    // ---- BOING: a frog that hops up and down ----
+    // It bounces in place (and creeps toward you once the way is clear).
+    // Jump over it between hops, STOMP it, or swing at it.
+    boing: {
+      size: () => ({ w: 14, h: 11 }),
+      hitbox: { left: 2, right: 2, top: 2 },
+      enemy: true,
+      stompable: true,
+      defeated: 'KO',
+      debris: ['#4cc96b', '#2a8a4a', '#b8f5a0'],
+      deathLines: ['Ribbit. (That means "gotcha".)', 'Boing! Boing! Bonk.', 'Out-hopped by a frog.', 'Toad-ally squashed.'],
+      init(o) { o.timer = Math.random() * 0.9; o.vy = 0; o.phase = 0; },
+      update(o, dt, g) {
+        if (g.frozen) return;                  // Time Freeze
+        o.timer += dt;
+        const ground = C.GROUND_Y - o.h;
+        if (o.phase === 0) {
+          // Sitting: crouch, then hop (about 22 px high) every second.
+          if (o.timer > 0.55) { o.phase = 1; o.vy = -200; o.timer = 0; }
+        } else {
+          o.vy += 900 * dt;
+          o.y += o.vy * dt;
+          if (o.y >= ground) { o.y = ground; o.phase = 0; o.timer = 0; }
+        }
+        if (o.x < C.VIEW_W - 4 && !g.hasDangerBefore(o.x)) o.x -= 25 * dt;   // creeps at you
+      },
+      draw(ctx, o) {
+        const x = o.drawX;
+        const y = Math.round(o.y);
+        const air = o.phase === 1;
+        const crouch = !air && o.timer > 0.4 ? 1 : 0;      // squats before a hop
+        const GREEN = '#4cc96b';
+        const DARK = '#2a8a4a';
+        // Back legs (stretched out while hopping)
+        ctx.fillStyle = P.ink;
+        if (air) { ctx.fillRect(x + 9, y + 8, 5, 4); ctx.fillRect(x + 1, y + 8, 3, 3); }
+        else { ctx.fillRect(x + 8, y + 7, 6, 4); ctx.fillRect(x, y + 8, 4, 3); }
+        ctx.fillStyle = DARK;
+        if (air) ctx.fillRect(x + 10, y + 9, 3, 2);
+        else ctx.fillRect(x + 9, y + 8, 4, 2);
+        // Body
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 1, y + 3 + crouch, 12, 8 - crouch);
+        ctx.fillStyle = GREEN;
+        ctx.fillRect(x + 2, y + 4 + crouch, 10, 6 - crouch);
+        ctx.fillStyle = '#b8f5a0';                           // pale belly
+        ctx.fillRect(x + 2, y + 8, 6, 2);
+        ctx.fillStyle = DARK;                                // spots
+        ctx.fillRect(x + 8, y + 5 + crouch, 2, 1); ctx.fillRect(x + 10, y + 7, 1, 1);
+        // Big eyes on top
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 1, y + crouch, 5, 5); ctx.fillRect(x + 6, y + crouch, 5, 5);
+        ctx.fillStyle = P.white;
+        ctx.fillRect(x + 2, y + 1 + crouch, 3, 3); ctx.fillRect(x + 7, y + 1 + crouch, 3, 3);
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 2, y + 2 + crouch, 1, 2); ctx.fillRect(x + 7, y + 2 + crouch, 1, 2);
+        // Wide grumpy mouth
+        ctx.fillRect(x + 1, y + 7, 5, 1);
+      },
+    },
+
+    // ---- DIVEBIRD: flies high, then SWOOPS down at you ----
+    // Up high it's above any normal jump. When you get close (and nothing
+    // else is in the way) it dives to just above the ground, still well
+    // ahead of you, and flies at you low: jump it, stomp it or swing at it.
+    // If it can't dive in time, it just flies over your head.
+    divebird: {
+      size: () => ({ w: 16, h: 10 }),
+      hitbox: { left: 2, right: 3, top: 2 },
+      enemy: true,
+      stompable: true,
+      defeated: 'KO',
+      debris: ['#3a5fcd', '#22397f', '#ff8a3d', P.white],
+      deathLines: ['Dive-bombed!', 'Tweet tweet. (Translation: gotcha.)', 'The early bird got you.', 'Swooped and scooped.'],
+      init(o) {
+        o.phase = 0;                           // 0 high, 1 diving, 2 low
+        o.timer = Math.random();
+        o.extra = C.GROUND_Y - o.h - 84;       // cruising height (above the highest jump)
+        o.y = o.extra;
+      },
+      update(o, dt, g) {
+        if (g.frozen) return;                  // Time Freeze
+        o.timer += dt;
+        const v = g.worldSpeed;
+        const gap = o.x - (g.player.x + g.player.w);
+        const low = C.GROUND_Y - o.h - 3;
+        if (o.phase === 0) {
+          o.y = o.extra + Math.round(Math.sin(o.timer * 3) * 2);
+          // Dive only from the right distance: never too close to you.
+          if (gap <= v * 0.9 + 20 && gap >= v * 0.6 && o.x < C.VIEW_W - 8 && !g.hasDangerBefore(o.x)) {
+            o.phase = 1; o.timer = 0; o.vy = o.y;
+            g.sound.play('dive');
+          }
+        } else if (o.phase === 1) {
+          const k = Math.min(1, o.timer / 0.35);
+          o.y = o.vy + (low - o.vy) * k * k;   // speeds up as it dives
+          o.x -= 60 * dt;
+          if (k >= 1) o.phase = 2;
+        } else {
+          o.y = low - (Math.floor(o.timer * 8) % 2);
+          o.x -= 60 * dt;                      // skims along at you
+        }
+      },
+      draw(ctx, o) {
+        const x = o.drawX;
+        const y = Math.round(o.y);
+        const diving = o.phase === 1;
+        const flap = diving ? 2 : Math.floor(o.timer * 10) % 2;
+        const BLUE = '#3a5fcd';
+        const DARK = '#22397f';
+        // Wing: up, down, or tucked back while diving
+        ctx.fillStyle = P.ink;
+        if (flap === 0) ctx.fillRect(x + 6, y - 4, 7, 6);
+        else if (flap === 1) ctx.fillRect(x + 6, y + 4, 7, 5);
+        else ctx.fillRect(x + 8, y + 1, 8, 4);
+        ctx.fillStyle = DARK;
+        if (flap === 0) ctx.fillRect(x + 7, y - 3, 5, 4);
+        else if (flap === 1) ctx.fillRect(x + 7, y + 5, 5, 3);
+        else ctx.fillRect(x + 9, y + 2, 6, 2);
+        // Body and tail
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 3, y + 1, 10, 8);
+        ctx.fillRect(x + 12, y + 2, 4, 3);
+        ctx.fillStyle = BLUE;
+        ctx.fillRect(x + 4, y + 2, 8, 6);
+        ctx.fillRect(x + 13, y + 3, 2, 1);
+        ctx.fillStyle = P.white;                             // white chest
+        ctx.fillRect(x + 4, y + 5, 4, 3);
+        // Beak (pointing at you) and a mean eye
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x, y + 3, 4, 3);
+        ctx.fillStyle = '#ff8a3d';
+        ctx.fillRect(x + 1, y + 4, 3, 1);
+        ctx.fillStyle = P.white;
+        ctx.fillRect(x + 5, y + 2, 2, 2);
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 5, y + 3, 1, 1);
+        ctx.fillRect(x + 4, y + 1, 4, 1);                    // brow
+        // Feet tucked under
+        ctx.fillStyle = '#ff8a3d';
+        ctx.fillRect(x + 7, y + 9, 1, 1); ctx.fillRect(x + 9, y + 9, 1, 1);
+      },
+    },
+
+    // ---- DIGBY: a mole in a hard hat that pops out of the ground ----
+    // You'll see its dirt mound first (it wobbles as you get near). Just
+    // before you reach it, Digby pops up, still ahead of you: jump it,
+    // stomp it or swing at it.
+    digby: {
+      size: () => ({ w: 14, h: 12 }),
+      hitbox: { left: 2, right: 2, top: 2 },
+      enemy: true,
+      stompable: true,
+      defeated: 'KO',
+      debris: ['#8a5a3c', P.gold, P.dirt],
+      deathLines: ['Whack-a-you.', 'Dug up and done in.', 'A mole in a hard hat. Of course.', 'Holey moley!'],
+      init(o) {
+        o.phase = 0;                           // 0 hiding, 1 popping up, 2 up
+        o.timer = 0;
+        o.extra = 0;                           // how far out of the ground it is (0..1)
+      },
+      update(o, dt, g) {
+        if (g.frozen) return;                  // Time Freeze
+        o.timer += dt;
+        const gap = o.x - (g.player.x + g.player.w);
+        if (o.phase === 0 && gap <= g.worldSpeed * 0.4 + 8 && gap > 0) {
+          o.phase = 1; o.timer = 0;
+          g.sound.play('pop');
+          g.particles.burst(o.x + 7, C.GROUND_Y - 1, 10, 30, 90, Math.PI * 1.1, Math.PI * 1.9, 0.4, [P.dirt, P.dirtLight, P.dust], 300);
+        } else if (o.phase === 1) {
+          o.extra = Math.min(1, o.timer / 0.1);
+          if (o.extra >= 1) o.phase = 2;
+        }
+        // Only the part out of the ground can hurt you.
+        const up = Math.round(12 * o.extra);
+        o.h = up;
+        o.y = C.GROUND_Y - up;
+      },
+      draw(ctx, o, g) {
+        const x = o.drawX;
+        const gy = C.GROUND_Y;
+        const up = Math.round(12 * o.extra);
+        if (up > 0) {
+          const y = gy - 12 + (12 - up);
+          const MOLE = '#8a5a3c';
+          // Body
+          ctx.fillStyle = P.ink;
+          ctx.fillRect(x + 2, y + 3, 11, 10);
+          ctx.fillStyle = MOLE;
+          ctx.fillRect(x + 3, y + 4, 9, 8);
+          ctx.fillStyle = '#a8744f';
+          ctx.fillRect(x + 4, y + 8, 4, 3);
+          // Hard hat
+          ctx.fillStyle = P.ink;
+          ctx.fillRect(x + 2, y, 11, 4);
+          ctx.fillRect(x, y + 3, 9, 2);
+          ctx.fillStyle = P.gold;
+          ctx.fillRect(x + 3, y + 1, 9, 2);
+          ctx.fillRect(x + 1, y + 3, 7, 1);
+          ctx.fillStyle = '#fff2a8';
+          ctx.fillRect(x + 4, y + 1, 2, 1);
+          // Squinty eyes, big pink nose, claws
+          ctx.fillStyle = P.ink;
+          ctx.fillRect(x + 4, y + 6, 2, 1); ctx.fillRect(x + 8, y + 6, 2, 1);
+          ctx.fillStyle = '#ff8fb0';
+          ctx.fillRect(x + 1, y + 7, 3, 2);
+          ctx.fillStyle = P.white;
+          ctx.fillRect(x + 2, y + 11, 1, 1); ctx.fillRect(x + 4, y + 11, 1, 1);
+        }
+        // The dirt mound (wobbles when you're getting close)
+        const gap = o.x - (g.player.x + g.player.w);
+        const wobble = o.phase === 0 && gap < g.worldSpeed * 0.9 + 8 && Math.floor(g.time * 20) % 2 ? 1 : 0;
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x + 1, gy - 3 - wobble, 12, 3 + wobble);
+        ctx.fillRect(x + 3, gy - 4 - wobble, 8, 1);
+        ctx.fillStyle = P.dirt;
+        ctx.fillRect(x + 2, gy - 2 - wobble, 10, 2 + wobble);
+        ctx.fillRect(x + 4, gy - 3 - wobble, 6, 1);
+        ctx.fillStyle = P.dirtLight;
+        ctx.fillRect(x + 4, gy - 3 - wobble, 2, 1); ctx.fillRect(x + 9, gy - 2, 1, 1);
+      },
+    },
+
     // ---- WOODEN PLATFORM: a floating plank you can stand on ----
     // Jump up through it from underneath and land on top. Press DOWN while
     // standing on it to drop through. It never hurts you, and whatever is

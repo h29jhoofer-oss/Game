@@ -130,6 +130,9 @@ Any swing or plunge defeats a monster. Touching one any other way still ends you
 | Shellback | A grumpy little turtle that waddles toward you. Jump over it, **stomp on its head** (you bounce up), or hit it with your sword. Then it hides in its shell, which shoots forward and smashes what's ahead. |
 | Buzzbee (air) | A grumpy bee buzzing just above the ground, flying at you. It's too low to run under: jump over it, **stomp it** (you bounce up), or swing at it. It flips over and falls away. |
 | Bristleboar (ground) | A spiky boar that waits, scrapes its hoof and snorts (its eye turns red)... then **charges** at you. The spikes on its back mean no stomping: jump over it or swing at it. |
+| Boing (ground) | A grumpy frog that hops up and down, creeping toward you. Jump it between hops, **stomp it**, or swing at it. |
+| Digby (ground) | A mole in a yellow hard hat. You see its dirt mound first (it wobbles as you get near); just before you reach it, Digby **pops out**. Jump it, **stomp it**, or swing at it. |
+| Divebird (air) | A blue bird flying high above any jump. When you get close it **swoops down** to just above the ground and skims at you: jump it, **stomp it**, or swing at it. If something else is in the way, it just flies over your head. |
 
 Like the crossbow, a monster only starts walking (or charging) once nothing else is between
 you, so it never arrives at an unfair moment. A Bristleboar also waits until you're on the

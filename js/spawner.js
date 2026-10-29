@@ -100,6 +100,18 @@ OMJ.PATTERNS = [
     build(api) { return api.place('buzzbee', 0, 0); },
   },
   {
+    name: 'boing', minDifficulty: 0.15, weight: 1.6,
+    build(api) { return api.place('boing', 0, 0); },
+  },
+  {
+    name: 'digby', minDifficulty: 0.2, weight: 1.5,
+    build(api) { return api.place('digby', 0, 0); },
+  },
+  {
+    name: 'divebird', minDifficulty: 0.28, weight: 1.5,
+    build(api) { return api.place('divebird', 0, 0); },
+  },
+  {
     name: 'bristleboar', minDifficulty: 0.22, weight: 1.6,
     build(api) { return api.place('bristleboar', 0, 0); },
   },
