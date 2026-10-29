@@ -182,28 +182,24 @@ html, body.omj-page {
   letter-spacing: calc(var(--px) * 1);
   color: #1d1a2f;
   background: #ffd23f;
+  /* Flat look: a dark outline and a thin darker lip at the bottom. */
   box-shadow:
-    0 calc(var(--px) * 3) 0 #c99a10,
-    0 0 0 calc(var(--px) * 1) #1d1a2f,
-    0 calc(var(--px) * 3) 0 calc(var(--px) * 1) #1d1a2f;
+    inset 0 calc(var(--px) * -1) 0 #c99a10,
+    0 0 0 calc(var(--px) * 1) #1d1a2f;
   transition: transform 0.05s;
 }
 .omj-btn:hover { background: #ffe066; }
 .omj-btn:active {
-  transform: translateY(calc(var(--px) * 2));
-  box-shadow:
-    0 calc(var(--px) * 1) 0 #c99a10,
-    0 0 0 calc(var(--px) * 1) #1d1a2f,
-    0 calc(var(--px) * 1) 0 calc(var(--px) * 1) #1d1a2f;
+  transform: translateY(calc(var(--px) * 1));
+  box-shadow: 0 0 0 calc(var(--px) * 1) #1d1a2f;
 }
 .omj-btn--small {
   padding: calc(var(--px) * 2) calc(var(--px) * 8);
   font-size: calc(var(--px) * 6);
   background: #c8ccd8;
   box-shadow:
-    0 calc(var(--px) * 3) 0 #7d8299,
-    0 0 0 calc(var(--px) * 1) #1d1a2f,
-    0 calc(var(--px) * 3) 0 calc(var(--px) * 1) #1d1a2f;
+    inset 0 calc(var(--px) * -1) 0 #7d8299,
+    0 0 0 calc(var(--px) * 1) #1d1a2f;
 }
 .omj-btn--small:hover { background: #e2e5ee; }
 .omj-screen--pause .omj-btn--small { margin-top: calc(var(--px) * 6); }
@@ -290,9 +286,10 @@ html, body.omj-page {
 /* ---- Coin icon used in text ---- */
 .omj-coin-icon {
   display: inline-block;
-  width: calc(var(--px) * 5);
+  width: calc(var(--px) * 6);
   height: calc(var(--px) * 6);
   vertical-align: middle;
+  border-radius: 50%;
   background: #ffd23f;
   box-shadow: 0 0 0 calc(var(--px) * 1) #1d1a2f, inset calc(var(--px) * 1) 0 0 #fff2a8;
 }

@@ -4,6 +4,10 @@
 // this file moves, collects and draws them. Fixed pool, re-used.
 // =============================================================
 
+// Half-width of each pixel row of a coin, top to bottom (a round 8x8 coin).
+const COIN_ROWS = [2, 3, 4, 4, 4, 4, 3, 2];
+const COIN_SQUASH = [1, 0.6, 0.25, 0.6];
+
 OMJ.Coins = class {
   constructor(poolSize) {
     this.pool = [];
@@ -103,19 +107,24 @@ OMJ.Coins = class {
       if (!c.active) continue;
       const x = Math.round(c.x);
       const y = Math.round(c.y + Math.sin(c.spin * 4) * 1);   // gentle bob
-      // Three spin frames: full face, narrower, edge-on.
-      const frame = Math.floor(c.spin * 8) % 4;
-      const half = frame === 0 ? 3 : frame === 2 ? 1 : 2;
-      ctx.fillStyle = P.ink;
-      ctx.fillRect(x - half - 1, y - 3, half * 2 + 2, 7);
-      ctx.fillRect(x - half, y - 4, half * 2, 9);
-      ctx.fillStyle = '#c99a10';
-      ctx.fillRect(x - half, y - 3, half * 2, 7);
-      ctx.fillStyle = P.gold;
-      ctx.fillRect(x - half, y - 3, Math.max(1, half * 2 - 1), 6);
-      if (half > 1) {
-        ctx.fillStyle = '#fff2a8';                 // shine
-        ctx.fillRect(x - half + 1, y - 2, 1, 3);
+      // Spin frames: full face, narrower, edge-on, narrower.
+      const squash = COIN_SQUASH[Math.floor(c.spin * 8) % 4];
+      for (let r = 0; r < COIN_ROWS.length; r++) {
+        const hw = Math.max(1, Math.round(COIN_ROWS[r] * squash));
+        const ry = y - 4 + r;
+        ctx.fillStyle = P.ink;                              // outline
+        ctx.fillRect(x - hw - 1, ry, hw * 2 + 2, 1);
+        if (r === 0 || r === COIN_ROWS.length - 1) ctx.fillRect(x - hw, ry + (r === 0 ? -1 : 1), hw * 2, 1);
+        ctx.fillStyle = '#c99a10';                          // shaded rim
+        ctx.fillRect(x - hw, ry, hw * 2, 1);
+        if (r < COIN_ROWS.length - 1) {
+          ctx.fillStyle = P.gold;                           // face
+          ctx.fillRect(x - hw, ry, Math.max(1, hw * 2 - 1), 1);
+        }
+      }
+      if (squash > 0.3) {
+        ctx.fillStyle = '#fff2a8';                          // shine
+        ctx.fillRect(x - Math.round(2 * squash), y - 2, 1, 3);
       }
     }
   }
