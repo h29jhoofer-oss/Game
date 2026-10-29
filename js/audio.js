@@ -67,6 +67,13 @@ const SOUND_RECIPES = {
       s.tone({ type: 'triangle', freq: 180, endFreq: 260, duration: 0.25, volume: 0.06, delay: 0.05 });
     },
   },
+  // A warm little rising chime for picking up a heart.
+  heal: {
+    minGap: 0.1,
+    play: (s) => {
+      [523, 784, 1047].forEach((freq, i) => s.tone({ type: 'triangle', freq, duration: 0.12, volume: 0.12, delay: i * 0.06 }));
+    },
+  },
   shieldReady: { minGap: 0.2, play: (s) => s.tone({ type: 'triangle', freq: 900, endFreq: 1500, duration: 0.12, volume: 0.08 }) },
   dash: { minGap: 0.1, play: (s) => s.noise({ duration: 0.12, volume: 0.12, filter: 600, endFilter: 3500 }) },
   enemyShoot: { minGap: 0.08, play: (s) => s.tone({ type: 'triangle', freq: 330, endFreq: 180, duration: 0.12, volume: 0.08 }) },

@@ -64,7 +64,7 @@ const MAX_DELTA = 0.05;
 
 // Health and getting hit.
 const HEALTH_CONFIG = {
-  maxHealth: 3,
+  maxHealth: 3, // hearts at the start (heart pickups can take you above this)
   invulnerableTime: 1.0, // seconds of safety after taking a hit
   hitFlashTime: 0.1, // seconds the player flashes white when hit
   hitRadius: 3, // the player's hitbox is smaller than the sprite to feel fair
@@ -218,3 +218,15 @@ const GAS_CONFIG = {
   radius: 10, // rough size of the cloud
   maxClouds: 12, // oldest clouds vanish if there are too many
 };
+
+// Hearts that defeated monsters sometimes drop. There is no limit to how
+// many you can carry.
+const HEART_DROP_CONFIG = {
+  chance: { chaser: 0.05, toxic: 0.075, shooter: 0.1, brute: 0.15 }, // 0.05 = 5%
+  bonusPerHeartLost: 0.05, // +5% to every chance each time you lose a heart
+  maxOnFloor: 30, // performance limit for hearts lying around
+};
+
+// The HUD shows one icon per heart up to this many, then switches to
+// a single heart with a number (like "x9") so it never runs off-screen.
+const HUD_MAX_HEART_ICONS = 6;

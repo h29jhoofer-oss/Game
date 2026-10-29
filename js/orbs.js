@@ -1,9 +1,9 @@
 // =====================================================================
-// orbs.js — energy orbs that defeated enemies leave behind.
+// orbs.js — energy orbs (and heart pickups) that defeated enemies leave behind.
 //
 // Orbs pop out, settle on the floor, and get pulled toward the player
-// when they come close (the "magnet"). In Stage 4 the energy you
-// collect will fill an experience bar.
+// when they come close (the "magnet"). The energy you collect fills
+// the experience bar.
 // =====================================================================
 
 class Orb {
@@ -71,5 +71,41 @@ class Orb {
     ctx.fillStyle = PALETTE.void; // shadow
     ctx.fillRect(drawX + 1, Math.round(this.y) + 3, 3, 1);
     ctx.drawImage(image, drawX, drawY);
+  }
+}
+
+// ---------------------------------------------------------------------
+// Heart pickup: sometimes dropped by a defeated monster. It moves just
+// like an energy orb (pops out, gets pulled in by the magnet), but it
+// restores a heart instead of giving energy, and it never disappears.
+// ---------------------------------------------------------------------
+class HeartPickup extends Orb {
+  constructor(x, y) {
+    super(x, y, 1);
+  }
+
+  isExpired() {
+    return false; // hearts wait for you as long as it takes
+  }
+
+  draw(ctx) {
+    const t = this.age + this.animOffset;
+    const bob = Math.floor(t * 2.5) % 2; // bob up and down by one pixel
+    const drawX = Math.round(this.x) - 3;
+    const drawY = Math.round(this.y) - 3 - bob;
+
+    ctx.fillStyle = PALETTE.void; // shadow
+    ctx.fillRect(drawX + 2, Math.round(this.y) + 4, 3, 1);
+    ctx.drawImage(Sprites.heart.full, drawX, drawY);
+
+    // A little white twinkle in the corner every second, so hearts
+    // stand out among the yellow energy orbs.
+    if (t % 1 < 0.15) {
+      ctx.fillStyle = PALETTE.white;
+      ctx.fillRect(drawX + 6, drawY - 1, 1, 1);
+      ctx.fillRect(drawX + 5, drawY, 1, 1);
+      ctx.fillRect(drawX + 7, drawY, 1, 1);
+      ctx.fillRect(drawX + 6, drawY + 1, 1, 1);
+    }
   }
 }

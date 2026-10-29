@@ -81,28 +81,6 @@ const UPGRADES = [
     },
   },
   {
-    id: 'extraHealth',
-    name: 'EXTRA HEALTH',
-    lines: ['RESTORE', '1 HEART'],
-    maxLevel: Infinity,
-    icon: [
-      '.......',
-      '.rr.rr.',
-      'rprrrrr',
-      'rrrrrrr',
-      '.rrrrr.',
-      '..rrr..',
-      '...r...',
-    ],
-    // Only offered when it would actually do something.
-    canOffer(game) {
-      return game.player.health < game.player.maxHealth;
-    },
-    apply(game) {
-      game.player.heal(1);
-    },
-  },
-  {
     id: 'magnet',
     name: 'MAGNET',
     lines: ['PULL ENERGY', 'FROM FARTHER'],

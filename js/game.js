@@ -31,6 +31,8 @@ const Game = {
   enemyShots: [],
   gasClouds: [], // poison clouds left by Toxic Slimes
   orbs: [],
+  heartPickups: [], // hearts dropped by monsters
+  heartsLost: 0, // each lost heart raises the heart drop chance
   spawner: null,
   kills: 0, // enemies defeated this run
   score: 0,
@@ -110,6 +112,8 @@ const Game = {
     this.enemyShots = [];
     this.gasClouds = [];
     this.orbs = [];
+    this.heartPickups = [];
+    this.heartsLost = 0;
     this.spawner = new Spawner();
     this.kills = 0;
     this.score = 0;
@@ -258,8 +262,9 @@ const Game = {
     for (const cloud of this.gasClouds) cloud.update(dt);
     this.checkPlayerCollisions();
 
-    // 4. Energy orbs drift toward the player and get collected.
+    // 4. Energy orbs and hearts drift toward the player and get collected.
     this.updateOrbs(dt);
+    this.updateHeartPickups(dt);
 
     // 5. Throw away anything that is finished, so lists never grow forever.
     this.enemies = this.enemies.filter((enemy) => !enemy.dead);
@@ -362,8 +367,35 @@ const Game = {
     for (let i = 0; i < enemy.energyValue; i++) {
       this.orbs.push(new Orb(enemy.x, enemy.y, 1));
     }
+    this.maybeDropHeart(enemy);
     // Too many orbs lying around? Remove the oldest ones.
     if (this.orbs.length > ORB_CONFIG.maxOrbs) this.orbs.splice(0, this.orbs.length - ORB_CONFIG.maxOrbs);
+  },
+
+  // Every monster type has its own chance to drop a heart, and each heart
+  // you've lost this run adds +5% to all of them.
+  getHeartDropChance(type) {
+    return HEART_DROP_CONFIG.chance[type] + this.heartsLost * HEART_DROP_CONFIG.bonusPerHeartLost;
+  },
+
+  maybeDropHeart(enemy) {
+    if (this.heartPickups.length >= HEART_DROP_CONFIG.maxOnFloor) return;
+    if (Math.random() < this.getHeartDropChance(enemy.type)) {
+      this.heartPickups.push(new HeartPickup(enemy.x, enemy.y));
+    }
+  },
+
+  updateHeartPickups(dt) {
+    for (const heart of this.heartPickups) {
+      heart.update(dt, this.player, this.player.magnetRadius);
+      if (heart.collected) {
+        this.player.heal(1);
+        Effects.burst(heart.x, heart.y, 8, SPARK_COLORS.heart, { minSpeed: 15, maxSpeed: 45, life: 0.35 });
+        Effects.text(this.player.x, this.player.y - 10, '+1 HEART', PALETTE.red);
+        Sound.play('heal');
+      }
+    }
+    this.heartPickups = this.heartPickups.filter((heart) => !heart.collected);
   },
 
   updateOrbs(dt) {
@@ -436,6 +468,7 @@ const Game = {
     }
 
     const fatal = player.takeHit();
+    this.heartsLost++; // makes heart drops more likely from now on
     this.shake(3, 0.2);
     this.hurtFlashTime = 0.15;
     if (fatal) {
@@ -497,6 +530,7 @@ const Game = {
     Arena.draw(ctx, this.animTime);
     this.spawner.draw(ctx);
     for (const orb of this.orbs) orb.draw(ctx);
+    for (const heart of this.heartPickups) heart.draw(ctx);
     for (const cloud of this.gasClouds) cloud.draw(ctx);
     // Things higher on screen are drawn first, so lower ones overlap them
     // naturally (like standing in front of someone).
@@ -530,14 +564,26 @@ const Game = {
   drawHud(ctx) {
     const top = 4;
 
-    // Hearts in the top-left corner.
-    for (let i = 0; i < this.player.maxHealth; i++) {
-      const image = i < this.player.health ? Sprites.heart.full : Sprites.heart.empty;
-      ctx.drawImage(image, ARENA.x + i * 9, top);
+    // Hearts in the top-left corner. Below the starting 3 you see empty
+    // slots for the lost ones; above it, extra hearts are added. With
+    // lots of hearts it switches to one heart and a number.
+    const health = this.player.health;
+    let afterHearts;
+    if (health <= HUD_MAX_HEART_ICONS) {
+      const slots = Math.max(health, this.player.maxHealth);
+      for (let i = 0; i < slots; i++) {
+        const image = i < health ? Sprites.heart.full : Sprites.heart.empty;
+        ctx.drawImage(image, ARENA.x + i * 9, top);
+      }
+      afterHearts = ARENA.x + slots * 9;
+    } else {
+      ctx.drawImage(Sprites.heart.full, ARENA.x, top);
+      const countText = 'X' + health;
+      drawText(ctx, countText, ARENA.x + 9, top + 1, PALETTE.red, { shadow: PALETTE.void });
+      afterHearts = ARENA.x + 9 + measureText(countText) + 2;
     }
 
     // Shield icon after the hearts (only once you have the upgrade).
-    let afterHearts = ARENA.x + this.player.maxHealth * 9;
     if (this.player.shieldLevel > 0) {
       const icon = this.player.shieldReady ? Sprites.shieldIcon.ready : Sprites.shieldIcon.empty;
       ctx.drawImage(icon, afterHearts + 1, top - 1);
@@ -590,6 +636,7 @@ const Game = {
       'ENEMIES ' + this.enemies.length + ' SHOTS ' + this.projectiles.length + ' ENEMY SHOTS ' + this.enemyShots.length,
       'ORBS ' + this.orbs.length + ' PARTICLES ' + Effects.particles.length + ' GAS ' + this.gasClouds.length,
       'XP ' + this.xp + '/' + this.xpToNext + ' NEXT SURGE ' + Math.ceil(this.spawner.surgeTimer) + 'S',
+      'HEARTS LOST ' + this.heartsLost + ' CHASER HEART DROP ' + Math.round(this.getHeartDropChance('chaser') * 1000) / 10 + '%',
       'FIRE ' + this.weapon.stats.fireInterval.toFixed(2) + 'S DMG ' + this.weapon.stats.damage + ' PIERCE ' + this.weapon.stats.pierce + ' BOLTS ' + this.weapon.stats.projectileCount + ' TWIN ' + this.weapon.stats.burstExtra,
       'SPAWN EVERY ' + this.spawner.getInterval(this.survivalTime).toFixed(2) + 'S',
     ];

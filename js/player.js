@@ -136,9 +136,9 @@ class Player {
     return this.invulnerableTime === 0 && !this.isDashing();
   }
 
-  // Get one health point back (never above the maximum).
+  // Get health back. There's no upper limit: hearts stack.
   heal(amount) {
-    this.health = Math.min(this.maxHealth, this.health + amount);
+    this.health += amount;
   }
 
   getShieldRechargeTime() {

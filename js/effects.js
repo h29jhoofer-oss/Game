@@ -18,6 +18,7 @@ const SPARK_COLORS = {
   shield: [PALETTE.white, PALETTE.cyan, PALETTE.blue],
   levelUp: [PALETTE.white, PALETTE.yellow, PALETTE.orange],
   toxic: [PALETTE.white, '#b6ffc8', PALETTE.green, '#139a3c', '#0b4a20'],
+  heart: [PALETTE.white, '#ff8a9a', PALETTE.red, '#a3173a'],
 };
 
 const Effects = {
