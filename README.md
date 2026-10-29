@@ -1,8 +1,8 @@
 # NEON SURVIVOR
 
-A pixel-art arcade survival game built with plain HTML, CSS, and JavaScript. It has no frameworks and nothing to install.
+A pixel-art arcade survival game built with plain HTML, CSS, and JavaScript. It has no frameworks, no images, no audio files, and nothing to install. Every sprite is drawn from text grids and every sound is synthesized in code.
 
-**Current progress: Stage 5, more content.** Three enemy types (Chasers, Shooters, Brutes), eight upgrades including Multi-Shot and Shield, and more effects: floating score numbers, a red hurt flash, stomping dust, and a spinning shield bubble.
+You're a tiny neon hero trapped in an arena. Your blaster fires on its own, so your job is to **move**: dodge slimes, drones, and brutes, grab the energy they drop, pick upgrades as you level up, and survive as long as you can.
 
 ## How to run it
 
@@ -10,7 +10,7 @@ A pixel-art arcade survival game built with plain HTML, CSS, and JavaScript. It 
 
 Double-click `index.html`, or drag it into Chrome, Firefox, or Edge.
 
-**Option B: run a tiny local web server** (closer to how a real website behaves)
+**Option B: run a tiny local web server** (closer to how a real website behaves, and the most reliable way to save your best score)
 
 If you have Python installed, open a terminal in this folder and run:
 
@@ -25,73 +25,62 @@ Then visit <http://localhost:8000> in your browser.
 | Key | Action |
 | --- | --- |
 | W A S D / Arrow keys | Move |
-| SPACE | Dash (short cooldown, shown by the DASH meter) |
-| ESC | Pause / resume |
-| ENTER or R | Restart from the game-over screen (or click RESTART) |
+| SPACE | Dash (you can't be hurt while dashing) |
+| ESC | Pause menu, or back to the title from the results |
+| M | Mute or unmute sound |
+| ENTER | Start, confirm menu choices, restart after game over |
+| R | Restart from the results screen |
 | 1 / 2 / 3 | Pick an upgrade card |
-| ← → (or A D) then ENTER / SPACE | Choose a card with the keyboard (or hover and click with the mouse) |
-| G | Toggle debug info (FPS, scale, position) |
+| G | Debug info (FPS, scale, enemy counts, weapon stats) |
 
-## Stage 5 test checklist
+The mouse works everywhere too: the PLAY button, menu buttons, upgrade cards, and the sound and pause icons in the bottom-right corner while playing.
 
-1. **Shooter (after about 40 s):** the first time one appears, "NEW ENEMY: SHOOTER" flashes and its spawn marker is purple. Shooters keep their distance, circle you (sometimes switching direction), and their eye **blinks pink for half a second before they fire** a slow pink shot. Dodge it or dash through it. Defeating one shows a floating "+50".
-2. **Brute (after about 90 s):** an orange marker that's larger than the others, then "NEW ENEMY: BRUTE". Brutes are slow, take many hits, barely move when shot, and puff dust with every stomp. Their explosion is big, with a heavier screen shake and "+120".
-3. **Fair limits:** never more than 5 Shooters or 3 Brutes at once. Press **G** to see enemy and enemy-shot counts.
-4. **Multi-Shot:** each level adds a bolt, fanned out about 12° apart (up to 4 bolts).
-5. **Shield:** after taking it, a ring of dots spins around you and a shield icon appears next to your hearts. The next hit shows "BLOCKED!" instead of costing a heart. The icon turns dark blue while recharging (12 s, then 9 s, then 6.5 s with more levels) and a ring flashes when it's back.
-6. **Hurt flash:** losing a heart flashes a crisp red border around the screen.
-7. **Tougher over time:** every 100 seconds all enemies gain health (Brutes gain the most).
+## How to play
 
-## Stage 4 test checklist
+- **Survive.** You earn 10 points every second you're alive.
+- **Defeat enemies.** Your blaster auto-aims at the nearest enemy in range. Chasers are worth 25 points, Shooters 50, and Brutes 120.
+- **Collect energy.** Yellow orbs fill your experience bar. A full bar is a **level-up**: the game freezes and you choose one of three random upgrades.
+- **Watch for warnings.** Blinking brackets show where enemies will appear (red for Chaser, purple for Shooter, orange for Brute). A Shooter's eye glows pink right before it fires. "SWARM INCOMING!" means a ring of enemies is about to surround you, so dash out.
+- **Beat your best.** Your top score is saved in the browser and shown on the title screen.
 
-1. **Experience bar:** the yellow bar next to `LV1` fills as you collect orbs. You need 5 energy for level 2, then 9, 13, 17… (4 more each time).
-2. **Level-up freeze:** when the bar fills, a ring flashes around you and **everything stops**: enemies, shots, orbs, the timer, even the floor lights. "LEVEL UP!" appears and three cards rise in one after another.
-3. **Choosing:** for the first 0.6 seconds the cards ignore input, so mashing SPACE can't pick one by accident. Then:
-   - **1, 2, 3** pick a card right away
-   - **← →** move the yellow highlight (the card lifts up and an arrow blinks above it), and **ENTER** or **SPACE** confirms
-   - with the mouse, hover highlights a card and a click picks it
+### Enemies
 
-   The chosen card flashes white and the others go dark.
-4. **Upgrades work:** press **G** and watch `FIRE`, `DMG`, and `PIERCE` change after taking Rapid Fire, Heavy Shots, or Piercing. Speed Boost makes you visibly faster. Magnet pulls orbs from farther away. Extra Health refills a heart.
-5. **Card details:** each card shows `NEW!` or `LV 1 > 2`, plus pips for how many times it can be taken. Maxed upgrades stop appearing. Extra Health only appears when you're missing a heart.
-6. **Double level-up:** if one pickup fills the bar twice, a second set of cards appears right after the first.
-7. **Safety after choosing:** you blink for about half a second after picking, so a slime that crept close can't hit you instantly.
-8. **Score:** the 7-digit score in the top-right goes up by 10 per second alive and 25 per slime defeated.
-9. **Swarm surges:** at about 45 seconds, "SWARM INCOMING!" flashes and a ring of warning markers surrounds you. Dash out before it closes. Surges repeat every 40–55 seconds and get bigger each minute.
-10. **Results:** the game-over panel now shows score, time, slimes defeated, and level.
+| Enemy | Appears | Behavior |
+| --- | --- | --- |
+| **Chaser** (red slime) | From the start | Hops straight at you. Comes in packs later on. |
+| **Shooter** (purple drone) | After ~40 s | Keeps its distance, circles you, and fires slow pink shots. |
+| **Brute** (orange monster) | After ~90 s | Slow, huge, very tough, and barely flinches when shot. |
 
-## Stage 3 test checklist
+All enemies gain health every 100 seconds, and spawns speed up over time.
 
-1. **Auto-fire:** when a slime gets within range, the blaster fires a small cyan bolt at the *nearest* one about every 0.6 seconds. You'll see a tiny white flash at the muzzle. With no slime in range, it doesn't fire.
-2. **Enemy damage:** a slime takes two hits. The first makes it flash white and knocks it back. The second makes it explode in a ring of pixels and chunky sparks, with a one-pixel screen bump.
-3. **Energy orbs:** each defeated slime drops a bobbing yellow orb. Walk near one and it gets pulled in, sparkles, and the counter next to your hearts goes up.
-4. **Orb timeout:** orbs you leave alone start blinking after 15 seconds and vanish at 18.
-5. **Missed shots:** bolts that reach a wall fizzle with a small spark.
-6. **Standing still loses:** groups of 2–3 slimes start appearing over time, so you can't win by standing in the middle. Move, kite, and grab orbs.
-7. **Death:** your final hit makes a big cyan explosion. The results show time survived, slimes defeated, and energy collected.
-8. **Debug (G):** shows live counts of shots, orbs, and particles. Leave the game running for a while and confirm the numbers go up and down rather than growing forever.
+### Upgrades
 
-## Stage 2 test checklist
+| Upgrade | Effect | Max |
+| --- | --- | --- |
+| Rapid Fire | Shoot 15% faster | 5 |
+| Heavy Shots | +1 damage per shot | 4 |
+| Speed Boost | Move 10% faster | 4 |
+| Extra Health | Restore 1 heart (only offered when you're hurt) | ∞ |
+| Magnet | Pull energy from farther away | 4 |
+| Piercing | Shots pass through +1 enemy | 3 |
+| Multi-Shot | +1 bolt per shot, fanned out | 3 |
+| Shield | Blocks one hit, then recharges (faster each level) | 3 |
 
-1. **Warning markers:** blinking red brackets appear near the walls about 0.7 seconds before each slime arrives. Slimes never appear right next to you.
-2. **Chasers:** red slimes bounce toward you and spread out instead of stacking into one blob.
-3. **Getting hit:** touching a slime flashes you white, removes a heart, shakes the screen, and knocks the slime back. For one second you blink and can't be hurt again.
-4. **Dash through enemies:** you can't be hurt while dashing, so SPACE lets you slip through a gap.
-5. **Difficulty:** slimes appear more often and move faster the longer you survive. Press **G** to watch `SPAWN EVERY` shrink over time.
-6. **Game over:** after the last heart, you flicker and vanish, then the GAME OVER panel opens. It shows your survival time and a message.
-7. **Restart:** click RESTART (the cursor turns into a hand) or press ENTER / R. Hearts, timer, and enemies all reset.
-8. **Pause:** ESC still freezes everything, including the timer.
+## Final test checklist
 
-## Stage 1 test checklist
+1. **Title screen:** the logo drops in and a shine sweeps across it every few seconds. Four characters animate in a row, PLAY pulses, and your best score is shown (or "NO BEST SCORE YET").
+2. **Start:** press ENTER or SPACE, or click PLAY. Dark squares wipe across the screen and the game begins.
+3. **Sound:** after your first key press or click you'll hear sounds for:
+   - shooting, hits, and enemy explosions
+   - orb pickups, whose pitch climbs while you grab them quickly
+   - dashing, level-ups, getting hurt, shield blocks, the swarm alarm, and the game-over jingle
 
-1. **Crisp pixels:** resize the browser window and zoom in and out (Ctrl + / Ctrl -). The game should snap to a bigger or smaller size, and every pixel should stay a sharp square. Press **G** to see the current scale (2X, 3X, 4X…).
-2. **Movement:** hold W, A, S, D, or the arrow keys. The character walks with a stepping animation and faces left or right.
-3. **Diagonal speed:** press G and hold two keys, such as W and D. `SPEED` should show about 80, the same as moving straight.
-4. **Walls:** walk into every wall and corner. The player should never leave the arena.
-5. **Dash:** press SPACE while moving. You zip forward with an after-image trail, and the DASH bar refills over about one second.
-6. **Idle animation:** stand still. The character breathes and sometimes blinks.
-7. **Pause:** press ESC. Everything freezes behind a pixel "PAUSED" panel. Press ESC again to resume. The game also pauses by itself when you click into another window.
-8. **No page scrolling:** SPACE and the arrow keys should never scroll the page.
+   M, the speaker icon, or the pause menu toggles sound. The mute setting is remembered.
+4. **Pause menu:** ESC or the pause icon opens it. Use ↑ ↓ (or W S) to choose and ENTER to confirm, or use the mouse. The options are Resume, Restart, Sound on/off, and Quit to title. ESC also resumes. The game also pauses by itself when you switch windows.
+5. **Results:** GAME OVER shows score, time, enemies defeated, level, your best, and a message. Beating your record shows a flashing **NEW BEST!** badge with a fanfare.
+6. **Quick restart:** ENTER or R restarts immediately. ESC (or MENU) goes back to the title.
+7. **Best score persists:** refresh the page and your best is still on the title screen. Restarting never erases it.
+8. **Crisp pixels:** resize the window or zoom the browser. The game always scales by a whole number and never blurs.
 
 ## How the code is organized
 
@@ -99,48 +88,51 @@ The scripts in `js/` load in this order. Each file has one job:
 
 | File | What it does |
 | --- | --- |
-| `config.js` | All the tunable numbers (sizes, speeds) and the color palette. Start here if you want to tweak things. |
+| `config.js` | All the tunable numbers (speeds, health, spawn rates, upgrade values) and the color palette. **Start here to tweak the game.** |
 | `utils.js` | Small helpers: `clamp`, random numbers, off-screen canvases. |
-| `input.js` | Remembers which keys are held and which were just pressed. It blocks page scrolling for game keys only. |
-| `font.js` | A hand-made 3×5 pixel font, because normal fonts are smooth and look wrong in pixel art. |
-| `sprites.js` | Pixel art written as text grids (`'.'` = empty, letters = colors). Each grid is "baked" once into a small canvas. |
-| `arena.js` | Draws the space background, floor tiles, and walls once, then animates the glowing tiles and stars. |
-| `effects.js` | Particles and pixel shockwave rings. Purely visual, with a hard cap on how many can exist. |
-| `projectiles.js` | The `Weapon` (auto-aim, fire rate, damage, all in a `stats` object that upgrades will change) and the `Projectile` bolts. |
-| `orbs.js` | Energy orbs: popping out, the magnet pull, collection, and the timeout. |
-| `player.js` | The `Player` class: movement, diagonal normalization, wall collision, dash, health, invulnerability, and animation frames. |
-| `enemies.js` | The shared `Enemy` class, the three enemy types (`Chaser`, `Shooter`, `Brute`), enemy shots, enemy separation, and circle collision. |
-| `spawner.js` | Decides when, where, and which enemies appear (weighted by time, with caps). Shows warning markers and banners, and controls the difficulty ramp. |
-| `upgrades.js` | The list of upgrades: name, description, pixel icon, maximum level, and what each one does. Add a new upgrade by adding one entry. |
-| `levelup.js` | The level-up screen: picking three random cards, keyboard and mouse selection, and the card animations. |
-| `game.js` | The game loop, game states (playing, paused, dying, game over), collisions, screen shake, HUD, and menus. |
+| `storage.js` | Saves and loads the personal best and the mute setting with `localStorage`. |
+| `audio.js` | Synthesized retro sounds. Each sound is a short "recipe" of beeps and noise. |
+| `input.js` | Remembers which keys are held and which were just pressed. Blocks page scrolling for game keys only. |
+| `font.js` | A hand-made 3×5 pixel font. |
+| `sprites.js` | All character pixel art, written as text grids and baked into tiny canvases at startup. |
+| `arena.js` | The background, floor tiles, walls, glowing tiles, and stars. |
+| `effects.js` | Particles, shockwave rings, and floating text. |
+| `player.js` | Movement, dash, health, shield, and animation. |
+| `projectiles.js` | The auto-aiming weapon and its bolts. |
+| `orbs.js` | Energy orbs and the magnet pull. |
+| `enemies.js` | The `Enemy` base class, `Chaser`, `Shooter`, `Brute`, and enemy shots. |
+| `spawner.js` | When, where, and which enemies appear, plus swarm surges and banners. |
+| `upgrades.js` | The list of upgrades. |
+| `levelup.js` | The level-up card screen. |
+| `ui.js` | Shared interface pieces: panels, bars, buttons, icons. |
+| `transition.js` | The pixel wipe between screens. |
+| `screens.js` | The title screen (with its big logo), the pause menu, and the results screen. |
+| `game.js` | The game loop, game states, combat, collisions, and HUD. It ties everything together. |
 | `main.js` | Starts everything and scales the canvas. |
 
 ### Key ideas
 
 - **Low resolution, scaled up.** The game is drawn on a 320×180 canvas. `main.js` enlarges it by a *whole number* (×2, ×3, ×4…), measured in real screen pixels. CSS `image-rendering: pixelated` makes the browser copy pixels as hard squares instead of blurring them.
-- **Delta time (`dt`).** Every frame, the loop measures how many seconds have passed. Movement is `speed × dt`, so the game runs at the same speed on 60 Hz and 144 Hz screens. `dt` is capped so a frozen tab doesn't make the player teleport.
-- **Decimal positions, whole-pixel drawing.** The player's position keeps its decimals for smooth movement. When drawing, it's rounded with `Math.round`, so sprites always sit exactly on the pixel grid.
-- **One game loop only.** `Game.start()` won't start a second loop if one is already running. Two loops would make the game run at double speed.
-- **Game states.** The game is always in exactly one state: `playing`, `paused`, `dying`, or `gameover`. `update()` checks the state and only runs the code for it, which keeps pausing and restarting reliable.
-- **Circle hitboxes.** Collisions compare the distance between two centers with the sum of their radii. Hitboxes are slightly smaller than the sprites, so near-misses feel fair.
-- **Enemy inheritance.** `Chaser extends Enemy`, so it only has to say *where it wants to go* (`think()`). Movement, knockback, and drawing are shared. New enemy types will reuse all of that.
-- **Cleaning up.** Shots, orbs, particles, and enemies each get a `dead`, `collected`, or age flag. At the end of every frame, the game filters finished items out of their lists, so memory never piles up. Each list also has a maximum size in `config.js`.
-- **Upgrade-ready weapon.** Every number the blaster uses lives in `weapon.stats`. A future "Rapid Fire" upgrade only needs to do `weapon.stats.fireInterval *= 0.85`.
-- **Weighted random spawns.** Each enemy type has a weight that grows with time, for example `{ chaser: 10, shooter: 2, brute: 1 }`. Picking an enemy is like drawing from a bag with 10 chaser tickets, 2 shooter tickets, and 1 brute ticket, so each run's sequence is different.
-- **Telegraphs.** Every danger warns you first: spawn markers, the Shooter's pink charge-up, the swarm banner. Hard but fair means you can always react.
-- **Data-driven upgrades.** Each upgrade is a small object with an `apply(game)` function, for example `game.weapon.stats.damage += 1`. The level-up screen doesn't know what any upgrade does. It just shows the card and calls `apply`.
-- **A difficulty curve you can tune.** Spawn rate, enemy speed, enemy health (+1 every 100 s), pack chance, and swarm surges all depend on survival time, and every number is in `config.js`.
-- **No blur effects.** Glows change through a few fixed palette colors in steps, and the pause overlay is a checkerboard "dither". There are no gradients or soft shadows.
+- **Delta time (`dt`).** Every frame, the loop measures how many seconds have passed. Movement is `speed × dt`, so the game runs at the same speed on 60 Hz and 144 Hz screens. `dt` is capped so a frozen tab doesn't cause a jump.
+- **Decimal positions, whole-pixel drawing.** Positions keep their decimals for smooth movement but are rounded with `Math.round` when drawn, so sprites always sit exactly on the pixel grid.
+- **One game loop only.** `Game.start()` refuses to start a second loop.
+- **Game states.** The game is always in exactly one state: `title`, `playing`, `paused`, `levelup`, `dying`, or `gameover`. `update()` runs only the code for that state. That's what makes pausing, level-ups, and restarting reliable.
+- **Cleaning up.** Shots, orbs, particles, and enemies are flagged when finished and filtered out every frame. Each list also has a maximum size, so memory never piles up.
+- **Inheritance for enemies.** `Chaser`, `Shooter`, and `Brute` all `extend Enemy`. Each only describes what makes it different, like where it wants to go (`think()`) or shooting.
+- **Data-driven upgrades.** Each upgrade is a small object with an `apply(game)` function. Add a new one by adding one entry to the list in `upgrades.js`.
+- **Weighted random spawns.** Each enemy type has a weight that grows with time. Picking a spawn is like drawing from a bag of tickets, so every run is different.
+- **Telegraphs.** Every danger warns you first: spawn markers, the Shooter's pink charge-up, and the swarm banner. Hard but fair means you can always react.
+- **Sound without files.** The Web Audio API creates waves and noise and shapes their pitch and volume, just like old arcade hardware. Browsers only allow sound after the player interacts, so audio starts on the first key press or click.
+- **Saving safely.** `localStorage` can be unavailable (private windows, for example), so every read and write is wrapped in `try/catch`. The game works fine without it; it just won't remember your best.
+- **No blur effects.** Glows step through palette colors, overlays use a checkerboard "dither", and every effect lands on whole pixels.
 
-### Drawing your own sprite
+### Ideas for changing the game
 
-Open `js/sprites.js` and edit a grid in `PLAYER_SPRITE_DATA`. Each letter is a color from `PLAYER_COLORS`:
+- **Make it easier or harder:** change `SPAWN_CONFIG`, `CHASER_CONFIG`, and the other values in `config.js`.
+- **Redraw a character:** edit its grid in `sprites.js`. Each letter is a color from that sprite's color key. Every row must have the same length (the game shows an error if not).
+- **Add an upgrade:** copy an entry in `upgrades.js` and change its name, icon, and `apply`.
+- **Change a sound:** tweak a recipe in `audio.js`. Try different `type` values (`square`, `triangle`, `sawtooth`) or frequencies.
 
-```
-'..kkkk..',   k = dark outline
-'.kcccck.',   c = cyan
-'kcccwcwk',   w = white (eyes)
-```
+## Embedding in another website
 
-Save the file and refresh the browser to see the change.
+Everything lives inside `#game-container`. Keyboard input ignores text boxes elsewhere on the page and only blocks scrolling for the game's own keys. To embed it, copy the container, the stylesheet, and the scripts into your page, and give the container a fixed size (for example `width: 960px; height: 540px`).

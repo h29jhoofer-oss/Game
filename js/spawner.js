@@ -26,6 +26,7 @@ class Spawner {
 
   showBanner(text, color, time = 1.6) {
     this.banner = { text, color, time };
+    Sound.play('alarm');
   }
 
   // How many seconds between spawns, given how long the run has lasted.

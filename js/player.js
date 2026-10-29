@@ -123,6 +123,7 @@ class Player {
     this.dashTime = PLAYER_CONFIG.dashDuration;
     this.dashCooldown = PLAYER_CONFIG.dashCooldown;
     this.ghostTimer = 0;
+    Sound.play('dash');
   }
 
   isDashing() {
@@ -151,6 +152,7 @@ class Player {
     if (this.shieldRecharge <= 0) {
       this.shieldReady = true;
       Effects.ring(this.x, this.y, SHIELD_CONFIG.radius, SPARK_COLORS.shield, 0.25);
+      Sound.play('shieldReady');
     }
   }
 

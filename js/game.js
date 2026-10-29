@@ -4,23 +4,26 @@
 // The game loop runs about 60 times per second:
 //   1. update(dt) — move things forward in time by dt seconds
 //   2. draw()     — paint the current state onto the canvas
+//
+// The menus (title, pause, results) live in screens.js and the upgrade
+// cards in levelup.js; this file decides which one is showing.
 // =====================================================================
 
 const DYING_DURATION = 0.9; // seconds between the final hit and the results panel
-const GAMEOVER_INPUT_DELAY = 0.5; // seconds before restart input is accepted
-const GAMEOVER_PANEL = { width: 160, height: 112 };
+const COLLECT_COMBO_WINDOW = 0.6; // orbs collected this close together raise the pitch
 
 const Game = {
   canvas: null,
   ctx: null,
 
   // Which "mode" the game is in:
+  //   'title'    — the start screen
   //   'playing'  — normal gameplay
-  //   'paused'   — frozen, waiting for ESC
+  //   'paused'   — frozen, pause menu open
   //   'levelup'  — frozen, choosing an upgrade card
   //   'dying'    — short dramatic moment after the last heart is lost
-  //   'gameover' — results panel with a restart button
-  state: 'playing',
+  //   'gameover' — results panel
+  state: 'title',
   player: null,
   weapon: null,
   enemies: [],
@@ -30,6 +33,9 @@ const Game = {
   spawner: null,
   kills: 0, // enemies defeated this run
   score: 0,
+  best: null, // personal best, loaded from storage
+  isNewBest: false, // did the last run beat the record?
+  runRecorded: false, // makes sure one run is only saved once
 
   // Experience: collecting energy fills the bar; a full bar = level up.
   level: 1,
@@ -38,16 +44,18 @@ const Game = {
   pendingLevelUps: 0, // level-ups waiting to be shown (you can gain two at once)
   upgradeLevels: {}, // how many times each upgrade was taken, e.g. { rapidFire: 2 }
   survivalTime: 0, // seconds survived in the current run
-  animTime: 0, // seconds of animation (keeps running on the game-over screen)
+  animTime: 0, // seconds of animation (keeps running on menus)
   stateTime: 0, // seconds since the current state started
   showDebug: false,
 
-  // Screen shake
+  // Feedback effects
   shakeTime: 0,
   shakeStrength: 0,
   hurtFlashTime: 0, // > 0 while the red screen border shows after a hit
+  collectCombo: 0, // orbs collected in quick succession
+  collectComboTimer: 0,
 
-  // Mouse position in game pixels (for the restart button)
+  // Mouse position in game pixels
   mouseX: -1,
   mouseY: -1,
 
@@ -66,15 +74,19 @@ const Game = {
 
     Sprites.init();
     Upgrades.init();
+    UI.init();
     Arena.init();
+    Sound.init();
+    this.best = Save.loadBest();
     this.resetRun();
+    this.setState('title');
+    TitleScreen.open();
 
     // Pause automatically when the player switches to another tab/window.
     window.addEventListener('blur', () => {
-      if (this.state === 'playing') this.setState('paused');
+      if (this.state === 'playing') this.pause();
     });
 
-    // Mouse support for the restart button.
     canvas.addEventListener('mousemove', (event) => this.onMouseMove(event));
     canvas.addEventListener('mouseleave', () => { this.mouseX = -1; this.mouseY = -1; });
     canvas.addEventListener('click', (event) => this.onClick(event));
@@ -85,7 +97,8 @@ const Game = {
     this.stateTime = 0;
   },
 
-  // Put everything back to the starting state.
+  // Put everything back to the starting state. The personal best is
+  // stored separately, so it is never touched here.
   resetRun() {
     const centerX = ARENA.x + ARENA.width / 2;
     const centerY = ARENA.y + ARENA.height / 2;
@@ -107,10 +120,57 @@ const Game = {
     this.survivalTime = 0;
     this.shakeTime = 0;
     this.hurtFlashTime = 0;
+    this.collectCombo = 0;
+    this.isNewBest = false;
+    this.runRecorded = false;
     Input.clear(); // forget keys held from the previous run
-    this.setState('playing');
   },
 
+  // ---------------------------------------------------------------
+  // Moving between screens (each one uses the pixel wipe)
+  // ---------------------------------------------------------------
+  startGame() {
+    Transition.start(() => {
+      this.resetRun();
+      this.setState('playing');
+    });
+  },
+
+  restartRun() {
+    this.recordRun();
+    this.startGame();
+  },
+
+  quitToTitle() {
+    this.recordRun();
+    Transition.start(() => {
+      this.resetRun();
+      this.setState('title');
+      TitleScreen.open();
+    });
+  },
+
+  pause() {
+    PauseMenu.open();
+    this.setState('paused');
+  },
+
+  // Save the run as the personal best if it beats the old one.
+  recordRun() {
+    if (this.runRecorded || this.survivalTime === 0) return;
+    this.runRecorded = true;
+    this.isNewBest = Save.submitRun({
+      score: Math.floor(this.score),
+      time: Math.floor(this.survivalTime),
+      kills: this.kills,
+      level: this.level,
+    });
+    this.best = Save.loadBest();
+  },
+
+  // ---------------------------------------------------------------
+  // Game loop
+  // ---------------------------------------------------------------
   // Start the loop. The check makes sure we never run two loops at once
   // (two loops would make the game run at double speed).
   start() {
@@ -135,11 +195,20 @@ const Game = {
 
   update(dt) {
     this.trackFps(dt);
-    if (Input.wasPressed('KeyG')) this.showDebug = !this.showDebug;
     this.stateTime += dt;
+    if (Input.wasPressed('KeyM')) Sound.toggleMute();
+    if (Input.wasPressed('KeyG') && this.state === 'playing') this.showDebug = !this.showDebug;
+
+    // During a screen wipe, only animations run (no input, no gameplay).
+    Transition.update(dt);
+    if (Transition.active) {
+      this.animTime += dt;
+      Arena.update(dt);
+      return;
+    }
 
     if (this.state === 'paused') {
-      if (Input.wasPressed('Escape')) this.setState('playing');
+      PauseMenu.update(dt, this);
       return; // nothing in the world moves while paused
     }
     if (this.state === 'levelup') {
@@ -147,26 +216,29 @@ const Game = {
       return; // the world is frozen while choosing an upgrade
     }
 
-    // Everything below keeps animating in every state except 'paused'.
+    // Everything below keeps animating in the other states.
     this.animTime += dt;
     this.shakeTime = Math.max(0, this.shakeTime - dt);
     this.hurtFlashTime = Math.max(0, this.hurtFlashTime - dt);
     Arena.update(dt);
     Effects.update(dt); // explosions keep playing on the game-over screen
 
-    if (this.state === 'playing') this.updatePlaying(dt);
+    if (this.state === 'title') TitleScreen.update(dt, this);
+    else if (this.state === 'playing') this.updatePlaying(dt);
     else if (this.state === 'dying') this.updateDying(dt);
-    else if (this.state === 'gameover') this.updateGameOver();
+    else if (this.state === 'gameover') GameOverScreen.update(dt, this);
   },
 
   updatePlaying(dt) {
     if (Input.wasPressed('Escape')) {
-      this.setState('paused');
+      this.pause();
       return;
     }
 
     this.survivalTime += dt;
     this.score += dt * PROGRESSION_CONFIG.scorePerSecond;
+    this.collectComboTimer -= dt;
+    if (this.collectComboTimer <= 0) this.collectCombo = 0;
 
     // 1. Player moves and the blaster fires on its own.
     this.player.update(dt);
@@ -212,6 +284,7 @@ const Game = {
   startLevelUp() {
     Effects.ring(this.player.x, this.player.y, 14, SPARK_COLORS.levelUp, 0.3);
     Effects.burst(this.player.x, this.player.y, 12, SPARK_COLORS.levelUp, { maxSpeed: 60, life: 0.5 });
+    Sound.play('levelUp');
     LevelUpScreen.open(this);
     this.setState('levelup');
   },
@@ -233,6 +306,9 @@ const Game = {
     this.setState('playing');
   },
 
+  // ---------------------------------------------------------------
+  // Combat
+  // ---------------------------------------------------------------
   // Check every shot against every enemy.
   checkProjectileHits() {
     const stats = this.weapon.stats;
@@ -246,6 +322,7 @@ const Game = {
         Effects.burst(projectile.x, projectile.y, 3, SPARK_COLORS.hit, { maxSpeed: 50, life: 0.2 });
         const defeated = enemy.takeDamage(projectile.damage, projectile.dirX, projectile.dirY, stats.hitKnockback);
         if (defeated) this.onEnemyDefeated(enemy);
+        else Sound.play('hit');
 
         // A piercing shot keeps going; a normal shot stops here.
         if (projectile.pierceLeft > 0) {
@@ -266,11 +343,14 @@ const Game = {
     if (enemy.type === 'brute') {
       this.shake(3, 0.2);
       Effects.text(enemy.x, enemy.y - 8, '+' + enemy.scoreValue, PALETTE.orange);
+      Sound.play('bruteDie');
     } else if (enemy.type === 'shooter') {
       this.shake(2, 0.1);
       Effects.text(enemy.x, enemy.y - 7, '+' + enemy.scoreValue, PALETTE.pink, 0.6);
+      Sound.play('enemyDie');
     } else {
       this.shake(1, 0.08);
+      Sound.play('enemyDie');
     }
     for (let i = 0; i < enemy.energyValue; i++) {
       this.orbs.push(new Orb(enemy.x, enemy.y, 1));
@@ -285,6 +365,10 @@ const Game = {
       if (orb.collected) {
         this.gainXp(orb.value);
         Effects.burst(orb.x, orb.y, 4, SPARK_COLORS.energy, { minSpeed: 10, maxSpeed: 35, life: 0.25 });
+        // Each orb in a quick chain plays a slightly higher note.
+        Sound.play('collect', this.collectCombo);
+        this.collectCombo++;
+        this.collectComboTimer = COLLECT_COMBO_WINDOW;
       }
     }
     this.orbs = this.orbs.filter((orb) => !orb.collected && !orb.isExpired());
@@ -294,6 +378,7 @@ const Game = {
   spawnEnemyShot(x, y, dirX, dirY) {
     if (this.enemyShots.length >= ENEMY_SHOT_CONFIG.max) return;
     this.enemyShots.push(new EnemyShot(x, y, dirX, dirY));
+    Sound.play('enemyShoot');
   },
 
   // Did any enemy or enemy shot touch the player this frame?
@@ -324,6 +409,7 @@ const Game = {
       Effects.ring(player.x, player.y, SHIELD_CONFIG.radius + 6, SPARK_COLORS.shield, 0.25);
       Effects.burst(player.x, player.y, 10, SPARK_COLORS.shield, { maxSpeed: 60, life: 0.35 });
       Effects.text(player.x, player.y - 10, 'BLOCKED!', PALETTE.cyan);
+      Sound.play('shieldBlock');
       this.shake(2, 0.12);
       return;
     }
@@ -334,23 +420,22 @@ const Game = {
     if (fatal) {
       this.shake(4, 0.5);
       Effects.explode(player.x, player.y, SPARK_COLORS.player, 3);
+      Sound.play('death');
       this.setState('dying');
+    } else {
+      Sound.play('hurt');
     }
   },
 
   // A short freeze after the final hit, so the player sees what happened.
   updateDying(dt) {
     this.player.updateDeath(dt);
-    if (this.stateTime >= DYING_DURATION) this.setState('gameover');
-  },
-
-  updateGameOver() {
-    // Ignore input for a moment so a key held during the final hit
-    // doesn't instantly skip the results.
-    if (this.stateTime < GAMEOVER_INPUT_DELAY) return;
-    if (Input.wasPressed('Enter') || Input.wasPressed('KeyR')) {
-      this.resetRun();
-    }
+    if (this.stateTime < DYING_DURATION) return;
+    this.recordRun();
+    Sound.play('gameOver');
+    if (this.isNewBest) Sound.play('newBest');
+    GameOverScreen.open();
+    this.setState('gameover');
   },
 
   shake(strength, duration) {
@@ -359,9 +444,27 @@ const Game = {
     this.shakeTime = Math.max(this.shakeTime, duration);
   },
 
+  // ---------------------------------------------------------------
+  // Drawing
+  // ---------------------------------------------------------------
   draw() {
     const ctx = this.ctx;
 
+    if (this.state === 'title') {
+      TitleScreen.draw(ctx, this);
+    } else {
+      this.drawWorld(ctx);
+      this.drawHud(ctx);
+      if (this.showDebug) this.drawDebug(ctx);
+      if (this.state === 'paused') PauseMenu.draw(ctx, this);
+      if (this.state === 'levelup') LevelUpScreen.draw(ctx, this);
+      if (this.state === 'gameover') GameOverScreen.draw(ctx, this);
+    }
+
+    Transition.draw(ctx); // the wipe goes on top of everything
+  },
+
+  drawWorld(ctx) {
     // Screen shake moves the whole world by a few WHOLE pixels.
     ctx.save();
     if (this.shakeTime > 0) {
@@ -391,17 +494,17 @@ const Game = {
       ctx.fillRect(0, 0, 2, VIEW_HEIGHT);
       ctx.fillRect(VIEW_WIDTH - 2, 0, 2, VIEW_HEIGHT);
     }
-
-    this.drawHud(ctx);
-    if (this.showDebug) this.drawDebug(ctx);
-    if (this.state === 'paused') this.drawPauseScreen(ctx);
-    if (this.state === 'levelup') LevelUpScreen.draw(ctx, this);
-    if (this.state === 'gameover') this.drawGameOverScreen(ctx);
   },
 
-  // ---------------------------------------------------------------
-  // Interface
-  // ---------------------------------------------------------------
+  // Clickable icons in the bottom-right corner while playing.
+  getHudButtons() {
+    const y = VIEW_HEIGHT - 8;
+    return [
+      { id: 'sound', box: { x: VIEW_WIDTH - ARENA.x - 21, y, width: 9, height: 8 } },
+      { id: 'pause', box: { x: VIEW_WIDTH - ARENA.x - 9, y, width: 9, height: 8 } },
+    ];
+  },
+
   drawHud(ctx) {
     const top = 4;
 
@@ -436,131 +539,23 @@ const Game = {
     drawText(ctx, scoreText, VIEW_WIDTH - ARENA.x, top + 1, PALETTE.white, { align: 'right', shadow: PALETTE.darkBlue });
     drawText(ctx, 'SCORE', VIEW_WIDTH - ARENA.x - measureText(scoreText) - 4, top + 1, PALETTE.cyanDim, { align: 'right' });
 
-    // Bottom row: dash meter on the left, controls on the right.
+    // Bottom row: dash meter, controls reminder, sound and pause icons.
     const bottom = VIEW_HEIGHT - 7;
     drawText(ctx, 'DASH', ARENA.x, bottom, PALETTE.cyanDim);
     const charge = 1 - this.player.dashCooldown / PLAYER_CONFIG.dashCooldown;
     drawPixelBar(ctx, ARENA.x + 20, bottom + 1, 30, 3, charge, charge >= 1 ? PALETTE.cyan : PALETTE.blue);
-    drawText(ctx, 'WASD MOVE  SPACE DASH  ESC PAUSE', VIEW_WIDTH - ARENA.x, bottom, PALETTE.darkBlue, { align: 'right' });
+    drawText(ctx, 'WASD MOVE  SPACE DASH  M MUTE  ESC PAUSE', VIEW_WIDTH - ARENA.x - 26, bottom, PALETTE.darkBlue, { align: 'right' });
+    for (const button of this.getHudButtons()) {
+      const icon = button.id === 'pause' ? 'pause' : Sound.muted ? 'soundOff' : 'soundOn';
+      const hovered = this.state === 'playing' && pointInBox(this.mouseX, this.mouseY, button.box);
+      ctx.drawImage(UI.icons[icon][hovered ? 'hover' : 'normal'], button.box.x, button.box.y + 1);
+    }
 
     // Banner messages ("SWARM INCOMING!", "NEW ENEMY: ...").
     const banner = this.spawner.banner;
     if (banner.time > 0 && Math.floor(banner.time * 8) % 2 === 0) {
       drawText(ctx, banner.text, VIEW_WIDTH / 2, ARENA.y + 6, banner.color, { align: 'center', shadow: PALETTE.void });
     }
-  },
-
-  drawPauseScreen(ctx) {
-    // Darken the game with a checkerboard of black pixels. This "dither"
-    // is a classic retro trick instead of a smooth transparent overlay.
-    ctx.drawImage(getDitherOverlay(), 0, 0);
-
-    const panelW = 120;
-    const panelH = 40;
-    const panelX = Math.floor((VIEW_WIDTH - panelW) / 2);
-    const panelY = Math.floor((VIEW_HEIGHT - panelH) / 2);
-    drawPixelPanel(ctx, panelX, panelY, panelW, panelH);
-    drawText(ctx, 'PAUSED', VIEW_WIDTH / 2, panelY + 9, PALETTE.cyan, { align: 'center', scale: 2, shadow: PALETTE.darkBlue });
-    drawText(ctx, 'PRESS ESC TO RESUME', VIEW_WIDTH / 2, panelY + 27, PALETTE.white, { align: 'center' });
-  },
-
-  drawGameOverScreen(ctx) {
-    ctx.drawImage(getDitherOverlay(), 0, 0);
-
-    // Pixel transition: the panel grows open in 8-pixel steps.
-    const panelW = GAMEOVER_PANEL.width;
-    const panelH = GAMEOVER_PANEL.height;
-    const reveal = Math.min(1, this.stateTime / 0.3);
-    const shownH = Math.max(8, Math.floor((panelH * reveal) / 8) * 8);
-    const panelX = Math.floor((VIEW_WIDTH - panelW) / 2);
-    const panelY = Math.floor((VIEW_HEIGHT - panelH) / 2);
-    drawPixelPanel(ctx, panelX, panelY + Math.floor((panelH - shownH) / 2), panelW, shownH);
-    if (reveal < 1) return;
-
-    const cx = VIEW_WIDTH / 2;
-    // The title flickers between red and pink like an old arcade sign.
-    const titleColor = Math.floor(this.animTime * 4) % 2 === 0 ? PALETTE.red : PALETTE.pink;
-    drawText(ctx, 'GAME OVER', cx, panelY + 9, titleColor, { align: 'center', scale: 2, shadow: PALETTE.void });
-
-    // Results: label on the left of the center line, value on the right.
-    const results = [
-      ['SCORE', String(Math.floor(this.score))],
-      ['SURVIVED', formatTime(this.survivalTime)],
-      ['DEFEATED', String(this.kills)],
-      ['LEVEL', String(this.level)],
-    ];
-    results.forEach(([label, value], i) => {
-      const rowY = panelY + 28 + i * 8;
-      drawText(ctx, label, cx - 4, rowY, PALETTE.cyanDim, { align: 'right' });
-      drawText(ctx, value, cx + 4, rowY, PALETTE.white);
-    });
-    drawText(ctx, getGameOverMessage(this.survivalTime), cx, panelY + 64, PALETTE.yellow, { align: 'center' });
-
-    // Restart button: highlighted when hovered.
-    const button = this.getRestartButton();
-    const hovered = this.isMouseOver(button);
-    ctx.fillStyle = hovered ? PALETTE.cyan : PALETTE.blue;
-    ctx.fillRect(button.x, button.y, button.width, button.height);
-    ctx.fillStyle = hovered ? PALETTE.white : PALETTE.cyanDim;
-    ctx.fillRect(button.x, button.y, button.width, 1); // light top edge
-    ctx.fillStyle = PALETTE.darkBlue;
-    ctx.fillRect(button.x, button.y + button.height - 1, button.width, 1); // dark bottom edge
-    drawText(ctx, 'RESTART', cx, button.y + 5, hovered ? PALETTE.void : PALETTE.white, { align: 'center' });
-
-    drawText(ctx, 'OR PRESS ENTER / R', cx, button.y + button.height + 5, PALETTE.blue, { align: 'center' });
-  },
-
-  getRestartButton() {
-    const width = 60;
-    const height = 15;
-    const panelY = Math.floor((VIEW_HEIGHT - GAMEOVER_PANEL.height) / 2);
-    return { x: Math.floor((VIEW_WIDTH - width) / 2), y: panelY + 75, width, height };
-  },
-
-  // ---------------------------------------------------------------
-  // Mouse
-  // ---------------------------------------------------------------
-  // The canvas is scaled up on screen, so convert the mouse position
-  // from screen pixels back into the game's 320x180 pixels.
-  onMouseMove(event) {
-    const rect = this.canvas.getBoundingClientRect();
-    this.mouseX = ((event.clientX - rect.left) / rect.width) * VIEW_WIDTH;
-    this.mouseY = ((event.clientY - rect.top) / rect.height) * VIEW_HEIGHT;
-    let pointer = this.state === 'gameover' && this.isMouseOver(this.getRestartButton());
-
-    // Hovering a level-up card selects it.
-    if (this.state === 'levelup' && LevelUpScreen.isReady()) {
-      const card = LevelUpScreen.cardAt(this.mouseX, this.mouseY);
-      if (card !== -1) {
-        LevelUpScreen.selected = card;
-        pointer = true;
-      }
-    }
-    this.canvas.style.cursor = pointer ? 'pointer' : 'default';
-  },
-
-  onClick(event) {
-    this.onMouseMove(event);
-    if (this.state === 'levelup' && LevelUpScreen.isReady()) {
-      const card = LevelUpScreen.cardAt(this.mouseX, this.mouseY);
-      if (card !== -1) {
-        this.canvas.style.cursor = 'default';
-        LevelUpScreen.confirm(card);
-      }
-      return;
-    }
-    if (this.state !== 'gameover' || this.stateTime < GAMEOVER_INPUT_DELAY) return;
-    if (this.isMouseOver(this.getRestartButton())) {
-      this.canvas.style.cursor = 'default';
-      this.resetRun();
-    }
-  },
-
-  isMouseOver(box) {
-    return (
-      this.mouseX >= box.x && this.mouseX < box.x + box.width &&
-      this.mouseY >= box.y && this.mouseY < box.y + box.height
-    );
   },
 
   drawDebug(ctx) {
@@ -581,6 +576,80 @@ const Game = {
     });
   },
 
+  // ---------------------------------------------------------------
+  // Mouse
+  // ---------------------------------------------------------------
+  // The screen that currently owns the buttons, if any.
+  getActiveScreen() {
+    if (Transition.active) return null;
+    if (this.state === 'title') return TitleScreen;
+    if (this.state === 'paused') return PauseMenu;
+    if (this.state === 'gameover' && GameOverScreen.isReady(this)) return GameOverScreen;
+    return null;
+  },
+
+  // The canvas is scaled up on screen, so convert the mouse position
+  // from screen pixels back into the game's 320x180 pixels.
+  onMouseMove(event) {
+    const rect = this.canvas.getBoundingClientRect();
+    this.mouseX = ((event.clientX - rect.left) / rect.width) * VIEW_WIDTH;
+    this.mouseY = ((event.clientY - rect.top) / rect.height) * VIEW_HEIGHT;
+    let pointer = false;
+
+    const screen = this.getActiveScreen();
+    if (screen) {
+      for (const button of screen.getButtons(this)) {
+        if (!pointInBox(this.mouseX, this.mouseY, button.box)) continue;
+        pointer = true;
+        // Hovering moves the keyboard highlight too.
+        if (button.index !== undefined && screen.selected !== button.index) {
+          screen.selected = button.index;
+          Sound.play('uiMove');
+        }
+      }
+    }
+    if (this.state === 'playing' && !Transition.active) {
+      pointer = this.getHudButtons().some((button) => pointInBox(this.mouseX, this.mouseY, button.box));
+    }
+    // Hovering a level-up card selects it.
+    if (this.state === 'levelup' && LevelUpScreen.isReady()) {
+      const card = LevelUpScreen.cardAt(this.mouseX, this.mouseY);
+      if (card !== -1) {
+        if (LevelUpScreen.selected !== card) Sound.play('uiMove');
+        LevelUpScreen.selected = card;
+        pointer = true;
+      }
+    }
+    this.canvas.style.cursor = pointer ? 'pointer' : 'default';
+  },
+
+  onClick(event) {
+    this.onMouseMove(event);
+
+    if (this.state === 'levelup' && LevelUpScreen.isReady()) {
+      const card = LevelUpScreen.cardAt(this.mouseX, this.mouseY);
+      if (card !== -1) LevelUpScreen.confirm(card);
+      return;
+    }
+    if (this.state === 'playing' && !Transition.active) {
+      for (const button of this.getHudButtons()) {
+        if (!pointInBox(this.mouseX, this.mouseY, button.box)) continue;
+        if (button.id === 'sound') Sound.toggleMute();
+        if (button.id === 'pause') this.pause();
+      }
+      return;
+    }
+    const screen = this.getActiveScreen();
+    if (!screen) return;
+    for (const button of screen.getButtons(this)) {
+      if (pointInBox(this.mouseX, this.mouseY, button.box)) {
+        screen.activate(button.id, this);
+        this.canvas.style.cursor = 'default';
+        return;
+      }
+    }
+  },
+
   trackFps(dt) {
     this.fpsFrames++;
     this.fpsTimer += dt;
@@ -595,61 +664,4 @@ const Game = {
 // Energy needed to go from `level` to the next level: 5, 9, 13, 17...
 function xpNeededForLevel(level) {
   return PROGRESSION_CONFIG.xpBase + (level - 1) * PROGRESSION_CONFIG.xpPerLevel;
-}
-
-// Turn seconds into a clock like 1:05.
-function formatTime(seconds) {
-  const whole = Math.floor(seconds);
-  const minutes = Math.floor(whole / 60);
-  const rest = whole % 60;
-  return minutes + ':' + String(rest).padStart(2, '0');
-}
-
-// A short fun message depending on how long the player lasted.
-function getGameOverMessage(seconds) {
-  if (seconds < 15) return 'TIP: DASH THROUGH ENEMIES!';
-  if (seconds < 40) return 'NOT BAD, NEON RUNNER.';
-  if (seconds < 80) return 'SLICK MOVES!';
-  if (seconds < 150) return 'THE SLIMES FEAR YOU.';
-  return 'LEGENDARY SURVIVOR!';
-}
-
-// The checkerboard overlay is drawn once and reused, since filling
-// thousands of single pixels every frame would be wasteful.
-let ditherOverlay = null;
-function getDitherOverlay() {
-  if (ditherOverlay) return ditherOverlay;
-  const { canvas, ctx } = createOffscreenCanvas(VIEW_WIDTH, VIEW_HEIGHT);
-  ctx.fillStyle = PALETTE.black;
-  for (let y = 0; y < VIEW_HEIGHT; y++) {
-    for (let x = y % 2; x < VIEW_WIDTH; x += 2) ctx.fillRect(x, y, 1, 1);
-  }
-  ditherOverlay = canvas;
-  return ditherOverlay;
-}
-
-// A bordered progress bar. `fraction` goes from 0 (empty) to 1 (full).
-function drawPixelBar(ctx, x, y, width, height, fraction, color) {
-  ctx.fillStyle = PALETTE.void;
-  ctx.fillRect(x - 1, y - 1, width + 2, height + 2);
-  ctx.fillStyle = PALETTE.gridLine;
-  ctx.fillRect(x, y, width, height);
-  ctx.fillStyle = color;
-  ctx.fillRect(x, y, Math.round(width * clamp(fraction, 0, 1)), height);
-}
-
-// A retro window: dark fill, double border, and notched corners.
-function drawPixelPanel(ctx, x, y, width, height) {
-  ctx.fillStyle = PALETTE.void;
-  ctx.fillRect(x, y, width, height);
-  ctx.fillStyle = PALETTE.cyanDim;
-  ctx.fillRect(x + 1, y, width - 2, 1);
-  ctx.fillRect(x + 1, y + height - 1, width - 2, 1);
-  ctx.fillRect(x, y + 1, 1, height - 2);
-  ctx.fillRect(x + width - 1, y + 1, 1, height - 2);
-  ctx.fillStyle = PALETTE.wallDark;
-  ctx.fillRect(x + 2, y + 2, width - 4, 1);
-  ctx.fillRect(x + 2, y + height - 3, width - 4, 1);
-  ctx.fillRect(x + 2, y + 2, 1, height - 4);
-  ctx.fillRect(x + width - 3, y + 2, 1, height - 4);
 }

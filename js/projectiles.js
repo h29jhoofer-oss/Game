@@ -86,6 +86,7 @@ class Weapon {
 
     this.cooldown = this.stats.fireInterval;
     this.muzzleFlash = 0.05;
+    Sound.play('shoot');
     this.flashX = startX + Math.cos(aim) * 5;
     this.flashY = startY + Math.sin(aim) * 5;
   }

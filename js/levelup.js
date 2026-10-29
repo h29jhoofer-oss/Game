@@ -50,12 +50,19 @@ const LevelUpScreen = {
         return;
       }
     }
-    if (Input.wasPressed('ArrowLeft') || Input.wasPressed('KeyA')) this.selected = (this.selected + count - 1) % count;
-    if (Input.wasPressed('ArrowRight') || Input.wasPressed('KeyD')) this.selected = (this.selected + 1) % count;
+    if (Input.wasPressed('ArrowLeft') || Input.wasPressed('KeyA')) {
+      this.selected = (this.selected + count - 1) % count;
+      Sound.play('uiMove');
+    }
+    if (Input.wasPressed('ArrowRight') || Input.wasPressed('KeyD')) {
+      this.selected = (this.selected + 1) % count;
+      Sound.play('uiMove');
+    }
     if (Input.wasPressed('Enter') || Input.wasPressed('Space')) this.confirm(this.selected);
   },
 
   confirm(index) {
+    Sound.play('uiSelect');
     this.selected = index;
     this.confirmed = index;
     this.confirmTime = 0;
