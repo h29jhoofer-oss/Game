@@ -13,6 +13,8 @@
 //   - Toxic Slimes join after 25 s, Shooters after 40 s, Sprinters after
 //     60 s, Brutes after 90 s.
 //   - Every 90 s the boss (King Slime) arrives, stronger each time.
+//   - From 2:00 on, every new monster gets more health and speed each
+//     minute (the late-game ramp in LATE_GAME_CONFIG).
 //   - Every 40-55 seconds a "swarm surge" rings the player from all sides.
 // =====================================================================
 
@@ -25,6 +27,7 @@ class Spawner {
     this.banner = { text: '', color: PALETTE.red, time: 0 };
     this.introduced = new Set(); // enemy types we've already announced
     this.nextBossAt = BOSS_CONFIG.spawnEvery;
+    this.nextLateGameBanner = LATE_GAME_CONFIG.startsAt;
     this.bossLevel = 0; // how many bosses have arrived so far
   }
 
@@ -98,14 +101,32 @@ class Spawner {
     return 'chaser';
   }
 
+  // The late-game boost: health and speed multipliers (1 = no boost).
+  getLateGameBoost(survivalTime) {
+    const minutesLate = Math.max(0, survivalTime - LATE_GAME_CONFIG.startsAt) / 60;
+    return {
+      // Compounding: each minute multiplies the last minute's health by 1.5,
+      // so it keeps up even with a player who has collected every gun.
+      health: Math.pow(1 + LATE_GAME_CONFIG.healthPerMinute, minutesLate),
+      speed: 1 + Math.min(LATE_GAME_CONFIG.maxSpeedBonus, minutesLate * LATE_GAME_CONFIG.speedPerMinute),
+    };
+  }
+
   createEnemy(type, x, y, survivalTime) {
+    // The boss has its own level-up every 90 seconds.
     if (type === 'boss') return new Boss(x, y, this.getChaserSpeed(survivalTime), this.bossLevel);
-    const health = this.getHealth(type, survivalTime);
-    if (type === 'sprinter') return new Sprinter(x, y, health);
-    if (type === 'shooter') return new Shooter(x, y, health);
-    if (type === 'brute') return new Brute(x, y, health);
-    if (type === 'toxic') return new ToxicSlime(x, y, this.getChaserSpeed(survivalTime), health);
-    return new Chaser(x, y, this.getChaserSpeed(survivalTime), health);
+
+    const boost = this.getLateGameBoost(survivalTime);
+    const health = this.getHealth(type, survivalTime) * boost.health;
+    let enemy;
+    if (type === 'sprinter') enemy = new Sprinter(x, y, health);
+    else if (type === 'shooter') enemy = new Shooter(x, y, health);
+    else if (type === 'brute') enemy = new Brute(x, y, health);
+    else if (type === 'toxic') enemy = new ToxicSlime(x, y, this.getChaserSpeed(survivalTime), health);
+    else enemy = new Chaser(x, y, this.getChaserSpeed(survivalTime), health);
+    // (The Sprinter's speed always follows yours, so it skips the speed boost.)
+    enemy.speed *= boost.speed;
+    return enemy;
   }
 
   roomLeft(enemies) {
@@ -135,7 +156,14 @@ class Spawner {
       this.showBanner(title, PALETTE.red, BOSS_CONFIG.warningTime + 0.6);
     }
 
-    // 3. Swarm surges.
+    // 3. Late game: a warning each minute that the monsters just got stronger.
+    //    It waits if another banner (like the boss's) is already showing.
+    if (survivalTime >= this.nextLateGameBanner && this.banner.time === 0) {
+      this.nextLateGameBanner += 60;
+      this.showBanner('MONSTERS GROW STRONGER!', PALETTE.orange, 2);
+    }
+
+    // 4. Swarm surges.
     this.surgeTimer -= dt;
     this.banner.time = Math.max(0, this.banner.time - dt);
     if (this.surgeTimer <= 0) {
@@ -143,7 +171,7 @@ class Spawner {
       this.spawnSurge(survivalTime, player, enemies);
     }
 
-    // 4. Turn finished warnings into real enemies.
+    // 5. Turn finished warnings into real enemies.
     for (const warning of this.warnings) {
       warning.time -= dt;
       if (warning.time <= 0) {

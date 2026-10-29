@@ -176,7 +176,7 @@ class Weapon {
     this.followUps = this.followUps.filter((followUp) => followUp.delay > 0);
   }
 
-  // One volley: a single bullet, or a fan of them (Multi-Shot, Shotgun).
+  // One volley: a single bullet, or a fan of them (Shotgun, SMG Spray).
   fireVolley(player, aim, projectiles, target) {
     const startX = player.x;
     const startY = player.y - 1;

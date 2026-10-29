@@ -777,7 +777,7 @@ const Game = {
       'XP ' + this.xp + '/' + this.xpToNext + ' NEXT SURGE ' + Math.ceil(this.spawner.surgeTimer) + 'S',
       'HEARTS LOST ' + this.heartsLost + ' CHASER HEART DROP ' + Math.round(this.getHeartDropChance('chaser') * 1000) / 10 + '%',
       ...this.weapons.map((w) => w.id.toUpperCase() + ' FIRE ' + w.stats.fireInterval.toFixed(2) + 'S DMG ' + w.stats.damage * w.stats.damageMultiplier * w.stats.gunDamage + ' X' + w.stats.projectileCount + ' RANGE ' + Math.round(w.stats.range)),
-      'SPAWN EVERY ' + this.spawner.getInterval(this.survivalTime).toFixed(2) + 'S',
+      'SPAWN EVERY ' + this.spawner.getInterval(this.survivalTime).toFixed(2) + 'S  LATE BOOST HP X' + this.spawner.getLateGameBoost(this.survivalTime).health.toFixed(2) + ' SPEED X' + this.spawner.getLateGameBoost(this.survivalTime).speed.toFixed(2),
     ];
     lines.forEach((line, i) => {
       drawText(ctx, line, ARENA.x + 3, ARENA.y + 3 + i * 7, PALETTE.yellow, { shadow: PALETTE.black });

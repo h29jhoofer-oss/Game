@@ -107,7 +107,7 @@ const WEAPON_CONFIG = {
   projectileSpeed: 190, // pixels per second
   projectileLifetime: 1.2, // seconds before a missed shot fizzles out
   pierce: 0, // how many extra enemies one shot can pass through
-  projectileCount: 1, // bullets fired per shot, fanned out (Multi-Shot adds more)
+  projectileCount: 1, // bullets fired per shot, fanned out (the Shotgun has 4)
   spread: 0.21, // angle between fanned-out bullets, in radians (~12 degrees)
   homing: 0, // how sharply bullets curve toward their target (Sniper only)
   critChance: 0, // chance of a triple-damage critical hit (Sniper upgrade)
@@ -266,4 +266,13 @@ const BOSS_CONFIG = {
   score: 1000,
   energy: 15,
   warningTime: 2, // a long warning before it appears
+};
+
+// Late game: after this point every new monster gets tougher and faster
+// each minute (on top of the normal difficulty curve).
+const LATE_GAME_CONFIG = {
+  startsAt: 120, // seconds (2:00)
+  healthPerMinute: 0.5, // +50% health each minute, compounding (x1.5, x2.25, x3.4, x5...)
+  speedPerMinute: 0.12, // +12% speed for every minute past the start...
+  maxSpeedBonus: 0.6, // ...up to +60%, so they never become impossible to escape
 };

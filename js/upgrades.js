@@ -127,25 +127,6 @@ const UPGRADES = [
     },
   },
   {
-    id: 'multiShot',
-    weapons: ['blaster'],
-    name: 'MULTI-SHOT',
-    lines: ['+1 BOLT', 'FANNED OUT'],
-    maxLevel: 3,
-    icon: [
-      'c......',
-      '.cw....',
-      '..c....',
-      'cwcwccw',
-      '..c....',
-      '.cw....',
-      'c......',
-    ],
-    improveWeapon(stats) {
-      stats.projectileCount += 1;
-    },
-  },
-  {
     id: 'twinShot',
     weapons: ['blaster'],
     name: 'TWIN SHOT',

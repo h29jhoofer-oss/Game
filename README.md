@@ -71,7 +71,7 @@ The multipliers keep working on top of upgrades: the Brute's Heavy Shots hit for
 | **Brute** (orange monster) | After ~90 s | Slow, huge, very tough, and barely flinches when shot. |
 | **King Slime** (boss) | Every 90 s | A crowned Chaser at **4× the size**. Moves at 0.75× a Chaser's speed, and touching it costs **2 hearts**. It gets a 2-second warning and appears on the far side of the arena. **It comes back every 90 seconds, stronger each time:** 60 health, then 90, 120… and 10% faster per return, with bigger rewards (1000 points × its level). Its health bar shows its level. If one is still alive, the next waits until it's defeated (and always at least 45 s). |
 
-All enemies gain health every 100 seconds, and spawns speed up over time.
+All enemies gain health every 100 seconds, and spawns speed up over time. **From 2:00 on, the late game kicks in:** every new monster's health is multiplied by 1.5 for each extra minute (×1.5, ×2.25, ×3.4, ×5…) and its speed rises 12% per minute (capped at +60%), and a "MONSTERS GROW STRONGER!" banner marks each minute.
 
 ### Weapons
 
@@ -103,7 +103,6 @@ Hero and gun multipliers stack: a Brute hero's Shotgun pellets hit for 1 × 1.5 
 | Upgrade | Effect | Max |
 | --- | --- | --- |
 | Piercing | Shots pass through +1 enemy | 3 |
-| Multi-Shot | +1 bolt per shot, fanned out to cover a wider area | 3 |
 | Twin Shot | +1 bolt fired right behind the first, in a line at the same target | 2 |
 
 **Shotgun only** (offered once you've picked up the Shotgun):
