@@ -8,9 +8,13 @@
 //   icon        : 7x7 pixel art, same format as sprites.js
 //   maxLevel    : how many times it can be taken (Infinity = no limit)
 //   weapons     : optional list of guns it belongs to, e.g. ['shotgun'].
+//                 It is only offered once you own one of those guns.
 //                 Without it, the upgrade works for every gun.
 //   canOffer()  : optional extra rule for when it may appear
-//   apply()     : what it actually does to the game
+//   apply()     : what it actually does to the game, OR
+//   improveWeapon(stats) : for weapon upgrades, how it changes one gun's
+//                 stats. It is applied to every gun you own (or only to
+//                 the guns in `weapons`), and to guns you pick up later.
 //
 // To add a new upgrade, add one more object to this list. Nothing else
 // needs to change.
@@ -43,8 +47,8 @@ const UPGRADES = [
       '..yy...',
       '.yy....',
     ],
-    apply(game) {
-      game.weapon.stats.fireInterval *= 0.85;
+    improveWeapon(stats) {
+      stats.fireInterval *= 0.85;
     },
   },
   {
@@ -61,8 +65,8 @@ const UPGRADES = [
       '..ooo..',
       '.......',
     ],
-    apply(game) {
-      game.weapon.stats.damage += 1;
+    improveWeapon(stats) {
+      stats.damage += 1;
     },
   },
   {
@@ -116,8 +120,8 @@ const UPGRADES = [
       '...rc..',
       '...r...',
     ],
-    apply(game) {
-      game.weapon.stats.pierce += 1;
+    improveWeapon(stats) {
+      stats.pierce += 1;
     },
   },
   {
@@ -135,8 +139,8 @@ const UPGRADES = [
       '.cw....',
       'c......',
     ],
-    apply(game) {
-      game.weapon.stats.projectileCount += 1;
+    improveWeapon(stats) {
+      stats.projectileCount += 1;
     },
   },
   {
@@ -154,8 +158,8 @@ const UPGRADES = [
       '.......',
       '.......',
     ],
-    apply(game) {
-      game.weapon.stats.burstExtra += 1;
+    improveWeapon(stats) {
+      stats.burstExtra += 1;
     },
   },
   {
@@ -192,8 +196,8 @@ const UPGRADES = [
       '.oo.oo.',
       '.......',
     ],
-    apply(game) {
-      game.weapon.stats.projectileCount += 2;
+    improveWeapon(stats) {
+      stats.projectileCount += 2;
     },
   },
   {
@@ -211,9 +215,9 @@ const UPGRADES = [
       'oo.....',
       '.......',
     ],
-    apply(game) {
-      game.weapon.stats.range *= 1.25;
-      game.weapon.stats.projectileLifetime *= 1.25;
+    improveWeapon(stats) {
+      stats.range *= 1.25;
+      stats.projectileLifetime *= 1.25;
     },
   },
   {
@@ -231,8 +235,8 @@ const UPGRADES = [
       '...oo..',
       '...o...',
     ],
-    apply(game) {
-      game.weapon.stats.hitKnockback += 60;
+    improveWeapon(stats) {
+      stats.hitKnockback += 60;
     },
   },
   // ---------------- Sniper upgrades ----------------
@@ -251,8 +255,8 @@ const UPGRADES = [
       'g......',
       'g......',
     ],
-    apply(game) {
-      game.weapon.stats.homing += 2;
+    improveWeapon(stats) {
+      stats.homing += 2;
     },
   },
   {
@@ -270,8 +274,8 @@ const UPGRADES = [
       '.r..r..',
       '.r..r..',
     ],
-    apply(game) {
-      game.weapon.stats.pierce += 1;
+    improveWeapon(stats) {
+      stats.pierce += 1;
     },
   },
   {
@@ -289,8 +293,8 @@ const UPGRADES = [
       '.rrrrr.',
       '...r...',
     ],
-    apply(game) {
-      game.weapon.stats.critChance += 0.25;
+    improveWeapon(stats) {
+      stats.critChance += 0.25;
     },
   },
 ];
@@ -323,12 +327,33 @@ const Upgrades = {
     }
   },
 
+  // Take an upgrade. Weapon upgrades go to the right guns; others use apply().
+  applyUpgrade(game, upgrade) {
+    if (!upgrade.improveWeapon) {
+      upgrade.apply(game);
+      return;
+    }
+    for (const weapon of game.weapons) {
+      if (!upgrade.weapons || upgrade.weapons.includes(weapon.id)) upgrade.improveWeapon(weapon.stats);
+    }
+  },
+
+  // A gun picked up mid-run catches up on every general weapon upgrade
+  // you already have (for example Rapid Fire x2), so it isn't left behind.
+  catchUpNewWeapon(game, weapon) {
+    for (const upgrade of UPGRADES) {
+      if (!upgrade.improveWeapon || upgrade.weapons) continue;
+      const taken = game.upgradeLevels[upgrade.id] || 0;
+      for (let i = 0; i < taken; i++) upgrade.improveWeapon(weapon.stats);
+    }
+  },
+
   // Pick `count` different upgrades the player is allowed to take.
   pickChoices(game, count) {
     const available = UPGRADES.filter((upgrade) => {
       const taken = game.upgradeLevels[upgrade.id] || 0;
       if (taken >= upgrade.maxLevel) return false;
-      if (upgrade.weapons && !upgrade.weapons.includes(game.weapon.id)) return false; // another gun's upgrade
+      if (upgrade.weapons && !upgrade.weapons.some((id) => game.hasGun(id))) return false; // a gun you don't own
       if (upgrade.canOffer && !upgrade.canOffer(game)) return false;
       return true;
     });

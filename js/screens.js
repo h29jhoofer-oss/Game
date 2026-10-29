@@ -2,7 +2,6 @@
 // screens.js — the menus around the gameplay:
 //   TitleScreen    — logo, character lineup, PLAY, personal best
 //   CharacterSelect — choose your hero before a run
-//   WeaponSelect   — then choose your gun
 //   PauseMenu      — resume / restart / sound / quit
 //   GameOverScreen — results, personal best, restart
 //
@@ -186,11 +185,11 @@ function bakeLogoWord(ctx, text, centerX, y, scale, bands, shadowColor) {
 }
 
 // ---------------------------------------------------------------------
-// Pick screens: "Choose your hero" and "Choose your weapon"
+// Pick screen: "Choose your hero"
 //
-// Both work the same way (cards in a row, arrows / 1-3 / mouse, ESC to
-// go back), so one function builds both. Each screen only supplies its
-// title, its list of items, and how to draw the inside of a card.
+// Cards in a row, arrows / 1-3 / mouse, ESC to go back. It's built by a
+// function so another pick screen could reuse it: each screen only
+// supplies its title, its list of items, and how to draw a card.
 // ---------------------------------------------------------------------
 const PICK_CARD = { width: 92, height: 112, gap: 8, y: 34 };
 
@@ -321,41 +320,6 @@ const CharacterSelect = makePickScreen({
       const heart = i < character.startHealth ? Sprites.heart.full : Sprites.heart.empty;
       ctx.drawImage(heart, x + w - 6 - character.maxHealth * 8 + i * 8 + 1, rowY);
     }
-  },
-});
-
-const WeaponSelect = makePickScreen({
-  title: 'CHOOSE YOUR WEAPON',
-  getItems: () => GUNS,
-  getCurrentId: (game) => game.gunId,
-  onPick: (game, gun) => game.chooseGun(gun.id),
-  onBack: (game) => game.backToCharacterSelect(),
-
-  drawCardBody(ctx, gun, x, y, w, isSelected, time) {
-    const ccx = x + Math.floor(w / 2);
-    // The gun at exactly 4x size. The selected one bobs and flashes its muzzle.
-    const bob = isSelected && Math.floor(time * 3) % 2 === 0 ? 1 : 0;
-    const gunX = ccx - (gun.image.width * 4) / 2;
-    const gunY = y + 12 - bob;
-    ctx.drawImage(gun.image, gunX, gunY, gun.image.width * 4, gun.image.height * 4);
-    if (isSelected && Math.floor(time * 3) % 2 === 0) {
-      ctx.fillStyle = gun.uiColor;
-      const mx = gunX + gun.image.width * 4 + 2;
-      const my = gunY + 10;
-      ctx.fillRect(mx, my, 6, 2);
-      ctx.fillRect(mx + 2, my - 2, 2, 6);
-    }
-
-    // Stats compared with the Blaster.
-    const blaster = WEAPON_CONFIG;
-    const fireRate = Math.round((blaster.fireInterval / gun.stats.fireInterval) * 100) / 100;
-    const rangeQuality = Math.sign(gun.stats.range - blaster.range);
-    const rangeText = rangeQuality > 0 ? 'LONG' : rangeQuality < 0 ? 'SHORT' : 'MEDIUM';
-    drawStatRow(ctx, x, y + 65, w, 'DAMAGE', 'X' + gun.stats.gunDamage, gun.stats.gunDamage - 1);
-    drawStatRow(ctx, x, y + 73, w, 'FIRE RATE', 'X' + fireRate, fireRate - 1);
-    drawStatRow(ctx, x, y + 81, w, 'RANGE', rangeText, rangeQuality);
-    drawStatRow(ctx, x, y + 89, w, 'BULLETS', String(gun.stats.projectileCount), gun.stats.projectileCount - 1);
-    drawText(ctx, gun.stats.homing > 0 ? 'CURVES TO TARGET' : '', ccx, y + 100, PALETTE.green, { align: 'center' });
   },
 });
 

@@ -232,3 +232,9 @@ const HEART_DROP_CONFIG = {
   fullHealthMultiplier: 0.5, // with full hearts, every chance is halved
   maxOnFloor: 30, // performance limit for hearts lying around
 };
+
+// The Shotgun and Sniper are rare drops: any defeated monster has this
+// chance to drop one you don't own yet. All your guns fire at once.
+const GUN_DROP_CONFIG = {
+  chance: 0.005, // 0.5%
+};

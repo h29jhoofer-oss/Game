@@ -1,5 +1,7 @@
 // =====================================================================
-// guns.js — the three guns you can choose before a run.
+// guns.js — the three guns. Every run starts with the Blaster; the
+// Shotgun and Sniper are rare monster drops (see GUN_DROP_CONFIG).
+// All the guns you own fire at the same time.
 //
 // Each gun is one object:
 //   aim    : how it picks where to shoot
@@ -11,16 +13,16 @@
 //   sound  : which sound recipe (audio.js) it plays when firing
 //   stats  : the numbers the Weapon uses. They start from WEAPON_CONFIG
 //            (the Blaster) and change only what is different.
-//   sprite : a small pixel-art picture for the select screen and HUD
+//   sprite : a small pixel-art picture for the HUD and the floor pickup
 //
 // To add a gun, add one more entry here (and its upgrades in upgrades.js).
+// A new gun automatically becomes a possible drop.
 // =====================================================================
 
 const GUNS = [
   {
     id: 'blaster',
     name: 'BLASTER',
-    tagline: 'AIMS AT NEAREST',
     uiColor: PALETTE.cyan,
     aim: 'nearest',
     style: 'bolt',
@@ -39,7 +41,6 @@ const GUNS = [
   {
     id: 'shotgun',
     name: 'SHOTGUN',
-    tagline: 'FIRES WHERE YOU MOVE',
     uiColor: PALETTE.orange,
     aim: 'movement',
     style: 'pellet',
@@ -68,7 +69,6 @@ const GUNS = [
   {
     id: 'sniper',
     name: 'SNIPER',
-    tagline: 'HUNTS SHOOTERS',
     uiColor: PALETTE.green,
     aim: 'sniper',
     style: 'sniper',

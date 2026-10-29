@@ -1,5 +1,5 @@
 // =====================================================================
-// orbs.js — energy orbs (and heart pickups) that defeated enemies leave behind.
+// orbs.js — energy orbs, hearts and guns that defeated enemies leave behind.
 //
 // Orbs pop out, settle on the floor, and get pulled toward the player
 // when they come close (the "magnet"). The energy you collect fills
@@ -119,5 +119,37 @@ class HeartPickup extends Orb {
       ctx.fillRect(drawX + 7, drawY, 1, 1);
       ctx.fillRect(drawX + 6, drawY + 1, 1, 1);
     }
+  }
+}
+
+// ---------------------------------------------------------------------
+// Gun pickup: a rare drop (the Shotgun or the Sniper). It moves like an
+// orb and never disappears. Picking it up adds the gun to your arsenal;
+// it fires alongside the guns you already have.
+// ---------------------------------------------------------------------
+class GunPickup extends Orb {
+  constructor(x, y, gunId) {
+    super(x, y, 0);
+    this.gunId = gunId;
+  }
+
+  isExpired() {
+    return false;
+  }
+
+  draw(ctx) {
+    const gun = getGun(this.gunId);
+    const t = this.age + this.animOffset;
+    const bob = Math.floor(t * 2.5) % 2;
+    const x = Math.round(this.x);
+    const y = Math.round(this.y);
+
+    // A pulsing ring in the gun's color, so it's easy to spot.
+    const radius = 8 + (Math.floor(t * 4) % 2);
+    drawPixelCircle(ctx, x, y, radius, Math.floor(t * 4) % 2 === 0 ? gun.uiColor : PALETTE.white);
+
+    ctx.fillStyle = PALETTE.void; // shadow
+    ctx.fillRect(x - 5, y + 4, 10, 1);
+    ctx.drawImage(gun.image, x - Math.floor(gun.image.width / 2), y - 3 - bob);
   }
 }

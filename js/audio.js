@@ -90,6 +90,13 @@ const SOUND_RECIPES = {
       [523, 784, 1047].forEach((freq, i) => s.tone({ type: 'triangle', freq, duration: 0.12, volume: 0.12, delay: i * 0.06 }));
     },
   },
+  // A bright fanfare for picking up a new gun.
+  gunPickup: {
+    minGap: 0.3,
+    play: (s) => {
+      [392, 523, 659, 784, 1047].forEach((freq, i) => s.tone({ type: 'square', freq, duration: 0.1, volume: 0.09, delay: i * 0.06 }));
+    },
+  },
   shieldReady: { minGap: 0.2, play: (s) => s.tone({ type: 'triangle', freq: 900, endFreq: 1500, duration: 0.12, volume: 0.08 }) },
   dash: { minGap: 0.1, play: (s) => s.noise({ duration: 0.12, volume: 0.12, filter: 600, endFilter: 3500 }) },
   enemyShoot: { minGap: 0.08, play: (s) => s.tone({ type: 'triangle', freq: 330, endFreq: 180, duration: 0.12, volume: 0.08 }) },

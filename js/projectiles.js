@@ -28,6 +28,7 @@ class Projectile {
     this.crit = Math.random() < stats.critChance;
     if (this.crit) this.damage *= 3;
     this.pierceLeft = stats.pierce; // extra enemies it may pass through
+    this.knockback = stats.hitKnockback; // how far a hit pushes an enemy
     this.life = stats.projectileLifetime;
     this.radius = style === 'pellet' ? 3 : 2; // pellets are a bit bigger
     this.homing = stats.homing;

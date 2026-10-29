@@ -69,7 +69,7 @@ All enemies gain health every 100 seconds, and spawns speed up over time.
 
 ### Weapons
 
-After choosing a hero you choose a gun. Your choice is remembered, and restarting keeps it.
+Every run starts with the **Blaster**. Any defeated monster has a **0.5% chance** to drop the **Shotgun** or the **Sniper** (one you don't have yet). A dropped gun sits on the floor inside a pulsing ring until you pick it up, and it never disappears. **All the guns you own fire at the same time**, and the bottom bar shows which ones you have.
 
 | Gun | Damage | Fire rate | Range | How it aims |
 | --- | --- | --- | --- | --- |
@@ -81,7 +81,7 @@ Hero and gun multipliers stack: a Brute hero's Shotgun pellets hit for 1 × 1.5 
 
 ### Upgrades
 
-**For every gun:**
+**For every gun you own** (a gun you pick up later catches up on the Rapid Fire and Heavy Shots you already have):
 
 | Upgrade | Effect | Max |
 | --- | --- | --- |
@@ -99,7 +99,7 @@ Hero and gun multipliers stack: a Brute hero's Shotgun pellets hit for 1 × 1.5 
 | Multi-Shot | +1 bolt per shot, fanned out to cover a wider area | 3 |
 | Twin Shot | +1 bolt fired right behind the first, in a line at the same target | 2 |
 
-**Shotgun only:**
+**Shotgun only** (offered once you've picked up the Shotgun):
 
 | Upgrade | Effect | Max |
 | --- | --- | --- |
@@ -107,7 +107,7 @@ Hero and gun multipliers stack: a Brute hero's Shotgun pellets hit for 1 × 1.5 
 | Long Barrel | Pellets fly 25% farther | 3 |
 | Stopping Power | Blasts knock enemies much farther back | 2 |
 
-**Sniper only:**
+**Sniper only** (offered once you've picked up the Sniper):
 
 | Upgrade | Effect | Max |
 | --- | --- | --- |
@@ -142,23 +142,23 @@ The scripts in `js/` load in this order. Each file has one job:
 | `storage.js` | Saves and loads the personal best and the mute setting with `localStorage`. |
 | `audio.js` | Synthesized retro sounds. Each sound is a short "recipe" of beeps and noise. |
 | `input.js` | Remembers which keys are held and which were just pressed. Blocks page scrolling for game keys only. |
-| `guns.js` | The three guns: how each aims, how its bullets look, and its stats. Add a gun by adding one entry. |
+| `guns.js` | The three guns: how each aims, how its bullets look, and its stats. Add a gun by adding one entry; it automatically becomes a possible drop. |
 | `characters.js` | The playable heroes: name, colors, and stat multipliers. Add a hero by adding one entry. |
 | `font.js` | A hand-made 3×5 pixel font. |
 | `sprites.js` | All character pixel art, written as text grids and baked into tiny canvases at startup. |
 | `arena.js` | The background, floor tiles, walls, glowing tiles, and stars. |
 | `effects.js` | Particles, shockwave rings, and floating text. |
 | `player.js` | Movement, dash, health, shield, and animation. |
-| `projectiles.js` | The `Weapon` (fires whichever gun you chose) and its bullets, including the Sniper's homing. |
+| `projectiles.js` | The `Weapon` class (one per gun you own) and its bullets, including the Sniper's homing. |
 | `orbs.js` | Energy orbs and the magnet pull. |
 | `enemies.js` | The `Enemy` base class, `Chaser`, `ToxicSlime`, `Shooter`, `Brute`, and enemy shots. |
 | `hazards.js` | The Toxic Slime's gas cloud: its shape, three life phases (forming, active, fading), collision, and dithered drawing. |
 | `spawner.js` | When, where, and which enemies appear, plus swarm surges and banners. |
-| `upgrades.js` | The list of upgrades. An upgrade with a `weapons` list only appears for those guns. |
+| `upgrades.js` | The list of upgrades. Weapon upgrades describe how they change one gun's stats (`improveWeapon`), and one with a `weapons` list only appears once you own those guns. |
 | `levelup.js` | The level-up card screen. |
 | `ui.js` | Shared interface pieces: panels, bars, buttons, icons. |
 | `transition.js` | The pixel wipe between screens. |
-| `screens.js` | The title screen (with its big logo), the hero and weapon select screens, the pause menu, and the results screen. |
+| `screens.js` | The title screen (with its big logo), the hero select screen, the pause menu, and the results screen. |
 | `game.js` | The game loop, game states, combat, collisions, and HUD. It ties everything together. |
 | `main.js` | Starts everything and scales the canvas. |
 
@@ -168,7 +168,7 @@ The scripts in `js/` load in this order. Each file has one job:
 - **Delta time (`dt`).** Every frame, the loop measures how many seconds have passed. Movement is `speed × dt`, so the game runs at the same speed on 60 Hz and 144 Hz screens. `dt` is capped so a frozen tab doesn't cause a jump.
 - **Decimal positions, whole-pixel drawing.** Positions keep their decimals for smooth movement but are rounded with `Math.round` when drawn, so sprites always sit exactly on the pixel grid.
 - **One game loop only.** `Game.start()` refuses to start a second loop.
-- **Game states.** The game is always in exactly one state: `title`, `select`, `weapon`, `playing`, `paused`, `levelup`, `dying`, or `gameover`. `update()` runs only the code for that state. That's what makes pausing, level-ups, and restarting reliable.
+- **Game states.** The game is always in exactly one state: `title`, `select`, `playing`, `paused`, `levelup`, `dying`, or `gameover`. `update()` runs only the code for that state. That's what makes pausing, level-ups, and restarting reliable.
 - **Cleaning up.** Shots, orbs, particles, and enemies are flagged when finished and filtered out every frame. Each list also has a maximum size, so memory never piles up.
 - **Inheritance for enemies.** `Chaser`, `Shooter`, and `Brute` all `extend Enemy`, and `ToxicSlime` extends `Chaser`, so it reuses all of the Chaser's movement and only changes its look, numbers, and what happens when it dies. Each only describes what makes it different, like where it wants to go (`think()`) or shooting.
 - **Data-driven upgrades.** Each upgrade is a small object with an `apply(game)` function. Add a new one by adding one entry to the list in `upgrades.js`.

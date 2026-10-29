@@ -51,15 +51,6 @@ const Save = {
     this.write('character', id);
   },
 
-  // The last gun you picked.
-  loadGun() {
-    return this.read('gun', 'blaster');
-  },
-
-  saveGun(id) {
-    this.write('gun', id);
-  },
-
   loadMuted() {
     return this.read('muted', false) === true;
   },
