@@ -1020,6 +1020,16 @@ OMJ.Game = class {
   // Break an obstacle into pieces (Dash, Shuriken, Shield...).
   smash(o) {
     o.active = false;
+    if (o.type === OMJ.ObstacleTypes.crate) {
+      // Crates are full of coins! 3 per crate, popping out in all directions.
+      const cx = o.x + o.w / 2;
+      for (let i = 0; i < 3 * o.variant; i++) {
+        // (They fly forward against the scrolling, so they land ahead of you.)
+        this.coins.pop(cx + OMJ.rand(-4, 4), o.y + o.h - 8 - (i % o.variant) * 16,
+          this.worldSpeed + OMJ.rand(20, 90), OMJ.rand(-170, -110));
+      }
+      this.sound.play('coin');
+    }
     if (!o.passed) this.jumped++;
     const colors = o.type.debris || [OMJ.PALETTE.metal, OMJ.PALETTE.metalLight];
     this.particles.burst(o.x + o.bx + o.bw / 2, o.y + o.h / 2, 14, 40, 130, 0, Math.PI * 2, 0.6, colors, 300);

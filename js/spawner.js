@@ -88,6 +88,14 @@ OMJ.PATTERNS = [
     build(api) { return api.place('shellback', 0, 0); },
   },
   {
+    name: 'boulder', minDifficulty: 0.18, weight: 1.6,
+    build(api, d) { return api.place('boulder', 0, d > 0.45 && Math.random() < 0.5 ? 1 : 0); },
+  },
+  {
+    name: 'fireGrate', minDifficulty: 0.25, weight: 1.4,
+    build(api) { return api.place('fireGrate', 0, 0); },
+  },
+  {
     name: 'buzzbee', minDifficulty: 0.12, weight: 1.8,
     build(api) { return api.place('buzzbee', 0, 0); },
   },

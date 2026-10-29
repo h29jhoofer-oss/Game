@@ -7,7 +7,7 @@
 OMJ.Coins = class {
   constructor(poolSize) {
     this.pool = [];
-    for (let i = 0; i < poolSize; i++) this.pool.push({ active: false, x: 0, y: 0, spin: 0, pulled: false });
+    for (let i = 0; i < poolSize; i++) this.pool.push({ active: false, x: 0, y: 0, spin: 0, pulled: false, popping: false, vx: 0, vy: 0 });
   }
 
   reset() {
@@ -24,9 +24,20 @@ OMJ.Coins = class {
       c.y = y;
       c.spin = Math.random() * 3;
       c.pulled = false;
+      c.popping = false;
       return c;
     }
     return null;
+  }
+
+  // A coin that pops out of something (like a broken crate), flies up
+  // with speed (vx, vy) and bounces to a stop on the ground.
+  pop(x, y, vx, vy) {
+    const c = this.spawn(x, y);
+    if (!c) return;
+    c.popping = true;
+    c.vx = vx;
+    c.vy = vy;
   }
 
   // Coin Vacuum: every coin on screen flies to you.
@@ -52,6 +63,18 @@ OMJ.Coins = class {
       if (!c.active) continue;
       c.x -= speed * dt;
       c.spin += dt;
+      if (c.popping && !c.pulled) {
+        c.vy += 700 * dt;
+        c.x += c.vx * dt;
+        c.y += c.vy * dt;
+        const floor = OMJ.CONFIG.GROUND_Y - 6;
+        if (c.y >= floor && c.vy > 0) {
+          c.y = floor;
+          c.vy *= -0.4;                          // a little bounce...
+          c.vx *= 0.5;
+          if (c.vy > -40) c.popping = false;     // ...then it settles
+        }
+      }
       // Coin Magnet: nearby coins fly to you.
       const dx = px - c.x;
       const dy = py - c.y;

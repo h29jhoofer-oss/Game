@@ -265,6 +265,10 @@ OMJ.Sound = class {
         this.noise(0.08, 0.08, 5000, 'highpass');
         this.tone(1800, 300, 0.08, 'square', 0.03);
         break;
+      case 'grateFire':                  // a fire grate blasts
+        this.noise(0.5, 0.12, 800, 'bandpass');
+        this.tone(90, 60, 0.4, 'sawtooth', 0.04);
+        break;
       case 'snort':                      // a Bristleboar gets ready to charge
         this.noise(0.18, 0.1, 700, 'bandpass');
         this.tone(140, 90, 0.15, 'sawtooth', 0.04);

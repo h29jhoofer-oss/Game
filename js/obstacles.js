@@ -756,6 +756,137 @@
       },
     },
 
+    // ---- BOULDER: a big rock that rolls at you ----
+    // Too heavy to cut: jump over it. Like the monsters, it only starts
+    // rolling once nothing else is between you. variant 0 = small, 1 = big.
+    boulder: {
+      size: (big) => (big ? { w: 18, h: 18 } : { w: 14, h: 14 }),
+      hitbox: { left: 2, right: 2, top: 2 },
+      debris: ['#8f8a9e', '#5f5a70', '#c4bfd4', P.dust],
+      deathLines: ['Rock and rolled.', 'Flattened by a boulder.', 'You got stoned. (By a rock.)', 'Indiana Jones would have run.'],
+      init(o) { o.extra = Math.random() * 6; o.phase = 0; },
+      update(o, dt, g) {
+        if (g.frozen) return;                  // Time Freeze
+        o.phase = 0;
+        if (o.x < C.VIEW_W - 4 && !g.hasDangerBefore(o.x)) {
+          o.x -= 70 * dt;                      // ROLL!
+          o.extra -= (70 * dt) / (o.w / 2);    // spin (radians) to match the rolling
+          o.phase = 1;
+          if (Math.random() < 0.4) g.particles.spawn(o.x + o.w - 2, C.GROUND_Y - 1, OMJ.rand(20, 60), OMJ.rand(-30, -10), 0.3, 1, P.dust, 200);
+        }
+      },
+      draw(ctx, o) {
+        const r = o.w / 2;
+        const cx = o.drawX + r;
+        const cy = Math.round(o.y) + r;
+        OMJ.Sprites.circle(ctx, cx, cy, r, P.ink);
+        OMJ.Sprites.circle(ctx, cx, cy, r - 1, '#5f5a70');
+        OMJ.Sprites.circle(ctx, cx - 1, cy - 1, r - 2, '#8f8a9e');
+        ctx.fillStyle = '#c4bfd4';                        // light on its top-left
+        ctx.fillRect(cx - r + 3, cy - r + 3, 3, 2);
+        ctx.fillRect(cx - r + 3, cy - r + 5, 1, 1);
+        // Cracks and moss spots that turn as it rolls
+        for (let i = 0; i < 3; i++) {
+          const a = o.extra + i * 2.1;
+          const d = r * (i === 1 ? 0.35 : 0.55);
+          const px = Math.round(cx + Math.cos(a) * d);
+          const py = Math.round(cy + Math.sin(a) * d);
+          ctx.fillStyle = i === 2 ? '#5aa04a' : '#4a4560';
+          ctx.fillRect(px - 1, py, i === 0 ? 3 : 2, 1);
+          if (i === 0) ctx.fillRect(px, py + 1, 1, 1);
+        }
+      },
+    },
+
+    // ---- FIRE GRATE: a metal grate in the ground that blasts fire ----
+    // It glows and spits sparks for half a second before every blast, and
+    // never starts one when you're close, so the fire never comes up right
+    // under you. While it's blasting, jump over the flames (34 px tall,
+    // well under a jump). While it's quiet, just run over it.
+    fireGrate: {
+      size: () => ({ w: 16, h: 34 }),
+      hitbox: { left: 1, right: 1, top: 3 },
+      debris: [P.metal, P.metalDark, '#ff8a3d'],
+      deathLines: ['Toasted from below.', 'Hot foot!', 'The floor is lava. Well, that bit was.', 'Well done. (Extra crispy.)'],
+      init(o) {
+        o.phase = 0;                           // 0 quiet, 1 warning, 2 blasting
+        o.timer = Math.random() * 0.8;
+        o.bx = 3;                              // the flames are narrower than the grate
+        o.bw = 10;
+        o.y = C.GROUND_Y;                      // nothing to hit while quiet
+      },
+      update(o, dt, g) {
+        if (g.frozen) return;                  // Time Freeze
+        o.timer += dt;
+        const p = g.player;
+        if (o.phase === 0) {
+          // Don't start a blast if you're about to reach it (or on top of it).
+          const close = o.x - (p.x + p.w) < g.worldSpeed * 0.7 + 10 && o.x + o.w > p.x - 2;
+          if (o.timer > 1.4 && o.x < C.VIEW_W - 8 && !close) { o.phase = 1; o.timer = 0; }
+        } else if (o.phase === 1) {
+          if (Math.random() < 0.5) g.particles.spawn(o.x + OMJ.rand(4, 12), C.GROUND_Y - 2, OMJ.rand(-10, 10), OMJ.rand(-90, -40), 0.35, 1, Math.random() < 0.5 ? P.gold : '#ff8a3d', -50);
+          if (o.timer > 0.5) { o.phase = 2; o.timer = 0; g.sound.play('grateFire'); }
+        } else if (o.phase === 2) {
+          if (Math.random() < 0.6) g.particles.spawn(o.x + OMJ.rand(4, 12), C.GROUND_Y - OMJ.rand(10, 34), OMJ.rand(-20, 20), OMJ.rand(-90, -40), 0.4, OMJ.randInt(1, 2), Math.random() < 0.5 ? P.gold : P.danger, -60);
+          if (o.timer > 0.9) { o.phase = 0; o.timer = 0; }
+        }
+        // The deadly box is exactly as tall as the flames.
+        const flame = this.flameHeight(o);
+        o.h = flame;
+        o.y = C.GROUND_Y - flame;
+      },
+      flameHeight(o) {
+        if (o.phase !== 2) return 0;
+        const grow = Math.min(1, o.timer / 0.08, (0.9 - o.timer) / 0.1);   // shoots up, then dies down
+        return Math.max(0, Math.round(34 * grow));
+      },
+      draw(ctx, o, g) {
+        const x = o.drawX;
+        const gy = C.GROUND_Y;
+        const glow = o.phase === 1 ? (Math.floor(g.time * 16) % 2 ? P.gold : '#ff8a3d') : o.phase === 2 ? P.white : '#7a2a1a';
+        // Flames
+        const fh = this.flameHeight(o);
+        if (fh > 0) {
+          const f = Math.floor(g.time * 18);
+          for (let i = 0; i < 10; i++) {
+            const tongue = (f + i * 3) % 5;                   // flickering top edge
+            const h = Math.max(2, fh - Math.abs(i - 4.5) * 2 - tongue);
+            const cx = x + 3 + i;
+            ctx.fillStyle = P.danger;
+            ctx.fillRect(cx, gy - h, 1, h);
+            ctx.fillStyle = '#ff8a3d';
+            if (h > 4) ctx.fillRect(cx, gy - h + 3, 1, h - 3);
+            ctx.fillStyle = P.gold;
+            if (i > 1 && i < 8 && h > 9) ctx.fillRect(cx, gy - h + 8, 1, h - 8);
+            ctx.fillStyle = P.white;
+            if (i > 3 && i < 6 && h > 16) ctx.fillRect(cx, gy - h + 14, 1, h - 14);
+          }
+        } else if (o.phase === 1) {
+          // Little flames peeking out: here it comes!
+          const f = Math.floor(g.time * 20) % 2;
+          ctx.fillStyle = '#ff8a3d';
+          ctx.fillRect(x + 4, gy - 3 - f, 2, 3 + f); ctx.fillRect(x + 9, gy - 2 - (1 - f), 2, 2 + (1 - f));
+          ctx.fillStyle = P.gold;
+          ctx.fillRect(x + 4, gy - 1, 2, 1); ctx.fillRect(x + 9, gy - 1, 2, 1);
+        }
+        // The grate itself, set into the ground
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(x, gy - 2, 16, 5);
+        ctx.fillStyle = glow;                                   // hot glow between the bars
+        ctx.fillRect(x + 1, gy - 1, 14, 3);
+        ctx.fillStyle = P.metalDark;
+        ctx.fillRect(x, gy - 2, 16, 1);
+        for (let i = 0; i < 5; i++) ctx.fillRect(x + 1 + i * 3, gy - 1, 2, 3);
+        ctx.fillStyle = P.metalLight;
+        for (let i = 0; i < 5; i++) ctx.fillRect(x + 1 + i * 3, gy - 2, 1, 1);
+        // A wisp of smoke while it's quiet
+        if (o.phase === 0 && Math.floor(g.time * 2 + o.x * 0.1) % 4 === 0) {
+          ctx.fillStyle = '#9a96aa';
+          ctx.fillRect(x + 7, gy - 5 - Math.floor((g.time * 8) % 4), 1, 1);
+        }
+      },
+    },
+
     // ---- BUZZBEE: a grumpy bee buzzing just above the ground ----
     // It flies too low to run under, so jump over it, STOMP it (bounce
     // off its back), or swing at it. Like the Shellback, it only flies
