@@ -1,0 +1,30 @@
+/* Page layout: fill the window with a dark background and center the game. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #05060f;
+  overflow: hidden; /* no scrollbars while playing */
+}
+
+/* The container fills the window. main.js measures it to pick a scale. */
+#game-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#game-canvas {
+  display: block;
+  background: #05060f;
+
+  /*
+    Nearest-neighbor scaling: when the browser enlarges the canvas,
+    it copies pixels as hard-edged blocks instead of blurring them.
+  */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges; /* older Firefox name */
+}
