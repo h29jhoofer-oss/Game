@@ -1,12 +1,12 @@
 // =====================================================================
-//  NEON BREAKER  -  Stage 1: core prototype
+//  NEON BREAKER  -  Stage 2: complete arcade loop
 //
 //  The file is organised top to bottom:
 //    1. Settings        - numbers you can tweak to change the game
-//    2. Colors & art    - palette, brick layout, pixel font, sprites
+//    2. Colors & art    - palette, brick types, levels, font, sprites
 //    3. Canvas setup    - low-res canvas + scaling to fit the window
 //    4. Game state      - every variable that changes while playing
-//    5. Game actions    - start game, launch ball, lose life, ...
+//    5. Game actions    - start game, next level, pause, lose life, ...
 //    6. Update          - moves things and checks collisions
 //    7. Drawing         - paints everything onto the canvas
 //    8. Input           - mouse, touch and keyboard
@@ -31,9 +31,14 @@ const PADDLE_Y = 166;             // distance from the top of the screen
 const PADDLE_KEY_SPEED = 220;     // pixels per second when using keys
 
 const BALL_SIZE = 4;              // the ball is a 4x4 pixel square
-const BALL_START_SPEED = 110;     // pixels per second
-const BALL_MAX_SPEED = 170;
 const BALL_SPEEDUP_PER_BRICK = 1.5;
+
+// Each level makes the ball a little faster, up to a limit.
+const BALL_START_SPEED = 110;     // level 1 launch speed (pixels/second)
+const BALL_START_SPEED_LIMIT = 150;
+const BALL_MAX_SPEED = 170;       // level 1 top speed
+const BALL_MAX_SPEED_LIMIT = 210;
+const SPEED_INCREASE_PER_LEVEL = 8;
 
 // Where the ball goes after hitting the paddle depends on where it hit.
 // Center = almost straight up, edges = up to 60 degrees to the side.
@@ -47,8 +52,19 @@ const BRICK_GAP = 1;              // ...with a 1 pixel gap to the next one
 const BRICK_TOP = 24;
 const BRICK_LEFT = (GAME_WIDTH - BRICK_COLUMNS * BRICK_CELL_WIDTH) / 2;
 
+const MOVING_BRICK_RANGE = 16;    // pixels a moving brick slides each way
+const MOVING_BRICK_SPEED = 14;    // pixels per second
+const BRICK_HIT_FLASH = 0.08;     // seconds a brick flashes white when hit
+const EXPLOSION_TIME = 0.25;      // seconds the explosion square is shown
+
 const START_LIVES = 3;
 const SCREEN_INPUT_DELAY = 0.6;   // seconds before menus accept input
+const BEST_SCORE_KEY = "neonBreakerBestScore"; // name used in localStorage
+
+// The pause button in the top-right corner (needed on phones).
+// The tap area is bigger than the icon so it's easy to hit with a finger.
+const PAUSE_ICON = { x: 308, y: 1, w: 10, h: 9 };
+const PAUSE_TAP_AREA = { x: 284, y: 0, w: 36, h: 20 };
 
 // ---------------------------------------------------------------------
 // 2. COLORS & ART
@@ -72,26 +88,96 @@ const COLORS = {
   cyan:    { light: "#a8ffff", base: "#22e3ff", dark: "#0a7a9a" },
   green:   { light: "#b6ffb0", base: "#3dff6e", dark: "#138a3a" },
   orange:  { light: "#ffd29a", base: "#ff8a1e", dark: "#a34a08" },
+  yellow:  { light: "#ffffc0", base: "#fff04a", dark: "#a08a10" },
+
+  steel:     { light: "#e8e8ff", base: "#9a9ad0", dark: "#4a4a80" },
+  heavy:     { light: "#d8c8ff", base: "#6a5aa8", dark: "#2e2460" },
+  explosive: { light: "#fff04a", base: "#ff5a1e", dark: "#5a0a10" },
+  mover:     { light: "#d0fff0", base: "#2affc0", dark: "#0a7a60" },
 };
 
-// Each letter in the layout below means one kind of brick.
+// Each character in a level layout means one kind of brick.
+//   kind "normal"    - breaks in one hit
+//   kind "armored"   - needs `hp` hits, shows cracks when damaged
+//   kind "explosive" - destroys the bricks around it when it breaks
+//   kind "moving"    - slides left and right along its row
 const BRICK_TYPES = {
-  M: { colors: COLORS.magenta, points: 50 },
-  P: { colors: COLORS.purple,  points: 40 },
-  C: { colors: COLORS.cyan,    points: 30 },
-  G: { colors: COLORS.green,   points: 20 },
-  O: { colors: COLORS.orange,  points: 10 },
+  M:   { kind: "normal",    colors: COLORS.magenta,   points: 50 },
+  P:   { kind: "normal",    colors: COLORS.purple,    points: 40 },
+  C:   { kind: "normal",    colors: COLORS.cyan,      points: 30 },
+  G:   { kind: "normal",    colors: COLORS.green,     points: 20 },
+  O:   { kind: "normal",    colors: COLORS.orange,    points: 10 },
+  A:   { kind: "armored",   colors: COLORS.steel,     points: 60, hp: 2 },
+  H:   { kind: "armored",   colors: COLORS.heavy,     points: 90, hp: 3 },
+  X:   { kind: "explosive", colors: COLORS.explosive, points: 40 },
+  "~": { kind: "moving",    colors: COLORS.mover,     points: 70 },
 };
 
-// The level layout: one string per row, one character per column.
-// A dot "." means "no brick here". Each row must be 14 characters.
-const LEVEL_LAYOUT = [
-  "..MMMMMMMMMM..",
-  ".PPPPPPPPPPPP.",
-  "CCCCCCCCCCCCCC",
-  "GGGGGG..GGGGGG",
-  "OOOOOOOOOOOOOO",
-  ".OOOO....OOOO.",
+// Handcrafted levels: one string per row, one character per column.
+// A dot "." means "no brick here". Every row must be 14 characters.
+//
+// Moving bricks ("~") all slide together, so rows containing them should
+// hold ONLY moving bricks and dots (otherwise they'd slide into a still
+// brick). After the last level, the levels repeat with a faster ball.
+const LEVELS = [
+  // Level 1 - warm up
+  [
+    "..MMMMMMMMMM..",
+    ".PPPPPPPPPPPP.",
+    "CCCCCCCCCCCCCC",
+    "GGGGGG..GGGGGG",
+    "OOOOOOOOOOOOOO",
+    ".OOOO....OOOO.",
+  ],
+  // Level 2 - armored bricks appear
+  [
+    "..AAAAAAAAAA..",
+    "..MMMMMMMMMM..",
+    "PP..PPPPPP..PP",
+    "CCCC..CC..CCCC",
+    "GGGGGGGGGGGGGG",
+    "OOOOOOOOOOOOOO",
+  ],
+  // Level 3 - explosive bricks appear
+  [
+    "MMMMMMMMMMMMMM",
+    "PPPXPPPPPPXPPP",
+    "CCCCCCCCCCCCCC",
+    "AAA.GGXXGG.AAA",
+    "OOOOOOOOOOOOOO",
+    "..OOOXOOXOOO..",
+  ],
+  // Level 4 - moving bricks appear
+  [
+    "AAAAAAAAAAAAAA",
+    "MMMXMMMMMMXMMM",
+    "..............",
+    "..~~~~~~~~~~..",
+    "..............",
+    "CCCCCCCCCCCCCC",
+    "GGGGGGGGGGGGGG",
+  ],
+  // Level 5 - heavy armor
+  [
+    "HHHHHHHHHHHHHH",
+    "MPCGOXAAXOGCPM",
+    "~~~~..~~..~~~~",
+    "PPPPPPPPPPPPPP",
+    "C.C.C.CXC.C.C.",
+    "GGGXGGGGGGXGGG",
+    "OOOOOOOOOOOOOO",
+  ],
+  // Level 6 - everything at once
+  [
+    "HHAAAAAAAAAAHH",
+    "XMMMMMMMMMMMMX",
+    "..~~~~..~~~~..",
+    "PPPPXPPPPXPPPP",
+    "..~~~~..~~~~..",
+    "CCAAAACCAAAACC",
+    "GGGGGGGGGGGGGG",
+    "OOOXOOOOOOXOOO",
+  ],
 ];
 
 // A tiny 3x5 pixel font. Each character is 15 digits: 5 rows of 3,
@@ -137,6 +223,15 @@ const HEART_SPRITE = [
   "..h..",
 ];
 const HEART_COLORS = { h: COLORS.heart };
+
+// Catch typing mistakes in the level layouts early.
+LEVELS.forEach((layout, i) => {
+  layout.forEach((row) => {
+    if (row.length !== BRICK_COLUMNS) {
+      console.warn(`Level ${i + 1}: row "${row}" should be ${BRICK_COLUMNS} characters long`);
+    }
+  });
+});
 
 // ---------------------------------------------------------------------
 // 3. CANVAS SETUP
@@ -188,12 +283,20 @@ backgroundCanvas.height = GAME_HEIGHT;
 // 4. GAME STATE
 // ---------------------------------------------------------------------
 
-// Which screen we are on: "title", "playing", "gameover" or "cleared".
+// Which screen we are on:
+//   "title", "playing", "paused", "levelcomplete" or "gameover"
 let gameState = "title";
 let screenTimer = 0;     // seconds spent on the current screen
 let score = 0;
+let bestScore = loadBestScore();
+let isNewBest = false;   // did this run beat the old best score?
 let lives = START_LIVES;
+let level = 1;
+let levelTime = 0;       // seconds played on this level (drives moving bricks)
+let ballStartSpeed = BALL_START_SPEED;
+let ballMaxSpeed = BALL_MAX_SPEED;
 let bricks = [];
+let explosions = [];     // short-lived explosion squares
 let paddle = null;
 let ball = null;
 
@@ -204,12 +307,28 @@ const pointer = { x: -100, y: -100 }; // mouse/finger position in game pixels
 // 5. GAME ACTIONS
 // ---------------------------------------------------------------------
 
-// Begin a completely fresh run. Everything is recreated from scratch,
-// so nothing from the previous game can leak into the new one.
+// Begin a completely fresh run. Everything is reset here or in
+// startLevel(), so nothing from the previous game can leak into the new one.
 function startGame() {
   score = 0;
+  isNewBest = false;
   lives = START_LIVES;
-  bricks = buildBricks(LEVEL_LAYOUT);
+  level = 1;
+  startLevel();
+}
+
+// Set up the bricks, paddle and ball for the current `level`.
+function startLevel() {
+  const layout = LEVELS[(level - 1) % LEVELS.length];
+  bricks = buildBricks(layout);
+  explosions = [];
+  levelTime = 0;
+
+  // Each level is a bit faster than the one before.
+  const extraSpeed = (level - 1) * SPEED_INCREASE_PER_LEVEL;
+  ballStartSpeed = Math.min(BALL_START_SPEED_LIMIT, BALL_START_SPEED + extraSpeed);
+  ballMaxSpeed = Math.min(BALL_MAX_SPEED_LIMIT, BALL_MAX_SPEED + extraSpeed);
+
   paddle = {
     x: (GAME_WIDTH - PADDLE_WIDTH) / 2,
     y: PADDLE_Y,
@@ -220,11 +339,24 @@ function startGame() {
   changeState("playing");
 }
 
+function nextLevel() {
+  level++;
+  startLevel();
+}
+
 function changeState(newState) {
   gameState = newState;
   screenTimer = 0;
   // Hide the mouse cursor during play (the paddle replaces it).
   canvas.style.cursor = newState === "playing" ? "none" : "default";
+}
+
+function pauseGame() {
+  if (gameState === "playing") changeState("paused");
+}
+
+function resumeGame() {
+  if (gameState === "paused") changeState("playing");
 }
 
 // Turn the text layout into a list of brick objects.
@@ -234,13 +366,20 @@ function buildBricks(layout) {
     for (let col = 0; col < BRICK_COLUMNS; col++) {
       const type = BRICK_TYPES[layout[row][col]];
       if (!type) continue; // "." or unknown letter = empty cell
+      const x = BRICK_LEFT + col * BRICK_CELL_WIDTH;
       list.push({
-        x: BRICK_LEFT + col * BRICK_CELL_WIDTH,
+        x: x,
         y: BRICK_TOP + row * BRICK_CELL_HEIGHT,
         w: BRICK_CELL_WIDTH - BRICK_GAP,
         h: BRICK_CELL_HEIGHT - BRICK_GAP,
+        kind: type.kind,
         colors: type.colors,
         points: type.points,
+        hp: type.hp || 1,
+        maxHp: type.hp || 1,
+        flash: 0,                        // seconds left of the white hit flash
+        startX: x,                       // moving bricks slide around this x
+        rowDirection: row % 2 === 0 ? 1 : -1, // alternate rows slide opposite ways
       });
     }
   }
@@ -249,7 +388,7 @@ function buildBricks(layout) {
 
 // Put a new ball on top of the paddle, waiting to be launched.
 function resetBall() {
-  ball = { x: 0, y: 0, vx: 0, vy: 0, speed: BALL_START_SPEED, stuck: true };
+  ball = { x: 0, y: 0, vx: 0, vy: 0, speed: ballStartSpeed, stuck: true };
   placeBallOnPaddle();
 }
 
@@ -283,18 +422,95 @@ function loseLife() {
   }
 }
 
+function addScore(points) {
+  score += points;
+  if (score > bestScore) {
+    bestScore = score;
+    isNewBest = true;
+    saveBestScore();
+  }
+}
+
+// The ball hit a brick: take away one hit point, break it at zero.
+function hitBrick(brick) {
+  brick.hp--;
+  brick.flash = BRICK_HIT_FLASH;
+  if (brick.hp <= 0) destroyBrick(brick);
+}
+
 function destroyBrick(brick) {
-  bricks.splice(bricks.indexOf(brick), 1);
-  score += brick.points;
+  const index = bricks.indexOf(brick);
+  if (index === -1) return; // already destroyed (e.g. by an explosion)
+  bricks.splice(index, 1);
+  addScore(brick.points);
 
   // Speed the ball up a little with every brick, up to a limit.
-  ball.speed = Math.min(BALL_MAX_SPEED, ball.speed + BALL_SPEEDUP_PER_BRICK);
+  ball.speed = Math.min(ballMaxSpeed, ball.speed + BALL_SPEEDUP_PER_BRICK);
   const currentSpeed = Math.hypot(ball.vx, ball.vy);
-  ball.vx *= ball.speed / currentSpeed;
-  ball.vy *= ball.speed / currentSpeed;
+  if (currentSpeed > 0) {
+    ball.vx *= ball.speed / currentSpeed;
+    ball.vy *= ball.speed / currentSpeed;
+  }
 
-  if (bricks.length === 0) {
-    changeState("cleared");
+  if (brick.kind === "explosive") explode(brick);
+
+  if (bricks.length === 0 && gameState === "playing") {
+    changeState("levelcomplete");
+  }
+}
+
+// Destroy every brick touching the 3x3 block of cells around `center`.
+// If one of those is also explosive, it explodes too (a chain reaction).
+function explode(center) {
+  explosions.push({
+    x: center.x - BRICK_CELL_WIDTH,
+    y: center.y - BRICK_CELL_HEIGHT,
+    w: center.w + BRICK_CELL_WIDTH * 2,
+    h: center.h + BRICK_CELL_HEIGHT * 2,
+    timeLeft: EXPLOSION_TIME,
+  });
+
+  const blastArea = {
+    x: center.x - BRICK_CELL_WIDTH / 2,
+    y: center.y - BRICK_CELL_HEIGHT / 2,
+    w: center.w + BRICK_CELL_WIDTH,
+    h: center.h + BRICK_CELL_HEIGHT,
+  };
+  const caught = bricks.filter((b) =>
+    rectsOverlap(b.x, b.y, b.w, b.h, blastArea.x, blastArea.y, blastArea.w, blastArea.h)
+  );
+  for (const brick of caught) destroyBrick(brick);
+}
+
+// --- Best score (saved in the browser with localStorage) -------------
+// localStorage can be blocked (e.g. some private windows), so every use
+// is wrapped in try/catch: the game still works, it just won't remember.
+function loadBestScore() {
+  try {
+    return Number(localStorage.getItem(BEST_SCORE_KEY)) || 0;
+  } catch (error) {
+    return 0;
+  }
+}
+
+function saveBestScore() {
+  try {
+    localStorage.setItem(BEST_SCORE_KEY, String(bestScore));
+  } catch (error) {
+    // Saving isn't possible here; ignore it.
+  }
+}
+
+// --- Fullscreen (handy on desktop: press F) --------------------------
+function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  } catch (error) {
+    // Some browsers (or embedded pages) don't allow fullscreen.
   }
 }
 
@@ -306,7 +522,11 @@ function update(dt) {
   screenTimer += dt;
   if (gameState !== "playing") return;
 
+  levelTime += dt;
   updatePaddle(dt);
+  updateBricks(dt);
+  updateExplosions(dt);
+  if (gameState !== "playing") return; // a moving brick may have ended the level
 
   if (ball.stuck) {
     placeBallOnPaddle(); // the waiting ball rides along with the paddle
@@ -342,6 +562,47 @@ function clampPaddle() {
   paddle.x = Math.max(0, Math.min(GAME_WIDTH - paddle.w, paddle.x));
 }
 
+function updateBricks(dt) {
+  // How far moving bricks are from their starting spot right now.
+  // This "zig-zag" goes smoothly from 0 to +RANGE, back to -RANGE and
+  // back to 0, over and over: a simple, predictable back-and-forth path.
+  const R = MOVING_BRICK_RANGE;
+  const travelled = (levelTime * MOVING_BRICK_SPEED) % (4 * R);
+  let offset;
+  if (travelled < R) offset = travelled;                // 0 -> +R
+  else if (travelled < 3 * R) offset = 2 * R - travelled; // +R -> -R
+  else offset = travelled - 4 * R;                      // -R -> 0
+  const movingRight = travelled < R || travelled >= 3 * R;
+
+  for (const brick of [...bricks]) {
+    if (brick.flash > 0) brick.flash -= dt;
+    if (brick.kind !== "moving") continue;
+
+    brick.x = brick.startX + offset * brick.rowDirection;
+
+    // If the brick slid into the ball, push the ball out of the way
+    // (in the direction the brick is moving) and count it as a hit.
+    if (!ball.stuck &&
+        rectsOverlap(ball.x, ball.y, BALL_SIZE, BALL_SIZE, brick.x, brick.y, brick.w, brick.h)) {
+      const pushRight = movingRight === (brick.rowDirection === 1);
+      if (pushRight) {
+        ball.x = brick.x + brick.w;
+        ball.vx = Math.abs(ball.vx);
+      } else {
+        ball.x = brick.x - BALL_SIZE;
+        ball.vx = -Math.abs(ball.vx);
+      }
+      hitBrick(brick);
+      if (gameState !== "playing") return;
+    }
+  }
+}
+
+function updateExplosions(dt) {
+  for (const explosion of explosions) explosion.timeLeft -= dt;
+  explosions = explosions.filter((explosion) => explosion.timeLeft > 0);
+}
+
 // Move the ball one small step. We move horizontally first and check
 // for hits, then vertically and check again. Doing the two directions
 // separately tells us exactly which side of a brick was hit, so we know
@@ -364,7 +625,7 @@ function moveBall(dt) {
     if (ball.vx > 0) ball.x = brick.x - BALL_SIZE;
     else ball.x = brick.x + brick.w;
     ball.vx = -ball.vx;
-    destroyBrick(brick);
+    hitBrick(brick);
     if (gameState !== "playing") return;
   }
 
@@ -381,7 +642,7 @@ function moveBall(dt) {
     if (ball.vy > 0) ball.y = brick.y - BALL_SIZE;
     else ball.y = brick.y + brick.h;
     ball.vy = -ball.vy;
-    destroyBrick(brick);
+    hitBrick(brick);
     if (gameState !== "playing") return;
   }
 
@@ -449,16 +710,24 @@ function draw() {
     drawTitleScreen();
   } else {
     drawBricks();
+    drawExplosions();
     drawPaddle();
-    if (gameState === "playing") drawBall();
+    if (gameState === "playing" || gameState === "paused") drawBall();
     drawHud();
 
-    if (gameState === "playing" && ball.stuck && blink(0.5)) {
-      drawText("TAP, CLICK OR SPACE TO LAUNCH", GAME_WIDTH / 2, 130,
-               COLORS.white, 1, "center");
+    if (gameState === "playing" && ball.stuck) {
+      if (levelTime < 2.5) {
+        drawText("LEVEL " + level, GAME_WIDTH / 2, 110, COLORS.cyan.base, 2, "center",
+                 COLORS.cyan.dark);
+      }
+      if (blink(0.5)) {
+        drawText("TAP, CLICK OR SPACE TO LAUNCH", GAME_WIDTH / 2, 130,
+                 COLORS.white, 1, "center");
+      }
     }
-    if (gameState === "gameover") drawEndScreen("GAME OVER", COLORS.magenta);
-    if (gameState === "cleared") drawEndScreen("BOARD CLEARED!", COLORS.green);
+    if (gameState === "paused") drawPauseScreen();
+    if (gameState === "levelcomplete") drawLevelCompleteScreen();
+    if (gameState === "gameover") drawGameOverScreen();
   }
 
   drawButtons();
@@ -483,21 +752,112 @@ function drawSprite(sprite, x, y, colorMap) {
   }
 }
 
-// A brick: base color, light top/left edge, dark bottom/right edge,
-// and a little shine mark. This gives a chunky "bevelled" pixel look.
+// The basic brick: base color, light top/left edge, dark bottom/right
+// edge. This gives a chunky "bevelled" pixel look.
 function drawBrickShape(x, y, w, h, colors) {
   fillPixelRect(x, y, w, h, colors.base);
   fillPixelRect(x, y, w, 1, colors.light);           // top edge
   fillPixelRect(x, y, 1, h, colors.light);           // left edge
   fillPixelRect(x, y + h - 1, w, 1, colors.dark);    // bottom edge
   fillPixelRect(x + w - 1, y, 1, h, colors.dark);    // right edge
-  fillPixelRect(x + 2, y + 2, 3, 1, colors.light);   // shine
+}
+
+function drawShine(x, y, colors) {
+  fillPixelRect(x + 2, y + 2, 3, 1, colors.light);
   fillPixelRect(x + 2, y + 3, 1, 1, colors.light);
 }
 
 function drawBricks() {
   for (const brick of bricks) {
-    drawBrickShape(brick.x, brick.y, brick.w, brick.h, brick.colors);
+    const x = Math.round(brick.x);
+    const y = Math.round(brick.y);
+    const { w, h, colors } = brick;
+
+    // A brick that was just hit flashes white for a moment.
+    if (brick.flash > 0) {
+      fillPixelRect(x, y, w, h, COLORS.white);
+      continue;
+    }
+
+    if (brick.kind === "normal") {
+      drawBrickShape(x, y, w, h, colors);
+      drawShine(x, y, colors);
+    } else if (brick.kind === "armored") {
+      drawArmoredBrick(brick, x, y);
+    } else if (brick.kind === "explosive") {
+      drawExplosiveBrick(x, y, w, h, colors);
+    } else if (brick.kind === "moving") {
+      drawMovingBrick(x, y, w, h, colors);
+    }
+  }
+}
+
+// Armored: metal plate with rivets in the corners. Heavy armor (3 hits)
+// also has a raised center plate. Cracks appear as it takes damage.
+function drawArmoredBrick(brick, x, y) {
+  const { w, h, colors } = brick;
+  drawBrickShape(x, y, w, h, colors);
+  // Rivets
+  fillPixelRect(x + 2, y + 2, 1, 1, colors.light);
+  fillPixelRect(x + w - 3, y + 2, 1, 1, colors.light);
+  fillPixelRect(x + 2, y + h - 3, 1, 1, colors.light);
+  fillPixelRect(x + w - 3, y + h - 3, 1, 1, colors.light);
+  if (brick.maxHp >= 3) {
+    fillPixelRect(x + 5, y + 2, w - 10, h - 4, colors.light);
+    fillPixelRect(x + 6, y + 3, w - 12, h - 6, colors.base);
+  }
+  const damage = brick.maxHp - brick.hp;
+  if (damage >= 1) { // first crack
+    fillPixelRect(x + 7, y + 1, 1, 2, colors.dark);
+    fillPixelRect(x + 8, y + 3, 1, 2, colors.dark);
+    fillPixelRect(x + 7, y + 5, 1, 1, colors.dark);
+  }
+  if (damage >= 2) { // second crack
+    fillPixelRect(x + 13, y + 1, 1, 1, colors.dark);
+    fillPixelRect(x + 12, y + 2, 1, 2, colors.dark);
+    fillPixelRect(x + 13, y + 4, 1, 2, colors.dark);
+  }
+}
+
+// Explosive: hazard stripes with a blinking core.
+function drawExplosiveBrick(x, y, w, h, colors) {
+  drawBrickShape(x, y, w, h, colors);
+  ctx.fillStyle = colors.dark;
+  for (let py = 1; py < h - 1; py++) {
+    for (let px = 1; px < w - 1; px++) {
+      if ((px + py) % 6 < 2) ctx.fillRect(x + px, y + py, 1, 1);
+    }
+  }
+  const core = blink(0.25) ? colors.light : COLORS.white;
+  fillPixelRect(x + Math.floor(w / 2) - 2, y + 2, 4, h - 4, colors.dark);
+  fillPixelRect(x + Math.floor(w / 2) - 1, y + 2, 2, h - 4, core);
+}
+
+// Moving: arrows on both ends show it slides sideways.
+function drawMovingBrick(x, y, w, h, colors) {
+  drawBrickShape(x, y, w, h, colors);
+  // "<" on the left
+  fillPixelRect(x + 4, y + 2, 1, 1, colors.dark);
+  fillPixelRect(x + 3, y + 3, 1, 1, colors.dark);
+  fillPixelRect(x + 4, y + 4, 1, 1, colors.dark);
+  // ">" on the right
+  fillPixelRect(x + w - 5, y + 2, 1, 1, colors.dark);
+  fillPixelRect(x + w - 4, y + 3, 1, 1, colors.dark);
+  fillPixelRect(x + w - 5, y + 4, 1, 1, colors.dark);
+}
+
+// An explosion is a hollow square that flickers yellow/orange.
+function drawExplosions() {
+  for (const e of explosions) {
+    const color = blink(0.05) ? COLORS.yellow.base : COLORS.orange.base;
+    // Shrink the square inward as the explosion fades.
+    const inset = Math.floor((1 - e.timeLeft / EXPLOSION_TIME) * 4);
+    const x = e.x + inset, y = e.y + inset;
+    const w = e.w - inset * 2, h = e.h - inset * 2;
+    fillPixelRect(x, y, w, 1, color);
+    fillPixelRect(x, y + h - 1, w, 1, color);
+    fillPixelRect(x, y, 1, h, color);
+    fillPixelRect(x + w - 1, y, 1, h, color);
   }
 }
 
@@ -523,46 +883,92 @@ function drawHud() {
 
   drawText("SCORE", 4, 4, COLORS.dim);
   drawText(String(score).padStart(6, "0"), 28, 4, COLORS.white);
+  drawText("BEST", 60, 4, COLORS.dim);
+  drawText(String(bestScore).padStart(6, "0"), 80, 4, COLORS.yellow.base);
 
-  drawText("LEVEL 1", GAME_WIDTH / 2, 4, COLORS.cyan.base, 1, "center");
+  drawText("LEVEL " + level, GAME_WIDTH / 2 + 10, 4, COLORS.cyan.base, 1, "center");
 
-  drawText("LIVES", GAME_WIDTH - 52, 4, COLORS.dim);
+  // Hearts are drawn right-to-left, ending just before the pause button.
+  const heartsLeft = 302 - lives * 7;
+  drawText("LIVES", heartsLeft - 22, 4, COLORS.dim);
   for (let i = 0; i < lives; i++) {
-    drawSprite(HEART_SPRITE, GAME_WIDTH - 30 + i * 7, 4, HEART_COLORS);
+    drawSprite(HEART_SPRITE, heartsLeft + i * 7 + 2, 4, HEART_COLORS);
   }
+
+  // Pause button: two bars "||"
+  const p = PAUSE_ICON;
+  fillPixelRect(p.x, p.y, p.w, p.h, COLORS.hudLine);
+  fillPixelRect(p.x + 3, p.y + 2, 1, p.h - 4, COLORS.white);
+  fillPixelRect(p.x + 6, p.y + 2, 1, p.h - 4, COLORS.white);
 }
 
 function drawTitleScreen() {
-  drawText("NEON", GAME_WIDTH / 2, 22, COLORS.magenta.base, 4, "center",
+  drawText("NEON", GAME_WIDTH / 2, 18, COLORS.magenta.base, 4, "center",
            COLORS.magenta.dark);
-  drawText("BREAKER", GAME_WIDTH / 2, 46, COLORS.cyan.base, 4, "center",
+  drawText("BREAKER", GAME_WIDTH / 2, 42, COLORS.cyan.base, 4, "center",
            COLORS.cyan.dark);
 
   // A decorative row of bricks in every color
   const colorList = [COLORS.magenta, COLORS.purple, COLORS.cyan,
                      COLORS.green, COLORS.orange];
   for (let i = 0; i < 10; i++) {
-    drawBrickShape(60 + i * 20, 76, 19, 7, colorList[i % colorList.length]);
+    const colors = colorList[i % colorList.length];
+    drawBrickShape(60 + i * 20, 72, 19, 7, colors);
+    drawShine(60 + i * 20, 72, colors);
   }
 
-  drawText("MOUSE, A/D OR ARROWS TO MOVE", GAME_WIDTH / 2, 94, COLORS.dim, 1, "center");
-  drawText("CLICK, TAP OR SPACE TO LAUNCH", GAME_WIDTH / 2, 102, COLORS.dim, 1, "center");
-  drawText("BREAK EVERY BRICK!", GAME_WIDTH / 2, 110, COLORS.white, 1, "center");
+  drawText("MOUSE, A/D OR ARROWS TO MOVE", GAME_WIDTH / 2, 88, COLORS.dim, 1, "center");
+  drawText("CLICK, TAP OR SPACE TO LAUNCH", GAME_WIDTH / 2, 96, COLORS.dim, 1, "center");
+  drawText("ESC OR P TO PAUSE  -  F FOR FULLSCREEN", GAME_WIDTH / 2, 104, COLORS.dim, 1, "center");
 
+  if (bestScore > 0) {
+    drawText("BEST " + bestScore, GAME_WIDTH / 2, 145, COLORS.yellow.base, 1, "center");
+  }
   if (blink(0.6)) {
-    drawText("PRESS SPACE", GAME_WIDTH / 2, 160, COLORS.dim, 1, "center");
+    drawText("PRESS SPACE", GAME_WIDTH / 2, 160, COLORS.white, 1, "center");
   }
 }
 
-function drawEndScreen(title, colors) {
-  // Darken the frozen game behind the message
+// Darken the frozen game behind a menu.
+function dimGameArea() {
   ctx.fillStyle = "rgba(5, 5, 20, 0.8)";
   ctx.fillRect(0, HUD_HEIGHT, GAME_WIDTH, GAME_HEIGHT - HUD_HEIGHT);
+}
 
-  drawText(title, GAME_WIDTH / 2, 44, colors.base, 3, "center", colors.dark);
-  drawText("FINAL SCORE", GAME_WIDTH / 2, 72, COLORS.dim, 1, "center");
-  drawText(String(score), GAME_WIDTH / 2, 82, COLORS.white, 2, "center",
-           COLORS.shadow);
+function drawPauseScreen() {
+  dimGameArea();
+  drawText("PAUSED", GAME_WIDTH / 2, 40, COLORS.purple.base, 3, "center",
+           COLORS.purple.dark);
+  drawText("ESC OR P TO RESUME", GAME_WIDTH / 2, 150, COLORS.dim, 1, "center");
+}
+
+function drawLevelCompleteScreen() {
+  dimGameArea();
+  drawText("LEVEL " + level, GAME_WIDTH / 2, 34, COLORS.green.base, 3, "center",
+           COLORS.green.dark);
+  drawText("COMPLETE!", GAME_WIDTH / 2, 56, COLORS.green.base, 3, "center",
+           COLORS.green.dark);
+  drawText("SCORE " + score, GAME_WIDTH / 2, 84, COLORS.white, 1, "center");
+  drawText("NEXT UP: LEVEL " + (level + 1) + "  -  FASTER BALL!", GAME_WIDTH / 2, 94,
+           COLORS.dim, 1, "center");
+  if (screenTimer > SCREEN_INPUT_DELAY && blink(0.6)) {
+    drawText("OR PRESS SPACE", GAME_WIDTH / 2, 150, COLORS.dim, 1, "center");
+  }
+}
+
+function drawGameOverScreen() {
+  dimGameArea();
+  drawText("GAME OVER", GAME_WIDTH / 2, 36, COLORS.magenta.base, 3, "center",
+           COLORS.magenta.dark);
+  drawText("FINAL SCORE", GAME_WIDTH / 2, 64, COLORS.dim, 1, "center");
+  drawText(String(score), GAME_WIDTH / 2, 74, COLORS.white, 2, "center", COLORS.shadow);
+  if (isNewBest) {
+    if (blink(0.3)) {
+      drawText("NEW BEST SCORE!", GAME_WIDTH / 2, 92, COLORS.yellow.base, 1, "center");
+    }
+  } else {
+    drawText("BEST " + bestScore, GAME_WIDTH / 2, 92, COLORS.yellow.base, 1, "center");
+  }
   if (screenTimer > SCREEN_INPUT_DELAY && blink(0.6)) {
     drawText("OR PRESS SPACE", GAME_WIDTH / 2, 150, COLORS.dim, 1, "center");
   }
@@ -574,9 +980,18 @@ function drawEndScreen(title, colors) {
 // and for detecting clicks/taps.
 function getButtons() {
   if (gameState === "title") {
-    return [{ label: "PLAY", x: 128, y: 124, w: 64, h: 18, action: startGame }];
+    return [{ label: "PLAY", x: 128, y: 120, w: 64, h: 18, action: startGame }];
   }
-  if (gameState === "gameover" || gameState === "cleared") {
+  if (gameState === "paused") {
+    return [
+      { label: "RESUME", x: 100, y: 76, w: 120, h: 18, action: resumeGame },
+      { label: "RESTART", x: 100, y: 100, w: 120, h: 18, action: startGame },
+    ];
+  }
+  if (gameState === "levelcomplete") {
+    return [{ label: "CONTINUE", x: 100, y: 112, w: 120, h: 18, action: nextLevel }];
+  }
+  if (gameState === "gameover") {
     return [{ label: "PLAY AGAIN", x: 100, y: 112, w: 120, h: 18, action: startGame }];
   }
   return [];
@@ -649,6 +1064,14 @@ function blink(seconds) {
 // 8. INPUT
 // ---------------------------------------------------------------------
 
+// Menus ignore input for a moment after they appear, so a click or key
+// press meant for the game doesn't accidentally press a button.
+// The pause menu reacts quickly so resuming feels instant.
+function menuAcceptsInput() {
+  const delay = gameState === "paused" ? 0.15 : SCREEN_INPUT_DELAY;
+  return screenTimer >= delay;
+}
+
 // Convert a mouse/touch position on the page into game pixels.
 function toGamePosition(event) {
   const rect = canvas.getBoundingClientRect();
@@ -675,12 +1098,16 @@ window.addEventListener("pointerdown", (event) => {
   pointer.y = pos.y;
 
   if (gameState === "playing") {
+    if (isInside(pos, PAUSE_TAP_AREA)) {
+      pauseGame();
+      return;
+    }
     movePaddleTo(pos.x);
     launchBall();
     return;
   }
 
-  if (screenTimer < SCREEN_INPUT_DELAY) return; // avoid accidental clicks
+  if (!menuAcceptsInput()) return;
   for (const button of getButtons()) {
     if (isInside(pos, button)) {
       button.action();
@@ -706,11 +1133,28 @@ window.addEventListener("keydown", (event) => {
   keys[event.code] = true;
   if (event.repeat) return; // ignore auto-repeat from holding a key
 
+  if (event.code === "KeyF") {
+    toggleFullscreen();
+    return;
+  }
+
+  if (event.code === "Escape" || event.code === "KeyP") {
+    if (gameState === "playing") pauseGame();
+    else if (gameState === "paused") resumeGame();
+    return;
+  }
+
   if (event.code === "Space" || event.code === "Enter") {
     if (gameState === "playing") {
       launchBall();
-    } else if (screenTimer >= SCREEN_INPUT_DELAY) {
-      startGame();
+    } else if (!menuAcceptsInput()) {
+      // too soon after the screen appeared; ignore
+    } else if (gameState === "paused") {
+      resumeGame();
+    } else if (gameState === "levelcomplete") {
+      nextLevel();
+    } else {
+      startGame(); // title or game over
     }
   }
 });
@@ -719,10 +1163,14 @@ window.addEventListener("keyup", (event) => {
   keys[event.code] = false;
 });
 
-// If the window loses focus, release all keys so the paddle
-// doesn't keep sliding on its own.
+// If the player switches tabs or windows, pause the game and release
+// all keys so the paddle doesn't keep sliding on its own.
 window.addEventListener("blur", () => {
   for (const code in keys) keys[code] = false;
+  pauseGame();
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) pauseGame();
 });
 
 // ---------------------------------------------------------------------
