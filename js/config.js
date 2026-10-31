@@ -128,15 +128,13 @@ const ORB_CONFIG = {
 const MAX_PROJECTILES = 120;
 const MAX_PARTICLES = 400;
 
-// Swarm surges: every so often a ring of enemies closes in from all sides.
+// Swarm surges: every so often a big wave arrives. The kinds of swarm
+// (and how many monsters each has) are in SWARM_TYPES in spawner.js.
 const SURGE_CONFIG = {
   firstSurge: 45, // seconds until the first surge
   minGap: 40, // seconds between surges (random between min and max)
   maxGap: 55,
-  baseCount: 6, // enemies in the first surge
-  extraPerMinute: 2, // more enemies per surge for every minute survived
-  maxCount: 14,
-  ringRadius: 85, // how far from the player the ring appears
+  ringRadius: 85, // how far from the player the Chaser ring appears
   warningTime: 1.2, // surges get a longer warning, so they stay fair
 };
 
@@ -276,3 +274,39 @@ const LATE_GAME_CONFIG = {
   speedPerMinute: 0.12, // +12% speed for every minute past the start...
   maxSpeedBonus: 0.6, // ...up to +60%, so they never become impossible to escape
 };
+
+// Environmental hazards (see hazards.js). They appear over time, never
+// right next to you, and always give a warning first.
+const HAZARD_CONFIG = {
+  safeDistance: 45, // new hazards never appear closer than this to you
+  spacing: 34, // ...or closer than this to each other
+  pit: {
+    firstAt: 15, // seconds until the first hole cracks open
+    every: 30, // then one more every this many seconds...
+    max: 4, // ...up to this many
+    warningTime: 1.5, // cracks show this long before it opens
+    minRadius: 9,
+    maxRadius: 12,
+  },
+  mine: {
+    firstAt: 8,
+    everyMin: 7, // seconds between new mines (random between min and max)
+    everyMax: 11,
+    max: 4,
+    triggerRadius: 6, // stepping this close starts the fuse
+    fuse: 0.7, // seconds of beeping before it blows
+    blastRadius: 24,
+    enemyDamage: 12, // blast damage to monsters (grows with the late game)
+  },
+  goo: {
+    firstAt: 25,
+    every: 20,
+    max: 3,
+    lifetime: 25, // seconds before a puddle dries up (it fades for the last 3)
+    radius: 14,
+    slow: 0.5, // walking speed inside the goo (0.5 = half)
+  },
+};
+
+// Seconds it takes to sink out of sight into a pit.
+const PIT_FALL_TIME = 0.45;

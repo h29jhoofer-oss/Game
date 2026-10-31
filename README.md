@@ -48,6 +48,32 @@ The mouse works everywhere too: the PLAY button, menu buttons, upgrade cards, an
 - **Watch for warnings.** Blinking brackets show where enemies will appear (red for Chaser, green for Toxic Slime, purple for Shooter, orange for Brute). A Shooter's eye glows pink right before it fires. "SWARM INCOMING!" means a ring of enemies is about to surround you, so dash out.
 - **Beat your best.** Your top score is saved in the browser and shown on the title screen.
 
+### Swarms
+
+Every 40–55 seconds a swarm arrives with its own banner. New kinds unlock as their monsters appear, and the same kind never comes twice in a row:
+
+| Swarm | Unlocks | What happens |
+| --- | --- | --- |
+| **SWARM INCOMING!** | From the start | A ring of Chasers all around you. Dash through a gap. |
+| **TOXIC WAVE!** | ~35 s | A line of Toxic Slimes marching in from the far wall. |
+| **SHOOTER SQUAD!** | ~50 s | Shooters spread around you for a crossfire. |
+| **SPRINTER PACK!** | ~70 s | A tight bunch of Sprinters bursting out of the far corner. |
+| **BRUTE STAMPEDE!** | ~100 s | Brutes closing in from opposite sides. |
+
+Swarms get bigger every minute. Regular spawns come in groups too: Chasers and Toxic Slimes in packs of 2–3, and Shooters sometimes in pairs.
+
+### Hazards
+
+The arena itself turns against you over time. New hazards never appear right next to you, and each one warns you first. Walking monsters are affected too, so you can lure them in:
+
+| Hazard | First appears | What it does |
+| --- | --- | --- |
+| **Hole into darkness** | ~15 s, then every 30 s (up to 4) | A pink dotted ring and spreading cracks show where it will open. Walking in costs a heart and you climb out at the edge. **Dashing carries you across safely.** Walking monsters that wander in are gone for good (counts as a kill, but their energy is lost). |
+| **Explosive mine** | ~8 s, then every 7–11 s (up to 4) | A grey disc with a blinking red light. Step on it and it beeps with a flashing red blast circle, then explodes 0.7 s later. The blast costs you a heart if you're inside it and badly damages every monster in it. Monsters can set mines off too. |
+| **Orange goo** | ~25 s, then every 20 s (up to 3) | A sticky puddle that halves walking speed for you and monsters. Dashing isn't slowed. It dries up after 25 seconds. |
+
+Shooters float and the boss is far too big, so pits, mines and goo don't affect them.
+
 ### Heroes
 
 After pressing PLAY you choose a hero with ← → and ENTER, keys 1–3, or the mouse. Your choice is remembered, and restarting keeps the same hero.
@@ -167,8 +193,8 @@ The scripts in `js/` load in this order. Each file has one job:
 | `projectiles.js` | The `Weapon` class (one per gun you own) and its bullets, including the Sniper's homing. |
 | `orbs.js` | Energy orbs and the magnet pull. |
 | `enemies.js` | The `Enemy` base class, `Chaser`, `ToxicSlime`, `Sprinter`, `Shooter`, `Brute`, the `Boss`, and enemy shots. |
-| `hazards.js` | The Toxic Slime's gas cloud: its shape, three life phases (forming, active, fading), collision, and dithered drawing. |
-| `spawner.js` | When, where, and which enemies appear, plus swarm surges and banners. |
+| `hazards.js` | Floor dangers: the Toxic Slime's gas cloud, pits, mines and orange goo, plus the `Hazards` manager that spawns them and applies their effects to you and the monsters. |
+| `spawner.js` | When, where, and which enemies appear, plus swarm surges and banners. The kinds of swarm are in `SWARM_TYPES` at the top. |
 | `upgrades.js` | The list of upgrades. Weapon upgrades describe how they change one gun's stats (`improveWeapon`), and one with a `weapons` list only appears once you own those guns. |
 | `levelup.js` | The level-up card screen. |
 | `ui.js` | Shared interface pieces: panels, bars, buttons, icons. |

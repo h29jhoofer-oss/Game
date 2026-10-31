@@ -213,7 +213,7 @@ function findNearestEnemy(x, y, enemies, range) {
   let nearest = null;
   let nearestDistSq = range * range;
   for (const enemy of enemies) {
-    if (enemy.dead) continue;
+    if (enemy.dead || enemy.isFalling()) continue;
     const dx = enemy.x - x;
     const dy = enemy.y - y;
     const distSq = dx * dx + dy * dy;
@@ -233,7 +233,7 @@ function findSniperTarget(x, y, enemies, range) {
   let farthest = null;
   let farthestDistSq = -1;
   for (const enemy of enemies) {
-    if (enemy.dead) continue;
+    if (enemy.dead || enemy.isFalling()) continue;
     const distSq = (enemy.x - x) ** 2 + (enemy.y - y) ** 2;
     if (distSq > range * range) continue;
     if (enemy.type === 'shooter' && distSq < shooterDistSq) {

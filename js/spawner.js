@@ -15,8 +15,103 @@
 //   - Every 90 s the boss (King Slime) arrives, stronger each time.
 //   - From 2:00 on, every new monster gets more health and speed each
 //     minute (the late-game ramp in LATE_GAME_CONFIG).
-//   - Every 40-55 seconds a "swarm surge" rings the player from all sides.
+//   - Every 40-55 seconds a swarm arrives. There are several kinds (see
+//     SWARM_TYPES below); new kinds unlock as their monsters appear.
 // =====================================================================
+
+// ---------------------------------------------------------------------
+// Swarm types. Each one says which monster it uses, when it unlocks, how
+// many monsters it has (growing each minute), and where to put them.
+// placeMonsters(count, player) returns a list of {x, y} spots.
+// ---------------------------------------------------------------------
+const SWARM_TYPES = [
+  {
+    id: 'chaserRing',
+    banner: 'SWARM INCOMING!',
+    color: PALETTE.red,
+    monster: 'chaser',
+    unlockAt: 0,
+    baseCount: 6,
+    extraPerMinute: 2,
+    maxCount: 14,
+    // A ring all around you. Dash through a gap to escape.
+    placeMonsters(count, player) {
+      const start = randomRange(0, Math.PI * 2);
+      return Array.from({ length: count }, (_, i) => {
+        const angle = start + (i / count) * Math.PI * 2;
+        return { x: player.x + Math.cos(angle) * SURGE_CONFIG.ringRadius, y: player.y + Math.sin(angle) * SURGE_CONFIG.ringRadius };
+      });
+    },
+  },
+  {
+    id: 'toxicWave',
+    banner: 'TOXIC WAVE!',
+    color: PALETTE.green,
+    monster: 'toxic',
+    unlockAt: 35,
+    baseCount: 4,
+    extraPerMinute: 1,
+    maxCount: 8,
+    // A line marching in from the wall farthest from you.
+    placeMonsters(count, player) {
+      const fromLeft = player.x > ARENA.x + ARENA.width / 2;
+      const x = fromLeft ? ARENA.x + 10 : ARENA.x + ARENA.width - 10;
+      return Array.from({ length: count }, (_, i) => ({ x, y: ARENA.y + ((i + 0.5) / count) * ARENA.height }));
+    },
+  },
+  {
+    id: 'shooterSquad',
+    banner: 'SHOOTER SQUAD!',
+    color: PALETTE.purple,
+    monster: 'shooter',
+    unlockAt: 50,
+    baseCount: 3,
+    extraPerMinute: 0.5,
+    maxCount: 5,
+    // Spread evenly around you at a distance, so you're caught in a crossfire.
+    placeMonsters(count, player) {
+      const start = randomRange(0, Math.PI * 2);
+      return Array.from({ length: count }, (_, i) => {
+        const angle = start + (i / count) * Math.PI * 2;
+        return { x: player.x + Math.cos(angle) * 95, y: player.y + Math.sin(angle) * 95 };
+      });
+    },
+  },
+  {
+    id: 'sprinterPack',
+    banner: 'SPRINTER PACK!',
+    color: PALETTE.yellow,
+    monster: 'sprinter',
+    unlockAt: 70,
+    baseCount: 3,
+    extraPerMinute: 0.5,
+    maxCount: 5,
+    // A tight bunch bursting out of the corner farthest from you.
+    placeMonsters(count, player) {
+      const cornerX = player.x > ARENA.x + ARENA.width / 2 ? ARENA.x + 12 : ARENA.x + ARENA.width - 12;
+      const cornerY = player.y > ARENA.y + ARENA.height / 2 ? ARENA.y + 12 : ARENA.y + ARENA.height - 12;
+      return Array.from({ length: count }, () => ({ x: cornerX + randomRange(-8, 8), y: cornerY + randomRange(-8, 8) }));
+    },
+  },
+  {
+    id: 'bruteStampede',
+    banner: 'BRUTE STAMPEDE!',
+    color: PALETTE.orange,
+    monster: 'brute',
+    unlockAt: 100,
+    baseCount: 2,
+    extraPerMinute: 0.5,
+    maxCount: 4,
+    // Closing in from opposite sides, so you can't just back away.
+    placeMonsters(count, player) {
+      const start = randomRange(0, Math.PI);
+      return Array.from({ length: count }, (_, i) => {
+        const angle = start + (i / count) * Math.PI * 2;
+        return { x: player.x + Math.cos(angle) * 90, y: player.y + Math.sin(angle) * 90 };
+      });
+    },
+  },
+];
 
 class Spawner {
   constructor() {
@@ -28,6 +123,7 @@ class Spawner {
     this.introduced = new Set(); // enemy types we've already announced
     this.nextBossAt = BOSS_CONFIG.spawnEvery;
     this.nextLateGameBanner = LATE_GAME_CONFIG.startsAt;
+    this.lastSwarm = null; // so the same swarm type doesn't come twice in a row
     this.bossLevel = 0; // how many bosses have arrived so far
   }
 
@@ -186,48 +282,47 @@ class Spawner {
     const spot = this.pickSpawnPoint(player);
     const type = this.pickWeighted(this.getTypeWeights(survivalTime, enemies));
 
-    if (type !== 'chaser') {
-      // The first time a new enemy type shows up, announce it.
-      if (!this.introduced.has(type)) {
-        this.introduced.add(type);
-        if (type === 'toxic') this.showBanner('NEW ENEMY: TOXIC SLIME', PALETTE.green, 2.2);
-        if (type === 'sprinter') this.showBanner('NEW ENEMY: SPRINTER', PALETTE.yellow, 2.2);
-        if (type === 'shooter') this.showBanner('NEW ENEMY: SHOOTER', PALETTE.purple, 2.2);
-        if (type === 'brute') this.showBanner('NEW ENEMY: BRUTE', PALETTE.orange, 2.2);
-      }
-      this.addWarning(spot.x, spot.y, SPAWN_CONFIG.warningTime, type);
-      return;
+    // The first time a new enemy type shows up, announce it.
+    if (type !== 'chaser' && !this.introduced.has(type)) {
+      this.introduced.add(type);
+      if (type === 'toxic') this.showBanner('NEW ENEMY: TOXIC SLIME', PALETTE.green, 2.2);
+      if (type === 'sprinter') this.showBanner('NEW ENEMY: SPRINTER', PALETTE.yellow, 2.2);
+      if (type === 'shooter') this.showBanner('NEW ENEMY: SHOOTER', PALETTE.purple, 2.2);
+      if (type === 'brute') this.showBanner('NEW ENEMY: BRUTE', PALETTE.orange, 2.2);
     }
 
+    // How big a group this type can arrive in. Chasers and Toxic Slimes
+    // come in packs of 2-3, Shooters sometimes in pairs, the rest alone.
     // Packs become more common the longer you survive.
     const groupChance = SPAWN_CONFIG.groupChanceMax * Math.min(1, survivalTime / SPAWN_CONFIG.groupChanceRampTime);
-    const groupSize = Math.random() < groupChance ? randomInt(2, 3) : 1;
+    let groupSize = 1;
+    if ((type === 'chaser' || type === 'toxic') && Math.random() < groupChance) groupSize = randomInt(2, 3);
+    if (type === 'shooter' && Math.random() < groupChance * 0.6) groupSize = 2;
     const count = Math.min(groupSize, this.roomLeft(enemies));
     for (let i = 0; i < count; i++) {
       const spread = i === 0 ? 0 : SPAWN_CONFIG.groupSpread;
-      this.addWarning(spot.x + randomRange(-spread, spread), spot.y + randomRange(-spread, spread), SPAWN_CONFIG.warningTime, 'chaser');
+      this.addWarning(spot.x + randomRange(-spread, spread), spot.y + randomRange(-spread, spread), SPAWN_CONFIG.warningTime, type);
     }
   }
 
-  // A ring of enemies around the player that you have to break out of
-  // (dashing through it works well!).
+  // A big wave. Picks one of the swarm types that has unlocked (never the
+  // same one twice in a row) and lets it place its monsters.
   spawnSurge(survivalTime, player, enemies) {
+    const unlocked = SWARM_TYPES.filter((swarm) => survivalTime >= swarm.unlockAt);
+    // Prefer a different kind than last time (if more than one has unlocked).
+    const fresh = unlocked.filter((swarm) => swarm.id !== this.lastSwarm);
+    const choices = fresh.length > 0 ? fresh : unlocked;
+    const swarm = choices[randomInt(0, choices.length - 1)];
+    this.lastSwarm = swarm.id;
+
     const minutes = survivalTime / 60;
-    const wanted = Math.min(SURGE_CONFIG.maxCount, Math.round(SURGE_CONFIG.baseCount + minutes * SURGE_CONFIG.extraPerMinute));
+    const wanted = Math.min(swarm.maxCount, Math.round(swarm.baseCount + minutes * swarm.extraPerMinute));
     const count = Math.min(wanted, this.roomLeft(enemies));
     if (count <= 0) return;
-
-    const startAngle = randomRange(0, Math.PI * 2); // a different ring every time
-    for (let i = 0; i < count; i++) {
-      const angle = startAngle + (i / count) * Math.PI * 2;
-      this.addWarning(
-        player.x + Math.cos(angle) * SURGE_CONFIG.ringRadius,
-        player.y + Math.sin(angle) * SURGE_CONFIG.ringRadius,
-        SURGE_CONFIG.warningTime,
-        'chaser',
-      );
+    for (const spot of swarm.placeMonsters(count, player)) {
+      this.addWarning(spot.x, spot.y, SURGE_CONFIG.warningTime, swarm.monster);
     }
-    this.showBanner('SWARM INCOMING!', PALETTE.red);
+    this.showBanner(swarm.banner, swarm.color);
   }
 
   addWarning(x, y, time, type) {

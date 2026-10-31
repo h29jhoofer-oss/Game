@@ -99,6 +99,20 @@ const SOUND_RECIPES = {
       [392, 523, 659, 784, 1047].forEach((freq, i) => s.tone({ type: 'square', freq, duration: 0.1, volume: 0.09, delay: i * 0.06 }));
     },
   },
+  // Hazards
+  mineArm: {
+    minGap: 0.2,
+    play: (s) => [0, 0.15, 0.3, 0.45].forEach((delay) => s.tone({ type: 'square', freq: 1200, duration: 0.05, volume: 0.07, delay })),
+  },
+  mineBoom: {
+    minGap: 0.1,
+    play: (s) => {
+      s.noise({ duration: 0.5, volume: 0.35, filter: 1800, endFilter: 120 });
+      s.tone({ type: 'sawtooth', freq: 120, endFreq: 35, duration: 0.4, volume: 0.15 });
+    },
+  },
+  pitOpen: { minGap: 0.3, play: (s) => s.noise({ duration: 0.6, volume: 0.2, filter: 300, endFilter: 80 }) },
+  fall: { minGap: 0.2, play: (s) => s.tone({ type: 'triangle', freq: 900, endFreq: 90, duration: 0.45, volume: 0.1 }) },
   shieldReady: { minGap: 0.2, play: (s) => s.tone({ type: 'triangle', freq: 900, endFreq: 1500, duration: 0.12, volume: 0.08 }) },
   dash: { minGap: 0.1, play: (s) => s.noise({ duration: 0.12, volume: 0.12, filter: 600, endFilter: 3500 }) },
   enemyShoot: { minGap: 0.08, play: (s) => s.tone({ type: 'triangle', freq: 330, endFreq: 180, duration: 0.12, volume: 0.08 }) },

@@ -131,6 +131,7 @@ const Game = {
     this.pendingLevelUps = 0;
     this.upgradeLevels = {};
     Effects.reset();
+    Hazards.reset();
     this.survivalTime = 0;
     this.shakeTime = 0;
     this.hurtFlashTime = 0;
@@ -336,6 +337,14 @@ const Game = {
     // 1. Player moves and the blaster fires on its own.
     this.player.update(dt);
     this.checkDashRam();
+    // Fell into a pit? Climb back out at the edge, minus a heart.
+    if (this.player.isFalling() && this.player.fallTime >= PIT_FALL_TIME) {
+      this.player.finishFalling(this.player.fallRadius);
+      Effects.text(this.player.x, this.player.y - 10, 'FELL!', PALETTE.red);
+      this.hurtPlayer(1);
+      // A short moment of safety even if the shield took the hit.
+      this.player.invulnerableTime = Math.max(this.player.invulnerableTime, 0.8);
+    }
     for (const weapon of this.weapons) weapon.update(dt, this.player, this.enemies, this.projectiles);
 
     // 2. Shots fly and hit enemies.
@@ -348,6 +357,8 @@ const Game = {
     separateEnemies(this.enemies);
     for (const shot of this.enemyShots) shot.update(dt);
     for (const cloud of this.gasClouds) cloud.update(dt);
+    Hazards.update(dt, this);
+    for (const enemy of this.enemies) if (enemy.fellIn && !enemy.dead) this.onEnemyFell(enemy);
     this.checkPlayerCollisions();
 
     // 4. Energy orbs and hearts drift toward the player and get collected.
@@ -412,7 +423,7 @@ const Game = {
     for (const projectile of this.projectiles) {
       if (projectile.dead) continue;
       for (const enemy of this.enemies) {
-        if (enemy.dead || projectile.alreadyHit.has(enemy)) continue;
+        if (enemy.dead || enemy.isFalling() || projectile.alreadyHit.has(enemy)) continue;
         if (!circlesOverlap(projectile, enemy)) continue;
 
         projectile.alreadyHit.add(enemy);
@@ -508,6 +519,16 @@ const Game = {
     this.heartPickups = this.heartPickups.filter((heart) => !heart.collected && !heart.isExpired());
   },
 
+  // A monster that walked into a pit: it counts as defeated, but its
+  // energy falls into the darkness with it.
+  onEnemyFell(enemy) {
+    enemy.dead = true;
+    this.kills++;
+    this.score += enemy.scoreValue;
+    Effects.burst(enemy.fallX, enemy.fallY, 5, SPARK_COLORS.dust, { minSpeed: 10, maxSpeed: 25, life: 0.3 });
+    Effects.text(enemy.fallX, enemy.fallY - 8, '+' + enemy.scoreValue, PALETTE.cyanDim, 0.6);
+  },
+
   updateOrbs(dt) {
     for (const orb of this.orbs) {
       orb.update(dt, this.player, this.player.magnetRadius);
@@ -538,7 +559,7 @@ const Game = {
     const damage = player.character.dashDamage;
     if (damage === 0 || !player.isDashing()) return;
     for (const enemy of this.enemies) {
-      if (enemy.dead || player.dashHits.has(enemy)) continue;
+      if (enemy.dead || enemy.isFalling() || player.dashHits.has(enemy)) continue;
       // A slightly bigger reach than normal contact, so ramming feels solid.
       if (!circlesOverlap({ x: player.x, y: player.y, radius: player.radius + 3 }, enemy)) continue;
       player.dashHits.add(enemy);
@@ -563,7 +584,7 @@ const Game = {
     const player = this.player;
     for (const enemy of this.enemies) {
       if (!player.canBeHit()) return;
-      if (enemy.dead || !circlesOverlap(player, enemy)) continue; // just-defeated enemies can't hurt you
+      if (enemy.dead || enemy.isFalling() || !circlesOverlap(player, enemy)) continue; // defeated or falling enemies can't hurt you
       enemy.knockBackFrom(player.x, player.y, CHASER_CONFIG.knockback);
       this.hurtPlayer(enemy.contactDamage);
     }
@@ -663,6 +684,7 @@ const Game = {
     }
     // Draw in layers, from the floor up.
     Arena.draw(ctx, this.animTime);
+    Hazards.drawFloor(ctx);
     this.spawner.draw(ctx);
     for (const orb of this.orbs) orb.draw(ctx);
     for (const heart of this.heartPickups) heart.draw(ctx);
@@ -675,6 +697,7 @@ const Game = {
     for (const projectile of this.projectiles) projectile.draw(ctx);
     for (const shot of this.enemyShots) shot.draw(ctx);
     for (const weapon of this.weapons) weapon.draw(ctx);
+    Hazards.drawWarnings(ctx);
     Effects.draw(ctx);
     ctx.restore();
 

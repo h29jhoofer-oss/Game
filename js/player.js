@@ -21,6 +21,15 @@ class Player {
     this.width = 8;
     this.height = 10;
     this.facing = 1; // 1 = right, -1 = left
+    // Hazards (hazards.js) set these every frame.
+    this.slowFactor = 1; // 0.5 while standing in orange goo
+    this.fallTime = -1; // >= 0 while falling into a pit
+    this.fallX = 0;
+    this.fallY = 0;
+    this.safeX = x; // the last spot you stood on that wasn't near a pit
+    this.safeY = y;
+    this.climbTime = 0; // > 0 while climbing out of a pit (can't move yet)
+
     // The last direction you moved in (length 1). The Shotgun fires this way.
     this.aimX = 1;
     this.aimY = 0;
@@ -61,8 +70,22 @@ class Player {
   }
 
   update(dt) {
-    // --- 1. Read the keyboard ---
-    const input = Input.getMoveDirection();
+    // Falling into a pit: no control, just slide into the middle and sink.
+    // (game.js puts you back at the edge and takes a heart when it's over.)
+    if (this.isFalling()) {
+      this.fallTime += dt;
+      this.x += (this.fallX - this.x) * Math.min(1, dt * 8);
+      this.y += (this.fallY - this.y) * Math.min(1, dt * 8);
+      this.vx = 0;
+      this.vy = 0;
+      this.invulnerableTime = Math.max(0, this.invulnerableTime - dt);
+      this.updateShield(dt);
+      return;
+    }
+
+    // --- 1. Read the keyboard (not while climbing out of a pit) ---
+    this.climbTime = Math.max(0, this.climbTime - dt);
+    const input = this.climbTime > 0 ? { x: 0, y: 0 } : Input.getMoveDirection();
     let dirX = input.x;
     let dirY = input.y;
 
@@ -102,8 +125,9 @@ class Player {
     } else {
       // Ease the velocity toward the target speed. Using Math.exp makes
       // the easing behave the same at 30, 60 or 144 frames per second.
-      const targetVX = dirX * this.speed;
-      const targetVY = dirY * this.speed;
+      // Goo slows walking, but not dashing.
+      const targetVX = dirX * this.speed * this.slowFactor;
+      const targetVY = dirY * this.speed * this.slowFactor;
       const blend = 1 - Math.exp(-PLAYER_CONFIG.acceleration * dt);
       this.vx += (targetVX - this.vx) * blend;
       this.vy += (targetVY - this.vy) * blend;
@@ -148,7 +172,33 @@ class Player {
   // Dashing makes you briefly untouchable, so a well-timed dash can
   // carry you straight through an enemy.
   canBeHit() {
-    return this.invulnerableTime === 0 && !this.isDashing();
+    return this.invulnerableTime === 0 && !this.isDashing() && !this.isFalling();
+  }
+
+  isFalling() {
+    return this.fallTime >= 0;
+  }
+
+  startFalling(pitX, pitY, pitRadius) {
+    this.fallTime = 0;
+    this.fallRadius = pitRadius;
+    this.fallX = pitX;
+    this.fallY = pitY;
+    this.dashTime = 0;
+  }
+
+  // Climb back out on the side you came from, a little clear of the edge,
+  // then take a moment to recover (so a held key doesn't walk you straight
+  // back in).
+  finishFalling(pitRadius) {
+    this.fallTime = -1;
+    const dx = this.safeX - this.fallX;
+    const dy = this.safeY - this.fallY;
+    const length = Math.hypot(dx, dy) || 1;
+    const distance = pitRadius + 12;
+    this.x = clamp(this.fallX + (dx / length) * distance, ARENA.x + this.width / 2, ARENA.x + ARENA.width - this.width / 2);
+    this.y = clamp(this.fallY + (dy / length) * distance, ARENA.y + this.height / 2, ARENA.y + ARENA.height - this.height / 2);
+    this.climbTime = 0.4;
   }
 
   // Get health back, up to the maximum.
@@ -262,6 +312,13 @@ class Player {
 
     // After the death flicker the player is gone (shadow included).
     if (this.isDead() && this.deathTime > 0.6) return;
+
+    // Sinking into a pit.
+    if (this.isFalling()) {
+      const sprite = this.sprites.idle;
+      drawSinking(ctx, this.facing === 1 ? sprite.right : sprite.left, drawX, drawY, this.fallTime / PIT_FALL_TIME);
+      return;
+    }
 
     // Small shadow under the feet.
     ctx.fillStyle = PALETTE.void;

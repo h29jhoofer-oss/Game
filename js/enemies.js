@@ -32,6 +32,13 @@ class Enemy {
     this.explosionSize = settings.explosionSize;
     this.knockbackScale = settings.knockbackScale ?? 1; // 1 = normal, 0 = can't be pushed
     this.contactDamage = settings.contactDamage ?? 1; // hearts lost when it touches you
+    // Walking monsters can fall into pits, set off mines and get stuck in
+    // goo. Floating ones (Shooters) and the huge boss are not affected.
+    this.grounded = settings.grounded ?? true;
+    this.slowFactor = 1; // set each frame by hazards (0.5 while in goo)
+    this.fallTime = -1; // >= 0 while falling into a pit
+    this.fallX = 0; // the pit's center, which it slides toward while falling
+    this.fallY = 0;
 
     // Knockback velocity: added on top of normal movement, fades quickly.
     this.pushX = 0;
@@ -50,7 +57,28 @@ class Enemy {
   }
 
   // `world` is the Game object, so enemies can create things like shots.
+  // Is this monster in the middle of falling into a pit? Falling monsters
+  // can't hurt you and aren't worth shooting.
+  isFalling() {
+    return this.fallTime >= 0;
+  }
+
+  startFalling(pitX, pitY) {
+    this.fallTime = 0;
+    this.fallX = pitX;
+    this.fallY = pitY;
+  }
+
   update(dt, player, world) {
+    if (this.isFalling()) {
+      // Slide into the middle of the pit and sink out of sight.
+      this.fallTime += dt;
+      this.x += (this.fallX - this.x) * Math.min(1, dt * 8);
+      this.y += (this.fallY - this.y) * Math.min(1, dt * 8);
+      if (this.fallTime >= PIT_FALL_TIME) this.fellIn = true; // game.js counts it as a kill
+      return;
+    }
+
     const dir = this.think(player);
     if (dir.x !== 0) this.facing = Math.sign(dir.x);
 
@@ -59,8 +87,9 @@ class Enemy {
     this.pushX *= fade;
     this.pushY *= fade;
 
-    this.x += (dir.x * this.speed + this.pushX) * dt;
-    this.y += (dir.y * this.speed + this.pushY) * dt;
+    const speed = this.speed * this.slowFactor;
+    this.x += (dir.x * speed + this.pushX) * dt;
+    this.y += (dir.y * speed + this.pushY) * dt;
     this.keepInsideArena();
 
     this.animTime += dt;
@@ -114,8 +143,22 @@ class Enemy {
 
     const sprite = this.getSpriteSet();
     const image = this.flashTime > 0 ? sprite.ghosts[0] : sprite;
-    ctx.drawImage(this.facing === 1 ? image.right : image.left, drawX, drawY);
+    const frame = this.facing === 1 ? image.right : image.left;
+    if (this.isFalling()) {
+      drawSinking(ctx, frame, drawX, drawY, this.fallTime / PIT_FALL_TIME);
+      return;
+    }
+    ctx.drawImage(frame, drawX, drawY);
   }
+}
+
+// Draw a sprite sinking into a pit: it slides down while the part below
+// the pit's edge is cut off, one whole pixel row at a time.
+function drawSinking(ctx, image, x, y, progress) {
+  const sunk = Math.min(image.height, Math.floor(progress * image.height));
+  const visible = image.height - sunk;
+  if (visible <= 0) return;
+  ctx.drawImage(image, 0, 0, image.width, visible, x, y + sunk, image.width, visible);
 }
 
 // Direction from one point to another, with a length of 1.
@@ -234,6 +277,7 @@ class Boss extends Enemy {
       explosionSize: 8,
       knockbackScale: BOSS_CONFIG.knockbackScale,
       contactDamage: BOSS_CONFIG.contactDamage,
+      grounded: false, // far too big to fall into a pit or be slowed by goo
     });
     this.maxHealth = health;
     this.level = level;
@@ -295,6 +339,7 @@ class Shooter extends Enemy {
       scoreValue: SHOOTER_CONFIG.score,
       explosionColors: SPARK_COLORS.shooter,
       explosionSize: 2,
+      grounded: false, // it floats, so pits, mines and goo don't affect it
     });
     // Random start so a group of shooters doesn't fire all at once.
     this.fireTimer = randomRange(1.2, SHOOTER_CONFIG.fireInterval);
