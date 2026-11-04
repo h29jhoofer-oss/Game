@@ -112,8 +112,9 @@ const Game = {
     const centerY = ARENA.y + ARENA.height / 2;
     const character = getCharacter(this.characterId);
     this.player = new Player(centerX, centerY, character);
-    // Everyone starts with just the Blaster. The others are rare drops.
-    this.weapons = [this.createWeapon('blaster')];
+    // Each hero starts with the gun that matches their color. The other
+    // guns are rare drops.
+    this.weapons = [this.createWeapon(character.startGun)];
     this.gunPickups = [];
     this.enemies = [];
     this.projectiles = [];
@@ -596,6 +597,7 @@ const Game = {
       this.hurtPlayer();
     }
     for (const cloud of this.gasClouds) {
+      if (player.character.gasImmune) break; // the Viper shrugs off toxic gas
       if (!player.canBeHit()) return;
       if (!cloud.isHarmful() || !cloud.touches(player)) continue;
       Effects.burst(player.x, player.y, 5, SPARK_COLORS.toxic, { maxSpeed: 30, life: 0.3 });

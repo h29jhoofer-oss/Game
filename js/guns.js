@@ -1,14 +1,16 @@
 // =====================================================================
-// guns.js — the guns. Every run starts with the Blaster; the Shotgun,
-// Sniper and SMG are rare monster drops (see GUN_DROP_CONFIG).
+// guns.js — the guns. Each hero starts with the gun matching their color
+// (Runner: Blaster, Brute: Shotgun, Speeder: SMG, Viper: Sniper); the
+// others are rare monster drops (see GUN_DROP_CONFIG).
 // All the guns you own fire at the same time.
 //
 // Each gun is one object:
 //   aim    : how it picks where to shoot
 //              'nearest'  — at the closest enemy (Blaster)
 //              'movement' — the way you are moving (Shotgun)
-//              'sniper'   — at a Shooter if there is one, otherwise the
-//                           farthest enemy in range (Sniper)
+//              'sniper'   — at any monster that gets dangerously close,
+//                           otherwise a Shooter, otherwise the farthest
+//                           enemy in range (Sniper)
 //   style  : how its bullets look ('bolt', 'pellet', 'sniper' or 'smg')
 //   sound  : which sound recipe (audio.js) it plays when firing
 //   stats  : the numbers the Weapon uses. They start from WEAPON_CONFIG

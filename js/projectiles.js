@@ -225,9 +225,15 @@ function findNearestEnemy(x, y, enemies, range) {
   return nearest;
 }
 
-// The Sniper's choice: the nearest Shooter in range if there is one,
-// otherwise the farthest enemy it can reach.
+// The Sniper's choice:
+//   1. a monster that's dangerously close (so it can defend itself),
+//   2. otherwise the nearest Shooter in range,
+//   3. otherwise the farthest enemy it can reach.
+const SNIPER_DANGER_CLOSE = 45; // pixels
 function findSniperTarget(x, y, enemies, range) {
+  const tooClose = findNearestEnemy(x, y, enemies, SNIPER_DANGER_CLOSE);
+  if (tooClose) return tooClose;
+
   let shooter = null;
   let shooterDistSq = Infinity;
   let farthest = null;

@@ -76,13 +76,14 @@ Shooters float and the boss is far too big, so pits, mines and goo don't affect 
 
 ### Heroes
 
-After pressing PLAY you choose a hero with ← → and ENTER, keys 1–3, or the mouse. Your choice is remembered, and restarting keeps the same hero.
+After pressing PLAY you choose a hero with ← → and ENTER, keys 1–4, or the mouse. Your choice is remembered, and restarting keeps the same hero.
 
-| Hero | Speed | Damage | Range | Hearts (start / max) | Dash perk |
-| --- | --- | --- | --- | --- | --- |
-| **Runner** (blue) | ×1 | ×1 | ×1 | 3 / 4 | — |
-| **Brute** (orange) | ×0.75 | ×1.5 | ×1 | 3 / 5 | Rams: dashing into a monster deals 4 damage and knocks it back (once per monster per dash) |
-| **Speeder** (purple) | ×1.75 | ×1 | ×1.5 | 3 / 3 | Dashes twice as far (twice as fast, so the untouchable moment stays the same length) |
+| Hero | Speed | Damage | Range | Hearts (start / max) | Perk | Starting gun |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Runner** (blue) | ×1 | ×1 | ×1 | 3 / 4 | — | Blaster |
+| **Brute** (orange) | ×0.75 | ×1.5 | ×1 | 3 / 5 | Rams: dashing into a monster deals 4 damage and knocks it back (once per monster per dash) | Shotgun |
+| **Speeder** (purple) | ×1.75 | ×1 | ×1.5 | 3 / 3 | Dashes twice as far (twice as fast, so the untouchable moment stays the same length) | SMG |
+| **Viper** (green) | ×0.9 | ×1.4 | ×1.25 | 3 / 3 | Immune to the Toxic Slimes' gas clouds | Sniper |
 
 The multipliers keep working on top of upgrades: the Brute's Heavy Shots hit for (1 + 1) × 1.5 = 3.
 
@@ -101,14 +102,14 @@ All enemies gain health every 100 seconds, and spawns speed up over time. **From
 
 ### Weapons
 
-Every run starts with the **Blaster**. Any defeated monster has a **0.5% chance** to drop the **Shotgun**, the **Sniper** or the **SMG** (one you don't have yet). A dropped gun sits on the floor inside a pulsing ring until you pick it up, and it never disappears. **All the guns you own fire at the same time**, and the bottom bar shows which ones you have.
+Each hero starts with the gun that matches their color: **Runner → Blaster**, **Brute → Shotgun**, **Speeder → SMG**, **Viper → Sniper**. Any defeated monster has a **0.5% chance** to drop one of the other guns (one you don't have yet). A dropped gun sits on the floor inside a pulsing ring until you pick it up, and it never disappears. **All the guns you own fire at the same time**, and the bottom bar shows which ones you have.
 
 | Gun | Damage | Fire rate | Range | How it aims |
 | --- | --- | --- | --- | --- |
 | **Blaster** (cyan) | ×1 | ×1 | medium | At the nearest enemy |
 | **Shotgun** (orange) | ×2 per pellet, 4 pellets | ×0.5 | short (pellets vanish close to you) | The way you're moving, whenever an enemy is close |
 | **SMG** (purple) | ×0.5 per bullet (small purple bullets) | ×2 | medium | At the nearest enemy |
-| **Sniper** (green) | ×1.5 | ×0.75 | long | At a Shooter if there is one, otherwise the farthest enemy. Bullets curve slightly toward their target. |
+| **Sniper** (green) | ×1.5 | ×0.75 | long | At any monster that gets dangerously close (within 45 px); otherwise at a Shooter if there is one, otherwise the farthest enemy. Bullets curve slightly toward their target. |
 
 Hero and gun multipliers stack: a Brute hero's Shotgun pellets hit for 1 × 1.5 × 2 = 3.
 

@@ -192,7 +192,7 @@ function bakeLogoWord(ctx, text, centerX, y, scale, bands, shadowColor) {
 // function so another pick screen could reuse it: each screen only
 // supplies its title, its list of items, and how to draw a card.
 // ---------------------------------------------------------------------
-const PICK_CARD = { width: 92, height: 112, gap: 8, y: 34 };
+const PICK_CARD = { width: 72, height: 116, gap: 5, y: 30 };
 
 function makePickScreen({ title, getItems, getCurrentId, drawCardBody, onPick, onBack }) {
   return {
@@ -236,7 +236,7 @@ function makePickScreen({ title, getItems, getCurrentId, drawCardBody, onPick, o
         this.selected = (this.selected + 1) % count;
         Sound.play('uiMove');
       }
-      ['Digit1', 'Digit2', 'Digit3'].forEach((key, index) => {
+      ['Digit1', 'Digit2', 'Digit3', 'Digit4'].forEach((key, index) => {
         if (index < count && Input.wasPressed(key)) {
           this.selected = index;
           this.activate('pick', game);
@@ -256,7 +256,8 @@ function makePickScreen({ title, getItems, getCurrentId, drawCardBody, onPick, o
 
       const back = this.getButtons().find((button) => button.id === 'back');
       drawButton(ctx, back.box, 'BACK', { active: pointInBox(game.mouseX, game.mouseY, back.box) });
-      drawText(ctx, Touch.active ? 'TAP A CARD' : '1 2 3 OR ARROWS + ENTER', cx + 20, 161, PALETTE.blue, { align: 'center' });
+      const keys = getItems().map((item, i) => i + 1).join(' ');
+      drawText(ctx, Touch.active ? 'TAP A CARD' : keys + ' OR ARROWS + ENTER', cx + 20, 161, PALETTE.blue, { align: 'center' });
     },
 
     drawCard(ctx, item, index) {
@@ -269,8 +270,8 @@ function makePickScreen({ title, getItems, getCurrentId, drawCardBody, onPick, o
 
       drawCardFrame(ctx, x, y, w, box.height, isSelected ? PALETTE.yellow : PALETTE.wallDark, isSelected ? PALETTE.navy : PALETTE.void);
       drawText(ctx, String(index + 1), x + 4, y + 4, isSelected ? PALETTE.yellow : PALETTE.blue);
-      drawText(ctx, item.name, ccx, y + 45, item.uiColor, { align: 'center', shadow: PALETTE.black });
-      drawText(ctx, item.tagline, ccx, y + 53, PALETTE.cyanDim, { align: 'center' });
+      drawText(ctx, item.name, ccx, y + 44, item.uiColor, { align: 'center', shadow: PALETTE.black });
+      drawText(ctx, item.tagline, ccx, y + 52, PALETTE.cyanDim, { align: 'center' });
       drawCardBody(ctx, item, x, y, w, isSelected, this.time);
 
       // Blinking arrow above the selected card.
@@ -312,18 +313,24 @@ const CharacterSelect = makePickScreen({
     ctx.drawImage(image, spriteX, y + 9, image.width * 3, image.height * 3);
 
     const stats = [['SPEED', character.speed], ['DAMAGE', character.damage], ['RANGE', character.range]];
-    stats.forEach(([label, value], i) => drawStatRow(ctx, x, y + 65 + i * 8, w, label, 'X' + value, value - 1));
+    stats.forEach(([label, value], i) => drawStatRow(ctx, x, y + 62 + i * 8, w, label, 'X' + value, value - 1));
 
     // Hearts: one icon per possible heart, filled for the ones you start with.
-    const rowY = y + 92;
-    drawText(ctx, 'HEARTS', x + 6, rowY + 1, PALETTE.blue);
+    const heartsLeft = ccx - Math.floor((character.maxHealth * 8 - 1) / 2);
     for (let i = 0; i < character.maxHealth; i++) {
       const heart = i < character.startHealth ? Sprites.heart.full : Sprites.heart.empty;
-      ctx.drawImage(heart, x + w - 6 - character.maxHealth * 8 + i * 8 + 1, rowY);
+      ctx.drawImage(heart, heartsLeft + i * 8, y + 87);
     }
 
+    // The gun this hero starts with: its picture and name.
+    const gun = getGun(character.startGun);
+    const gunWidth = gun.image.width + 3 + measureText(gun.name);
+    const gunX = ccx - Math.floor(gunWidth / 2);
+    ctx.drawImage(gun.image, gunX, y + 96);
+    drawText(ctx, gun.name, gunX + gun.image.width + 3, y + 97, gun.uiColor);
+
     // The hero's special perk, if any.
-    if (character.perk) drawText(ctx, character.perk, ccx, y + 102, PALETTE.green, { align: 'center' });
+    if (character.perk) drawText(ctx, character.perk, ccx, y + 106, PALETTE.green, { align: 'center' });
   },
 });
 
