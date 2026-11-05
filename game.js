@@ -1,11 +1,12 @@
 /* =============================================================
-   KINGDOM IDLE - GAME LOGIC                       (Stage 1)
+   KINGDOM IDLE - GAME LOGIC                       (Stage 2)
    -------------------------------------------------------------
    This file is split into numbered sections:
 
      1. CONFIGURATION   - numbers & data you can tweak
      2. GAME STATE      - everything that changes while playing
      3. PRODUCTION      - how resources are generated
+     3b. COSTS & ACTIONS - building and upgrading
      4. GAME LOOP       - time-based updates
      5. NUMBER FORMAT   - turning 12345 into "12.3K"
      6. PIXEL ICONS     - tiny hand-made pixel art for the UI
@@ -31,24 +32,59 @@ const RESOURCES = [
 
 // Building types. Rates are written PER MINUTE because that is how the
 // design document describes them; the code converts to per second.
-// Stage 2 will add costs, the Quarry, the Market and upgrading.
+//
+//   startingCount   - how many you own in a brand-new game
+//   buildCost       - price of your first newly built copy
+//   upgradeBaseCost - price of the FIRST upgrade (level 1 -> 2)
 const BUILDING_TYPES = {
   farm: {
     name: "Farm",
     produces: "food",
     baseRatePerMinute: 10,
     description: "Golden wheat for hungry citizens.",
+    startingCount: 1,
+    buildCost: { wood: 50 },
+    upgradeBaseCost: { wood: 60 },
   },
   lumberMill: {
     name: "Lumber Mill",
     produces: "wood",
     baseRatePerMinute: 8,
     description: "Saws timber from the nearby forest.",
+    startingCount: 1,
+    buildCost: { food: 50 },
+    upgradeBaseCost: { food: 60 },
+  },
+  quarry: {
+    name: "Quarry",
+    produces: "stone",
+    baseRatePerMinute: 5,
+    description: "Cuts sturdy stone from the hillside.",
+    startingCount: 0,
+    buildCost: { wood: 100 },
+    upgradeBaseCost: { wood: 120, food: 40 },
+  },
+  market: {
+    name: "Market",
+    produces: "gold",
+    baseRatePerMinute: 2,
+    description: "Merchants trade goods for gold.",
+    startingCount: 0,
+    buildCost: { wood: 100, stone: 50 },
+    upgradeBaseCost: { wood: 120, stone: 60 },
   },
 };
 
-// Each building level adds +15% production (used fully in Stage 2).
+// Each building level adds +15% production (compounding:
+// level 2 = 115%, level 3 = 132%, level 4 = 152% ...).
 const LEVEL_PRODUCTION_BONUS = 0.15;
+
+// Each upgrade costs 25% more than the previous one.
+const UPGRADE_COST_GROWTH = 1.25;
+
+// Each extra copy of a building also costs 25% more than the last one,
+// so you can't just spam the cheapest building forever.
+const BUILD_COST_GROWTH = 1.25;
 
 // Taxes: every citizen pays a tiny bit of gold per minute.
 // This gives gold a trickle of income before Markets exist.
@@ -76,15 +112,24 @@ function createNewGameState() {
     version: 1,                                  // helps future save upgrades
     resources: { ...STARTING_RESOURCES },        // copy, don't share
     population: STARTING_POPULATION,
-    buildings: {
-      // count = how many of this building you own
-      // level = upgrade level (shared by all buildings of that type)
-      farm:       { count: 1, level: 1 },
-      lumberMill: { count: 1, level: 1 },
-    },
+    // One entry per building type, e.g. farm: { count: 1, level: 1 }
+    //   count = how many of this building you own
+    //   level = upgrade level (shared by all buildings of that type,
+    //           so one upgrade improves every farm at once)
+    buildings: createStartingBuildings(),
     era: 1,
     lastUpdate: Date.now(),                      // real-world time in ms
   };
+}
+
+// Builds { farm: {count, level}, lumberMill: {...}, ... } from BUILDING_TYPES,
+// so adding a new building type only requires editing the config.
+function createStartingBuildings() {
+  const buildings = {};
+  for (const typeId in BUILDING_TYPES) {
+    buildings[typeId] = { count: BUILDING_TYPES[typeId].startingCount, level: 1 };
+  }
+  return buildings;
 }
 
 let state = createNewGameState();
@@ -94,17 +139,35 @@ let state = createNewGameState();
    3. PRODUCTION
    ============================================================= */
 
-// How much ONE building type produces per second, counting
-// how many you own and their level.
-function getBuildingRatePerSecond(typeId) {
+// Production per second for a building type with a given number of
+// copies and a given level. Used for current output AND for previews
+// ("what would I get with one more farm / one more level?").
+function calculateRatePerSecond(typeId, count, level) {
   const type = BUILDING_TYPES[typeId];
-  const owned = state.buildings[typeId];
-  if (!type || !owned || owned.count <= 0) return 0;
+  if (!type || count <= 0) return 0;
 
   // Level 1 = 100%, level 2 = 115%, level 3 = 132.25%, ...
-  const levelMultiplier = Math.pow(1 + LEVEL_PRODUCTION_BONUS, owned.level - 1);
-  const perMinute = type.baseRatePerMinute * owned.count * levelMultiplier;
+  const levelMultiplier = Math.pow(1 + LEVEL_PRODUCTION_BONUS, level - 1);
+  const perMinute = type.baseRatePerMinute * count * levelMultiplier;
   return perMinute / 60;
+}
+
+// How much a building type produces right now, per second.
+function getBuildingRatePerSecond(typeId) {
+  const owned = state.buildings[typeId];
+  return calculateRatePerSecond(typeId, owned.count, owned.level);
+}
+
+// Extra production per second from building ONE more copy.
+function getBuildGainPerSecond(typeId) {
+  const owned = state.buildings[typeId];
+  return calculateRatePerSecond(typeId, owned.count + 1, owned.level) - getBuildingRatePerSecond(typeId);
+}
+
+// Extra production per second from upgrading ONE level.
+function getUpgradeGainPerSecond(typeId) {
+  const owned = state.buildings[typeId];
+  return calculateRatePerSecond(typeId, owned.count, owned.level + 1) - getBuildingRatePerSecond(typeId);
 }
 
 // Adds up every source of income and returns, for example:
@@ -138,6 +201,79 @@ function applyProduction(seconds) {
 
 
 /* =============================================================
+   3b. COSTS & ACTIONS
+   -------------------------------------------------------------
+   A "cost" is an object like { wood: 100, stone: 50 }.
+   ============================================================= */
+
+// Multiplies every resource in a cost and rounds UP to whole numbers,
+// so the price shown is always exactly the price paid.
+function scaleCost(baseCost, multiplier) {
+  const cost = {};
+  for (const resourceId in baseCost) {
+    cost[resourceId] = Math.ceil(baseCost[resourceId] * multiplier);
+  }
+  return cost;
+}
+
+// Price of the next copy of a building.
+// Example (Farm): 2nd farm = 50 wood, 3rd = 63, 4th = 79 ...
+function getBuildCost(typeId) {
+  const type = BUILDING_TYPES[typeId];
+  const extraCopies = Math.max(0, state.buildings[typeId].count - type.startingCount);
+  return scaleCost(type.buildCost, Math.pow(BUILD_COST_GROWTH, extraCopies));
+}
+
+// Price of the next upgrade.
+// Example (Farm): Lv1->2 = 60 wood, Lv2->3 = 75, Lv3->4 = 94 ...
+function getUpgradeCost(typeId) {
+  const type = BUILDING_TYPES[typeId];
+  const level = state.buildings[typeId].level;
+  return scaleCost(type.upgradeBaseCost, Math.pow(UPGRADE_COST_GROWTH, level - 1));
+}
+
+// True if the player has enough of every resource in the cost.
+function canAfford(cost) {
+  for (const resourceId in cost) {
+    if (state.resources[resourceId] < cost[resourceId]) return false;
+  }
+  return true;
+}
+
+// Removes the cost from the player's resources.
+function spendResources(cost) {
+  for (const resourceId in cost) {
+    state.resources[resourceId] -= cost[resourceId];
+  }
+}
+
+// Called by the "Build" button. Returns true if it worked.
+function buildBuilding(typeId) {
+  updateGame(); // bank all production up to this exact moment first
+  const cost = getBuildCost(typeId);
+  if (!canAfford(cost)) return false;
+
+  spendResources(cost);
+  state.buildings[typeId].count += 1;
+  refreshUI();
+  return true;
+}
+
+// Called by the "Upgrade" button. You must own at least one copy.
+function upgradeBuilding(typeId) {
+  updateGame();
+  const owned = state.buildings[typeId];
+  const cost = getUpgradeCost(typeId);
+  if (owned.count <= 0 || !canAfford(cost)) return false;
+
+  spendResources(cost);
+  owned.level += 1;
+  refreshUI();
+  return true;
+}
+
+
+/* =============================================================
    4. GAME LOOP
    -------------------------------------------------------------
    KEY IDEA: we never assume a timer fires on time.
@@ -159,10 +295,16 @@ function updateGame() {
   state.lastUpdate = now;
 }
 
+// Refreshes everything on screen that shows numbers.
+function refreshUI() {
+  updateResourceBar();
+  updateBuildingPanel();
+}
+
 // Runs the logic and refreshes the numbers on screen.
 function gameTick() {
   updateGame();
-  updateResourceBar();
+  refreshUI();
 }
 
 // When the player comes back to the tab, catch up immediately
@@ -318,6 +460,30 @@ const ICON_PIXELS = {
     "oFfwoowfFo",
     "oooooooooo",
   ],
+  quarry: [ // pickaxe over a rock
+    "o.........",
+    "oSo.......",
+    ".olooo....",
+    "..ollSo...",
+    "..obolo...",
+    "...ob.o...",
+    "...oooooo.",
+    "..olllssSo",
+    ".olsssSSSo",
+    "oooooooooo",
+  ],
+  market: [ // striped market stall
+    "oooooooooo",
+    "orwrwrwrwo",
+    "orwrwrwrwo",
+    "oooooooooo",
+    ".ob....bo.",
+    ".ob....bo.",
+    "oooooooooo",
+    "obyrgdyrbo",
+    "obbbbbbbbo",
+    "oooooooooo",
+  ],
   lumberMill: [ // axe in a stump
     "....oo....",
     "...osso...",
@@ -409,32 +575,118 @@ function updateResourceBar() {
   popEl.rate.classList.add("zero");
 }
 
-// Builds the list of owned buildings on the right-hand panel.
-// Stage 1 only shows information; buttons arrive in Stage 2.
-function renderBuildingPanel() {
+// ---------- Building panel ----------
+// The cards are created ONCE. After that, updateBuildingPanel() only
+// changes their text and enables/disables buttons. Rebuilding the
+// cards 5 times a second would make buttons flicker and miss clicks.
+const buildingCardElements = {};
+
+function buildBuildingPanel() {
   const list = document.getElementById("building-list");
   list.innerHTML = "";
 
   for (const typeId in BUILDING_TYPES) {
     const type = BUILDING_TYPES[typeId];
-    const owned = state.buildings[typeId];
-    if (!owned || owned.count <= 0) continue;
-
-    const resourceName = RESOURCES.find(r => r.id === type.produces).name;
-    const perMinute = getBuildingRatePerSecond(typeId) * 60;
 
     const card = document.createElement("li");
     card.className = "building-card";
-    card.appendChild(createPixelIcon(typeId));
+    card.innerHTML =
+      `<div class="building-header">` +
+        `<div class="building-info">` +
+          `<div class="building-name">${type.name} <span class="building-count"></span></div>` +
+          `<div class="building-meta">${type.description}</div>` +
+          `<div class="building-output"></div>` +
+        `</div>` +
+      `</div>` +
+      `<div class="building-actions">` +
+        `<button class="btn btn-build">` +
+          `<span class="btn-label">Build</span>` +
+          `<span class="btn-gain"></span>` +
+          `<span class="btn-cost"></span>` +
+        `</button>` +
+        `<button class="btn btn-upgrade">` +
+          `<span class="btn-label">Upgrade</span>` +
+          `<span class="btn-gain"></span>` +
+          `<span class="btn-cost"></span>` +
+        `</button>` +
+      `</div>`;
+    card.querySelector(".building-header").prepend(createPixelIcon(typeId));
 
-    const info = document.createElement("div");
-    info.className = "building-info";
-    info.innerHTML =
-      `<div class="building-name">${type.name} &times;${owned.count}</div>` +
-      `<div class="building-meta">Level ${owned.level} &middot; ${type.description}</div>` +
-      `<div class="building-output">+${formatPerMinute(perMinute)} ${resourceName}</div>`;
-    card.appendChild(info);
+    const buildBtn = card.querySelector(".btn-build");
+    const upgradeBtn = card.querySelector(".btn-upgrade");
+    buildBtn.addEventListener("click", () => buildBuilding(typeId));
+    upgradeBtn.addEventListener("click", () => upgradeBuilding(typeId));
+
     list.appendChild(card);
+    buildingCardElements[typeId] = {
+      card,
+      count: card.querySelector(".building-count"),
+      output: card.querySelector(".building-output"),
+      buildBtn,
+      buildGain: buildBtn.querySelector(".btn-gain"),
+      buildCost: buildBtn.querySelector(".btn-cost"),
+      upgradeBtn,
+      upgradeLabel: upgradeBtn.querySelector(".btn-label"),
+      upgradeGain: upgradeBtn.querySelector(".btn-gain"),
+      upgradeCost: upgradeBtn.querySelector(".btn-cost"),
+    };
+  }
+}
+
+// Fills a cost element with small icons + amounts, e.g. [log]100 [rock]50.
+// Amounts the player can't afford yet are marked with the "short" class (red).
+function showCost(element, cost) {
+  // Only rebuild if something changed (keeps the DOM calm).
+  let key = "";
+  for (const resourceId in cost) {
+    key += resourceId + cost[resourceId] + (state.resources[resourceId] >= cost[resourceId]) + ";";
+  }
+  if (element.dataset.key === key) return;
+  element.dataset.key = key;
+
+  element.innerHTML = "";
+  for (const resourceId in cost) {
+    const part = document.createElement("span");
+    part.className = "cost-part";
+    if (state.resources[resourceId] < cost[resourceId]) part.classList.add("short");
+    part.appendChild(createPixelIcon(resourceId));
+    part.appendChild(document.createTextNode(formatNumber(cost[resourceId])));
+    element.appendChild(part);
+  }
+}
+
+// Updates every card: counts, output, costs and button states.
+function updateBuildingPanel() {
+  for (const typeId in BUILDING_TYPES) {
+    const type = BUILDING_TYPES[typeId];
+    const owned = state.buildings[typeId];
+    const el = buildingCardElements[typeId];
+    const resourceName = RESOURCES.find(r => r.id === type.produces).name;
+
+    el.card.classList.toggle("not-owned", owned.count === 0);
+    el.count.textContent = owned.count > 0 ? `×${owned.count} · Lv ${owned.level}` : "";
+    el.output.textContent = owned.count > 0
+      ? `Producing +${formatPerMinute(getBuildingRatePerSecond(typeId) * 60)} ${resourceName}`
+      : `Not built yet · makes ${formatPerMinute(type.baseRatePerMinute)} ${resourceName}`;
+
+    // Build button
+    const buildCost = getBuildCost(typeId);
+    el.buildGain.textContent = `+${formatPerMinute(getBuildGainPerSecond(typeId) * 60)}`;
+    showCost(el.buildCost, buildCost);
+    el.buildBtn.disabled = !canAfford(buildCost);
+
+    // Upgrade button (only possible once you own one)
+    const upgradeCost = getUpgradeCost(typeId);
+    if (owned.count > 0) {
+      el.upgradeLabel.textContent = "Upgrade";
+      el.upgradeGain.textContent = `+${formatPerMinute(getUpgradeGainPerSecond(typeId) * 60)}`;
+      el.upgradeBtn.disabled = !canAfford(upgradeCost);
+    } else {
+      el.upgradeLabel.textContent = "Upgrade";
+      el.upgradeGain.textContent = "build one first";
+      el.upgradeBtn.disabled = true;
+    }
+    showCost(el.upgradeCost, upgradeCost);
   }
 }
 
@@ -499,6 +751,8 @@ const VILLAGE_LAYOUT = {
   townHall:   { x: 140, y: 40 },
   farm:       { x: 22,  y: 108 },
   lumberMill: { x: 214, y: 106 },
+  quarry:     { x: 46,  y: 36 },
+  market:     { x: 152, y: 118 },
   huts: [
     { x: 100, y: 58 },
     { x: 196, y: 56 },
@@ -810,6 +1064,62 @@ function drawCampfire(ctx, x, y) {
   rect(ctx, x + 3, y - 1, 2, 3, PAL.fireLight);
 }
 
+// Quarry: a cut-stone pit in the hillside with blocks and a pickaxe.
+function drawQuarry(ctx, x, y) {
+  // Rocky hill
+  const rows = [[10, 16], [6, 24], [3, 30], [1, 34], [0, 36], [0, 36], [0, 36], [0, 36], [1, 34]];
+  rows.forEach(([o, w], i) => rect(ctx, x + o, y + i * 2, w, 2, PAL.stoneDark));
+  rows.forEach(([o, w], i) => rect(ctx, x + o + 1, y + i * 2, w - 3, 1, PAL.stone));
+  rect(ctx, x + 12, y + 1, 6, 1, PAL.stoneLight);
+  rect(ctx, x + 6, y + 4, 4, 1, PAL.stoneLight);
+  // Cut pit (stepped ledges)
+  rect(ctx, x + 9, y + 7, 18, 10, PAL.outline);
+  rect(ctx, x + 10, y + 8, 16, 3, PAL.stoneDark);
+  rect(ctx, x + 10, y + 11, 16, 2, PAL.stone);
+  rect(ctx, x + 11, y + 13, 14, 3, PAL.stoneDark);
+  rect(ctx, x + 11, y + 16, 14, 1, PAL.stone);
+  // Cut blocks stacked at the front
+  for (const [ox, oy] of [[3, 20], [9, 20], [6, 16], [26, 20]]) {
+    rect(ctx, x + ox, y + oy, 6, 4, PAL.outline);
+    rect(ctx, x + ox, y + oy, 5, 3, PAL.stoneLight);
+    rect(ctx, x + ox + 1, y + oy + 1, 3, 1, PAL.stone);
+  }
+  // Pickaxe leaning on the blocks
+  rect(ctx, x + 18, y + 18, 1, 6, PAL.trunk);
+  rect(ctx, x + 16, y + 17, 5, 1, PAL.metalDark);
+  rect(ctx, x + 15, y + 18, 1, 1, PAL.metalDark);
+  rect(ctx, x + 21, y + 18, 1, 1, PAL.metalDark);
+}
+
+// Market: a striped stall with goods on the counter.
+function drawMarket(ctx, x, y) {
+  drawShadow(ctx, x - 1, y + 20, 30);
+  // Poles
+  rect(ctx, x + 1, y + 6, 2, 15, PAL.timber);
+  rect(ctx, x + 25, y + 6, 2, 15, PAL.timber);
+  // Striped awning
+  rect(ctx, x - 1, y, 30, 8, PAL.outline);
+  for (let i = 0; i < 28; i += 4) {
+    rect(ctx, x + i, y + 1, 2, 6, PAL.barn);
+    rect(ctx, x + i + 2, y + 1, 2, 6, PAL.flowerW);
+  }
+  for (let i = 0; i < 28; i += 4) rect(ctx, x + i + 1, y + 7, 2, 2, PAL.barn); // scalloped edge
+  // Counter
+  rect(ctx, x + 1, y + 13, 26, 8, PAL.outline);
+  rect(ctx, x + 2, y + 14, 24, 6, PAL.log);
+  rect(ctx, x + 2, y + 14, 24, 1, PAL.wall);
+  // Goods: apples, bread, gold coins, cloth
+  rect(ctx, x + 4, y + 11, 4, 3, PAL.flowerR);
+  rect(ctx, x + 10, y + 11, 5, 3, PAL.thatch);
+  rect(ctx, x + 17, y + 12, 3, 2, PAL.bannerGold);
+  rect(ctx, x + 18, y + 11, 1, 1, PAL.fireLight);
+  rect(ctx, x + 21, y + 11, 4, 3, PAL.banner);
+  // Barrel and crate beside the stall
+  rect(ctx, x + 29, y + 13, 5, 7, PAL.outline);
+  rect(ctx, x + 30, y + 14, 3, 5, PAL.log);
+  rect(ctx, x + 30, y + 16, 3, 1, PAL.metalDark);
+}
+
 // Trees placed around the edges of the village.
 const TREE_SPOTS = [
   // Forest along the top
@@ -820,7 +1130,7 @@ const TREE_SPOTS = [
   { kind: "tree", x: 226, y: 20 }, { kind: "pine", x: 290, y: 30 }, { kind: "tree", x: 302, y: 50 },
   { kind: "pine", x: 276, y: 44 }, { kind: "pine", x: 296, y: 74 },
   // Left side
-  { kind: "tree", x: 2, y: 40 },  { kind: "pine", x: 14, y: 58 }, { kind: "tree", x: 30, y: 36 },
+  { kind: "tree", x: 2, y: 40 },  { kind: "pine", x: 14, y: 58 }, { kind: "tree", x: 26, y: 78 },
   // Near the lumber mill (the forest it cuts from)
   { kind: "pine", x: 280, y: 108 }, { kind: "tree", x: 296, y: 118 },
   // Bottom edge
@@ -845,6 +1155,12 @@ function drawVillage() {
   }
   if (state.buildings.lumberMill.count > 0) {
     objects.push({ bottom: L.lumberMill.y + 34, draw: () => drawLumberMill(ctx, L.lumberMill.x, L.lumberMill.y) });
+  }
+  if (state.buildings.quarry.count > 0) {
+    objects.push({ bottom: L.quarry.y + 24, draw: () => drawQuarry(ctx, L.quarry.x, L.quarry.y) });
+  }
+  if (state.buildings.market.count > 0) {
+    objects.push({ bottom: L.market.y + 21, draw: () => drawMarket(ctx, L.market.x, L.market.y) });
   }
   for (const hut of L.huts) {
     objects.push({ bottom: hut.y + 17, draw: () => drawHut(ctx, hut.x, hut.y) });
@@ -901,7 +1217,7 @@ function initGame() {
 
   // Build the interface
   buildResourceBar();
-  renderBuildingPanel();
+  buildBuildingPanel();
   setupNavigation();
   resizeVillageCanvas();
   window.addEventListener("resize", resizeVillageCanvas);

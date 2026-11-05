@@ -237,14 +237,25 @@ button {
 
 .building-card {
   display: flex;
-  gap: 10px;
-  align-items: center;
+  flex-direction: column;
+  gap: 6px;
   background: var(--text-light);
   border: 2px solid var(--wood-dark);
-  padding: 6px 8px;
+  padding: 6px 8px 8px;
 }
 
-.building-card .pixel-icon {
+/* Buildings you don't own yet look a little faded */
+.building-card.not-owned .building-header {
+  opacity: 0.7;
+}
+
+.building-header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.building-header .pixel-icon {
   width: 32px;
   height: 32px;
 }
@@ -259,6 +270,11 @@ button {
   color: var(--ink);
 }
 
+.building-count {
+  font-size: 18px;
+  color: var(--gold-dark);
+}
+
 .building-meta {
   font-size: 17px;
   color: var(--wood);
@@ -267,6 +283,95 @@ button {
 .building-output {
   font-size: 18px;
   color: var(--grass-dark);
+}
+
+/* ---------- Build / Upgrade buttons ---------- */
+.building-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-height: 44px;          /* comfortable to tap on phones */
+  padding: 4px 4px 6px;
+  font-size: 17px;
+  color: var(--text-light);
+  background: var(--grass-dark);
+  border: 2px solid var(--ink);
+  box-shadow: inset 0 -3px 0 #2c4d1e;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--grass);
+}
+
+.btn:active:not(:disabled) {
+  box-shadow: inset 0 3px 0 #2c4d1e;   /* "pressed" look */
+}
+
+.btn-upgrade {
+  background: var(--wood);
+  box-shadow: inset 0 -3px 0 var(--wood-dark);
+}
+
+.btn-upgrade:hover:not(:disabled) {
+  background: var(--wood-light);
+}
+
+.btn-upgrade:active:not(:disabled) {
+  box-shadow: inset 0 3px 0 var(--wood-dark);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  color: var(--stone-dark);
+  background: var(--parchment-dk);
+  box-shadow: inset 0 -3px 0 var(--stone);
+}
+
+.btn-label {
+  font-size: 18px;
+}
+
+.btn-gain {
+  font-size: 15px;
+  color: var(--positive);
+}
+
+.btn:disabled .btn-gain {
+  color: var(--wood);
+}
+
+.btn-cost {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 8px;
+}
+
+.cost-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.cost-part .pixel-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* Amounts you can't afford yet */
+.cost-part.short {
+  color: #c8442f;
+}
+
+.btn:not(:disabled) .cost-part {
+  color: var(--text-light);
 }
 
 .placeholder {
