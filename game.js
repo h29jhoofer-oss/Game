@@ -1,5 +1,5 @@
 /* =============================================================
-   KINGDOM IDLE - GAME LOGIC                       (Stage 3)
+   KINGDOM IDLE - GAME LOGIC                       (Stage 4)
    -------------------------------------------------------------
    This file is split into numbered sections:
 
@@ -960,128 +960,191 @@ function setupSaveControls() {
 
 
 /* =============================================================
-   8. VILLAGE DRAWING
+   8. VILLAGE DRAWING                                  (Stage 4)
    -------------------------------------------------------------
-   The village is painted on a small 480x270 canvas. CSS then
+   The village is painted on a small 480x270 canvas, then CSS
    scales it up with nearest-neighbor ("pixelated") scaling so
    every pixel stays sharp.
 
-   HOW THE 3D LOOK WORKS
-   We use a "3/4 view" like many classic pixel-art games:
-     * Every building is a BOX. We draw its front wall (facing
-       you), its right-hand side wall (darker, because the sun
-       shines from the upper-left) and a pitched roof on top.
-     * Shadows fall to the lower-right on the ground.
-     * Objects are sorted by where they touch the ground: things
-       further back are drawn first, so nearer things cover them.
-     * The keep stands on a raised hill with a cliff face, and
-       far-away things (mountains, forest) are bluer and darker.
+   HOW THE 3D LOOK WORKS - "ISOMETRIC" VIEW
+   The ground is a grid of diamond-shaped tiles (VILLAGE_MAP).
+   The function iso(tx, ty, z) turns a grid position plus a
+   height (z, in pixels) into a screen position:
+       moving +1 in tx  ->  10 px right, 5 px down
+       moving +1 in ty  ->  10 px left,  5 px down
+       moving +1 in z   ->  1 px up
+   Every building is a box: we see its LEFT wall (sunlit), its
+   RIGHT wall (in shade) and its roof. Tiles have heights too,
+   so hills and cliffs show their rocky sides, and the whole
+   village sits on a thick floating island.
 
-   The picture only changes when you build something, so we
-   paint it once and keep it until something changes. Moving
-   animations arrive in Stage 4.
+   Things further back are drawn first and nearer things later
+   (the "painter's algorithm"), so nearer objects cover farther
+   ones - even moving workers walking behind houses.
+
+   WHAT IS CACHED
+   Drawing thousands of pixels 30 times a second would be slow,
+   so the ground and every building are painted ONCE into small
+   hidden canvases ("sprites") and simply copied each frame.
+   Only animated things (workers, smoke, flags, water, crops,
+   day/night lighting) are drawn fresh every frame.
    ============================================================= */
 
+// ---------- Settings you can tweak ----------
 const VIEW_WIDTH = 480;
 const VIEW_HEIGHT = 270;
+const TILE_W = 20;                   // width of one ground tile on screen
+const TILE_H = 10;                   // height of one ground tile on screen
+const MAP_SIZE = 20;                 // the map is 20 x 20 tiles
+const LEVEL_HEIGHT = 6;              // pixels per terrain height level
+const ISLAND_DEPTH = 24;             // thickness of the floating island
+const ORIGIN_X = 240;                // screen position of the map's back corner
+const ORIGIN_Y = 42;
+const DAY_LENGTH_SECONDS = 480;      // one full day + night = 8 minutes
+const CROP_CYCLE_SECONDS = 120;      // how long crops take to grow and be harvested
+const FRAME_INTERVAL_MS = 1000 / 30; // redraw at most 30 times per second
+const MAX_WORKERS = 16;
 
 const PAL = {
   outline: "#2b1d14",
-  // Sky and distance
-  sky1: "#4a8fd0", sky2: "#5a9fda", sky3: "#6cafe2", sky4: "#80bfe9", sky5: "#97cfef", sky6: "#b2ddf3",
-  cloud: "#ffffff", cloudShade: "#d3e2ef",
-  mountFar: "#8a9ab5", mountFarDark: "#6c7c99", snow: "#f1f5fa", snowShade: "#c6d3e3",
-  hill: "#6b8a72", hillDark: "#56735d",
-  forestBack: "#2e5640", forestBackLight: "#3d6a50",
-  forestFront: "#2a5a33", forestFrontLight: "#3c7444",
-  // Ground
-  grass: "#5d9640", grassHigh: "#67a446", grassDark: "#4d8236", grassLight: "#72ab4e", grassDeep: "#3d6b2b", grassFar: "#548b3e",
+  // Sky (day / dusk / night versions are blended over time)
+  daySky:   ["#3f86cc", "#4f95d6", "#62a6df", "#78b7e7", "#90c8ee", "#aad7f3"],
+  duskSky:  ["#3b4f93", "#6a5ca0", "#a86a9a", "#e08a7a", "#f2a86a", "#f8c878"],
+  nightSky: ["#0b1230", "#101a3e", "#16234c", "#1d2d5a", "#263a68", "#304676"],
+  sun: "#fff3b0", sunGlow: "#ffe27a", moon: "#eef2ff", moonShade: "#c9d0ea", star: "#ffffff",
+  cloud: "#ffffff", cloudShade: "#d5e2f0", cloudDeep: "#b9c9df",
+  mountFar: "#8d9cc0", mountFarDark: "#7584ab", mountNear: "#7a8fae", mountNearDark: "#64789a",
+  snow: "#f1f5fa", snowShade: "#c6d3e3",
+  // Ground tops
+  grass: "#5d9640", grassAlt: "#629b44", grassDark: "#4d8236", grassLight: "#76b052",
+  grassDeep: "#3d6b2b", forestFloor: "#4f8538",
   flowerY: "#f2d04e", flowerW: "#f6ead0", flowerR: "#d8604a", flowerP: "#b688dc",
   dirt: "#a07a4a", dirtDark: "#7f5d36", dirtLight: "#b98f58",
-  cobble: "#a29c8e", cobbleLight: "#bdb7a8", cobbleDark: "#8a8478", cobbleGap: "#615c52", curb: "#4a463e",
-  water: "#3f86c0", waterLight: "#8cc6ec", waterDark: "#2d6597", bank: "#6b5a3a",
-  cliff: "#8a6b4a", cliffDark: "#6b5036", cliffLight: "#a5845e", cliffDeep: "#4a3626",
+  sand: "#d8c08a", sandDark: "#bca46e",
+  cobble: "#a29c8e", cobbleLight: "#bdb7a8", cobbleDark: "#858074", cobbleGap: "#66615a",
+  water: "#3f86c0", waterLight: "#9fd2f2", waterDark: "#2d6597", foam: "#e8f6ff",
+  rock: "#a19d92", rockLight: "#c3bfb3", rockDark: "#7b776d", rockDeep: "#5a574f",
+  // Island sides (lit left side / shaded right side)
+  soilL: "#8d6542", soilDarkL: "#70502f", deepRockL: "#6c645a",
+  soilR: "#6f4e30", soilDarkR: "#573c22", deepRockR: "#4f4941",
   // Buildings
-  plaster: "#ebdfc4", plasterShade: "#c7b592", plasterDeep: "#a8977a",
-  timber: "#4f3220",
+  plaster: "#ece0c4", plasterShade: "#c5b391", timber: "#4f3220",
   wood: "#8a5a32", woodDark: "#5f3d22", woodLight: "#a87443", woodDeep: "#46301c",
-  stone: "#a6a296", stoneDark: "#7a766c", stoneLight: "#c8c4b7", stoneDeep: "#57544c",
-  roofRed: "#a8482e", roofRedDark: "#7a311f", roofRedLight: "#c9623f",
-  thatch: "#d2a64a", thatchDark: "#9f7a2c", thatchLight: "#ecc76b",
-  slate: "#3f7d6e", slateDark: "#2b5a4f", slateLight: "#5ea592",
-  blueRoof: "#4a5f86", blueRoofDark: "#34445f", blueRoofLight: "#6a80a8",
-  barn: "#b23c2a", barnDark: "#80271a", barnDeep: "#5e1b12",
-  glass: "#f2d48a", door: "#4a2f1d",
+  stone: "#aaa699", stoneDark: "#7d796f", stoneLight: "#cbc7ba", stoneDeep: "#5a574f",
+  roofRed: "#b04a2e", roofRedDark: "#7c321f", roofRedLight: "#d06a44",
+  thatch: "#d6a94c", thatchDark: "#a07a2c", thatchLight: "#f0cc70",
+  slate: "#3f8070", slateDark: "#2b5a4f", slateLight: "#62a894",
+  blueRoof: "#4b6290", blueRoofDark: "#34466a", blueRoofLight: "#6c84b2",
+  barn: "#b43c2a", barnDark: "#82281a", barnLight: "#cf5a40",
+  glass: "#f6d886", door: "#4a2f1d",
   banner: "#3a5fa8", bannerDark: "#26407a", gold: "#f2c14e", goldDark: "#b8862b",
   metal: "#c4c4cc", metalDark: "#7a7a84",
-  cloth: "#efe6d2", red: "#c8442f", blue: "#3a6fb5", green: "#4f9a4a", yellow: "#e8b83a", purple: "#8a5aa8",
+  cloth: "#f1e8d4", red: "#c8442f", blue: "#3a6fb5", green: "#4f9a4a", purple: "#8a5aa8",
   // Nature
   leaf: "#4a8a3a", leafDark: "#336a2b", leafDeep: "#24501f", leafLight: "#6aaa4a", leafBright: "#93cd62",
   pine: "#2f6a42", pineDark: "#1f4d30", pineLight: "#4a8a56",
   trunk: "#5c3a21", trunkDark: "#3f2716",
   soil: "#6b4a2a", soilDark: "#4f351d", soilLight: "#86603a",
-  wheat: "#d9a441", wheatLight: "#f0cf6a", crop: "#5fa04a", cropDark: "#3f7a34",
+  wheat: "#d9a441", wheatLight: "#f0cf6a", sprout: "#7fbf4f", crop: "#5fa04a", cropDark: "#3f7a34",
   pumpkin: "#e07a2a", cabbage: "#9ad372",
   logEnd: "#e0b77a", logRing: "#b98a4e",
+  skin: "#e8b796", skinDark: "#c98f6c",
+  fire: "#f08a2a", fireLight: "#ffd860",
 };
 
-// Semi-transparent so it darkens whatever ground is underneath.
-const SHADOW = "rgba(16, 32, 8, 0.33)";
+// Semi-transparent shadow so it darkens whatever is underneath.
+const SHADOW = "rgba(16, 32, 8, 0.32)";
 
-// Where things go. (x, y) is usually the bottom-left corner of the
-// front wall, where it meets the ground. Change numbers to move things.
+
+// ---------- The map ----------
+// One letter per tile. Row = ty (0 at the back), column = tx.
+// On screen, rows run down-left and columns run down-right.
+//   G grass   F forest   H castle hill   m/M mountain   q/Q quarry hill
+//   W water   B bridge   S sand   R road   P plaza   T stairs
+const VILLAGE_MAP = [
+  "MMMmmFFFFFFqQQqFFFFF",
+  "MMmmFFGGGGGqQQqGFFFF",
+  "MmmFGGGGGGGGqqGGGFFF",
+  "mmFGGGGGGGGGGGGGGGFF",
+  "mWGGHHHHHHGGGGGGGGFF",
+  "FWGGHHHHHHGGGGGGGGGF",
+  "FWGGHHHHHHGGGGGGGGGF",
+  "FWGGHHHHHHGGGGGGGGGF",
+  "FWGGHHHHHHGGGGGGGGFF",
+  "FWGGHHHHHHGGGGGGGGFF",
+  "FWSGGGGTTGGGGGGRGGGF",
+  "GWSGGGGRRPPPPGGRGGGF",
+  "RBRRRRRRRPPPPRRRGGGF",
+  "GWSGGGGGGPPPPGGGGGGG",
+  "GWSGGGGGGGRRGGGGGGGG",
+  "GWSGGGGGGGRRGGGGGGGF",
+  "GWWSGGGGGGRRGGGGGGFF",
+  "GGWSGGGGGGRRGGGGGFFF",
+  "GGWWSGGGGGRRGGGGFFFF",
+  "GGGWSGGGGGRRGGGFFFFF",
+];
+
+// What each letter means: the kind of ground and its height level.
+const TILE_TYPES = {
+  G: { kind: "grass",  level: 0 },
+  F: { kind: "forest", level: 0 },
+  H: { kind: "grass",  level: 2 },
+  m: { kind: "rock",   level: 3 },
+  M: { kind: "snow",   level: 4 },
+  q: { kind: "rock",   level: 2 },
+  Q: { kind: "rock",   level: 3 },
+  W: { kind: "water",  level: -0.5 },
+  B: { kind: "water",  level: -0.5 },
+  S: { kind: "sand",   level: 0 },
+  R: { kind: "road",   level: 0 },
+  T: { kind: "road",   level: 0 },
+  P: { kind: "plaza",  level: 0 },
+};
+
+// Where buildings stand (in tiles). Fields appear one per farm.
 const VILLAGE_LAYOUT = {
-  townHall:     { x: 214, y: 108 },
-  barn:         { x: 14,  y: 236 },
-  farmFields:   [{ x: 66, y: 198 }, { x: 126, y: 198 }, { x: 66, y: 234 }, { x: 126, y: 234 }],
-  lumberMill:   { x: 366, y: 228 },
-  quarry:       { x: 350, y: 128 },
-  marketStalls: [{ x: 192, y: 178 }, { x: 272, y: 178 }, { x: 194, y: 206 }, { x: 270, y: 206 }],
-  huts:         [{ x: 128, y: 154 }, { x: 324, y: 158 }, { x: 184, y: 256 }],
-  well:         { x: 238, y: 192 },
+  barn:        { x: 3, y: 13 },
+  farmFields:  [{ x: 6, y: 13, w: 3, d: 3 }, { x: 4, y: 16, w: 3, d: 2 }, { x: 7, y: 16, w: 3, d: 3 }, { x: 5, y: 18, w: 2, d: 2 }],
+  lumberMill:  { x: 15, y: 8 },
+  marketStalls: [{ x: 9, y: 11 }, { x: 12, y: 11 }, { x: 9, y: 13 }, { x: 12, y: 13 }],
+  huts:        [{ x: 12, y: 7 }, { x: 13, y: 13 }, { x: 12, y: 15 }],
+  quarryCut:   [[12, 1], [13, 1], [12, 2], [13, 2]],   // tiles dug out when a quarry is built
 };
 
-// Crops grown in each farm field (one field appears per farm, up to 4).
 const FIELD_CROPS = ["wheat", "cabbage", "pumpkin", "wheat"];
+const STALL_COLORS = [PAL.red, PAL.blue, PAL.green, PAL.purple];
 
-// The raised hill the keep stands on.
-const PLATEAU_TOP = [[172, 82], [306, 80], [326, 92], [320, 116], [176, 118], [162, 100]];
-const PLATEAU_FRONT = [[162, 100], [176, 118], [320, 116], [326, 92]]; // edges facing you
-const CLIFF_HEIGHT = 18;
-
-// Cobblestone roads (each is a polygon: a list of [x, y] corners).
-const ROADS = [
-  [[234, 102], [254, 102], [254, 118], [234, 118]],                          // in front of the keep
-  [[234, 134], [254, 134], [254, 152], [234, 152]],                          // below the stairs
-  [[200, 150], [288, 150], [310, 164], [310, 196], [288, 212], [200, 212], [178, 196], [178, 164]], // plaza
-  [[234, 210], [254, 210], [258, 270], [230, 270]],                          // south road
-  [[30, 170], [180, 168], [180, 190], [30, 192]],                            // west road
-  [[308, 168], [432, 170], [432, 190], [308, 190]],                          // east road
+// Paths the little workers walk along: [tx, ty, z] points.
+// "needs" = only used once that building exists. "loop" = walk in a circle.
+const WORKER_ROUTES = [
+  { needs: null,         carry: null,    points: [[9.3, 12.5, 0], [0.3, 12.5, 0]] },
+  { needs: null,         carry: "sack",  points: [[11, 13.8, 0], [11, 19.6, 0]] },
+  { needs: null,         carry: null,    loop: true, points: [[9.4, 11.5, 0], [12.6, 11.5, 0], [12.6, 13.6, 0], [9.4, 13.6, 0]] },
+  { needs: null,         carry: null,    points: [[9.2, 11.6, 0], [7.8, 11.6, 0], [7.8, 11.25, 0], [7.8, 10.05, 12], [7.8, 9.5, 12]] },
+  { needs: "farm",       carry: "wheat", points: [[6.3, 14.5, 0], [8.8, 14.5, 0]] },
+  { needs: "farm",       carry: "wheat", points: [[4.6, 15.3, 0], [2.6, 15.3, 0], [2.6, 12.7, 0]] },
+  { needs: "lumberMill", carry: "log",   points: [[12.8, 12.5, 0], [15.5, 12.5, 0], [15.5, 10.2, 0]] },
+  { needs: "lumberMill", carry: "log",   points: [[14.2, 10.5, 0], [18.2, 10.5, 0]] },
+  { needs: "quarry",     carry: "stone", points: [[11.4, 4.3, 0], [14.6, 4.3, 0], [14.6, 6.5, 0]] },
+  { needs: "market",     carry: "crate", points: [[9.6, 12.3, 0], [12.5, 12.6, 0]] },
 ];
+const SHIRT_COLORS = ["#3a6fb5", "#c8442f", "#4f9a4a", "#8a5aa8", "#d9a441", "#e07a2a", "#5c8a9a"];
+const HAIR_COLORS = ["#4a2f1d", "#2b1d14", "#a8642a", "#d9b25a", "#6b4528"];
 
-// Trees, bushes and props: [kind, x, y, size]
-const SCENERY = [
-  // West grove
-  ["tree", 16, 100, 8], ["pine", 36, 114, 8], ["tree", 60, 96, 9], ["tree", 24, 140, 9],
-  ["pine", 82, 108, 7], ["tree", 54, 134, 8], ["bush", 94, 130, 4], ["tree", 150, 108, 7],
-  ["pine", 6, 164, 7], ["bush", 140, 124, 3],
-  // Behind the hill
-  ["pine", 158, 88, 7], ["tree", 338, 98, 8],
-  // East forest beside the quarry and the lumber mill
-  ["pine", 458, 102, 8], ["tree", 472, 126, 9], ["pine", 450, 150, 8], ["tree", 468, 172, 9],
-  ["pine", 458, 204, 8], ["tree", 474, 230, 9], ["pine", 446, 256, 8], ["tree", 468, 268, 9],
-  // South-east meadow
-  ["tree", 302, 246, 9], ["pine", 328, 266, 7], ["bush", 286, 228, 4], ["tree", 352, 260, 8],
-  // South-west corner
-  ["bush", 8, 252, 4], ["tree", 12, 270, 8], ["bush", 214, 240, 3],
-  // Plaza props
-  ["lamp", 186, 160], ["lamp", 302, 160], ["lamp", 186, 210], ["lamp", 302, 210],
-  ["barrel", 216, 186], ["barrel", 220, 188], ["crate", 296, 190], ["crate", 262, 160],
-];
 
+// ---------- Scene state ----------
 let villageCanvas, villageCtx;
-let backdropCanvas;          // sky, hills, river, roads: painted once
-let villageNeedsRedraw = true;
+let villageNeedsRedraw = true;   // true = rebuild cached art (e.g. after building)
+let tiles = null;                // the tile map with heights
+let terrainCanvas = null;        // cached ground
+let backgroundCanvas = null;     // cached distant mountains + cloud sea
+let islandMask = null;           // island shape, used for cloud shadows
+let shadowLayer = null;          // scratch canvas for cloud shadows
+let skyCache = { key: -1, canvas: null };
+let sceneObjects = [];           // cached buildings, trees, props
+let fx = null;                   // lights, chimneys, flags... found while drawing
+let smokePuffs = [];
+let lastFrameMs = 0;
 
 // Call this whenever something visible changes (e.g. a new building).
 function markVillageDirty() {
@@ -1091,14 +1154,12 @@ function markVillageDirty() {
 
 // ---------- Basic drawing tools ----------
 
-// Fill a rectangle. Coordinates are rounded so pixels stay crisp.
 function rect(ctx, x, y, w, h, color) {
   ctx.fillStyle = color;
   ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
 }
 
-// Fill any polygon one pixel-row at a time. This gives hard pixel
-// edges instead of the blurry anti-aliased edges of ctx.fill().
+// Fill any polygon one pixel-row at a time, for hard pixel edges.
 function fillPoly(ctx, points, color) {
   ctx.fillStyle = color;
   const ys = points.map(p => p[1]);
@@ -1123,7 +1184,6 @@ function fillPoly(ctx, points, color) {
   }
 }
 
-// Fill an oval, row by row (crisp pixel edges).
 function fillEllipse(ctx, cx, cy, rx, ry, color) {
   ctx.fillStyle = color;
   const rows = Math.max(1, Math.round(ry));
@@ -1134,19 +1194,40 @@ function fillEllipse(ctx, cx, cy, rx, ry, color) {
   }
 }
 
-// Is the point (px, py) inside the polygon?
-function pointInPoly(px, py, points) {
-  let inside = false;
-  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-    const [xi, yi] = points[i];
-    const [xj, yj] = points[j];
-    if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+// A 1-pixel line with no blur (Bresenham's line algorithm).
+function drawLine(ctx, x0, y0, x1, y1, color) {
+  ctx.fillStyle = color;
+  x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+  const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  for (let guard = 0; guard < 2000; guard++) {
+    ctx.fillRect(x0, y0, 1, 1);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
   }
-  return inside;
 }
 
-// A tiny "random" number generator that always gives the same sequence
-// for the same seed, so the village looks the same every time.
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function lerpPoint(p, q, t) {
+  return [lerp(p[0], q[0], t), lerp(p[1], q[1], t)];
+}
+
+// Blend two "#rrggbb" colors.
+function lerpColor(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const r = Math.round(lerp(pa >> 16, pb >> 16, t));
+  const g = Math.round(lerp((pa >> 8) & 255, (pb >> 8) & 255, t));
+  const bl = Math.round(lerp(pa & 255, pb & 255, t));
+  return "#" + ((1 << 24) | (r << 16) | (g << 8) | bl).toString(16).slice(1);
+}
+
+// Repeatable "random" numbers: same seed, same village every time.
 function makeRandom(seed) {
   return function () {
     seed = (seed * 1664525 + 1013904223) % 4294967296;
@@ -1154,662 +1235,716 @@ function makeRandom(seed) {
   };
 }
 
-
-// ---------- 3D building blocks ----------
-
-// How far "back" an object reaches on screen. Depth goes up and to the
-// right at 45 degrees, at half scale (depth 12 -> 6 px right, 6 px up).
-function depthOffset(d) {
-  return Math.round(d / 2);
+// Grid position (+ height in pixels) -> screen position.
+function iso(tx, ty, z = 0) {
+  return [ORIGIN_X + (tx - ty) * (TILE_W / 2), ORIGIN_Y + (tx + ty) * (TILE_H / 2) - z];
 }
 
-// Shadow on the ground, falling to the lower-right of a box.
-function drawGroundShadow(ctx, x, y, w, d) {
-  const k = depthOffset(d);
-  fillPoly(ctx, [
-    [x + 1, y], [x + w, y], [x + w + k, y - k], [x + w + k + 8, y - k + 3],
-    [x + w + 8, y + 4], [x + 3, y + 4],
-  ], SHADOW);
+// A hidden canvas holding a pre-drawn picture. `bounds` is the area
+// (in screen pixels) the drawing covers.
+function makeSprite(bounds, drawFn) {
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.ceil(bounds.w));
+  canvas.height = Math.max(1, Math.ceil(bounds.h));
+  const ctx = canvas.getContext("2d");
+  ctx.translate(-Math.floor(bounds.x), -Math.floor(bounds.y));
+  drawFn(ctx);
+  return { canvas, x: Math.floor(bounds.x), y: Math.floor(bounds.y) };
 }
 
-// A plain box: front face, right side face and top face.
-// (x, y) = bottom-left corner of the front face, on the ground.
-function drawBox(ctx, x, y, w, h, d, front, side, top) {
-  const k = depthOffset(d);
-  fillPoly(ctx, [[x + w, y], [x + w + k, y - k], [x + w + k, y - h - k], [x + w, y - h]], side);
-  fillPoly(ctx, [[x, y - h], [x + w, y - h], [x + w + k, y - h - k], [x + k, y - h - k]], top);
-  rect(ctx, x, y - h, w, h, front);
-}
-
-// A building: box walls plus a pitched roof whose ridge runs left-right.
-//   o.w, o.h, o.d   width, wall height, depth
-//   o.roofH         how tall the roof is
-//   o.wall / o.wallShade / o.side / o.sideDark   wall colors
-//   o.roof / o.roofDark / o.roofLight / o.roofStyle   roof look
-//   o.front(ctx, x, top, w, h)   draws doors/windows on the front wall
-//   o.chimney       true to add a stone chimney
-function drawBuildingBox(ctx, x, y, o) {
-  const w = o.w;
-  const top = y - o.h;                       // top edge of the front wall
-  const k = depthOffset(o.d);
-  const half = Math.round(k / 2);            // the ridge sits halfway back
-  const ridgeY = top - o.roofH - half;
-  const eaveY = top + 2;                     // roof overhangs the wall a bit
-
-  drawGroundShadow(ctx, x, y, w, o.d);
-
-  // Walls
-  fillPoly(ctx, [[x + w, y], [x + w + k, y - k], [x + w + k, top - k], [x + w, top]], o.side);
-  rect(ctx, x, top, w, o.h, o.wall);
-  if (o.front) o.front(ctx, x, top, w, o.h);
-  rect(ctx, x, eaveY, w, 1, o.wallShade);    // shadow under the roof edge
-  rect(ctx, x, y - 1, w, 1, o.wallShade);    // dark line where wall meets ground
-
-  // Roof: back slope (its edge peeks out on the right), side gable, front slope
-  fillPoly(ctx, [[x - 1 + half, ridgeY], [x + w + 1 + half, ridgeY], [x + w + 1 + k, top - k + 1], [x - 1 + k, top - k + 1]], o.roofDark);
-  fillPoly(ctx, [[x + w, top + 1], [x + w + k, top - k + 1], [x + w + half, ridgeY + 1]], o.sideDark);
-  fillPoly(ctx, [[x - 2, eaveY], [x + w + 2, eaveY], [x + w + 1 + half, ridgeY], [x - 1 + half, ridgeY]], o.roof);
-  paintRoofTexture(ctx, o, x, w, eaveY, ridgeY, half);
-
-  if (o.chimney) {
-    const cx = x + Math.round(w * 0.68) + half;
-    drawBox(ctx, cx, ridgeY + 5, 4, 10, 4, PAL.stone, PAL.stoneDark, PAL.stoneLight);
-    rect(ctx, cx, ridgeY - 5, 6, 1, PAL.stoneDeep);
-  }
-}
-
-// Shingle lines or thatch straw on the front roof slope.
-function paintRoofTexture(ctx, o, x, w, eaveY, ridgeY, half) {
-  const height = eaveY - ridgeY;
-  for (let yy = ridgeY; yy < eaveY; yy++) {
-    const t = (eaveY - yy) / height;                    // 0 at the eave, 1 at the ridge
-    const left = Math.round(x - 2 + t * (half + 1));
-    const right = Math.round(x + w + 2 + t * (half - 1));
-    const row = eaveY - yy;
-    rect(ctx, left, yy, 1, 1, o.roofLight);             // sunlit left edge
-    if (o.roofStyle === "thatch") {
-      for (let xx = left + 1 + (row % 3); xx < right - 1; xx += 3) {
-        rect(ctx, xx, yy, 1, 1, row % 2 ? o.roofDark : o.roofLight);
-      }
-    } else if (row % 3 === 0) {
-      rect(ctx, left + 1, yy, right - left - 1, 1, o.roofDark);
-    } else if (row % 3 === 1) {
-      const offset = (Math.floor(row / 3) % 2) * 2;
-      for (let xx = left + 2 + offset; xx < right - 1; xx += 4) rect(ctx, xx, yy, 1, 1, o.roofDark);
-    }
-  }
-  rect(ctx, x - 1 + half, ridgeY, w + 2, 1, o.roofLight);   // ridge highlight
-  rect(ctx, x - 2, eaveY - 1, w + 4, 1, o.roofDark);        // thick eave edge
-}
-
-// Stone brick pattern.
-function paintBricks(ctx, x, y, w, h, base, dark, light) {
-  rect(ctx, x, y, w, h, base);
-  for (let row = 0; row * 3 < h; row++) {
-    const yy = y + row * 3;
-    rect(ctx, x, yy + 2, w, 1, dark);
-    for (let xx = x + (row % 2) * 3; xx < x + w; xx += 6) {
-      rect(ctx, xx, yy, 1, 2, dark);
-      rect(ctx, xx + 1, yy, 2, 1, light);
-    }
-  }
-}
-
-// Dark wooden beams on a plaster wall (Tudor style).
-function paintTimberFrame(ctx, x, top, w, h) {
-  rect(ctx, x, top, 1, h, PAL.timber);
-  rect(ctx, x + w - 1, top, 1, h, PAL.timber);
-  rect(ctx, x, top + Math.floor(h / 2), w, 1, PAL.timber);
-  rect(ctx, x, top + h - 2, w, 1, PAL.timber);
-  for (let xx = x + 7; xx < x + w - 3; xx += 7) rect(ctx, xx, top, 1, h, PAL.timber);
-}
-
-function drawDoor(ctx, x, bottom, w, h) {
-  rect(ctx, x - 1, bottom - h - 1, w + 2, h + 1, PAL.timber);
-  rect(ctx, x, bottom - h, w, h, PAL.door);
-  for (let xx = x + 2; xx < x + w; xx += 2) rect(ctx, xx, bottom - h, 1, h, PAL.woodDeep);
-  rect(ctx, x + w - 2, bottom - Math.round(h / 2), 1, 1, PAL.gold);
-  rect(ctx, x - 1, bottom, w + 2, 1, PAL.stone);          // doorstep
-}
-
-function drawWindow(ctx, x, y, w, h) {
-  rect(ctx, x - 1, y - 1, w + 2, h + 2, PAL.timber);
-  rect(ctx, x, y, w, h, PAL.glass);
-  rect(ctx, x + Math.floor(w / 2), y, 1, h, PAL.timber);
-  rect(ctx, x, y + Math.floor(h / 2), w, 1, PAL.timber);
-  rect(ctx, x - 1, y + h + 1, w + 2, 1, PAL.woodLight);   // sill
-}
-
-
-// ---------- Backdrop (painted once) ----------
-
-function paintBackdrop() {
-  backdropCanvas = document.createElement("canvas");
-  backdropCanvas.width = VIEW_WIDTH;
-  backdropCanvas.height = VIEW_HEIGHT;
-  const g = backdropCanvas.getContext("2d");
-  const random = makeRandom(42);
-
-  paintSky(g);
-  paintMountains(g);
-  paintGrass(g, random);
-  paintForest(g, random);
-  paintRiver(g, random);
-  paintDirtPaths(g);
-  paintPlateau(g, random);
-  for (const road of ROADS) paintCobbles(g, road, random);
-  paintStairs(g);
-}
-
-function paintSky(g) {
-  // Flat color bands with a checkerboard "dither" between them:
-  // the pixel-art way to make a smooth-looking sky without gradients.
-  const bands = [PAL.sky1, PAL.sky2, PAL.sky3, PAL.sky4, PAL.sky5, PAL.sky6];
-  const bandHeight = 10;
-  bands.forEach((color, i) => rect(g, 0, i * bandHeight, VIEW_WIDTH, bandHeight, color));
-  for (let i = 1; i < bands.length; i++) {
-    const y = i * bandHeight - 1;
-    for (let x = 0; x < VIEW_WIDTH; x += 2) rect(g, x + (i % 2), y, 1, 1, bands[i]);
-    for (let x = 1; x < VIEW_WIDTH; x += 2) rect(g, x - (i % 2), y + 1, 1, 1, bands[i - 1]);
-  }
-  drawCloud(g, 50, 14, 10);
-  drawCloud(g, 168, 8, 7);
-  drawCloud(g, 342, 15, 12);
-  drawCloud(g, 444, 7, 7);
-}
-
-function drawCloud(g, x, y, s) {
-  fillEllipse(g, x + s * 0.5, y + 2, s * 1.9, s * 0.45, PAL.cloudShade);
-  fillEllipse(g, x - s * 0.5, y, s * 0.9, s * 0.55, PAL.cloud);
-  fillEllipse(g, x + s * 0.4, y - s * 0.35, s, s * 0.75, PAL.cloud);
-  fillEllipse(g, x + s * 1.4, y, s * 0.8, s * 0.5, PAL.cloud);
-  rect(g, x - s * 1.2, y + 1, s * 3.2, 1, PAL.cloudShade);
-}
-
-function paintMountains(g) {
-  const baseY = 60;
-  // [peak x, peak y, half width]
-  const peaks = [[28, 26, 42], [96, 34, 36], [156, 20, 48], [232, 30, 40], [304, 18, 52], [384, 28, 44], [452, 22, 46]];
-  for (const [px, py, hw] of peaks) {
-    fillPoly(g, [[px - hw, baseY], [px, py], [px, baseY]], PAL.mountFar);        // sunny side
-    fillPoly(g, [[px, py], [px + hw, baseY], [px, baseY]], PAL.mountFarDark);    // shady side
-    if (py < 30) {                                                                // snow cap
-      const s = 8;
-      fillPoly(g, [[px - s, py + s], [px, py], [px, py + s + 1]], PAL.snow);
-      fillPoly(g, [[px, py], [px + s, py + s], [px + 3, py + s - 2], [px, py + s + 1]], PAL.snowShade);
-      rect(g, px - s + 2, py + s, 3, 1, PAL.snow);
-    }
-  }
-  // Rolling foothills in front of the mountains
-  for (let x = -20; x < VIEW_WIDTH + 40; x += 46) {
-    fillEllipse(g, x, 60, 34, 12, PAL.hillDark);
-    fillEllipse(g, x - 4, 60, 28, 10, PAL.hill);
-  }
-}
-
-function paintGrass(g, random) {
-  rect(g, 0, 56, VIEW_WIDTH, VIEW_HEIGHT - 56, PAL.grass);
-  rect(g, 0, 56, VIEW_WIDTH, 40, PAL.grassFar);           // far-away grass is a bit duller
-  for (let x = 0; x < VIEW_WIDTH; x += 2) rect(g, x, 96, 1, 1, PAL.grassFar);
-
-  for (let i = 0; i < 140; i++) {                         // light and dark patches
-    const x = Math.floor(random() * VIEW_WIDTH);
-    const y = 60 + Math.floor(random() * (VIEW_HEIGHT - 60));
-    rect(g, x, y, 4 + Math.floor(random() * 14), 2, random() < 0.5 ? PAL.grassDark : PAL.grassLight);
-  }
-  for (let i = 0; i < 520; i++) {                         // grass tufts
-    const x = Math.floor(random() * VIEW_WIDTH);
-    const y = 60 + Math.floor(random() * (VIEW_HEIGHT - 60));
-    rect(g, x, y, 1, 1, PAL.grassDeep);
-    rect(g, x + 2, y, 1, 1, PAL.grassDeep);
-    rect(g, x + 1, y + 1, 1, 1, PAL.grassDeep);
-    rect(g, x + 1, y - 1, 1, 1, PAL.grassLight);
-  }
-  const flowers = [PAL.flowerY, PAL.flowerW, PAL.flowerR, PAL.flowerP];
-  for (let i = 0; i < 40; i++) {                          // little flower clusters
-    const x = Math.floor(random() * VIEW_WIDTH);
-    const y = 90 + Math.floor(random() * (VIEW_HEIGHT - 90));
-    const color = flowers[Math.floor(random() * flowers.length)];
-    for (let j = 0; j < 4; j++) rect(g, x + Math.floor(random() * 6), y + Math.floor(random() * 4), 1, 1, color);
-  }
-}
-
-function paintForest(g, random) {
-  // A thick band of treetops between the hills and the river.
-  rect(g, 0, 56, VIEW_WIDTH, 10, PAL.forestBack);
-  for (let x = -4; x < VIEW_WIDTH + 6; x += 5) {
-    const y = 52 + Math.floor(random() * 4);
-    const r = 5 + Math.floor(random() * 3);
-    fillEllipse(g, x, y, r, r - 1, PAL.forestBack);
-    fillEllipse(g, x - 1, y - 1, r - 2, r - 3, PAL.forestBackLight);
-  }
-  for (let x = -2; x < VIEW_WIDTH + 6; x += 6) {
-    const y = 60 + Math.floor(random() * 3);
-    const r = 5 + Math.floor(random() * 2);
-    fillEllipse(g, x, y, r, r - 1, PAL.forestFront);
-    fillEllipse(g, x - 1, y - 2, r - 2, r - 3, PAL.forestFrontLight);
-    rect(g, x - 2, y - 4, 2, 1, PAL.leafLight);
-  }
-}
-
-// The river's middle line wiggles gently across the map.
-function riverCenterY(x) {
-  return 72 + Math.round(Math.sin(x / 45) * 3);
-}
-
-function paintRiver(g, random) {
-  for (let x = 0; x < VIEW_WIDTH; x++) {
-    const c = riverCenterY(x);
-    rect(g, x, c - 7, 1, 2, PAL.bank);
-    rect(g, x, c - 5, 1, 10, PAL.water);
-    rect(g, x, c - 5, 1, 2, PAL.waterDark);
-    rect(g, x, c + 5, 1, 2, PAL.bank);
-    rect(g, x, c + 7, 1, 1, PAL.grassDeep);
-  }
-  for (let i = 0; i < 40; i++) {                          // sparkles on the water
-    const x = Math.floor(random() * VIEW_WIDTH);
-    rect(g, x, riverCenterY(x) - 2 + Math.floor(random() * 5), 3 + Math.floor(random() * 4), 1, PAL.waterLight);
-  }
-  // Wooden footbridge
-  const bx = 113;
-  const c = riverCenterY(bx);
-  rect(g, bx, c - 9, 12, 18, PAL.wood);
-  for (let y = c - 9; y < c + 9; y += 2) rect(g, bx, y, 12, 1, PAL.woodDark);
-  rect(g, bx - 1, c - 10, 1, 20, PAL.timber);
-  rect(g, bx + 12, c - 10, 2, 20, PAL.woodDeep);
-  for (let y = c - 10; y < c + 10; y += 5) {
-    rect(g, bx - 1, y, 2, 2, PAL.woodLight);
-    rect(g, bx + 12, y, 2, 2, PAL.woodDark);
-  }
-}
-
-function paintDirtPaths(g) {
-  const paths = [
-    [[114, 80], [123, 80], [124, 170], [112, 170]],   // from the bridge down to the road
-    [[26, 190], [40, 190], [42, 238], [28, 238]],     // to the barn
+// Screen area covered by a box of the given height (plus padding).
+function boxBounds(box, height, pad = 6) {
+  const pts = [
+    iso(box.x, box.y, box.z + height), iso(box.x + box.w, box.y, box.z + height),
+    iso(box.x, box.y + box.d, box.z), iso(box.x + box.w, box.y + box.d, box.z),
+    iso(box.x + box.w, box.y, box.z), iso(box.x, box.y + box.d, box.z + height),
   ];
-  for (const p of paths) {
-    fillPoly(g, p.map(([x, y]) => [x + 1, y + 1]), PAL.dirtDark);
-    fillPoly(g, p, PAL.dirt);
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const x = Math.min(...xs) - pad, y = Math.min(...ys) - pad;
+  return { x, y, w: Math.max(...xs) + pad - x, h: Math.max(...ys) + pad - y };
+}
+
+// Effects found while drawing (night lights, chimneys, flags...).
+function newEffects() {
+  return { lights: [], chimneys: [], flags: [], saws: [], fires: [], sparkles: [], falls: [], fireflies: [], shadows: [], groundDraws: [] };
+}
+function addLight(x, y, r = 5) { fx.lights.push({ x, y, r }); }
+
+
+// ---------- 3D boxes, walls and roofs ----------
+// A "box" is { x, y, w, d, z }: position and size in tiles, z in pixels.
+
+function drawIsoBox(ctx, box, h, left, right, top) {
+  const { x, y, w, d, z } = box;
+  const zt = z + h;
+  fillPoly(ctx, [iso(x, y + d, zt), iso(x + w, y + d, zt), iso(x + w, y + d, z), iso(x, y + d, z)], left);
+  fillPoly(ctx, [iso(x + w, y + d, zt), iso(x + w, y, zt), iso(x + w, y, z), iso(x + w, y + d, z)], right);
+  if (top) fillPoly(ctx, [iso(x, y, zt), iso(x + w, y, zt), iso(x + w, y + d, zt), iso(x, y + d, zt)], top);
+}
+
+// A patch on the LEFT wall: u = tiles from the wall's left end, v = pixels up.
+function faceL(ctx, box, u, v, uw, vh, color) {
+  const fy = box.y + box.d, z = box.z;
+  fillPoly(ctx, [iso(box.x + u, fy, z + v), iso(box.x + u + uw, fy, z + v),
+    iso(box.x + u + uw, fy, z + v + vh), iso(box.x + u, fy, z + v + vh)], color);
+}
+
+// A patch on the RIGHT wall: u = tiles from the wall's back end.
+function faceR(ctx, box, u, v, uw, vh, color) {
+  const fx2 = box.x + box.w, z = box.z;
+  fillPoly(ctx, [iso(fx2, box.y + u, z + v), iso(fx2, box.y + u + uw, z + v),
+    iso(fx2, box.y + u + uw, z + v + vh), iso(fx2, box.y + u, z + v + vh)], color);
+}
+
+// Horizontal line along a wall at height v.
+function lineL(ctx, box, v, color) {
+  drawLine(ctx, ...iso(box.x, box.y + box.d, box.z + v), ...iso(box.x + box.w, box.y + box.d, box.z + v), color);
+}
+function lineR(ctx, box, v, color) {
+  drawLine(ctx, ...iso(box.x + box.w, box.y + box.d, box.z + v), ...iso(box.x + box.w, box.y, box.z + v), color);
+}
+
+// Vertical beam on a wall.
+function postL(ctx, box, u, h, color) {
+  const [px, py] = iso(box.x + u, box.y + box.d, box.z);
+  rect(ctx, px, py - h, 1, h, color);
+}
+function postR(ctx, box, u, h, color) {
+  const [px, py] = iso(box.x + box.w, box.y + u, box.z);
+  rect(ctx, px, py - h, 1, h, color);
+}
+
+function windowL(ctx, box, u, v, uw = 0.3, vh = 4) {
+  faceL(ctx, box, u - 0.07, v - 1, uw + 0.14, vh + 2, PAL.timber);
+  faceL(ctx, box, u, v, uw, vh, PAL.glass);
+  const [mx, my] = iso(box.x + u + uw / 2, box.y + box.d, box.z + v);
+  rect(ctx, mx, my - vh, 1, vh, PAL.timber);
+  addLight(mx, my - vh / 2, 6);
+}
+function windowR(ctx, box, u, v, uw = 0.3, vh = 4) {
+  faceR(ctx, box, u - 0.07, v - 1, uw + 0.14, vh + 2, PAL.timber);
+  faceR(ctx, box, u, v, uw, vh, PAL.glass);
+  const [mx, my] = iso(box.x + box.w, box.y + u + uw / 2, box.z + v);
+  rect(ctx, mx, my - vh, 1, vh, PAL.timber);
+  addLight(mx, my - vh / 2, 6);
+}
+function doorL(ctx, box, u, uw = 0.32, vh = 8) {
+  faceL(ctx, box, u - 0.07, 0, uw + 0.14, vh + 1, PAL.timber);
+  faceL(ctx, box, u, 0, uw, vh, PAL.door);
+  const [kx, ky] = iso(box.x + u + uw - 0.08, box.y + box.d, box.z + vh / 2);
+  rect(ctx, kx, ky, 1, 1, PAL.gold);
+}
+
+// Brick lines on both visible walls.
+function paintBricks(ctx, box, h, darkL, darkR) {
+  for (let v = 3; v < h; v += 3) {
+    lineL(ctx, box, v, darkL);
+    lineR(ctx, box, v, darkR);
+    const shift = (v / 3) % 2 ? 0.2 : 0;
+    for (let u = 0.1 + shift; u < box.w; u += 0.4) faceL(ctx, box, u, v - 2, 0.05, 2, darkL);
+    for (let u = 0.1 + shift; u < box.d; u += 0.4) faceR(ctx, box, u, v - 2, 0.05, 2, darkR);
   }
 }
 
-// Top edge of the cliff at a given x (follows PLATEAU_FRONT).
-function cliffTopY(x) {
-  for (let i = 0; i < PLATEAU_FRONT.length - 1; i++) {
-    const [x1, y1] = PLATEAU_FRONT[i];
-    const [x2, y2] = PLATEAU_FRONT[i + 1];
-    if (x >= x1 && x <= x2) return y1 + ((x - x1) / (x2 - x1)) * (y2 - y1);
-  }
-  return null;
-}
+// Roof styles
+const ROOF_THATCH = { roof: PAL.thatch, dark: PAL.thatchDark, light: PAL.thatchLight, kind: "thatch" };
+const ROOF_RED    = { roof: PAL.roofRed, dark: PAL.roofRedDark, light: PAL.roofRedLight, kind: "shingle" };
+const ROOF_BLUE   = { roof: PAL.blueRoof, dark: PAL.blueRoofDark, light: PAL.blueRoofLight, kind: "shingle" };
+const ROOF_SLATE  = { roof: PAL.slate, dark: PAL.slateDark, light: PAL.slateLight, kind: "shingle" };
+const ROOF_WOOD   = { roof: PAL.wood, dark: PAL.woodDark, light: PAL.woodLight, kind: "shingle" };
 
-function paintPlateau(g, random) {
-  const H = CLIFF_HEIGHT;
-  // Shadow at the foot of the cliff
-  fillPoly(g, [[164, 100 + H], [178, 118 + H + 3], [322, 116 + H + 3], [332, 92 + H + 4], [326, 92 + H]], SHADOW);
-
-  // Cliff faces (left facet in light, front in mid-tone, right facet in shade)
-  const faceColors = [PAL.cliffLight, PAL.cliff, PAL.cliffDark];
-  for (let i = 0; i < PLATEAU_FRONT.length - 1; i++) {
-    const a = PLATEAU_FRONT[i];
-    const b = PLATEAU_FRONT[i + 1];
-    fillPoly(g, [a, b, [b[0], b[1] + H], [a[0], a[1] + H]], faceColors[i]);
-  }
-  // Rock layers: horizontal ledges with sunlit tops, a few cracks
-  for (let x = 163; x < 326; x++) {
-    const top = Math.round(cliffTopY(x));
-    for (const layer of [6, 12]) {
-      const wobble = Math.round(Math.sin(x / 7 + layer) * 1.2);
-      rect(g, x, top + layer + wobble, 1, 1, PAL.cliffDeep);
-      rect(g, x, top + layer + wobble + 1, 1, 1, PAL.cliffLight);
+// Lines across a roof slope, parallel to its bottom edge (eave).
+function paintRoofSlope(ctx, eaveA, eaveB, ridgeA, ridgeB, style, lineColor) {
+  if (style.kind === "stripes") {
+    const n = 6;
+    for (let k = 1; k < n; k += 2) {
+      fillPoly(ctx, [lerpPoint(eaveA, eaveB, k / n), lerpPoint(eaveA, eaveB, (k + 1) / n),
+        lerpPoint(ridgeA, ridgeB, (k + 1) / n), lerpPoint(ridgeA, ridgeB, k / n)], style.stripe);
     }
-    if (random() < 0.08) rect(g, x, top + 3 + Math.floor(random() * 10), 1, 3, PAL.cliffDeep);
-    rect(g, x, top + H - 2, 1, 2, PAL.cliffDeep);
+    return;
   }
-
-  // Grassy top of the hill (a little brighter: it's higher up, in the sun)
-  fillPoly(g, PLATEAU_TOP, PAL.grassHigh);
-  for (let i = 0; i < 160; i++) {
-    const x = 162 + Math.floor(random() * 166);
-    const y = 80 + Math.floor(random() * 38);
-    if (!pointInPoly(x, y, PLATEAU_TOP)) continue;
-    rect(g, x, y, 1, 1, random() < 0.5 ? PAL.grassDeep : PAL.grassLight);
+  const rows = 4;
+  for (let i = 1; i < rows; i++) {
+    const t = i / rows;
+    drawLine(ctx, ...lerpPoint(eaveA, ridgeA, t), ...lerpPoint(eaveB, ridgeB, t), lineColor);
   }
-  // Grass hanging over the cliff edge
-  for (let x = 163; x < 326; x++) {
-    const top = Math.round(cliffTopY(x));
-    rect(g, x, top - 1, 1, 2, PAL.grassDark);
-    if (x % 3 === 0) rect(g, x, top + 1, 1, 1 + (x % 2), PAL.grassDeep);
-  }
-}
-
-// Cobblestones: dark mortar first, then rows of little stones on top.
-function paintCobbles(g, poly, random) {
-  fillPoly(g, poly.map(([x, y]) => [x + 1, y + 2]), PAL.curb);   // curb edge for depth
-  fillPoly(g, poly, PAL.cobbleGap);
-  const xs = poly.map(p => p[0]);
-  const ys = poly.map(p => p[1]);
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
-  for (let y = minY; y < maxY; y += 3) {
-    const offset = (Math.floor(y / 3) % 2) * 2;
-    for (let x = minX + offset; x < maxX; x += 4) {
-      if (!pointInPoly(x + 1.5, y + 1, poly) || !pointInPoly(x + 2.5, y + 1.5, poly)) continue;
-      const r = random();
-      rect(g, x, y, 3, 2, r < 0.3 ? PAL.cobbleDark : r < 0.8 ? PAL.cobble : PAL.cobbleLight);
-      rect(g, x, y, 2, 1, PAL.cobbleLight);
+  if (style.kind === "thatch") {
+    for (let j = 0.1; j < 1; j += 0.14) {
+      drawLine(ctx, ...lerpPoint(eaveA, eaveB, j), ...lerpPoint(ridgeA, ridgeB, j), style.light);
     }
   }
 }
 
-// Stone stairs cut into the cliff, leading up to the keep.
+// A pitched roof on a box with walls `wallH` tall and a peak `rh` tall.
+//   axis "x": the ridge runs toward the lower-right
+//   axis "y": the ridge runs toward the lower-left
+//   gable:    color of the triangle of wall under the roof's end
+//   between:  optional function drawn between the back and front of
+//             the roof (used for chimneys that poke through)
+function drawRoof(ctx, box, wallH, rh, style, axis, gable, between) {
+  const o = 0.12;
+  const z = box.z + wallH;
+  const x0 = box.x - o, x1 = box.x + box.w + o, y0 = box.y - o, y1 = box.y + box.d + o;
+  if (axis === "x") {
+    const ym = box.y + box.d / 2;
+    const rL = iso(x0, ym, z + rh), rR = iso(x1, ym, z + rh);
+    const backL = iso(x0, y0, z), backR = iso(x1, y0, z);
+    const frontL = iso(x0, y1, z), frontR = iso(x1, y1, z);
+    fillPoly(ctx, [backL, backR, rR, rL], style.dark);
+    if (between) between();
+    fillPoly(ctx, [iso(box.x + box.w, box.y, z), iso(box.x + box.w, box.y + box.d, z), iso(box.x + box.w, ym, z + rh)], gable);
+    fillPoly(ctx, [frontL, frontR, rR, rL], style.roof);
+    paintRoofSlope(ctx, frontL, frontR, rL, rR, style, style.dark);
+    drawLine(ctx, ...rL, ...rR, style.light);
+    drawLine(ctx, ...frontL, ...frontR, style.dark);
+    drawLine(ctx, ...frontR, ...rR, style.dark);
+    drawLine(ctx, ...rR, ...backR, style.dark);
+  } else {
+    const xm = box.x + box.w / 2;
+    const rB = iso(xm, y0, z + rh), rF = iso(xm, y1, z + rh);
+    const lF = iso(x0, y1, z), lB = iso(x0, y0, z);
+    const rFe = iso(x1, y1, z), rBe = iso(x1, y0, z);
+    fillPoly(ctx, [rFe, rBe, rB, rF], style.dark);
+    fillPoly(ctx, [lF, lB, rB, rF], style.roof);
+    paintRoofSlope(ctx, lF, lB, rF, rB, style, style.dark);
+    paintRoofSlope(ctx, rFe, rBe, rF, rB, { ...style, light: style.dark }, PAL.outline);
+    fillPoly(ctx, [iso(box.x, box.y + box.d, z), iso(box.x + box.w, box.y + box.d, z), iso(xm, box.y + box.d, z + rh)], gable);
+    drawLine(ctx, ...rB, ...rF, style.light);
+    drawLine(ctx, ...lF, ...rF, style.dark);
+    drawLine(ctx, ...rF, ...rFe, style.dark);
+    if (between) between();
+  }
+}
+
+// Small stone chimney that also releases smoke.
+function drawChimney(ctx, tx, ty, z, h) {
+  const box = { x: tx, y: ty, w: 0.28, d: 0.28, z };
+  drawIsoBox(ctx, box, h, PAL.stone, PAL.stoneDark, PAL.stoneDeep);
+  const [cx, cy] = iso(tx + 0.14, ty + 0.14, z + h);
+  fx.chimneys.push({ x: cx, y: cy - 1 });
+}
+
+// Upright cylinder (towers, wells). Shaded from light (left) to dark (right).
+function drawCylinder(ctx, sx, sy, r, h, shades, bricks) {
+  const ry = r / 2;
+  for (let i = -r; i < r; i++) {
+    const t = (i + r) / (2 * r);
+    const c = t < 0.3 ? shades[0] : t < 0.65 ? shades[1] : t < 0.85 ? shades[2] : shades[3];
+    const curve = Math.round(Math.sqrt(Math.max(0, 1 - ((i + 0.5) / r) ** 2)) * ry);
+    rect(ctx, sx + i, sy - h + curve, 1, h, c);
+    if (bricks) {
+      for (let k = 3; k < h; k += 3) {
+        rect(ctx, sx + i, sy - h + curve + k, 1, 1, shades[3]);
+        if ((i + k) % 5 === 0) rect(ctx, sx + i, sy - h + curve + k - 2, 1, 2, shades[3]);
+      }
+    }
+  }
+  fillEllipse(ctx, sx, sy - h, r, ry, shades[0]);
+}
+
+// Pointed roof for a round tower.
+function drawCone(ctx, sx, sy, r, coneH, light, dark) {
+  const ry = Math.max(1, Math.round(r / 2));
+  for (let dy = 0; dy < ry; dy++) {
+    const t = (dy + 0.5) / ry;
+    const half = Math.round(r * Math.sqrt(1 - t * t));
+    rect(ctx, sx - half, sy + dy, half, 1, light);
+    rect(ctx, sx, sy + dy, half, 1, dark);
+  }
+  fillPoly(ctx, [[sx - r, sy + 0.5], [sx, sy - coneH], [sx, sy + 0.5]], light);
+  fillPoly(ctx, [[sx, sy - coneH], [sx + r, sy + 0.5], [sx, sy + 0.5]], dark);
+  for (let y = sy - coneH + 4; y < sy; y += 3) {
+    const half = Math.round(((y - (sy - coneH)) / coneH) * r);
+    rect(ctx, sx - half, y, half * 2, 1, dark);
+  }
+}
+
+// A round stone tower with a pointed roof and a flag.
+function drawTower(ctx, tx, ty, z, r, h, coneH) {
+  const [sx, sy] = iso(tx, ty, z);
+  fillEllipse(ctx, sx + 4, sy + 2, r + 3, r / 2 + 1, SHADOW);
+  drawCylinder(ctx, sx, sy, r, h, [PAL.stoneLight, PAL.stone, PAL.stoneDark, PAL.stoneDeep], true);
+  for (let y = sy - h + 8; y < sy - 6; y += 10) {           // windows
+    rect(ctx, sx - 2, y, 2, 4, PAL.outline);
+    rect(ctx, sx - 2, y + 1, 2, 2, PAL.glass);
+    addLight(sx - 1, y + 2, 5);
+  }
+  rect(ctx, sx - r - 1, sy - h - 1, 2 * r + 2, 2, PAL.stoneLight);   // rim
+  drawCone(ctx, sx, sy - h, r + 2, coneH, PAL.slateLight, PAL.slateDark);
+  rect(ctx, sx, sy - h - coneH - 8, 1, 8, PAL.outline);             // flagpole
+  fx.flags.push({ x: sx + 1, y: sy - h - coneH - 8, color: PAL.banner });
+}
+
+// Low stone wall with battlements along the top.
+function drawCastleWall(ctx, box, h) {
+  drawIsoBox(ctx, box, h, PAL.stone, PAL.stoneDark, PAL.stoneLight);
+  lineL(ctx, box, 3, PAL.stoneDark);
+  lineL(ctx, box, 6, PAL.stoneDark);
+  lineR(ctx, box, 3, PAL.stoneDeep);
+  lineR(ctx, box, 6, PAL.stoneDeep);
+  const alongX = box.w > box.d;
+  const length = alongX ? box.w : box.d;
+  for (let u = 0; u < length - 0.1; u += 0.5) {
+    const merlon = alongX
+      ? { x: box.x + u, y: box.y, w: 0.25, d: box.d, z: box.z + h }
+      : { x: box.x, y: box.y + u, w: box.w, d: 0.25, z: box.z + h };
+    drawIsoBox(ctx, merlon, 3, PAL.stone, PAL.stoneDark, PAL.stoneLight);
+  }
+}
+
+
+// ---------- The ground ----------
+
+// Builds the tile grid from VILLAGE_MAP plus changes from buildings.
+function buildTileMap() {
+  const grid = [];
+  for (let ty = 0; ty < MAP_SIZE; ty++) {
+    const row = [];
+    for (let tx = 0; tx < MAP_SIZE; tx++) {
+      const letter = VILLAGE_MAP[ty][tx];
+      const type = TILE_TYPES[letter] || TILE_TYPES.G;
+      row.push({ letter, kind: type.kind, z: type.level * LEVEL_HEIGHT });
+    }
+    grid.push(row);
+  }
+  if (state.buildings.quarry.count > 0) {
+    for (const [tx, ty] of VILLAGE_LAYOUT.quarryCut) grid[ty][tx] = { letter: "c", kind: "cut", z: LEVEL_HEIGHT };
+  }
+  const fieldCount = Math.min(state.buildings.farm.count, VILLAGE_LAYOUT.farmFields.length);
+  for (let i = 0; i < fieldCount; i++) {
+    const f = VILLAGE_LAYOUT.farmFields[i];
+    for (let ty = f.y; ty < f.y + f.d; ty++) {
+      for (let tx = f.x; tx < f.x + f.w; tx++) grid[ty][tx] = { letter: "s", kind: "soil", z: 0 };
+    }
+  }
+  return grid;
+}
+
+function tileZ(tx, ty) {
+  if (tx < 0 || ty < 0 || tx >= MAP_SIZE || ty >= MAP_SIZE) return null;
+  return tiles[ty][tx].z;
+}
+
+// Colors for the top of each kind of tile.
+function tileTopColor(tile, tx, ty) {
+  const checker = (tx + ty) % 2 === 0;
+  switch (tile.kind) {
+    case "grass": return checker ? PAL.grass : PAL.grassAlt;
+    case "forest": return PAL.forestFloor;
+    case "rock": case "cut": return PAL.rock;
+    case "snow": return PAL.snow;
+    case "water": return PAL.water;
+    case "sand": return PAL.sand;
+    case "road": return PAL.cobbleGap;
+    case "plaza": return PAL.cobbleGap;
+    case "soil": return PAL.soil;
+    default: return PAL.grass;
+  }
+}
+
+// Paints the side of a tile (a cliff, river bank or the island's edge)
+// in layers: grass lip, soil, darker soil, then rock.
+function paintTileSide(g, side, tx, ty, zTop, zBottom, tile, random) {
+  const a = side === "left" ? [tx, ty + 1] : [tx + 1, ty];
+  const b = [tx + 1, ty + 1];
+  const lit = side === "left";
+  const band = (from, to, color) => {
+    const z1 = zTop - from, z2 = Math.max(zBottom, zTop - to);
+    if (z2 >= z1) return;
+    fillPoly(g, [iso(a[0], a[1], z1), iso(b[0], b[1], z1), iso(b[0], b[1], z2), iso(a[0], a[1], z2)], color);
+  };
+  const rocky = tile.kind === "rock" || tile.kind === "snow" || tile.kind === "cut";
+  if (rocky) {
+    band(0, 99, lit ? PAL.rock : PAL.rockDark);
+    band(0, 1, lit ? PAL.rockLight : PAL.rock);
+    for (let s = 5; s < zTop - zBottom; s += 5) band(s, s + 1, lit ? PAL.rockDark : PAL.rockDeep);
+  } else {
+    const lip = tile.kind === "road" || tile.kind === "plaza" ? PAL.cobbleDark
+      : tile.kind === "sand" ? PAL.sandDark : tile.kind === "soil" ? PAL.soilDark
+      : lit ? PAL.grassDark : PAL.grassDeep;
+    band(0, 99, lit ? PAL.deepRockL : PAL.deepRockR);
+    band(0, 14, lit ? PAL.soilDarkL : PAL.soilDarkR);
+    band(0, 8, lit ? PAL.soilL : PAL.soilR);
+    band(0, 2, lip);
+  }
+  // Pebbles and roots for texture
+  const height = zTop - zBottom;
+  for (let i = 0; i < height / 3; i++) {
+    const t = random();
+    const [px, py] = iso(lerp(a[0], b[0], t), lerp(a[1], b[1], t), zTop - 3 - random() * (height - 4));
+    rect(g, px, py, random() < 0.5 ? 2 : 1, 1, lit ? PAL.soilDarkL : PAL.deepRockR);
+  }
+}
+
+// Draws a single ground tile: its visible sides, then its top.
+function paintTile(g, tx, ty, random) {
+  const tile = tiles[ty][tx];
+  const z = tile.z;
+  const edgeBottom = -ISLAND_DEPTH - Math.floor(random() * 6);
+
+  const frontLeft = tileZ(tx, ty + 1);
+  const leftBottom = frontLeft === null ? edgeBottom : frontLeft;
+  if (leftBottom < z) paintTileSide(g, "left", tx, ty, z, leftBottom, tile, random);
+
+  const frontRight = tileZ(tx + 1, ty);
+  const rightBottom = frontRight === null ? edgeBottom : frontRight;
+  if (rightBottom < z) paintTileSide(g, "right", tx, ty, z, rightBottom, tile, random);
+
+  // Rocks hanging under the island's edge
+  if (frontLeft === null || frontRight === null) {
+    const side = frontLeft === null ? "left" : "right";
+    const a = side === "left" ? [tx, ty + 1] : [tx + 1, ty];
+    const b = [tx + 1, ty + 1];
+    const t = 0.2 + random() * 0.6;
+    const [mx, my] = iso(lerp(a[0], b[0], t), lerp(a[1], b[1], t), edgeBottom + 1);
+    const len = 4 + Math.floor(random() * 10);
+    const color = side === "left" ? PAL.deepRockL : PAL.deepRockR;
+    fillPoly(g, [[mx - 4, my - 1], [mx + 4, my - 1], [mx + (random() - 0.5) * 3, my + len]], color);
+    rect(g, mx - 3, my - 1, 2, 1, PAL.rockDark);
+  }
+
+  // The top surface
+  const corners = [iso(tx, ty, z), iso(tx + 1, ty, z), iso(tx + 1, ty + 1, z), iso(tx, ty + 1, z)];
+  fillPoly(g, corners, tileTopColor(tile, tx, ty));
+  const spot = (u, v) => iso(tx + u, ty + v, z);
+  const rnd = () => 0.08 + random() * 0.84;
+
+  switch (tile.kind) {
+    case "grass":
+    case "forest":
+      for (let i = 0; i < 4; i++) {
+        const [px, py] = spot(rnd(), rnd());
+        rect(g, px, py, 1, 1, PAL.grassDeep);
+        rect(g, px + 1, py - 1, 1, 1, PAL.grassLight);
+      }
+      if (tile.kind === "grass" && random() < 0.18) {
+        const colors = [PAL.flowerY, PAL.flowerW, PAL.flowerR, PAL.flowerP];
+        const color = colors[Math.floor(random() * colors.length)];
+        for (let i = 0; i < 3; i++) {
+          const [px, py] = spot(rnd(), rnd());
+          rect(g, px, py, 1, 1, color);
+        }
+      }
+      break;
+    case "road":
+    case "plaza":
+      for (let v = 0.12; v < 1; v += 0.25) {
+        for (let u = 0.1 + (v * 4 % 2 ? 0.12 : 0); u < 0.95; u += 0.25) {
+          const [px, py] = spot(u, v);
+          const r = random();
+          rect(g, px - 1, py, 3, 1, r < 0.3 ? PAL.cobbleDark : r < 0.75 ? PAL.cobble : PAL.cobbleLight);
+          rect(g, px, py - 1, 1, 1, PAL.cobbleLight);
+        }
+      }
+      break;
+    case "water":
+      for (let i = 0; i < 3; i++) {
+        const [px, py] = spot(rnd(), rnd());
+        fx.sparkles.push({ x: px, y: py, phase: random() * 6.28 });
+      }
+      rect(g, ...spot(0.3, 0.5), 3, 1, PAL.waterDark);
+      break;
+    case "sand":
+      for (let i = 0; i < 4; i++) rect(g, ...spot(rnd(), rnd()), 1, 1, PAL.sandDark);
+      break;
+    case "rock":
+    case "cut":
+      for (let i = 0; i < 3; i++) {
+        const [px, py] = spot(rnd(), rnd());
+        rect(g, px, py, 2, 1, PAL.rockDark);
+        rect(g, px, py - 1, 2, 1, PAL.rockLight);
+      }
+      if (tile.kind === "cut") {
+        drawLine(g, ...spot(0, 0.5), ...spot(1, 0.5), PAL.rockDark);
+        drawLine(g, ...spot(0.5, 0), ...spot(0.5, 1), PAL.rockDark);
+      }
+      break;
+    case "snow":
+      for (let i = 0; i < 4; i++) rect(g, ...spot(rnd(), rnd()), 2, 1, PAL.snowShade);
+      break;
+    case "soil":
+      for (const v of [0.25, 0.5, 0.75]) drawLine(g, ...spot(0, v), ...spot(1, v), PAL.soilDark);
+      for (let i = 0; i < 3; i++) rect(g, ...spot(rnd(), rnd()), 1, 1, PAL.soilLight);
+      break;
+  }
+}
+
+// Paints all the ground (back tiles first), plus shadows and flat details.
+function paintTerrain() {
+  const g = document.createElement("canvas").getContext("2d");
+  g.canvas.width = VIEW_WIDTH;
+  g.canvas.height = VIEW_HEIGHT;
+  const random = makeRandom(1234);
+  for (let sum = 0; sum <= 2 * (MAP_SIZE - 1); sum++) {
+    for (let tx = 0; tx < MAP_SIZE; tx++) {
+      const ty = sum - tx;
+      if (ty >= 0 && ty < MAP_SIZE) paintTile(g, tx, ty, random);
+    }
+  }
+  // Building shadows fall toward the lower-right
+  for (const s of fx.shadows) {
+    const { x, y, w, d, z } = s.box;
+    const L = s.h / 16;
+    fillPoly(g, [iso(x + w, y, z), iso(x + w + L, y, z), iso(x + w + L, y + d, z), iso(x + w, y + d, z)], SHADOW);
+  }
+  for (const draw of fx.groundDraws) draw(g);
+  return g.canvas;
+}
+
+// Black island shape, used to keep cloud shadows on the ground only.
+function paintIslandMask() {
+  const g = document.createElement("canvas").getContext("2d");
+  g.canvas.width = VIEW_WIDTH;
+  g.canvas.height = VIEW_HEIGHT;
+  for (let ty = 0; ty < MAP_SIZE; ty++) {
+    for (let tx = 0; tx < MAP_SIZE; tx++) {
+      const z = tiles[ty][tx].z;
+      fillPoly(g, [iso(tx, ty, z), iso(tx + 1, ty, z), iso(tx + 1, ty + 1, z), iso(tx, ty + 1, z)], "#000");
+    }
+  }
+  return g.canvas;
+}
+
+// Stone stairs from the plaza road up to the castle gate (drawn on the ground layer).
 function paintStairs(g) {
-  const x = 234, w = 20;
-  const top = Math.round(cliffTopY(x + 10));
-  for (let y = top; y < top + CLIFF_HEIGHT; y += 2) {
-    rect(g, x, y, w, 1, PAL.stoneLight);
-    rect(g, x, y + 1, w, 1, PAL.stoneDark);
+  for (let i = 0; i < 6; i++) {
+    const box = { x: 7.05, y: 10 + i * 0.2, w: 1.5, d: 0.2, z: 0 };
+    drawIsoBox(g, box, 12 - i * 2, PAL.stone, PAL.stoneDark, PAL.stoneLight);
   }
-  rect(g, x - 2, top - 1, 2, CLIFF_HEIGHT + 1, PAL.stone);
-  rect(g, x + w, top - 1, 2, CLIFF_HEIGHT + 1, PAL.stoneDeep);
+}
+
+function paintBridge(g) {
+  const deck = { x: 0.9, y: 12.15, w: 1.2, d: 0.7, z: -2 };
+  drawIsoBox(g, deck, 3, PAL.woodDark, PAL.woodDeep, PAL.wood);
+  for (let u = 0.15; u < 1.2; u += 0.2) {
+    drawLine(g, ...iso(deck.x + u, deck.y, 1), ...iso(deck.x + u, deck.y + deck.d, 1), PAL.woodDark);
+  }
+  for (const y of [deck.y + 0.05, deck.y + deck.d - 0.05]) {
+    drawLine(g, ...iso(deck.x, y, 5), ...iso(deck.x + deck.w, y, 5), PAL.woodLight);
+    for (let u = 0; u <= 1.2; u += 0.4) {
+      const [px, py] = iso(deck.x + u, y, 1);
+      rect(g, px, py - 4, 1, 4, PAL.woodDeep);
+    }
+  }
 }
 
 
 // ---------- Buildings ----------
 
-// A round stone tower with a pointed roof and a flag.
-function drawTower(ctx, x, y, w, h, d, coneH) {
-  const k = depthOffset(d);
-  const top = y - h;
-  drawGroundShadow(ctx, x, y, w, d);
-  fillPoly(ctx, [[x + w, y], [x + w + k, y - k], [x + w + k, top - k], [x + w, top]], PAL.stoneDeep);
-  paintBricks(ctx, x, top, w, h, PAL.stone, PAL.stoneDark, PAL.stoneLight);
-  rect(ctx, x, top, 2, h, PAL.stoneLight);                       // rounded, sunlit edge
-  rect(ctx, x + w - 2, top, 2, h, PAL.stoneDark);
-  for (let yy = top + 8; yy < y - 10; yy += 12) {               // arrow slits
-    rect(ctx, x + Math.floor(w / 2) - 1, yy, 2, 5, PAL.outline);
+function drawCastle(ctx) {
+  const Z = 2 * LEVEL_HEIGHT;   // the castle hill is 2 levels high
+  drawTower(ctx, 5.3, 5.3, Z, 6, 46, 18);                        // tall back tower
+
+  // The keep (main hall)
+  const keep = { x: 5.8, y: 5.6, w: 2.6, d: 2.4, z: Z };
+  fx.shadows.push({ box: keep, h: 26 });
+  drawIsoBox(ctx, keep, 26, PAL.stone, PAL.stoneDark);
+  paintBricks(ctx, keep, 26, PAL.stoneDark, PAL.stoneDeep);
+  doorL(ctx, keep, 1.1, 0.45, 11);
+  windowL(ctx, keep, 0.3, 14, 0.28, 6);
+  windowL(ctx, keep, 2.0, 14, 0.28, 6);
+  windowR(ctx, keep, 0.5, 14, 0.28, 6);
+  windowR(ctx, keep, 1.6, 14, 0.28, 6);
+  for (const u of [0.75, 1.65]) {                                // royal banners
+    faceL(ctx, keep, u, 6, 0.28, 12, PAL.banner);
+    faceL(ctx, keep, u + 0.08, 10, 0.12, 4, PAL.gold);
   }
-  // Battlements
-  rect(ctx, x - 1, top - 2, w + 2, 3, PAL.stoneLight);
-  for (let xx = x - 1; xx < x + w; xx += 4) rect(ctx, xx, top - 4, 2, 2, PAL.stoneLight);
-  // Pointed roof: left half sunlit, right half in shade
-  const cx = x + Math.round(w / 2) + Math.round(k / 2);
-  const apexY = top - coneH;
-  fillPoly(ctx, [[x - 2, top - 1], [cx, apexY], [cx, top + 1]], PAL.slateLight);
-  fillPoly(ctx, [[cx, apexY], [x + w + k + 2, top - k], [x + w + 2, top], [cx, top + 1]], PAL.slateDark);
-  for (let yy = apexY + 4; yy < top; yy += 3) {
-    const spread = Math.round(((yy - apexY) / (top - apexY)) * (w / 2 + 1));
-    rect(ctx, cx - spread, yy, spread, 1, PAL.slate);
+  drawRoof(ctx, keep, 26, 14, ROOF_SLATE, "y", PAL.stone);
+
+  // Curtain walls and towers along the hill's front edges
+  drawTower(ctx, 9.6, 4.6, Z, 5, 26, 14);
+  drawCastleWall(ctx, { x: 9.45, y: 4.6, w: 0.45, d: 5.0, z: Z }, 9);
+  drawTower(ctx, 4.6, 9.6, Z, 5, 26, 14);
+  drawCastleWall(ctx, { x: 4.6, y: 9.45, w: 2.3, d: 0.45, z: Z }, 9);
+  drawCastleWall(ctx, { x: 8.5, y: 9.45, w: 1.1, d: 0.45, z: Z }, 9);
+
+  // Gatehouse above the stairs
+  const gate = { x: 6.9, y: 9.25, w: 1.6, d: 0.7, z: Z };
+  drawIsoBox(ctx, gate, 16, PAL.stone, PAL.stoneDark, PAL.stoneLight);
+  paintBricks(ctx, gate, 16, PAL.stoneDark, PAL.stoneDeep);
+  faceL(ctx, gate, 0.45, 0, 0.7, 10, PAL.outline);
+  faceL(ctx, gate, 0.52, 0, 0.56, 9, PAL.door);
+  for (let u = 0; u < 1.6; u += 0.4) {
+    drawIsoBox(ctx, { x: gate.x + u, y: gate.y, w: 0.22, d: gate.d, z: Z + 16 }, 3, PAL.stone, PAL.stoneDark, PAL.stoneLight);
   }
-  // Flag
-  rect(ctx, cx, apexY - 9, 1, 9, PAL.outline);
-  rect(ctx, cx + 1, apexY - 9, 7, 4, PAL.banner);
-  rect(ctx, cx + 1, apexY - 5, 4, 1, PAL.bannerDark);
-  rect(ctx, cx + 3, apexY - 8, 2, 2, PAL.gold);
+  const [t1x, t1y] = iso(gate.x + 0.3, gate.y + gate.d, Z + 9);
+  const [t2x, t2y] = iso(gate.x + 1.3, gate.y + gate.d, Z + 9);
+  fx.fires.push({ x: t1x, y: t1y, small: true }, { x: t2x, y: t2y, small: true });
+  rect(ctx, t1x, t1y, 1, 3, PAL.woodDeep);
+  rect(ctx, t2x, t2y, 1, 3, PAL.woodDeep);
+
+  drawTower(ctx, 9.6, 9.6, Z, 6, 30, 16);                        // front tower
 }
 
-// The keep: a stone hall with three towers.
-function drawTownHall(ctx, x, y) {
-  drawTower(ctx, x + 22, y - 12, 14, 56, 8, 22);                 // tall tower at the back
-  drawBuildingBox(ctx, x, y, {
-    w: 58, h: 24, d: 14, roofH: 12,
-    wall: PAL.stone, wallShade: PAL.stoneDark, side: PAL.stoneDark, sideDark: PAL.stoneDeep,
-    roof: PAL.slate, roofDark: PAL.slateDark, roofLight: PAL.slateLight, roofStyle: "shingle",
-    front(ctx, x, top, w, h) {
-      paintBricks(ctx, x, top, w, h, PAL.stone, PAL.stoneDark, PAL.stoneLight);
-      // Arched gate
-      const gx = x + Math.round(w / 2) - 5;
-      rect(ctx, gx - 1, top + 8, 12, h - 8, PAL.stoneDeep);
-      rect(ctx, gx + 1, top + 7, 8, 1, PAL.stoneDeep);
-      rect(ctx, gx, top + 9, 10, h - 9, PAL.door);
-      rect(ctx, gx + 1, top + 8, 8, 1, PAL.door);
-      rect(ctx, gx + 5, top + 9, 1, h - 9, PAL.outline);
-      for (let yy = top + 11; yy < top + h; yy += 3) rect(ctx, gx, yy, 10, 1, PAL.woodDeep);
-      // Tall windows
-      for (const wx of [x + 4, x + w - 8]) {
-        rect(ctx, wx, top + 8, 4, 8, PAL.outline);
-        rect(ctx, wx + 1, top + 9, 2, 6, PAL.glass);
-        rect(ctx, wx + 1, top + 12, 2, 1, PAL.outline);
-      }
-      // Royal banners
-      for (const bx of [x + 13, x + w - 18]) {
-        rect(ctx, bx - 1, top + 4, 7, 1, PAL.woodDeep);
-        rect(ctx, bx, top + 5, 5, 11, PAL.banner);
-        rect(ctx, bx + 4, top + 5, 1, 11, PAL.bannerDark);
-        rect(ctx, bx, top + 16, 2, 1, PAL.banner);
-        rect(ctx, bx + 3, top + 16, 2, 1, PAL.bannerDark);
-        rect(ctx, bx + 1, top + 8, 3, 3, PAL.gold);
-        rect(ctx, bx + 2, top + 9, 1, 1, PAL.goldDark);
-      }
-    },
-  });
-  drawTower(ctx, x - 12, y + 4, 14, 38, 8, 18);                  // front-left tower
-  drawTower(ctx, x + 56, y + 4, 14, 42, 8, 20);                  // front-right tower
-}
-
-// A timber-framed cottage. `variant` changes the roof.
-function drawHut(ctx, x, y, variant) {
+// Timber-framed cottage. `variant` picks the roof.
+function drawHouse(ctx, tx, ty, variant) {
+  const box = { x: tx + 0.25, y: ty + 0.25, w: 1.5, d: 1.5, z: 0 };
+  const h = 13;
+  fx.shadows.push({ box, h: h + 8 });
+  drawIsoBox(ctx, box, h, PAL.plaster, PAL.plasterShade);
+  // Timber frame
+  lineL(ctx, box, 6, PAL.timber); lineL(ctx, box, h - 1, PAL.timber); lineL(ctx, box, 0, PAL.timber);
+  lineR(ctx, box, 6, PAL.timber); lineR(ctx, box, h - 1, PAL.timber); lineR(ctx, box, 0, PAL.timber);
+  for (const u of [0, 0.75, 1.49]) { postL(ctx, box, u, h, PAL.timber); postR(ctx, box, u, h, PAL.timber); }
+  doorL(ctx, box, 0.95, 0.32, 8);
+  windowL(ctx, box, 0.25, 7, 0.3, 4);
+  windowR(ctx, box, 0.55, 7, 0.32, 4);
+  faceL(ctx, box, 0.2, 5, 0.4, 1, PAL.flowerR);                  // flower box
   const roofs = [
-    { roof: PAL.thatch, roofDark: PAL.thatchDark, roofLight: PAL.thatchLight, roofStyle: "thatch" },
-    { roof: PAL.roofRed, roofDark: PAL.roofRedDark, roofLight: PAL.roofRedLight, roofStyle: "shingle" },
-    { roof: PAL.blueRoof, roofDark: PAL.blueRoofDark, roofLight: PAL.blueRoofLight, roofStyle: "shingle" },
+    [ROOF_THATCH, "x"], [ROOF_RED, "y"], [ROOF_BLUE, "x"],
   ];
-  drawBuildingBox(ctx, x, y, {
-    w: 24, h: 15, d: 12, roofH: 10,
-    wall: PAL.plaster, wallShade: PAL.plasterShade, side: PAL.plasterShade, sideDark: PAL.plasterDeep,
-    ...roofs[variant % roofs.length],
-    chimney: true,
-    front(ctx, x, top, w, h) {
-      paintTimberFrame(ctx, x, top, w, h);
-      drawDoor(ctx, x + 14, top + h, 5, 9);
-      drawWindow(ctx, x + 3, top + 5, 6, 4);
-      rect(ctx, x + 3, top + 11, 6, 1, PAL.flowerR);              // flower box
-      rect(ctx, x + 4, top + 10, 1, 1, PAL.flowerY);
-      rect(ctx, x + 7, top + 10, 1, 1, PAL.flowerP);
-    },
-  });
+  const [style, axis] = roofs[variant % roofs.length];
+  const gable = axis === "x" ? PAL.plasterShade : PAL.plaster;
+  const chimney = () => drawChimney(ctx, box.x + 1.0, box.y + 0.3, h, 13);
+  drawRoof(ctx, box, h, 10, style, axis, gable, chimney);
 }
 
-// Red barn with a white-crossed door and hay bales.
-function drawBarn(ctx, x, y) {
-  drawBuildingBox(ctx, x, y, {
-    w: 40, h: 18, d: 14, roofH: 12,
-    wall: PAL.barn, wallShade: PAL.barnDark, side: PAL.barnDark, sideDark: PAL.barnDeep,
-    roof: PAL.wood, roofDark: PAL.woodDark, roofLight: PAL.woodLight, roofStyle: "shingle",
-    front(ctx, x, top, w, h) {
-      for (let px = x + 3; px < x + w; px += 4) rect(ctx, px, top, 1, h, PAL.barnDark);
-      rect(ctx, x, top, 1, h, PAL.cloth);
-      rect(ctx, x + w - 1, top, 1, h, PAL.cloth);
-      const dx = x + 13, dy = top + 5, dw = 14, dh = h - 5;
-      rect(ctx, dx - 1, dy - 1, dw + 2, dh + 1, PAL.cloth);
-      rect(ctx, dx, dy, dw, dh, PAL.barnDeep);
-      for (let i = 0; i < dh; i++) {
-        const step = Math.round((i * (dw - 1)) / (dh - 1));
-        rect(ctx, dx + step, dy + i, 1, 1, PAL.cloth);
-        rect(ctx, dx + dw - 1 - step, dy + i, 1, 1, PAL.cloth);
-      }
-      drawWindow(ctx, x + 3, top + 4, 5, 4);
-      drawWindow(ctx, x + w - 8, top + 4, 5, 4);
-    },
-  });
-  drawBox(ctx, x + 44, y + 2, 8, 5, 6, PAL.thatch, PAL.thatchDark, PAL.thatchLight);   // hay bales
-  drawBox(ctx, x + 46, y - 3, 8, 5, 6, PAL.thatch, PAL.thatchDark, PAL.thatchLight);
+function drawBarn(ctx, tx, ty) {
+  const box = { x: tx + 0.15, y: ty + 0.15, w: 2.7, d: 1.7, z: 0 };
+  const h = 15;
+  fx.shadows.push({ box, h: h + 10 });
+  drawIsoBox(ctx, box, h, PAL.barn, PAL.barnDark);
+  for (let u = 0.2; u < box.w; u += 0.25) postL(ctx, box, u, h, PAL.barnDark);
+  for (let u = 0.2; u < box.d; u += 0.25) postR(ctx, box, u, h, "#6a1f14");
+  postL(ctx, box, 0, h, PAL.cloth); postR(ctx, box, box.d - 0.02, h, PAL.cloth);
+  // Big door with a white X
+  const door = { u: 1.0, w: 0.8, h: 11 };
+  faceL(ctx, box, door.u - 0.06, 0, door.w + 0.12, door.h + 1, PAL.cloth);
+  faceL(ctx, box, door.u, 0, door.w, door.h, PAL.barnDark);
+  const fy = box.y + box.d;
+  drawLine(ctx, ...iso(box.x + door.u, fy, door.h), ...iso(box.x + door.u + door.w, fy, 0), PAL.cloth);
+  drawLine(ctx, ...iso(box.x + door.u, fy, 0), ...iso(box.x + door.u + door.w, fy, door.h), PAL.cloth);
+  windowL(ctx, box, 0.3, 7, 0.3, 4);
+  windowL(ctx, box, 2.1, 7, 0.3, 4);
+  windowR(ctx, box, 0.7, 7, 0.3, 4);
+  drawRoof(ctx, box, h, 12, ROOF_WOOD, "x", PAL.barnDark);
 }
 
-// A fenced field with rows of crops.
-function drawField(ctx, x, y, crop) {
-  const w = 50, h = 26;
-  rect(ctx, x, y, w, h, PAL.soil);
-  rect(ctx, x, y + h, w, 2, PAL.soilDark);                       // front edge of the raised bed
-  for (let ry = y + 3; ry < y + h - 1; ry += 5) {
-    rect(ctx, x + 1, ry + 2, w - 2, 1, PAL.soilDark);            // furrow
-    rect(ctx, x + 1, ry - 1, w - 2, 1, PAL.soilLight);
-    for (let px = x + 2; px < x + w - 2; px += 3) drawCrop(ctx, px, ry, crop);
+function drawHay(ctx, tx, ty) {
+  drawIsoBox(ctx, { x: tx, y: ty, w: 0.5, d: 0.35, z: 0 }, 4, PAL.thatch, PAL.thatchDark, PAL.thatchLight);
+}
+
+function drawLumberMill(ctx, tx, ty) {
+  const box = { x: tx + 0.2, y: ty + 0.2, w: 1.6, d: 1.6, z: 0 };
+  const h = 12;
+  fx.shadows.push({ box, h: h + 8 });
+  drawIsoBox(ctx, box, h, PAL.wood, PAL.woodDark);
+  for (let v = 2; v < h; v += 3) {                               // stacked logs
+    lineL(ctx, box, v, PAL.woodDark);
+    lineL(ctx, box, v + 1, PAL.woodLight);
+    lineR(ctx, box, v, PAL.woodDeep);
+    const [ex, ey] = iso(box.x, box.y + box.d, v + 1);
+    rect(ctx, ex - 1, ey - 1, 2, 2, PAL.logEnd);
+    const [rx, ry] = iso(box.x + box.w, box.y + box.d, v + 1);
+    rect(ctx, rx - 1, ry - 1, 2, 2, PAL.logRing);
   }
-  // Fence: back rail, side rails, then the front rail and posts
-  rect(ctx, x - 2, y - 3, w + 4, 1, PAL.woodLight);
-  rect(ctx, x - 2, y - 3, 1, h + 6, PAL.woodLight);
-  rect(ctx, x + w + 1, y - 3, 1, h + 6, PAL.woodDark);
-  for (let px = x - 2; px <= x + w + 1; px += 6) rect(ctx, px, y - 5, 1, 3, PAL.timber);
-  rect(ctx, x - 2, y + h + 2, w + 4, 1, PAL.woodLight);
-  rect(ctx, x - 2, y + h + 3, w + 4, 1, PAL.woodDark);
-  for (let px = x - 2; px <= x + w + 1; px += 6) {
-    rect(ctx, px, y + h, 1, 5, PAL.timber);
-    rect(ctx, px, y + h, 1, 1, PAL.woodLight);
+  doorL(ctx, box, 0.9, 0.4, 9);
+  windowL(ctx, box, 0.25, 6, 0.3, 4);
+  windowR(ctx, box, 0.6, 6, 0.3, 4);
+  drawRoof(ctx, box, h, 9, ROOF_RED, "y", PAL.wood, () => drawChimney(ctx, box.x + 1.1, box.y + 0.25, h, 12));
+
+  // Open saw shed beside it
+  const shed = { x: tx + 2.1, y: ty + 0.3, w: 0.9, d: 1.4, z: 0 };
+  for (const [u, v] of [[0, 0], [0.85, 0], [0, 1.35], [0.85, 1.35]]) {
+    const [px, py] = iso(shed.x + u, shed.y + v, 0);
+    rect(ctx, px, py - 11, 1, 11, PAL.woodDeep);
   }
+  drawIsoBox(ctx, { x: shed.x + 0.15, y: shed.y + 0.3, w: 0.6, d: 0.8, z: 0 }, 4, PAL.woodLight, PAL.wood, PAL.woodDark);
+  const [bx, by] = iso(shed.x + 0.45, shed.y + 0.7, 4);
+  fx.saws.push({ x: bx, y: by - 4 });
+  drawIsoBox(ctx, { ...shed, z: 11 }, 1, PAL.roofRedDark, PAL.roofRedDark, PAL.roofRed);
 }
 
-function drawCrop(ctx, x, y, crop) {
-  if (crop === "wheat") {
-    rect(ctx, x, y - 3, 1, 4, PAL.wheat);
-    rect(ctx, x, y - 3, 1, 1, PAL.wheatLight);
-    rect(ctx, x + 1, y - 1, 1, 2, PAL.thatchDark);
-  } else if (crop === "cabbage") {
-    rect(ctx, x, y - 1, 2, 2, PAL.cabbage);
-    rect(ctx, x, y - 1, 1, 1, PAL.leafBright);
-    rect(ctx, x + 1, y, 1, 1, PAL.cropDark);
-  } else {
-    rect(ctx, x, y - 2, 1, 1, PAL.crop);
-    rect(ctx, x, y - 1, 2, 2, PAL.pumpkin);
-    rect(ctx, x, y - 1, 1, 1, PAL.wheatLight);
+// Logs lying front-to-back so you see their round ends.
+function drawLogPile(ctx, tx, ty) {
+  const logs = [[0, 0], [0.32, 0], [0.64, 0], [0.16, 3], [0.48, 3], [0.32, 6]];
+  for (const [u, z] of logs) {
+    const box = { x: tx + u, y: ty, w: 0.3, d: 0.8, z };
+    drawIsoBox(ctx, box, 3, PAL.logEnd, PAL.woodDark, PAL.woodLight);
+    const [cx, cy] = iso(box.x + 0.15, box.y + box.d, z + 1.5);
+    rect(ctx, cx, cy, 1, 1, PAL.logRing);
   }
 }
 
-// Lumber mill: log house, open saw shed and piles of logs.
-function drawLumberMill(ctx, x, y) {
-  drawBuildingBox(ctx, x, y, {
-    w: 34, h: 16, d: 12, roofH: 10,
-    wall: PAL.wood, wallShade: PAL.woodDark, side: PAL.woodDark, sideDark: PAL.woodDeep,
-    roof: PAL.roofRed, roofDark: PAL.roofRedDark, roofLight: PAL.roofRedLight, roofStyle: "shingle",
-    front(ctx, x, top, w, h) {
-      for (let yy = top + 3; yy < top + h; yy += 3) {             // stacked log walls
-        rect(ctx, x, yy, w, 1, PAL.woodDark);
-        rect(ctx, x, yy + 1, w, 1, PAL.woodLight);
-        rect(ctx, x - 1, yy, 2, 2, PAL.logEnd);
-        rect(ctx, x + w - 1, yy, 2, 2, PAL.logEnd);
-      }
-      drawDoor(ctx, x + 15, top + h, 8, 10);
-      drawWindow(ctx, x + 4, top + 6, 5, 4);
-    },
-  });
-  // Saw shed with a round blade
-  const sx = x + 44, sy = y + 4;
-  drawGroundShadow(ctx, sx, sy, 18, 8);
-  rect(ctx, sx, sy - 16, 1, 16, PAL.timber);
-  rect(ctx, sx + 17, sy - 16, 1, 16, PAL.timber);
-  drawBox(ctx, sx + 1, sy, 16, 5, 8, PAL.wood, PAL.woodDark, PAL.woodLight);
-  fillEllipse(ctx, sx + 9, sy - 8, 4, 4, PAL.metalDark);
-  fillEllipse(ctx, sx + 9, sy - 8, 3, 3, PAL.metal);
-  rect(ctx, sx + 8, sy - 9, 2, 2, PAL.outline);
-  rect(ctx, sx + 2, sy - 7, 5, 2, PAL.woodLight);                // plank being cut
-  drawBox(ctx, sx - 2, sy - 16, 22, 2, 10, PAL.roofRedDark, PAL.roofRedDark, PAL.roofRed);
-  drawLogPile(ctx, x + 2, y + 16);
-  drawLogPile(ctx, sx + 22, sy + 2);
-  for (const [ox, oy] of [[40, 22], [70, 12]]) {                 // tree stumps
-    drawBox(ctx, x + ox, y + oy, 5, 3, 4, PAL.wood, PAL.woodDark, PAL.logEnd);
-  }
-}
-
-function drawLogPile(ctx, x, y) {
-  const logs = [[0, 0], [6, 0], [12, 0], [3, -5], [9, -5], [6, -10]];
-  for (const [ox, oy] of logs) {
-    drawBox(ctx, x + ox, y + oy, 6, 5, 10, PAL.wood, PAL.woodDark, PAL.woodLight);
-    rect(ctx, x + ox, y + oy - 5, 6, 5, PAL.logEnd);
-    rect(ctx, x + ox, y + oy - 5, 1, 1, PAL.woodDark);
-    rect(ctx, x + ox + 5, y + oy - 1, 1, 1, PAL.woodDark);
-    rect(ctx, x + ox + 2, y + oy - 3, 2, 1, PAL.logRing);
-  }
-}
-
-// The rocky hill. When a quarry is built it gets cut terraces, stone
-// blocks and a wooden crane.
-function drawQuarry(ctx, x, y, built) {
-  fillPoly(ctx, [[x + 4, y], [x + 92, y], [x + 106, y - 8], [x + 100, y + 4], [x + 10, y + 5]], SHADOW);
-  fillPoly(ctx, [[x - 4, y], [x + 92, y], [x + 98, y - 12], [x + 86, y - 36], [x + 62, y - 46], [x + 34, y - 44], [x + 10, y - 32], [x - 2, y - 14]], PAL.stone);
-  fillPoly(ctx, [[x + 10, y - 32], [x + 34, y - 44], [x + 62, y - 46], [x + 86, y - 36], [x + 66, y - 30], [x + 36, y - 30]], PAL.stoneLight);
-  fillPoly(ctx, [[x + 86, y - 36], [x + 98, y - 12], [x + 92, y], [x + 74, y], [x + 66, y - 30]], PAL.stoneDark);
-  fillPoly(ctx, [[x - 4, y], [x - 2, y - 14], [x + 10, y - 32], [x + 8, y - 12], [x + 6, y]], PAL.stoneLight);
-  const random = makeRandom(9);
-  for (let i = 0; i < 30; i++) {                                  // cracks
-    const cx = x + 4 + Math.floor(random() * 88);
-    const cy = y - 4 - Math.floor(random() * 26);
-    rect(ctx, cx, cy, 1 + Math.floor(random() * 4), 1, PAL.stoneDeep);
-  }
-  for (let i = 0; i < 18; i++) {                                  // grass on top
-    rect(ctx, x + 22 + Math.floor(random() * 50), y - 44 + Math.floor(random() * 12), 2, 1, PAL.grassDark);
-  }
-  fillEllipse(ctx, x + 30, y - 40, 5, 3, PAL.leafDark);           // bushes on top
-  fillEllipse(ctx, x + 29, y - 41, 3, 2, PAL.leaf);
-
-  if (!built) return;
-
-  // Cut terraces
-  for (let i = 0; i < 3; i++) {
-    const tx = x + 22 - i * 4, ty = y - 26 + i * 9, tw = 44 + i * 8;
-    rect(ctx, tx, ty, tw, 2, PAL.stoneLight);
-    rect(ctx, tx, ty + 2, tw, 7, PAL.stoneDark);
-    for (let bx = tx + 2 + i * 2; bx < tx + tw; bx += 7) rect(ctx, bx, ty + 2, 1, 7, PAL.stoneDeep);
-    rect(ctx, tx, ty + 8, tw, 1, PAL.stoneDeep);
-  }
+function drawQuarryWorks(ctx) {
   // Wooden crane
-  rect(ctx, x + 76, y - 30, 2, 30, PAL.wood);
-  rect(ctx, x + 78, y - 30, 1, 30, PAL.woodDark);
-  rect(ctx, x + 56, y - 30, 24, 2, PAL.wood);
-  rect(ctx, x + 60, y - 28, 1, 12, PAL.outline);                  // rope
-  drawBox(ctx, x + 58, y - 12, 5, 4, 4, PAL.stoneLight, PAL.stone, PAL.cloth);
-  // Cut blocks waiting to be carted away
-  drawBox(ctx, x + 6, y + 8, 7, 5, 6, PAL.stoneLight, PAL.stoneDark, PAL.cloth);
-  drawBox(ctx, x + 14, y + 8, 7, 5, 6, PAL.stoneLight, PAL.stoneDark, PAL.cloth);
-  drawBox(ctx, x + 10, y + 3, 7, 5, 6, PAL.stoneLight, PAL.stoneDark, PAL.cloth);
-  // Cart
-  drawBox(ctx, x + 30, y + 8, 14, 5, 8, PAL.wood, PAL.woodDark, PAL.woodLight);
-  rect(ctx, x + 32, y + 3, 4, 2, PAL.stoneLight);
-  rect(ctx, x + 37, y + 2, 4, 3, PAL.stone);
-  fillEllipse(ctx, x + 33, y + 9, 3, 3, PAL.woodDeep);
-  fillEllipse(ctx, x + 42, y + 9, 3, 3, PAL.woodDeep);
-  rect(ctx, x + 32, y + 8, 2, 1, PAL.woodLight);
-  rect(ctx, x + 41, y + 8, 2, 1, PAL.woodLight);
-}
-
-// A market stall with a striped awning.
-function drawStall(ctx, x, y, color) {
-  drawGroundShadow(ctx, x, y, 22, 8);
-  rect(ctx, x + 1, y - 18, 1, 18, PAL.timber);                   // posts
-  rect(ctx, x + 20, y - 18, 1, 18, PAL.timber);
-  drawBox(ctx, x, y, 22, 7, 8, PAL.wood, PAL.woodDark, PAL.woodLight);
-  // Goods on the counter
-  const goods = [PAL.red, PAL.wheatLight, PAL.cabbage, PAL.pumpkin, PAL.gold];
-  goods.forEach((c, i) => {
-    rect(ctx, x + 2 + i * 4, y - 9, 3, 2, c);
-    rect(ctx, x + 2 + i * 4, y - 9, 1, 1, PAL.cloth);
-  });
-  // Awning: sloped canvas with stripes, plus a dark side
-  const front = [[x - 2, y - 15], [x + 24, y - 15], [x + 27, y - 22], [x + 1, y - 22]];
-  fillPoly(ctx, [[x + 24, y - 15], [x + 28, y - 19], [x + 28, y - 22], [x + 27, y - 22]], PAL.woodDark);
-  fillPoly(ctx, front, PAL.cloth);
-  for (let i = 0; i < 26; i += 6) {
-    fillPoly(ctx, [[x - 2 + i, y - 15], [x + 1 + i, y - 15], [x + 4 + i, y - 22], [x + 1 + i, y - 22]], color);
+  const [cx, cy] = iso(14.7, 3.4, 0);
+  rect(ctx, cx, cy - 26, 2, 26, PAL.wood);
+  rect(ctx, cx + 2, cy - 26, 1, 26, PAL.woodDark);
+  drawLine(ctx, cx + 1, cy - 26, cx - 22, cy - 34, PAL.wood);
+  drawLine(ctx, cx + 1, cy - 25, cx - 22, cy - 33, PAL.woodDark);
+  rect(ctx, cx - 20, cy - 32, 1, 14, PAL.outline);
+  drawIsoBox(ctx, { x: 13.15, y: 2.75, w: 0.3, d: 0.3, z: 18 }, 3, PAL.stoneLight, PAL.stone, PAL.cloth);
+  // Cut stone blocks
+  for (const [x, y, z] of [[11.2, 3.3, 0], [11.6, 3.3, 0], [11.4, 3.25, 4]]) {
+    drawIsoBox(ctx, { x, y, w: 0.35, d: 0.35, z }, 4, PAL.stoneLight, PAL.stone, PAL.cloth);
   }
-  for (let i = 0; i < 26; i += 3) rect(ctx, x - 2 + i, y - 15, 2, 2, i % 6 === 0 ? color : PAL.cloth);   // scalloped edge
-  rect(ctx, x + 1, y - 23, 26, 1, PAL.cloth);
+  // Cart
+  const cart = { x: 12.6, y: 3.6, w: 0.9, d: 0.5, z: 2 };
+  drawIsoBox(ctx, cart, 4, PAL.wood, PAL.woodDark, PAL.woodDeep);
+  drawIsoBox(ctx, { x: 12.75, y: 3.65, w: 0.3, d: 0.3, z: 6 }, 2, PAL.stoneLight, PAL.stone, PAL.cloth);
+  for (const u of [0.15, 0.75]) {
+    const [wx, wy] = iso(cart.x + u, cart.y + cart.d, 2);
+    fillEllipse(ctx, wx, wy, 2, 2, PAL.woodDeep);
+  }
 }
 
-const STALL_COLORS = [PAL.red, PAL.blue, PAL.green, PAL.purple];
-
-function drawWell(ctx, x, y) {
-  drawGroundShadow(ctx, x, y, 12, 8);
-  paintBricks(ctx, x, y - 7, 12, 7, PAL.stone, PAL.stoneDark, PAL.stoneLight);
-  fillEllipse(ctx, x + 6, y - 7, 6, 2, PAL.stoneLight);
-  fillEllipse(ctx, x + 6, y - 7, 4, 1, PAL.waterDark);
-  rect(ctx, x, y - 17, 1, 10, PAL.timber);
-  rect(ctx, x + 11, y - 17, 1, 10, PAL.timber);
-  drawBox(ctx, x - 2, y - 17, 16, 2, 6, PAL.roofRed, PAL.roofRedDark, PAL.roofRedLight);
-  rect(ctx, x + 6, y - 15, 1, 5, PAL.outline);
-  rect(ctx, x + 5, y - 11, 3, 3, PAL.wood);
+function drawStall(ctx, tx, ty, color) {
+  const box = { x: tx + 0.15, y: ty + 0.15, w: 0.7, d: 0.7, z: 0 };
+  fx.shadows.push({ box, h: 10 });
+  for (const [u, v] of [[0, 0], [0.7, 0], [0, 0.7], [0.7, 0.7]]) {
+    const [px, py] = iso(box.x + u, box.y + v, 0);
+    rect(ctx, px, py - 13, 1, 13, PAL.woodDeep);
+  }
+  drawIsoBox(ctx, box, 5, PAL.wood, PAL.woodDark, PAL.woodLight);
+  const goods = [PAL.red, PAL.wheatLight, PAL.cabbage, PAL.pumpkin];
+  goods.forEach((c, i) => {
+    const [gx, gy] = iso(box.x + 0.12 + i * 0.15, box.y + 0.45, 5);
+    rect(ctx, gx, gy - 1, 2, 2, c);
+  });
+  const roofBox = { x: box.x - 0.05, y: box.y - 0.05, w: 0.8, d: 0.8, z: 0 };
+  drawRoof(ctx, roofBox, 13, 5, { roof: PAL.cloth, dark: "#cfc5ae", light: "#fffaf0", kind: "stripes", stripe: color }, "x", color);
+  const [lx, ly] = iso(box.x + 0.35, box.y + box.d, 11);
+  addLight(lx, ly, 6);
 }
 
-function drawTree(ctx, x, y, s) {
+function drawWell(ctx, tx, ty) {
+  const [sx, sy] = iso(tx, ty, 0);
+  fillEllipse(ctx, sx + 3, sy + 1, 7, 3, SHADOW);
+  drawCylinder(ctx, sx, sy, 5, 6, [PAL.stoneLight, PAL.stone, PAL.stoneDark, PAL.stoneDeep], true);
+  fillEllipse(ctx, sx, sy - 6, 3, 1, PAL.waterDark);
+  rect(ctx, sx - 5, sy - 16, 1, 11, PAL.woodDeep);
+  rect(ctx, sx + 4, sy - 16, 1, 11, PAL.woodDeep);
+  fillPoly(ctx, [[sx - 7, sy - 15], [sx, sy - 20], [sx, sy - 14]], PAL.roofRedLight);
+  fillPoly(ctx, [[sx, sy - 20], [sx + 7, sy - 15], [sx, sy - 14]], PAL.roofRedDark);
+  rect(ctx, sx, sy - 14, 1, 5, PAL.outline);
+  rect(ctx, sx - 1, sy - 10, 3, 2, PAL.wood);
+}
+
+function drawLamp(ctx, sx, sy) {
+  rect(ctx, sx, sy - 12, 1, 12, PAL.outline);
+  rect(ctx, sx - 1, sy - 15, 3, 3, PAL.glass);
+  rect(ctx, sx - 1, sy - 16, 3, 1, PAL.outline);
+  rect(ctx, sx - 1, sy, 3, 1, PAL.stoneDeep);
+  addLight(sx, sy - 14, 8);
+}
+
+function drawBarrel(ctx, sx, sy) {
+  rect(ctx, sx, sy - 6, 5, 6, PAL.wood);
+  rect(ctx, sx + 3, sy - 6, 2, 6, PAL.woodDark);
+  rect(ctx, sx, sy - 5, 5, 1, PAL.metalDark);
+  rect(ctx, sx, sy - 2, 5, 1, PAL.metalDark);
+  fillEllipse(ctx, sx + 2.5, sy - 6, 2.5, 1, PAL.woodLight);
+}
+
+function drawCampfire(ctx, sx, sy) {
+  fillEllipse(ctx, sx, sy, 5, 2, PAL.stoneDark);
+  fillEllipse(ctx, sx, sy - 1, 3, 1, PAL.woodDeep);
+  rect(ctx, sx - 3, sy - 2, 6, 1, PAL.wood);
+  fx.fires.push({ x: sx, y: sy - 2, small: false });
+}
+
+function drawTree(ctx, x, y, s, seed) {
   fillEllipse(ctx, x + Math.round(s * 0.7), y, s, Math.max(2, Math.round(s * 0.35)), SHADOW);
   rect(ctx, x - 1, y - s - 2, 3, s + 2, PAL.trunk);
   rect(ctx, x + 1, y - s - 2, 1, s + 2, PAL.trunkDark);
@@ -1819,8 +1954,8 @@ function drawTree(ctx, x, y, s) {
   fillEllipse(ctx, x - Math.round(s * 0.2), cy - Math.round(s * 0.2), Math.round(s * 0.75), Math.round(s * 0.65), PAL.leaf);
   fillEllipse(ctx, x - Math.round(s * 0.4), cy - Math.round(s * 0.4), Math.round(s * 0.35), Math.round(s * 0.3), PAL.leafLight);
   rect(ctx, x - Math.round(s * 0.55), cy - Math.round(s * 0.55), 2, 1, PAL.leafBright);
-  const random = makeRandom(x * 31 + y * 17);
-  for (let i = 0; i < s * 2; i++) {                               // leafy texture
+  const random = makeRandom(seed);
+  for (let i = 0; i < s * 2; i++) {
     const lx = x + Math.round((random() - 0.5) * s * 1.4);
     const ly = cy + Math.round((random() - 0.4) * s * 1.2);
     rect(ctx, lx, ly, 1, 1, random() < 0.5 ? PAL.leafDeep : PAL.leafLight);
@@ -1848,75 +1983,661 @@ function drawBush(ctx, x, y, s) {
   rect(ctx, x - Math.round(s / 2), y - s - 1, 2, 1, PAL.leafLight);
 }
 
-function drawLamp(ctx, x, y) {
-  rect(ctx, x, y - 12, 1, 12, PAL.outline);
-  rect(ctx, x - 1, y - 15, 3, 3, PAL.glass);
-  rect(ctx, x - 1, y - 16, 3, 1, PAL.outline);
-  rect(ctx, x - 1, y, 3, 1, PAL.stoneDeep);
-}
-
-function drawBarrel(ctx, x, y) {
-  rect(ctx, x, y - 6, 5, 6, PAL.wood);
-  rect(ctx, x + 4, y - 6, 1, 6, PAL.woodDark);
-  rect(ctx, x, y - 5, 5, 1, PAL.metalDark);
-  rect(ctx, x, y - 2, 5, 1, PAL.metalDark);
-  fillEllipse(ctx, x + 2.5, y - 6, 2.5, 1, PAL.woodLight);
+function drawBoulder(ctx, x, y, s) {
+  fillEllipse(ctx, x + 2, y, s + 1, Math.max(1, s / 2), SHADOW);
+  fillEllipse(ctx, x, y - s / 2, s, s * 0.7, PAL.rockDark);
+  fillEllipse(ctx, x - 1, y - s / 2 - 1, s - 1, s * 0.55, PAL.rock);
+  rect(ctx, x - s / 2, y - s, 2, 1, PAL.rockLight);
 }
 
 
-// ---------- Putting the scene together ----------
+// ---------- Fields and crops ----------
 
-// Builds the list of everything standing in the village. Each entry
-// knows where it touches the ground (baseY) and how to draw itself.
-function getSceneObjects() {
+// Fence rails along the field's back edges (drawn flat on the ground layer).
+function paintFieldBackFence(g, f) {
+  const z = 4;
+  drawLine(g, ...iso(f.x, f.y, z), ...iso(f.x + f.w, f.y, z), PAL.woodLight);
+  drawLine(g, ...iso(f.x, f.y, z), ...iso(f.x, f.y + f.d, z), PAL.woodLight);
+  for (let u = 0; u <= f.w; u += 1) { const [px, py] = iso(f.x + u, f.y, 0); rect(g, px, py - 5, 1, 5, PAL.woodDeep); }
+  for (let v = 1; v <= f.d; v += 1) { const [px, py] = iso(f.x, f.y + v, 0); rect(g, px, py - 5, 1, 5, PAL.woodDeep); }
+}
+
+function drawFieldFrontFence(ctx, f) {
+  const z = 4;
+  drawLine(ctx, ...iso(f.x, f.y + f.d, z), ...iso(f.x + f.w, f.y + f.d, z), PAL.woodLight);
+  drawLine(ctx, ...iso(f.x + f.w, f.y, z), ...iso(f.x + f.w, f.y + f.d, z), PAL.woodDark);
+  for (let u = 0; u <= f.w; u += 1) { const [px, py] = iso(f.x + u, f.y + f.d, 0); rect(ctx, px, py - 5, 1, 5, PAL.woodDeep); }
+  for (let v = 0; v < f.d; v += 1) { const [px, py] = iso(f.x + f.w, f.y + v, 0); rect(ctx, px, py - 5, 1, 5, PAL.woodDeep); }
+}
+
+// One plant. stage: 0 sprout, 1 growing, 2 ripe, 3 just harvested.
+// sway: 0 or 1, a tiny lean in the wind.
+function drawPlant(ctx, x, y, crop, stage, sway) {
+  if (stage === 3) { rect(ctx, x, y, 1, 1, PAL.thatchDark); return; }
+  if (stage === 0) { rect(ctx, x, y - 1, 1, 2, PAL.sprout); return; }
+  if (crop === "wheat") {
+    const color = stage === 2 ? PAL.wheat : PAL.crop;
+    const tip = stage === 2 ? PAL.wheatLight : PAL.sprout;
+    rect(ctx, x, y - 3, 1, 4, color);
+    rect(ctx, x + sway, y - 4, 1, 2, tip);
+  } else if (crop === "cabbage") {
+    const size = stage === 2 ? 2 : 1;
+    rect(ctx, x, y - size, size + 1, size + 1, PAL.cabbage);
+    rect(ctx, x + sway, y - size, 1, 1, PAL.leafBright);
+  } else {
+    rect(ctx, x - 1 + sway, y - 2, 3, 1, PAL.crop);
+    if (stage === 2) rect(ctx, x, y - 1, 2, 2, PAL.pumpkin);
+    else rect(ctx, x, y, 1, 1, PAL.cropDark);
+  }
+}
+
+// One row of a field, cached for each growth stage and sway frame.
+const cropRowCache = {};
+function getCropRowSprite(f, row, crop, stage, sway) {
+  const key = `${f.x},${f.y},${row},${crop},${stage},${sway}`;
+  if (!cropRowCache[key]) {
+    const box = { x: f.x, y: f.y + row, w: f.w, d: 1, z: 0 };
+    cropRowCache[key] = makeSprite(boxBounds(box, 8), ctx => {
+      for (const v of [0.3, 0.8]) {
+        for (let u = 0.12; u < f.w; u += 0.25) {
+          const [px, py] = iso(f.x + u, f.y + row + v, 0);
+          drawPlant(ctx, px, py, crop, stage, sway);
+        }
+      }
+    });
+  }
+  return cropRowCache[key];
+}
+
+
+// ---------- Building the scene ----------
+
+// Rebuilds all cached art from the current game state.
+function buildScene() {
+  fx = newEffects();
+  tiles = buildTileMap();
+  sceneObjects = buildSceneObjects();
+  fx.groundDraws.push(paintStairs, paintBridge);
+  terrainCanvas = paintTerrain();
+  islandMask = paintIslandMask();
+  findWaterfalls();
+}
+
+// Everything that stands on the ground. Each entry has a depth
+// (bigger = nearer = drawn later) and either a cached sprite or a
+// draw(ctx, time) function for animated things.
+function buildSceneObjects() {
   const L = VILLAGE_LAYOUT;
   const b = state.buildings;
-  const objects = [];
-  const add = (baseY, draw) => objects.push({ baseY, draw });
+  const list = [];
+  const occupied = new Set();
+  const occupy = (x, y, w, d) => {
+    for (let ty = y; ty < y + d; ty++) for (let tx = x; tx < x + w; tx++) occupied.add(tx + "," + ty);
+  };
+  const addSprite = (depth, bounds, drawFn) => list.push({ depth, sprite: makeSprite(bounds, drawFn) });
 
-  add(L.townHall.y + 4, ctx => drawTownHall(ctx, L.townHall.x, L.townHall.y));
+  // Castle on its hill (depth chosen so the stairs and roads draw in front)
+  addSprite(17, { x: 140, y: 0, w: 210, h: 140 }, drawCastle);
+  occupy(4, 4, 6, 6);
 
-  const hasQuarry = b.quarry.count > 0;
-  add(L.quarry.y + (hasQuarry ? 10 : 0), ctx => drawQuarry(ctx, L.quarry.x, L.quarry.y, hasQuarry));
+  // Houses
+  L.huts.forEach((h, i) => {
+    occupy(h.x, h.y, 2, 2);
+    addSprite(h.x + h.y + 3.4, boxBounds({ x: h.x, y: h.y, w: 2, d: 2, z: 0 }, 40), ctx => drawHouse(ctx, h.x, h.y, i));
+  });
 
-  if (b.farm.count > 0) add(L.barn.y, ctx => drawBarn(ctx, L.barn.x, L.barn.y));
+  // Farm: barn + one field per farm
+  if (b.farm.count > 0) {
+    const barn = L.barn;
+    occupy(barn.x, barn.y, 3, 2);
+    addSprite(barn.x + barn.y + 4.6, boxBounds({ x: barn.x, y: barn.y, w: 3, d: 2, z: 0 }, 44), ctx => drawBarn(ctx, barn.x, barn.y));
+    addSprite(barn.x + barn.y + 5.5, boxBounds({ x: barn.x, y: barn.y + 2, w: 1, d: 1, z: 0 }, 12), ctx => {
+      drawHay(ctx, barn.x + 0.2, barn.y + 2.2);
+      drawHay(ctx, barn.x + 0.25, barn.y + 2.15 - 0.05);
+    });
+  }
   const fieldCount = Math.min(b.farm.count, L.farmFields.length);
   for (let i = 0; i < fieldCount; i++) {
     const f = L.farmFields[i];
-    add(f.y, ctx => drawField(ctx, f.x, f.y, FIELD_CROPS[i]));
+    occupy(f.x, f.y, f.w, f.d);
+    fx.groundDraws.push(g => paintFieldBackFence(g, f));
+    for (let row = 0; row < f.d; row++) {
+      list.push({
+        depth: f.x + f.y + row + 1.2,
+        draw(ctx, time) {
+          const cycle = (time / CROP_CYCLE_SECONDS + i * 0.27) % 1;
+          const stage = cycle < 0.2 ? 0 : cycle < 0.5 ? 1 : cycle < 0.9 ? 2 : 3;
+          const sway = Math.floor(time * 1.4 + row * 0.5 + i) % 2;
+          const s = getCropRowSprite(f, row, FIELD_CROPS[i], stage, sway);
+          ctx.drawImage(s.canvas, s.x, s.y);
+        },
+      });
+    }
+    addSprite(f.x + f.w + f.y + f.d, boxBounds({ ...f, z: 0 }, 8), ctx => drawFieldFrontFence(ctx, f));
   }
 
+  // Lumber mill
   if (b.lumberMill.count > 0) {
-    add(L.lumberMill.y, ctx => drawLumberMill(ctx, L.lumberMill.x, L.lumberMill.y));
+    const m = L.lumberMill;
+    occupy(m.x, m.y, 3, 2);
+    addSprite(m.x + m.y + 3.6, boxBounds({ x: m.x, y: m.y, w: 3, d: 2, z: 0 }, 40), ctx => drawLumberMill(ctx, m.x, m.y));
+    addSprite(14.2 + 9.2 + 0.8, boxBounds({ x: 14.2, y: 9.2, w: 1, d: 0.8, z: 0 }, 12), ctx => drawLogPile(ctx, 14.15, 9.15));
+    addSprite(17.2 + 10.2 + 0.8, boxBounds({ x: 17.2, y: 10.2, w: 1, d: 0.8, z: 0 }, 12), ctx => drawLogPile(ctx, 17.15, 10.15));
   }
 
-  // One market = 2 stalls, every extra market adds a stall (up to 4)
+  // Quarry works
+  if (b.quarry.count > 0) {
+    addSprite(15.2, { x: 290, y: 80, w: 100, h: 70 }, drawQuarryWorks);
+  }
+
+  // Market stalls: one market = 2 stalls, each extra market adds one (max 4)
   const stallCount = b.market.count > 0 ? Math.min(L.marketStalls.length, b.market.count + 1) : 0;
   for (let i = 0; i < stallCount; i++) {
     const s = L.marketStalls[i];
-    add(s.y, ctx => drawStall(ctx, s.x, s.y, STALL_COLORS[i]));
+    addSprite(s.x + s.y + 1.85, boxBounds({ x: s.x, y: s.y, w: 1, d: 1, z: 0 }, 26), ctx => drawStall(ctx, s.x, s.y, STALL_COLORS[i]));
   }
 
-  L.huts.forEach((h, i) => add(h.y, ctx => drawHut(ctx, h.x, h.y, i)));
-  add(L.well.y, ctx => drawWell(ctx, L.well.x, L.well.y));
+  // Plaza well, lamps and props
+  const [wx, wy] = iso(11, 12.5, 0);
+  addSprite(23.5, { x: wx - 10, y: wy - 24, w: 22, h: 30 }, ctx => drawWell(ctx, 11, 12.5));
+  for (const [lx, ly] of [[9.05, 11.05], [12.95, 11.05], [9.05, 13.95], [12.95, 13.95], [11.1, 16], [11.1, 19], [6, 12.05], [2.8, 12.05], [15.1, 12.05]]) {
+    const [sx, sy] = iso(lx, ly, 0);
+    addSprite(lx + ly, { x: sx - 8, y: sy - 18, w: 16, h: 22 }, ctx => drawLamp(ctx, sx, sy));
+  }
+  for (const [px, py, kind] of [[13.3, 11.3, "barrel"], [13.5, 11.5, "barrel"], [16.9, 9.4, "barrel"], [5.9, 14.9, "barrel"]]) {
+    const [sx, sy] = iso(px, py, 0);
+    addSprite(px + py, { x: sx - 2, y: sy - 10, w: 10, h: 12 }, ctx => drawBarrel(ctx, sx, sy));
+  }
+  {
+    const [sx, sy] = iso(11.6, 9.6, 0);
+    addSprite(21.2, { x: sx - 8, y: sy - 6, w: 16, h: 10 }, ctx => drawCampfire(ctx, sx, sy));
+  }
 
-  const painters = { tree: drawTree, pine: drawPine, bush: drawBush, lamp: drawLamp, barrel: drawBarrel };
-  for (const [kind, x, y, size] of SCENERY) {
-    if (kind === "crate") {
-      add(y, ctx => drawBox(ctx, x, y, 6, 5, 6, PAL.wood, PAL.woodDark, PAL.woodLight));
-    } else {
-      add(y, ctx => painters[kind](ctx, x, y, size));
+  // Trees on forest tiles, pines on mountains, plus a few on the grass
+  const random = makeRandom(77);
+  const treeSprites = {};
+  const addTree = (kind, tx, ty, z, size, seed) => {
+    const [sx, sy] = iso(tx, ty, z);
+    const key = kind + size + (seed % 4);
+    if (!treeSprites[key]) {
+      treeSprites[key] = makeSprite({ x: -16, y: -size * 3 - 6, w: 34, h: size * 3 + 12 }, ctx => {
+        if (kind === "pine") drawPine(ctx, 0, 0, size);
+        else if (kind === "bush") drawBush(ctx, 0, 0, size);
+        else if (kind === "boulder") drawBoulder(ctx, 0, 0, size);
+        else drawTree(ctx, 0, 0, size, seed % 4 + 3);
+      });
+    }
+    if (kind === "tree" || kind === "pine") fx.fireflies.push({ x: sx, y: sy - size * 2 });
+    const s = treeSprites[key];
+    list.push({ depth: tx + ty, sprite: s, ax: Math.round(sx), ay: Math.round(sy) });
+  };
+  for (let ty = 0; ty < MAP_SIZE; ty++) {
+    for (let tx = 0; tx < MAP_SIZE; tx++) {
+      const tile = tiles[ty][tx];
+      if (occupied.has(tx + "," + ty)) continue;
+      // Skip spots hidden behind higher ground
+      const blocked = [[1, 0], [0, 1], [1, 1]].some(([dx, dy]) => {
+        const z = tileZ(tx + dx, ty + dy);
+        return z !== null && z > tile.z;
+      });
+      if (blocked) continue;
+      if (tile.kind === "forest") {
+        const count = 1 + Math.floor(random() * 2);
+        for (let i = 0; i < count; i++) {
+          const kind = random() < 0.45 ? "pine" : "tree";
+          addTree(kind, tx + 0.2 + random() * 0.6, ty + 0.2 + random() * 0.6, tile.z, kind === "pine" ? 6 + Math.floor(random() * 3) : 6 + Math.floor(random() * 3), Math.floor(random() * 100));
+        }
+      } else if ((tile.kind === "rock" || tile.kind === "snow") && random() < 0.35) {
+        addTree(random() < 0.7 ? "pine" : "boulder", tx + 0.5, ty + 0.5, tile.z, 5, Math.floor(random() * 100));
+      } else if (tile.kind === "grass" && tile.z === 0 && random() < 0.07) {
+        addTree(random() < 0.5 ? "bush" : "tree", tx + 0.5, ty + 0.5, 0, random() < 0.5 ? 3 : 6, Math.floor(random() * 100));
+      } else if (tile.kind === "grass" && tile.z > 0 && random() < 0.1) {
+        addTree("bush", tx + 0.5, ty + 0.5, tile.z, 3, 1);
+      }
     }
   }
 
-  objects.sort((a, b) => a.baseY - b.baseY);   // far first, near last
-  return objects;
+  list.sort((a, b) => a.depth - b.depth);
+  return list;
 }
 
-// Paints the whole village onto the visible canvas.
-function drawVillage() {
-  villageCtx.drawImage(backdropCanvas, 0, 0);
-  for (const obj of getSceneObjects()) obj.draw(villageCtx);
+// Waterfalls where the river spills over a cliff or the island's edge.
+function findWaterfalls() {
+  for (let ty = 0; ty < MAP_SIZE; ty++) {
+    for (let tx = 0; tx < MAP_SIZE; tx++) {
+      const tile = tiles[ty][tx];
+      // River flowing off the front-left edge of the island
+      if (tile.kind === "water" && ty === MAP_SIZE - 1) {
+        fx.falls.push({ a: iso(tx, ty + 1, tile.z), b: iso(tx + 1, ty + 1, tile.z), length: VIEW_HEIGHT });
+      }
+      // Spring pouring out of the mountain into the river
+      if (tile.kind === "water" && ty > 0 && tileZ(tx, ty - 1) > tile.z + 6) {
+        const top = tileZ(tx, ty - 1);
+        fx.falls.push({ a: iso(tx + 0.2, ty, top), b: iso(tx + 0.8, ty, top), length: top - tile.z });
+      }
+    }
+  }
+}
+
+
+// ---------- Sky, background and lighting ----------
+
+// Where we are in the day: 0 = sunrise ... 0.55 sunset ... night ... 1.
+function getDaylight(nowMs) {
+  const p = ((nowMs / 1000) % DAY_LENGTH_SECONDS) / DAY_LENGTH_SECONDS;
+  let darkness;
+  if (p < 0.55) darkness = 0;
+  else if (p < 0.65) darkness = (p - 0.55) / 0.1;
+  else if (p < 0.9) darkness = 1;
+  else darkness = 1 - (p - 0.9) / 0.1;
+  darkness = darkness * darkness * (3 - 2 * darkness);     // smooth the change
+  // Warm sunset / sunrise glow
+  const distance = Math.min(Math.abs(p - 0.6), Math.abs(p - 0.95), Math.abs(p + 0.05));
+  const glow = Math.max(0, 1 - distance / 0.08);
+  return { p, darkness, glow };
+}
+
+function getSkyCanvas(light) {
+  const key = Math.round(light.darkness * 40) * 100 + Math.round(light.glow * 40);
+  if (skyCache.key === key) return skyCache.canvas;
+  const canvas = skyCache.canvas || document.createElement("canvas");
+  canvas.width = VIEW_WIDTH;
+  canvas.height = VIEW_HEIGHT;
+  const g = canvas.getContext("2d");
+  const bandHeight = Math.ceil(VIEW_HEIGHT / 6 / 2);
+  const colors = PAL.daySky.map((c, i) => {
+    let color = lerpColor(c, PAL.nightSky[i], light.darkness);
+    return lerpColor(color, PAL.duskSky[i], light.glow * 0.75);
+  });
+  for (let i = 0; i < 6; i++) rect(g, 0, i * bandHeight, VIEW_WIDTH, VIEW_HEIGHT, colors[i]);
+  for (let i = 1; i < 6; i++) {                                   // dithered band edges
+    const y = i * bandHeight - 1;
+    for (let x = 0; x < VIEW_WIDTH; x += 2) {
+      rect(g, x + (i % 2), y, 1, 1, colors[i]);
+      rect(g, x + 1 - (i % 2), y + 1, 1, 1, colors[i - 1]);
+    }
+  }
+  skyCache = { key, canvas };
+  return canvas;
+}
+
+// Distant mountains and the sea of clouds below the island (cached).
+function paintBackground() {
+  const g = document.createElement("canvas").getContext("2d");
+  g.canvas.width = VIEW_WIDTH;
+  g.canvas.height = VIEW_HEIGHT;
+  const peaks = [[20, 92, 46], [92, 104, 40], [160, 96, 44], [330, 98, 46], [400, 90, 48], [470, 102, 40]];
+  for (const [px, py, hw] of peaks) {
+    fillPoly(g, [[px - hw, 150], [px, py], [px, 150]], PAL.mountFar);
+    fillPoly(g, [[px, py], [px + hw, 150], [px, 150]], PAL.mountFarDark);
+    fillPoly(g, [[px - 7, py + 7], [px, py], [px, py + 8]], PAL.snow);
+    fillPoly(g, [[px, py], [px + 7, py + 7], [px, py + 8]], PAL.snowShade);
+  }
+  for (const [px, py, hw] of [[56, 118, 40], [128, 124, 36], [370, 120, 40], [440, 116, 42]]) {
+    fillPoly(g, [[px - hw, 152], [px, py], [px, 152]], PAL.mountNear);
+    fillPoly(g, [[px, py], [px + hw, 152], [px, 152]], PAL.mountNearDark);
+  }
+  // Sea of clouds
+  const random = makeRandom(5);
+  rect(g, 0, 150, VIEW_WIDTH, VIEW_HEIGHT - 150, PAL.cloudShade);
+  for (let row = 0; row < 6; row++) {
+    const y = 146 + row * 22;
+    for (let x = -20; x < VIEW_WIDTH + 30; x += 26 + Math.floor(random() * 10)) {
+      const r = 14 + Math.floor(random() * 8);
+      fillEllipse(g, x + 2, y + 3, r, r * 0.5, PAL.cloudDeep);
+      fillEllipse(g, x, y, r, r * 0.5, PAL.cloud);
+      fillEllipse(g, x - 3, y - 2, r * 0.6, r * 0.3, "#ffffff");
+    }
+  }
+  return g.canvas;
+}
+
+function drawCloud(ctx, x, y, s) {
+  fillEllipse(ctx, x + s * 0.5, y + 2, s * 1.9, s * 0.45, PAL.cloudShade);
+  fillEllipse(ctx, x - s * 0.5, y, s * 0.9, s * 0.55, PAL.cloud);
+  fillEllipse(ctx, x + s * 0.4, y - s * 0.35, s, s * 0.75, PAL.cloud);
+  fillEllipse(ctx, x + s * 1.4, y, s * 0.8, s * 0.5, PAL.cloud);
+}
+
+const cloudSprites = {};
+function getCloudSprite(size) {
+  if (!cloudSprites[size]) {
+    cloudSprites[size] = makeSprite({ x: -size * 2.2, y: -size * 1.4, w: size * 5, h: size * 2.6 }, ctx => drawCloud(ctx, 0, 0, size));
+  }
+  return cloudSprites[size];
+}
+
+// Clouds drifting across the sky.
+const SKY_CLOUDS = [[30, 14, 9, 3], [170, 8, 7, 2], [300, 20, 11, 2.5], [420, 10, 7, 3.5], [520, 28, 8, 2.2]];
+function drawSkyClouds(ctx, time) {
+  for (const [x0, y, size, speed] of SKY_CLOUDS) {
+    const span = VIEW_WIDTH + 120;
+    const x = ((x0 + time * speed) % span + span) % span - 60;
+    const s = getCloudSprite(size);
+    ctx.drawImage(s.canvas, Math.round(x + s.x), Math.round(y + s.y));
+  }
+}
+
+// Fluffy clouds in front of the island's underside.
+function drawLowClouds(ctx, time) {
+  for (const [x0, y, size, speed] of [[60, 254, 12, 4], [250, 262, 14, 3], [420, 250, 11, 5], [-80, 266, 13, 3.5]]) {
+    const span = VIEW_WIDTH + 160;
+    const x = ((x0 + time * speed) % span + span) % span - 80;
+    const s = getCloudSprite(size);
+    ctx.drawImage(s.canvas, Math.round(x + s.x), Math.round(y + s.y));
+  }
+}
+
+function drawSunAndMoon(ctx, light) {
+  const p = light.p;
+  if (p < 0.64) {
+    const t = p / 0.64;
+    const x = 20 + t * 440, y = 70 - Math.sin(Math.PI * t) * 55;
+    fillEllipse(ctx, x, y, 9, 9, "rgba(255, 230, 140, 0.35)");
+    fillEllipse(ctx, x, y, 6, 6, PAL.sunGlow);
+    fillEllipse(ctx, x - 1, y - 1, 4, 4, PAL.sun);
+  }
+  if (p > 0.56) {
+    const t = (p - 0.56) / 0.44;
+    const x = 20 + t * 440, y = 70 - Math.sin(Math.PI * t) * 50;
+    fillEllipse(ctx, x, y, 5, 5, PAL.moon);
+    fillEllipse(ctx, x + 2, y - 1, 4, 4, PAL.moonShade);
+    fillEllipse(ctx, x + 3, y - 2, 3, 3, lerpColor(PAL.nightSky[1], PAL.daySky[1], 1 - light.darkness));
+  }
+}
+
+const STARS = (() => {
+  const random = makeRandom(99);
+  return Array.from({ length: 70 }, () => ({ x: Math.floor(random() * VIEW_WIDTH), y: Math.floor(random() * 120), phase: random() * 6.28 }));
+})();
+
+function drawStars(ctx, light, time) {
+  if (light.darkness < 0.2) return;
+  ctx.globalAlpha = Math.min(1, (light.darkness - 0.2) * 1.5);
+  for (const s of STARS) {
+    if (Math.sin(time * 2 + s.phase) > -0.3) rect(ctx, s.x, s.y, 1, 1, PAL.star);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Shadows of clouds gliding over the island (kept on the ground by the mask).
+function drawCloudShadows(ctx, time) {
+  if (!shadowLayer) {
+    shadowLayer = document.createElement("canvas");
+    shadowLayer.width = VIEW_WIDTH;
+    shadowLayer.height = VIEW_HEIGHT;
+  }
+  const g = shadowLayer.getContext("2d");
+  g.globalCompositeOperation = "source-over";
+  g.clearRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+  for (const [x0, y, rx, speed] of [[0, 120, 46, 5], [260, 190, 38, 4], [520, 90, 34, 6]]) {
+    const span = VIEW_WIDTH + 200;
+    const x = ((x0 + time * speed) % span + span) % span - 100;
+    fillEllipse(g, x, y, rx, rx * 0.45, "rgba(20, 40, 30, 0.16)");
+    fillEllipse(g, x + rx * 0.6, y - 6, rx * 0.6, rx * 0.3, "rgba(20, 40, 30, 0.16)");
+  }
+  g.globalCompositeOperation = "destination-in";
+  g.drawImage(islandMask, 0, 0);
+  ctx.drawImage(shadowLayer, 0, 0);
+}
+
+function drawBirds(ctx, time, light) {
+  if (light.darkness > 0.5) return;
+  const cycle = 45;
+  const t = time % cycle;
+  const x = -20 + t * 14;
+  if (x > VIEW_WIDTH + 20) return;
+  const flap = Math.floor(time * 5) % 2;
+  for (const [dx, dy] of [[0, 0], [-7, 4], [-12, -2]]) {
+    const bx = Math.round(x + dx), by = Math.round(30 + Math.sin(time * 0.7) * 6 + dy);
+    rect(ctx, bx - 2, by - flap, 2, 1, PAL.outline);
+    rect(ctx, bx + 1, by - flap, 2, 1, PAL.outline);
+    rect(ctx, bx, by, 1, 1, PAL.outline);
+  }
+}
+
+
+// ---------- Animated details ----------
+
+// Shimmering water and falling waterfalls.
+function drawWater(ctx, time) {
+  for (const s of fx.sparkles) {
+    if (Math.sin(time * 2.2 + s.phase) > 0.55) rect(ctx, s.x, s.y, 2, 1, PAL.waterLight);
+  }
+  for (const f of fx.falls) {
+    const width = Math.round(Math.abs(f.b[0] - f.a[0]));
+    const dir = f.b[0] > f.a[0] ? 1 : -1;
+    for (let i = 0; i <= width; i++) {
+      const x = Math.round(f.a[0] + i * dir);
+      const top = Math.round(lerp(f.a[1], f.b[1], width ? i / width : 0));
+      const bottom = Math.min(VIEW_HEIGHT, top + f.length);
+      rect(ctx, x, top, 1, bottom - top, PAL.water);
+      for (let y = top; y < bottom; y += 6) {
+        const offset = Math.floor(time * 30 + i * 3) % 6;
+        rect(ctx, x, y + offset, 1, 2, i % 3 === 0 ? PAL.foam : PAL.waterLight);
+      }
+    }
+    if (f.length < VIEW_HEIGHT) {                                 // splash at the bottom
+      const bx = Math.round((f.a[0] + f.b[0]) / 2);
+      const by = Math.round(Math.max(f.a[1], f.b[1]) + f.length);
+      const puff = Math.floor(time * 6) % 2;
+      rect(ctx, bx - 4 - puff, by - 1, 9 + puff * 2, 2, PAL.foam);
+    }
+  }
+}
+
+function drawFlags(ctx, time) {
+  for (const f of fx.flags) {
+    const frame = Math.floor(time * 4 + f.x * 0.3) % 2;
+    rect(ctx, f.x, f.y, 6, 3, f.color);
+    if (frame === 0) { rect(ctx, f.x + 6, f.y + 1, 2, 1, f.color); rect(ctx, f.x + 3, f.y + 3, 2, 1, PAL.bannerDark); }
+    else { rect(ctx, f.x + 6, f.y, 1, 2, f.color); rect(ctx, f.x + 1, f.y + 3, 2, 1, PAL.bannerDark); }
+    rect(ctx, f.x + 2, f.y + 1, 2, 1, PAL.gold);
+  }
+}
+
+function drawSaws(ctx, time) {
+  for (const s of fx.saws) {
+    fillEllipse(ctx, s.x, s.y, 3, 3, PAL.metalDark);
+    fillEllipse(ctx, s.x, s.y, 2, 2, PAL.metal);
+    const angle = time * 12;
+    for (let k = 0; k < 4; k++) {
+      const a = angle + (k * Math.PI) / 2;
+      rect(ctx, s.x + Math.round(Math.cos(a) * 3), s.y + Math.round(Math.sin(a) * 3), 1, 1, PAL.outline);
+    }
+  }
+}
+
+function drawFires(ctx, time) {
+  for (const f of fx.fires) {
+    const flicker = Math.floor(time * 10 + f.x) % 3;
+    if (f.small) {
+      rect(ctx, f.x, f.y - 2 - (flicker === 0 ? 1 : 0), 1, 2, PAL.fireLight);
+      rect(ctx, f.x - 1, f.y - 1, 3, 1, PAL.fire);
+    } else {
+      rect(ctx, f.x - 2, f.y - 2, 5, 2, PAL.fire);
+      rect(ctx, f.x - 1, f.y - 4 - flicker, 3, 3, PAL.fire);
+      rect(ctx, f.x, f.y - 3 - flicker, 1, 3, PAL.fireLight);
+    }
+  }
+}
+
+// Smoke puffs rising from chimneys and drifting with the wind.
+function updateAndDrawSmoke(ctx, time, dt) {
+  for (const c of fx.chimneys) {
+    c.timer = (c.timer || Math.random()) - dt;
+    if (c.timer <= 0) {
+      c.timer = 0.7 + Math.random() * 0.5;
+      smokePuffs.push({ x: c.x, y: c.y, age: 0 });
+    }
+  }
+  const next = [];
+  for (const p of smokePuffs) {
+    p.age += dt;
+    if (p.age > 3.2) continue;
+    p.y -= dt * 7;
+    p.x += dt * (3 + Math.sin(time + p.y * 0.1) * 2);
+    const size = 1 + Math.floor(p.age * 1.1);
+    ctx.globalAlpha = Math.max(0, 0.75 - p.age * 0.23);
+    rect(ctx, p.x - size / 2, p.y - size / 2, size, size, p.age < 1 ? "#d8d4cc" : "#c2beb6");
+    next.push(p);
+  }
+  ctx.globalAlpha = 1;
+  smokePuffs = next.slice(-120);
+}
+
+
+// ---------- Workers ----------
+
+// How many workers walk around: one per citizen plus one per extra building.
+function getWorkers() {
+  const b = state.buildings;
+  let buildings = 0;
+  for (const typeId in b) buildings += b[typeId].count;
+  const count = Math.min(MAX_WORKERS, state.population + Math.max(0, buildings - 2));
+  const routes = WORKER_ROUTES.filter(r => !r.needs || b[r.needs].count > 0);
+  const workers = [];
+  for (let i = 0; i < count; i++) {
+    workers.push({ route: routes[i % routes.length], offset: i * 7.3, shirt: SHIRT_COLORS[i % SHIRT_COLORS.length], hair: HAIR_COLORS[(i * 3) % HAIR_COLORS.length], speed: 0.45 + (i % 3) * 0.08 });
+  }
+  return workers;
+}
+
+// Works out where a worker is right now, purely from the time.
+// Workers walk to the end of their route, rest, then walk back.
+function getWorkerPosition(worker, time) {
+  const pts = worker.route.points;
+  const segments = [];
+  let total = 0;
+  const path = worker.route.loop ? [...pts, pts[0]] : pts;
+  for (let i = 0; i < path.length - 1; i++) {
+    const [ax, ay, az] = path[i], [bx, by, bz] = path[i + 1];
+    const len = Math.hypot(bx - ax, by - ay, (bz - az) / LEVEL_HEIGHT);
+    segments.push({ a: path[i], b: path[i + 1], len });
+    total += len;
+  }
+  const walkTime = total / worker.speed;
+  const rest = 1.5;
+  let distance, moving = true, forward = true;
+  if (worker.route.loop) {
+    distance = ((time + worker.offset) % walkTime) * worker.speed;
+  } else {
+    const cycle = 2 * walkTime + 2 * rest;
+    const t = (time + worker.offset) % cycle;
+    if (t < walkTime) distance = t * worker.speed;
+    else if (t < walkTime + rest) { distance = total; moving = false; }
+    else if (t < 2 * walkTime + rest) { distance = total - (t - walkTime - rest) * worker.speed; forward = false; }
+    else { distance = 0; moving = false; }
+  }
+  for (const s of segments) {
+    if (distance <= s.len || s === segments[segments.length - 1]) {
+      const t = s.len ? Math.min(1, distance / s.len) : 0;
+      const x = lerp(s.a[0], s.b[0], t), y = lerp(s.a[1], s.b[1], t), z = lerp(s.a[2], s.b[2], t);
+      const screenDx = (s.b[0] - s.a[0]) - (s.b[1] - s.a[1]);
+      return { x, y, z, moving, facing: (screenDx >= 0) === forward ? 1 : -1 };
+    }
+    distance -= s.len;
+  }
+  return { x: pts[0][0], y: pts[0][1], z: pts[0][2], moving: false, facing: 1 };
+}
+
+function drawWorker(ctx, worker, pos, time) {
+  const [fx0, fy0] = iso(pos.x, pos.y, pos.z);
+  const x = Math.round(fx0), y = Math.round(fy0);
+  const step = pos.moving ? Math.floor(time * 8 + worker.offset) % 2 : 0;
+  const bob = pos.moving && step ? -1 : 0;
+  rect(ctx, x - 2, y, 5, 1, SHADOW);
+  // Legs
+  rect(ctx, x - 1, y - 2 + (step ? 0 : 0), 1, 2 - step, PAL.woodDeep);
+  rect(ctx, x + 1, y - 2, 1, 1 + step, PAL.woodDeep);
+  // Body and head
+  rect(ctx, x - 1, y - 5 + bob, 3, 3, worker.shirt);
+  rect(ctx, x + 1, y - 5 + bob, 1, 3, "rgba(0,0,0,0.25)");
+  rect(ctx, x - 1, y - 7 + bob, 3, 2, PAL.skin);
+  rect(ctx, x - 1, y - 8 + bob, 3, 1, worker.hair);
+  rect(ctx, x + (pos.facing > 0 ? 1 : -1), y - 6 + bob, 1, 1, PAL.outline);
+  // What they carry
+  const side = pos.facing > 0 ? 2 : -2;
+  switch (worker.route.carry) {
+    case "log": rect(ctx, x - 3, y - 7 + bob, 7, 1, PAL.wood); rect(ctx, x + (pos.facing > 0 ? 3 : -3), y - 7 + bob, 1, 1, PAL.logEnd); break;
+    case "wheat": rect(ctx, x + side, y - 6 + bob, 1, 4, PAL.wheat); rect(ctx, x + side, y - 7 + bob, 1, 1, PAL.wheatLight); break;
+    case "stone": rect(ctx, x - 1, y - 10 + bob, 3, 2, PAL.stoneLight); break;
+    case "crate": rect(ctx, x + side - (side > 0 ? 0 : 1), y - 5 + bob, 2, 2, PAL.woodLight); break;
+    case "sack": rect(ctx, x - side, y - 6 + bob, 2, 3, PAL.cloth); break;
+  }
+}
+
+
+// ---------- Drawing a frame ----------
+
+function drawFrame(time, dt) {
+  const ctx = villageCtx;
+  const light = getDaylight(Date.now());
+
+  // 1. Sky, sun/moon, stars, clouds, distant mountains and cloud sea
+  ctx.drawImage(getSkyCanvas(light), 0, 0);
+  drawStars(ctx, light, time);
+  drawSunAndMoon(ctx, light);
+  drawSkyClouds(ctx, time);
+  ctx.drawImage(backgroundCanvas, 0, 0);
+  drawBirds(ctx, time, light);
+
+  // 2. The island's ground, water and passing cloud shadows
+  ctx.drawImage(terrainCanvas, 0, 0);
+  drawWater(ctx, time);
+  drawCloudShadows(ctx, time);
+
+  // 3. Buildings, trees and workers, back to front
+  const workers = getWorkers().map(w => ({ w, pos: getWorkerPosition(w, time) }));
+  const items = sceneObjects.concat(workers.map(({ w, pos }) => ({
+    depth: pos.x + pos.y + (pos.z > 0 ? 1 : 0),
+    draw: (c, t) => drawWorker(c, w, pos, t),
+  })));
+  items.sort((a, b) => a.depth - b.depth);
+  for (const item of items) {
+    if (item.sprite) ctx.drawImage(item.sprite.canvas, (item.ax || 0) + item.sprite.x, (item.ay || 0) + item.sprite.y);
+    else item.draw(ctx, time);
+  }
+
+  // 4. Little moving details
+  drawFlags(ctx, time);
+  drawSaws(ctx, time);
+  drawFires(ctx, time);
+  updateAndDrawSmoke(ctx, time, dt);
+  drawLowClouds(ctx, time);
+
+  // 5. Day/night lighting: tint everything, then add glowing lights
+  if (light.glow > 0) {
+    ctx.fillStyle = `rgba(255, 130, 60, ${0.15 * light.glow})`;
+    ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+  }
+  if (light.darkness > 0) {
+    ctx.fillStyle = `rgba(14, 20, 62, ${0.5 * light.darkness})`;
+    ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+    drawNightLights(ctx, light, time);
+  }
+}
+
+function drawNightLights(ctx, light, time) {
+  const a = light.darkness;
+  ctx.globalCompositeOperation = "lighter";
+  for (const l of fx.lights) {
+    fillEllipse(ctx, l.x, l.y, l.r, l.r * 0.7, `rgba(255, 170, 70, ${0.16 * a})`);
+    rect(ctx, l.x - 1, l.y - 1, 2, 2, `rgba(255, 210, 120, ${0.55 * a})`);
+  }
+  for (const f of fx.fires) {
+    const flicker = 0.85 + Math.sin(time * 13 + f.x) * 0.15;
+    const r = f.small ? 7 : 12;
+    fillEllipse(ctx, f.x, f.y - 2, r, r * 0.7, `rgba(255, 140, 50, ${0.22 * a * flicker})`);
+  }
+  // Fireflies near the trees
+  for (let i = 0; i < fx.fireflies.length; i += 3) {
+    const f = fx.fireflies[i];
+    if (Math.sin(time * 3 + i) < 0.2) continue;
+    const x = f.x + Math.sin(time * 0.8 + i) * 6, y = f.y + Math.cos(time * 0.6 + i * 2) * 4;
+    rect(ctx, x, y, 1, 1, `rgba(220, 255, 120, ${0.9 * a})`);
+  }
+  ctx.globalCompositeOperation = "source-over";
 }
 
 // Scales the 480x270 canvas to fill its frame, while leaving room for
@@ -1924,8 +2645,6 @@ function drawVillage() {
 function resizeVillageCanvas() {
   const frame = document.getElementById("village-frame");
   if (!frame.offsetParent) return;                       // village tab is hidden
-  // The frame hugs the canvas, so measure the space around the frame
-  // and subtract the frame's own border and padding.
   const screenWidth = document.getElementById("screen-village").clientWidth;
   const frameExtra = frame.offsetWidth - frame.clientWidth + 2 * parseFloat(getComputedStyle(frame).paddingLeft) + 6;
   const availableWidth = screenWidth - frameExtra;
@@ -1938,15 +2657,24 @@ function resizeVillageCanvas() {
   villageCanvas.style.height = Math.floor(VIEW_HEIGHT * scale) + "px";
 }
 
-// The drawing loop. It only repaints when something changed.
-// (requestAnimationFrame pauses in hidden tabs - that's fine, drawing
-// is only visual. Resources are handled by the time-based game loop.)
-function renderLoop() {
+// Prepares the art that never changes.
+function setupVillageArt() {
+  backgroundCanvas = paintBackground();
+}
+
+// The drawing loop: up to 30 frames per second. requestAnimationFrame
+// pauses in hidden tabs, which is fine - resources are handled by the
+// time-based game loop, not by drawing.
+function renderLoop(now) {
+  requestAnimationFrame(renderLoop);
+  if (now - lastFrameMs < FRAME_INTERVAL_MS) return;
+  const dt = Math.min(0.1, (now - lastFrameMs) / 1000);
+  lastFrameMs = now;
   if (villageNeedsRedraw) {
-    drawVillage();
+    buildScene();
     villageNeedsRedraw = false;
   }
-  requestAnimationFrame(renderLoop);
+  drawFrame(now / 1000, dt);
 }
 
 
@@ -1959,7 +2687,7 @@ function initGame() {
   villageCanvas = document.getElementById("village-canvas");
   villageCtx = villageCanvas.getContext("2d");
   villageCtx.imageSmoothingEnabled = false; // keep pixels crisp
-  paintBackdrop();
+  setupVillageArt();
 
   // Load the saved kingdom (or keep the new one if there is no save)
   const saved = loadGame();

@@ -14,7 +14,7 @@ Double-click `index.html` to open it in any modern browser. No install or build 
 - [x] Stage 1 – Core idle system
 - [x] Stage 2 – Buildings
 - [x] Stage 3 – Saving & offline earnings (+ 3D visual overhaul)
-- [ ] Stage 4 – Kingdom visuals & animation
+- [x] Stage 4 – Isometric floating-island village, workers, animations, day/night
 - [ ] Stage 5 – Progression (population, research)
 - [ ] Stage 6 – Polish
 - [ ] Military system (after the economy and saving work)
