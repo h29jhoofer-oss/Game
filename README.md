@@ -17,4 +17,14 @@ Double-click `index.html` to open it in any modern browser. No install or build 
 - [x] Stage 4 – Isometric floating-island village, workers, animations, day/night
 - [x] Stage 5 – Population, houses, unlocks, research, milestones, castle upgrade
 - [x] Stage 6 – Sound & music, visual feedback, mobile polish, economy balance
-- [ ] Military system (after the economy and saving work)
+- [ ] Military system
+  - [x] 1. Knight Barracks interface
+  - [x] 2. Swordsman recruitment
+  - [x] 3. Knight stats and army storage
+  - [x] 4. Basic automatic battle simulation
+  - [x] 5. Barbarian invasions with two enemy types (Raider, Berserker)
+  - [ ] 6. Remaining four barbarian enemies
+  - [ ] 7. Guardian, Cavalier, Ranger, Paladin
+  - [ ] 8. Elven civilization
+  - [ ] 9. Dwarven civilization
+  - [ ] 10. Military research, progression and polish

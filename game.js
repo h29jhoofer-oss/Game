@@ -1,5 +1,5 @@
 /* =============================================================
-   KINGDOM IDLE - GAME LOGIC                       (Stage 6)
+   KINGDOM IDLE - GAME LOGIC              (Stage 6 + Military)
    -------------------------------------------------------------
    This file is split into numbered sections:
 
@@ -8,13 +8,16 @@
      3. PRODUCTION      - how resources are generated
      3a. POPULATION, RESEARCH & MILESTONES
      3b. COSTS & ACTIONS - building and upgrading
+     3c. MILITARY       - barracks, knights, invasions, battles
      4. GAME LOOP       - time-based updates
      4b. SAVING         - localStorage, offline earnings
      5. NUMBER FORMAT   - turning 12345 into "12.3K"
      6. PIXEL ICONS     - tiny hand-made pixel art for the UI
      7. USER INTERFACE  - resource bar, building panel, tabs
      7b. SOUND & MUSIC  - sound effects and music made in code
+     7c. ARMY SCREEN    - barracks panel and the live battle window
      8. VILLAGE DRAWING - the pixel-art village on the canvas
+     8b. BATTLE VIEW    - the battlefield canvas and unit sprites
      9. START THE GAME
    ============================================================= */
 
@@ -244,6 +247,88 @@ const OFFLINE_CAP_HOURS = 8;
 const AWAY_THRESHOLD_SECONDS = 60;
 
 
+// =============================================================
+// ---- MILITARY SETTINGS ----
+// Everything about knights, enemies and invasions lives here, so
+// balancing the army means editing numbers in one place.
+//   hp           - health points
+//   attack       - damage per hit (before the target's defense)
+//   defense      - damage blocked from every hit received
+//   attackSpeed  - hits per second
+//   moveSpeed    - battlefield pixels walked per second
+//   range        - how close (pixels) a unit must be to hit
+// =============================================================
+
+const BARRACKS = {
+  unlockPopulation: 100,
+  buildCost: { wood: 300, stone: 200, gold: 100 },
+  upgradeBaseCost: { wood: 400, stone: 300, gold: 150 },
+  upgradeCostGrowth: 1.6,      // each barracks upgrade costs 60% more
+  maxLevel: 10,
+  baseCapacity: 5,             // army capacity = 5 + 5 per barracks level
+  capacityPerLevel: 5,
+  queueBase: 2,                // training slots = 2 + barracks level
+};
+
+const KNIGHT_TYPES = {
+  swordsman: {
+    name: "Swordsman",
+    description: "A balanced, affordable frontline fighter.",
+    hp: 100, attack: 12, defense: 3, attackSpeed: 1.0, moveSpeed: 16, range: 9,
+    cost: { food: 60, wood: 20, gold: 25 },
+    trainSeconds: 30,
+    barracksLevel: 1,          // barracks level needed to train it
+  },
+};
+
+const ENEMY_CIVILIZATIONS = {
+  barbarians: {
+    name: "Barbarians",
+    description: "Wild raiders from the northern hills. They come in great numbers and hit hard.",
+  },
+};
+
+const ENEMY_TYPES = {
+  raider: {
+    name: "Raider", civilization: "barbarians",
+    description: "Basic barbarian infantry with a hand axe.",
+    hp: 70, attack: 9, defense: 1, attackSpeed: 1.0, moveSpeed: 18, range: 9,
+  },
+  berserker: {
+    name: "Berserker", civilization: "barbarians",
+    description: "Hits very hard, but wears no armor at all.",
+    hp: 60, attack: 17, defense: 0, attackSpeed: 1.25, moveSpeed: 22, range: 9,
+  },
+};
+
+const INVASION = {
+  firstDelaySeconds: 600,      // the first raid comes 10 minutes after the barracks is built
+  intervalSeconds: 1200,       // then one raid every 20 minutes
+  warningSeconds: 120,         // warning banner in the last 2 minutes
+  maxOfflineBattles: 3,        // at most this many raids are fought while you're away
+  battleTimeLimit: 60,         // after 60 seconds the raiders give up and retreat
+  statGrowthPerWave: 0.08,     // enemies get 8% stronger every wave
+  woundedHealSeconds: 20,      // one wounded knight recovers this often
+};
+
+// Which enemies attack in a given wave. Raiders from the start;
+// Berserkers join from wave 2.
+function getWaveEnemies(wave) {
+  return [
+    { type: "raider", count: 2 + wave },
+    { type: "berserker", count: Math.floor(wave / 2) },
+  ].filter(group => group.count > 0);
+}
+
+// Loot for winning, and the repair bill for losing.
+function getWaveRewards(wave) {
+  return { gold: Math.round(30 * Math.pow(wave, 1.2)), food: 50 * wave };
+}
+function getWaveRepairs(wave) {
+  return { wood: 80 * wave, stone: 50 * wave };
+}
+
+
 /* =============================================================
    2. GAME STATE
    -------------------------------------------------------------
@@ -259,6 +344,7 @@ function createNewGameState() {
     population: STARTING_POPULATION,
     populationProgress: 0,    // 0..1, how close the next citizen is to arriving
     castleLevel: 1,           // 2 after the Castle Upgrade
+    military: createMilitaryState(),
     // One entry per building type, e.g. farm: { count: 1, level: 1 }
     //   count = how many of this building you own
     //   level = upgrade level (shared by all buildings of that type,
@@ -390,6 +476,7 @@ function applyProduction(seconds) {
     state.resources[res.id] += rates[res.id] * seconds;
   }
   growPopulation(seconds);
+  advanceMilitary(seconds);
 }
 
 
@@ -595,6 +682,369 @@ function upgradeBuilding(typeId) {
 
 
 /* =============================================================
+   3c. MILITARY: BARRACKS, KNIGHTS AND INVASIONS
+   -------------------------------------------------------------
+   The army is stored as simple counts:
+       state.military.army    = { swordsman: 6 }
+       state.military.wounded = { swordsman: 2 }
+   Training and healing use the same "how many seconds passed?"
+   idea as production, so they also continue while you're away.
+
+   BATTLES are simulated in small fixed steps of 0.05 seconds.
+   The same code is used whether you watch the battle or it
+   happens while you're away, and the "random" damage uses a
+   seeded generator - so watching, skipping or being offline
+   always gives exactly the same result.
+   ============================================================= */
+
+function createMilitaryState() {
+  const army = {}, wounded = {};
+  for (const typeId in KNIGHT_TYPES) { army[typeId] = 0; wounded[typeId] = 0; }
+  return {
+    barracksLevel: 0,                         // 0 = not built yet
+    army,
+    wounded,
+    healProgress: 0,                          // 0..1 toward the next healed knight
+    training: { queue: [], progress: 0 },     // queue of knight type ids
+    invasion: { wave: 1, nextAt: 0 },         // nextAt = real time (ms) of the next raid
+    experience: 0,
+    battlesWon: 0,
+    battlesLost: 0,
+    totalTrained: 0,
+    log: [],                                  // recent battle summaries
+  };
+}
+
+function countKnights(group) {
+  let total = 0;
+  for (const typeId in group) total += group[typeId];
+  return total;
+}
+
+function getArmyCapacity() {
+  const level = state.military.barracksLevel;
+  return level > 0 ? BARRACKS.baseCapacity + BARRACKS.capacityPerLevel * level : 0;
+}
+
+function getQueueSize() {
+  return BARRACKS.queueBase + state.military.barracksLevel;
+}
+
+// Free places in the army (wounded and queued knights take a place).
+function getKnightSpace() {
+  const m = state.military;
+  return getArmyCapacity() - countKnights(m.army) - countKnights(m.wounded) - m.training.queue.length;
+}
+
+function isBarracksUnlocked() {
+  return state.military.barracksLevel > 0 || state.population >= BARRACKS.unlockPopulation;
+}
+
+function getBarracksUpgradeCost() {
+  return scaleCost(BARRACKS.upgradeBaseCost, Math.pow(BARRACKS.upgradeCostGrowth, state.military.barracksLevel - 1));
+}
+
+function isKnightTypeUnlocked(typeId) {
+  return state.military.barracksLevel >= KNIGHT_TYPES[typeId].barracksLevel;
+}
+
+function buildBarracks() {
+  updateGame();
+  const m = state.military;
+  if (m.barracksLevel > 0 || !isBarracksUnlocked() || !canAfford(BARRACKS.buildCost)) return false;
+  spendResources(BARRACKS.buildCost);
+  m.barracksLevel = 1;
+  m.invasion.nextAt = Date.now() + INVASION.firstDelaySeconds * 1000;   // time to prepare
+  markVillageDirty();
+  requestVillageBurst("barracks", "build");
+  playSound("build");
+  showToast("The Knight Barracks is open! Scouts warn of barbarians...");
+  refreshUI();
+  return true;
+}
+
+function upgradeBarracks() {
+  updateGame();
+  const m = state.military;
+  const cost = getBarracksUpgradeCost();
+  if (m.barracksLevel < 1 || m.barracksLevel >= BARRACKS.maxLevel || !canAfford(cost)) return false;
+  spendResources(cost);
+  m.barracksLevel += 1;
+  requestVillageBurst("barracks", "upgrade");
+  playSound("upgrade");
+  refreshUI();
+  return true;
+}
+
+// Pays for a knight and adds it to the training queue.
+function recruitKnight(typeId) {
+  updateGame();
+  const m = state.military;
+  const type = KNIGHT_TYPES[typeId];
+  if (!type || m.barracksLevel < 1 || !isKnightTypeUnlocked(typeId)) return false;
+  if (m.training.queue.length >= getQueueSize() || getKnightSpace() <= 0 || !canAfford(type.cost)) return false;
+  spendResources(type.cost);
+  m.training.queue.push(typeId);
+  playSound("click");
+  refreshUI();
+  return true;
+}
+
+// Training and healing move forward by `seconds` (also while away).
+// Called from applyProduction().
+function advanceMilitary(seconds) {
+  const m = state.military;
+  if (m.barracksLevel < 1) return;
+
+  // Knights are trained one at a time, in order.
+  let time = seconds;
+  while (time > 0 && m.training.queue.length > 0) {
+    const needed = KNIGHT_TYPES[m.training.queue[0]].trainSeconds - m.training.progress;
+    if (time >= needed) {
+      time -= needed;
+      m.training.progress = 0;
+      m.army[m.training.queue.shift()] += 1;
+      m.totalTrained += 1;
+    } else {
+      m.training.progress += time;
+      time = 0;
+    }
+  }
+
+  // Wounded knights recover one by one.
+  let heal = m.healProgress + seconds / INVASION.woundedHealSeconds;
+  while (heal >= 1 && countKnights(m.wounded) > 0) {
+    const typeId = Object.keys(m.wounded).find(id => m.wounded[id] > 0);
+    m.wounded[typeId] -= 1;
+    m.army[typeId] += 1;
+    heal -= 1;
+  }
+  m.healProgress = countKnights(m.wounded) > 0 ? heal : 0;
+}
+
+// Enemy stats grow a little stronger every wave.
+function getEnemyStats(typeId, wave) {
+  const t = ENEMY_TYPES[typeId];
+  const k = 1 + INVASION.statGrowthPerWave * (wave - 1);
+  return { ...t, hp: Math.round(t.hp * k), attack: t.attack * k };
+}
+
+function getSecondsUntilInvasion() {
+  return (state.military.invasion.nextAt - Date.now()) / 1000;
+}
+
+
+// ---------- The battle simulation ----------
+
+const BATTLE_STEP = 0.05;                 // seconds per simulation step
+const BATTLE_FIELD = { top: 58, bottom: 150 };
+
+function makeUnit(side, typeId, stats, x, y) {
+  return {
+    side, typeId, x, y,
+    maxHp: stats.hp, hp: stats.hp,
+    attack: stats.attack, defense: stats.defense,
+    attackSpeed: stats.attackSpeed, moveSpeed: stats.moveSpeed, range: stats.range,
+    cooldown: 0.4, target: null, alive: true, facing: side === "knight" ? 1 : -1,
+    flash: 0, lunge: 0, moving: false, deathTime: 0,
+  };
+}
+
+// Places units in a formation: columns of 8, going back from the front line.
+function formationPosition(index, frontX, direction) {
+  const column = Math.floor(index / 8), row = index % 8;
+  return [frontX - direction * column * 7, BATTLE_FIELD.top + 6 + row * 11 + (column % 2) * 5];
+}
+
+// Sets up a battle between the current army and the next wave.
+function createBattle() {
+  const m = state.military;
+  const wave = m.invasion.wave;
+  const units = [];
+  let i = 0;
+  for (const typeId in m.army) {
+    for (let k = 0; k < m.army[typeId]; k++) {
+      const [x, y] = formationPosition(i++, 60, 1);
+      units.push(makeUnit("knight", typeId, KNIGHT_TYPES[typeId], x, y));
+    }
+  }
+  let j = 0;
+  for (const group of getWaveEnemies(wave)) {
+    for (let k = 0; k < group.count; k++) {
+      const [x, y] = formationPosition(j++, 262, -1);
+      units.push(makeUnit("enemy", group.type, getEnemyStats(group.type, wave), x, y));
+    }
+  }
+  return {
+    wave, units, time: 0, over: false, victory: false, timedOut: false,
+    rng: makeRandom(wave * 7919 + i * 131 + 17),
+    effects: [], hits: 0, resultApplied: false,
+  };
+}
+
+function nearestFoe(battle, unit) {
+  let best = null, bestDistance = Infinity;
+  for (const other of battle.units) {
+    if (!other.alive || other.side === unit.side) continue;
+    const d = (other.x - unit.x) ** 2 + (other.y - unit.y) ** 2;
+    if (d < bestDistance) { bestDistance = d; best = other; }
+  }
+  return best;
+}
+
+function strike(battle, attacker, target) {
+  const variance = 0.85 + battle.rng() * 0.3;
+  const damage = Math.max(1, Math.round((attacker.attack - target.defense) * variance));
+  target.hp -= damage;
+  target.flash = 0.12;
+  attacker.lunge = 0.15;
+  attacker.cooldown = 1 / attacker.attackSpeed;
+  battle.hits += 1;
+  battle.effects.push({ x: target.x, y: target.y - 15, value: damage, age: 0, side: target.side });
+  if (battle.effects.length > 60) battle.effects.shift();
+  if (target.hp <= 0) {
+    target.hp = 0;
+    target.alive = false;
+    target.deathTime = battle.time;
+  }
+}
+
+// Moves the battle forward by one small step.
+// Each unit picks the nearest enemy, walks toward it, and attacks
+// whenever it is in range and its attack has recharged.
+function stepBattle(battle, dt) {
+  if (battle.over) return;
+  battle.time += dt;
+  for (const u of battle.units) {
+    u.flash = Math.max(0, u.flash - dt);
+    u.lunge = Math.max(0, u.lunge - dt);
+    if (!u.alive) continue;
+    u.cooldown -= dt;
+    if (!u.target || !u.target.alive) u.target = nearestFoe(battle, u);
+    const t = u.target;
+    if (!t) { u.moving = false; continue; }
+    const dx = t.x - u.x, dy = t.y - u.y;
+    const distance = Math.hypot(dx, dy) || 0.001;
+    u.facing = dx >= 0 ? 1 : -1;
+    if (distance > u.range) {
+      const move = Math.min(distance - u.range, u.moveSpeed * dt);
+      u.x += (dx / distance) * move;
+      u.y += (dy / distance) * move;
+      u.moving = true;
+    } else {
+      u.moving = false;
+      if (u.cooldown <= 0) strike(battle, u, t);
+    }
+  }
+
+  // Gently push apart units that stand inside each other
+  const alive = battle.units.filter(u => u.alive);
+  for (let a = 0; a < alive.length; a++) {
+    for (let b = a + 1; b < alive.length; b++) {
+      const p = alive[a], q = alive[b];
+      const dx = q.x - p.x, dy = q.y - p.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < 36 && d2 > 0.0001) {
+        const d = Math.sqrt(d2), push = (6 - d) / 2;
+        p.x -= (dx / d) * push; p.y -= (dy / d) * push;
+        q.x += (dx / d) * push; q.y += (dy / d) * push;
+      }
+    }
+  }
+  for (const u of alive) u.y = Math.max(BATTLE_FIELD.top, Math.min(BATTLE_FIELD.bottom, u.y));
+
+  // Is the battle over?
+  const knightsLeft = alive.some(u => u.side === "knight");
+  const enemiesLeft = alive.some(u => u.side === "enemy");
+  if (!enemiesLeft) { battle.over = true; battle.victory = true; }
+  else if (!knightsLeft) { battle.over = true; battle.victory = false; }
+  else if (battle.time >= INVASION.battleTimeLimit) {
+    battle.over = true; battle.victory = true; battle.timedOut = true;   // raiders retreat
+  }
+}
+
+function runBattleToEnd(battle) {
+  while (!battle.over) stepBattle(battle, BATTLE_STEP);
+}
+
+// Applies a finished battle to the kingdom and returns a summary.
+// Fallen knights are WOUNDED, not lost: they recover over time.
+function applyBattleResult(battle) {
+  const m = state.military;
+  battle.resultApplied = true;
+  const fallen = {};
+  let knightsStart = 0, knightsSurviving = 0, enemiesTotal = 0, enemiesDefeated = 0;
+  for (const u of battle.units) {
+    if (u.side === "knight") {
+      knightsStart++;
+      if (u.alive) knightsSurviving++;
+      else fallen[u.typeId] = (fallen[u.typeId] || 0) + 1;
+    } else {
+      enemiesTotal++;
+      if (!u.alive) enemiesDefeated++;
+    }
+  }
+  for (const typeId in fallen) {
+    const lost = Math.min(fallen[typeId], m.army[typeId]);
+    m.army[typeId] -= lost;
+    m.wounded[typeId] += lost;
+  }
+
+  const summary = {
+    time: Date.now(), wave: battle.wave, civilization: "Barbarians",
+    victory: battle.victory, timedOut: battle.timedOut,
+    knightsStart, knightsSurviving, wounded: knightsStart - knightsSurviving,
+    enemiesTotal, enemiesDefeated, rewards: {}, repairs: {}, experience: 0,
+  };
+
+  if (battle.victory) {
+    summary.rewards = getWaveRewards(battle.wave);
+    for (const id in summary.rewards) state.resources[id] += summary.rewards[id];
+    m.battlesWon += 1;
+    m.invasion.wave += 1;                       // the next wave is stronger
+  } else {
+    // Temporary repairs: never more than 20% of what you have stored
+    const bill = getWaveRepairs(battle.wave);
+    for (const id in bill) {
+      const paid = Math.floor(Math.min(bill[id], state.resources[id] * 0.2));
+      state.resources[id] -= paid;
+      summary.repairs[id] = paid;
+    }
+    m.battlesLost += 1;                         // the same wave tries again
+  }
+  summary.experience = Math.round(enemiesDefeated * 10 * (1 + 0.1 * (battle.wave - 1)) * (battle.victory ? 1 : 0.5));
+  m.experience += summary.experience;
+  m.invasion.nextAt = Date.now() + INVASION.intervalSeconds * 1000;
+  m.log.unshift(summary);
+  m.log = m.log.slice(0, 8);
+  return summary;
+}
+
+// Checks whether a raid is due. While you're away it is fought
+// instantly (at most INVASION.maxOfflineBattles of them); while
+// you're watching, the battle plays on screen.
+function processInvasions(isAway) {
+  const m = state.military;
+  if (m.barracksLevel < 1 || currentBattle) return [];
+  const now = Date.now();
+  if (now < m.invasion.nextAt) return [];
+
+  if (isAway) {
+    const due = 1 + Math.floor((now - m.invasion.nextAt) / (INVASION.intervalSeconds * 1000));
+    const results = [];
+    for (let i = 0; i < Math.min(due, INVASION.maxOfflineBattles); i++) {
+      const battle = createBattle();
+      runBattleToEnd(battle);
+      results.push(applyBattleResult(battle));
+    }
+    return results;
+  }
+  if (uiReady && !document.hidden && !isModalOpen()) startLiveBattle();
+  return [];
+}
+
+
+/* =============================================================
    4. GAME LOOP
    -------------------------------------------------------------
    KEY IDEA: we never assume a timer fires on time.
@@ -620,6 +1070,7 @@ function updateGame() {
   } else {
     applyProduction(elapsedSeconds);
     state.lastUpdate = now;
+    processInvasions(false);   // a raid may start on screen
   }
 }
 
@@ -627,14 +1078,15 @@ function updateGame() {
 // and shows the welcome-back window.
 function handleTimeAway(secondsAway) {
   const secondsPaid = Math.min(secondsAway, OFFLINE_CAP_HOURS * 3600);
-  const before = { ...state.resources, citizens: state.population };
+  const before = { ...state.resources, citizens: state.population, knights: state.military.totalTrained };
 
   applyProduction(secondsPaid);
+  const battles = processInvasions(true);   // raids that happened while you were away
 
   // Report the real change (new citizens may have eaten some food).
-  const earned = { citizens: state.population - before.citizens };
+  const earned = { citizens: state.population - before.citizens, knights: state.military.totalTrained - before.knights };
   for (const res of RESOURCES) earned[res.id] = state.resources[res.id] - before[res.id];
-  showWelcomeBack(secondsAway, secondsPaid, earned);
+  showWelcomeBack(secondsAway, secondsPaid, earned, battles);
 }
 
 // Refreshes everything on screen that shows numbers.
@@ -643,6 +1095,7 @@ function refreshUI() {
   updateBuildingPanel();
   updateResearchPanel();
   updateKingdomPanel();
+  updateArmyPanel();
   updateSaveStatus();
 }
 
@@ -743,6 +1196,7 @@ function cleanSaveData(data) {
     }
   }
   if (isGoodNumber(data.lastSaved)) clean.lastSaved = data.lastSaved;
+  if (data.military && typeof data.military === "object") cleanMilitaryData(data.military, clean.military, isGoodNumber);
   // A timestamp in the future (clock changed) is treated as "now".
   if (isGoodNumber(data.lastUpdate) && data.lastUpdate <= Date.now()) {
     clean.lastUpdate = data.lastUpdate;
@@ -750,11 +1204,34 @@ function cleanSaveData(data) {
   return clean;
 }
 
+// Copies valid military data from a save (unknown knight types are ignored).
+function cleanMilitaryData(m, clean, isGoodNumber) {
+  if (isGoodNumber(m.barracksLevel)) clean.barracksLevel = Math.min(BARRACKS.maxLevel, Math.floor(m.barracksLevel));
+  for (const typeId in KNIGHT_TYPES) {
+    if (m.army && isGoodNumber(m.army[typeId])) clean.army[typeId] = Math.floor(m.army[typeId]);
+    if (m.wounded && isGoodNumber(m.wounded[typeId])) clean.wounded[typeId] = Math.floor(m.wounded[typeId]);
+  }
+  if (isGoodNumber(m.healProgress)) clean.healProgress = Math.min(1, m.healProgress);
+  if (m.training && Array.isArray(m.training.queue)) {
+    clean.training.queue = m.training.queue.filter(id => KNIGHT_TYPES[id]).slice(0, BARRACKS.queueBase + BARRACKS.maxLevel);
+    if (isGoodNumber(m.training.progress)) clean.training.progress = m.training.progress;
+  }
+  if (m.invasion) {
+    if (isGoodNumber(m.invasion.wave) && m.invasion.wave >= 1) clean.invasion.wave = Math.floor(m.invasion.wave);
+    if (isGoodNumber(m.invasion.nextAt)) clean.invasion.nextAt = m.invasion.nextAt;
+  }
+  for (const key of ["experience", "battlesWon", "battlesLost", "totalTrained"]) {
+    if (isGoodNumber(m[key])) clean[key] = m[key];
+  }
+  if (Array.isArray(m.log)) clean.log = m.log.filter(e => e && typeof e === "object").slice(0, 8);
+}
+
 // Wipes the save and starts a brand-new kingdom.
 function resetGame() {
   try { localStorage.removeItem(SAVE_KEY); } catch (error) { /* ignore */ }
   state = createNewGameState();
   welcomeTotals = null;
+  if (currentBattle) { currentBattle = null; closeModal("battle-modal"); }
   closeModal("welcome-modal");
   markVillageDirty();
   saveGame();
@@ -960,6 +1437,18 @@ const ICON_PIXELS = {
     "obyrgdyrbo",
     "obbbbbbbbo",
     "oooooooooo",
+  ],
+  sword: [ // a knight's sword
+    "........oo",
+    ".......olo",
+    "......olo.",
+    ".....olo..",
+    "....olo...",
+    ".o.olo....",
+    ".oyoo.....",
+    "..oyo.....",
+    ".obooy....",
+    "obo..o....",
   ],
   house: [ // cottage with a red roof
     "....oo....",
@@ -1440,11 +1929,12 @@ function showToast(message) {
 // before closing it, the new earnings are added on top.
 let welcomeTotals = null;
 
-function showWelcomeBack(secondsAway, secondsPaid, earned) {
-  if (!welcomeTotals) welcomeTotals = { away: 0, earned: {}, capped: false };
+function showWelcomeBack(secondsAway, secondsPaid, earned, battles = []) {
+  if (!welcomeTotals) welcomeTotals = { away: 0, earned: {}, capped: false, battles: [] };
+  welcomeTotals.battles.push(...battles);
   welcomeTotals.away += secondsAway;
   welcomeTotals.capped = welcomeTotals.capped || secondsAway > secondsPaid;
-  for (const key of [...RESOURCES.map(r => r.id), "citizens"]) {
+  for (const key of [...RESOURCES.map(r => r.id), "citizens", "knights"]) {
     welcomeTotals.earned[key] = (welcomeTotals.earned[key] || 0) + (earned[key] || 0);
   }
 
@@ -1455,6 +1945,7 @@ function showWelcomeBack(secondsAway, secondsPaid, earned) {
   list.innerHTML = "";
   const rows = [...RESOURCES.map(r => ({ id: r.id, icon: r.id, name: r.name }))];
   if (welcomeTotals.earned.citizens > 0) rows.push({ id: "citizens", icon: "population", name: "New citizens" });
+  if (welcomeTotals.earned.knights > 0) rows.push({ id: "knights", icon: "sword", name: "Knights trained" });
   for (const r of rows) {
     const value = welcomeTotals.earned[r.id];
     const row = document.createElement("li");
@@ -1470,6 +1961,20 @@ function showWelcomeBack(secondsAway, secondsPaid, earned) {
     row.append(name, amount);
     list.appendChild(row);
   }
+  // Raids fought while you were away
+  for (const b of welcomeTotals.battles) {
+    const row = document.createElement("li");
+    row.className = "earning-row";
+    row.appendChild(createPixelIcon("sword"));
+    const name = document.createElement("span");
+    name.className = "earning-name";
+    name.textContent = `Raid, wave ${b.wave}`;
+    const amount = document.createElement("span");
+    amount.className = "earning-amount" + (b.victory ? "" : " negative");
+    amount.textContent = b.victory ? "Victory" : "Defeat";
+    row.append(name, amount);
+    list.appendChild(row);
+  }
   openModal("welcome-modal");
 }
 
@@ -1480,6 +1985,7 @@ function collectWelcomeBack() {
   welcomeTotals = null;
   closeModal("welcome-modal");
   refreshUI();
+  processInvasions(false);
 }
 
 function setupSaveControls() {
@@ -1499,6 +2005,267 @@ function setupSaveControls() {
     resetGame();
   });
   document.getElementById("welcome-collect").addEventListener("click", collectWelcomeBack);
+}
+
+
+/* =============================================================
+   7c. ARMY SCREEN AND LIVE BATTLES
+   ============================================================= */
+
+let currentBattle = null;     // the battle playing on screen (if any)
+let uiReady = false;          // true once the page is fully set up
+let warnedForInvasionAt = 0;  // so the warning horn only sounds once per raid
+
+function isModalOpen() {
+  return [...document.querySelectorAll(".modal-backdrop")].some(m => !m.hidden);
+}
+
+// A small canvas showing a unit's battle sprite, for cards and lists.
+function createUnitIcon(typeId) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 16;
+  canvas.height = 16;
+  canvas.className = "pixel-icon unit-icon";
+  drawUnitSprite(canvas.getContext("2d"), typeId, 8, 14, 1, { noShadow: true });
+  return canvas;
+}
+
+function statLine(t) {
+  return `HP ${Math.round(t.hp)} · ATK ${Math.round(t.attack)} · DEF ${t.defense} · SPD ${t.attackSpeed}/s`;
+}
+
+const armyElements = {};
+
+function buildArmyPanel() {
+  // Knight cards
+  const list = document.getElementById("knight-list");
+  list.innerHTML = "";
+  for (const typeId in KNIGHT_TYPES) {
+    const t = KNIGHT_TYPES[typeId];
+    const card = document.createElement("li");
+    card.className = "knight-card";
+    card.innerHTML =
+      `<div class="knight-head">` +
+        `<div class="knight-info">` +
+          `<div class="knight-name">${t.name} <span class="knight-count"></span></div>` +
+          `<div class="knight-desc">${t.description}</div>` +
+          `<div class="knight-stats">${statLine(t)}</div>` +
+          `<div class="knight-train">Training time: ${t.trainSeconds}s · Requires Barracks Lv ${t.barracksLevel}</div>` +
+        `</div>` +
+      `</div>` +
+      `<button class="btn btn-build recruit-btn" type="button">` +
+        `<span class="btn-label">Recruit</span><span class="btn-cost"></span>` +
+      `</button>`;
+    card.querySelector(".knight-head").prepend(createUnitIcon(typeId));
+    const button = card.querySelector(".recruit-btn");
+    button.addEventListener("click", () => recruitKnight(typeId));
+    list.appendChild(card);
+    armyElements[typeId] = { card, button, label: button.querySelector(".btn-label"), cost: button.querySelector(".btn-cost"), count: card.querySelector(".knight-count") };
+  }
+
+  document.getElementById("barracks-build").addEventListener("click", buildBarracks);
+  document.getElementById("barracks-upgrade").addEventListener("click", upgradeBarracks);
+  document.getElementById("invasion-banner").addEventListener("click", () => {
+    document.querySelector('.nav-btn[data-screen="army"]').click();
+  });
+  document.getElementById("battle-skip").addEventListener("click", skipLiveBattle);
+  document.getElementById("battle-continue").addEventListener("click", closeBattle);
+}
+
+function formatClock(seconds) {
+  const s = Math.max(0, Math.ceil(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function updateArmyPanel() {
+  const m = state.military;
+  const built = m.barracksLevel > 0;
+  const unlocked = isBarracksUnlocked();
+
+  // Barracks: locked / ready to build / built
+  document.getElementById("barracks-locked").hidden = unlocked;
+  document.getElementById("barracks-buildable").hidden = !unlocked || built;
+  document.getElementById("barracks-built").hidden = !built;
+  document.getElementById("barracks-level-note").textContent = built
+    ? `Level ${m.barracksLevel} of ${BARRACKS.maxLevel}` : "Train knights to defend your kingdom.";
+  if (!unlocked) {
+    document.getElementById("barracks-lock-text").textContent =
+      `Unlocks at ${BARRACKS.unlockPopulation} citizens (${state.population}/${BARRACKS.unlockPopulation})`;
+    document.getElementById("barracks-lock-fill").style.width =
+      Math.min(100, (state.population / BARRACKS.unlockPopulation) * 100) + "%";
+  }
+  if (unlocked && !built) {
+    showCost(document.getElementById("barracks-build-cost"), BARRACKS.buildCost);
+    document.getElementById("barracks-build").disabled = !canAfford(BARRACKS.buildCost);
+  }
+
+  if (built) {
+    const armySize = countKnights(m.army), wounded = countKnights(m.wounded);
+    document.getElementById("army-size").textContent = armySize;
+    document.getElementById("army-capacity").textContent = getArmyCapacity();
+    document.getElementById("army-wounded").textContent = wounded > 0
+      ? `${wounded} wounded (next recovers in ${Math.ceil((1 - m.healProgress) * INVASION.woundedHealSeconds)}s)`
+      : "No wounded";
+
+    // Training queue
+    const queue = m.training.queue;
+    const current = queue[0];
+    document.getElementById("training-current").textContent = current
+      ? `Training ${KNIGHT_TYPES[current].name}: ${Math.ceil(KNIGHT_TYPES[current].trainSeconds - m.training.progress)}s left`
+      : "No knights in training";
+    document.getElementById("training-fill").style.width = current
+      ? (m.training.progress / KNIGHT_TYPES[current].trainSeconds) * 100 + "%" : "0%";
+    document.getElementById("training-slots").textContent = `Queue ${queue.length}/${getQueueSize()}`;
+
+    // Recruit buttons
+    const space = getKnightSpace();
+    for (const typeId in KNIGHT_TYPES) {
+      const t = KNIGHT_TYPES[typeId], el = armyElements[typeId];
+      el.count.textContent = `×${m.army[typeId]}`;
+      showCost(el.cost, t.cost);
+      const typeOpen = isKnightTypeUnlocked(typeId);
+      el.label.textContent = !typeOpen ? `Needs Barracks Lv ${t.barracksLevel}`
+        : space <= 0 ? "Army full" : queue.length >= getQueueSize() ? "Queue full" : "Recruit";
+      el.button.disabled = !typeOpen || space <= 0 || queue.length >= getQueueSize() || !canAfford(t.cost);
+    }
+
+    // Barracks upgrade
+    const upgradeButton = document.getElementById("barracks-upgrade");
+    if (m.barracksLevel >= BARRACKS.maxLevel) {
+      upgradeButton.disabled = true;
+      upgradeButton.querySelector(".btn-label").textContent = "Max level";
+      document.getElementById("barracks-upgrade-cost").hidden = true;
+    } else {
+      const cost = getBarracksUpgradeCost();
+      upgradeButton.querySelector(".btn-label").textContent = `Upgrade to Lv ${m.barracksLevel + 1} (+${BARRACKS.capacityPerLevel} capacity, +1 slot)`;
+      showCost(document.getElementById("barracks-upgrade-cost"), cost);
+      upgradeButton.disabled = !canAfford(cost);
+    }
+  }
+
+  // Defense panel: countdown and scouting report
+  document.getElementById("defense-inactive").hidden = built;
+  document.getElementById("defense-active").hidden = !built;
+  const secondsLeft = getSecondsUntilInvasion();
+  if (built) {
+    document.getElementById("invasion-countdown").textContent =
+      currentBattle ? "Under attack!" : secondsLeft > 0 ? formatClock(secondsLeft) : "Any moment...";
+    document.getElementById("invasion-wave").textContent = `Wave ${m.invasion.wave}`;
+    const previewKey = String(m.invasion.wave);
+    const preview = document.getElementById("enemy-preview");
+    if (preview.dataset.key !== previewKey) {
+      preview.dataset.key = previewKey;
+      preview.innerHTML = "";
+      for (const group of getWaveEnemies(m.invasion.wave)) {
+        const s = getEnemyStats(group.type, m.invasion.wave);
+        const row = document.createElement("li");
+        row.className = "enemy-row";
+        row.appendChild(createUnitIcon(group.type));
+        const text = document.createElement("div");
+        text.innerHTML = `<div class="enemy-name">${group.count} × ${s.name}</div>` +
+          `<div class="enemy-desc">${s.description}</div><div class="knight-stats">${statLine(s)}</div>`;
+        row.appendChild(text);
+        preview.appendChild(row);
+      }
+      const r = getWaveRewards(m.invasion.wave);
+      document.getElementById("invasion-reward").textContent = `Victory reward: ${formatNumber(r.gold)} gold, ${formatNumber(r.food)} food`;
+    }
+    document.getElementById("battle-record").textContent =
+      `Victories ${m.battlesWon} · Defeats ${m.battlesLost} · Army experience ${formatNumber(m.experience)}`;
+
+    // Battle log
+    const log = document.getElementById("battle-log");
+    const logKey = m.log.map(l => l.time).join(",");
+    if (log.dataset.key !== logKey) {
+      log.dataset.key = logKey;
+      log.innerHTML = m.log.length ? "" : "<li class='log-empty'>No battles yet.</li>";
+      for (const entry of m.log) {
+        const li = document.createElement("li");
+        li.className = "log-entry " + (entry.victory ? "won" : "lost");
+        li.textContent = `Wave ${entry.wave}: ${entry.victory ? (entry.timedOut ? "Raiders retreated" : "Victory") : "Defeat"} · ` +
+          `${entry.enemiesDefeated}/${entry.enemiesTotal} raiders defeated · ${entry.wounded} knights wounded`;
+        log.appendChild(li);
+      }
+    }
+  }
+
+  // Warning banner and horn in the last minutes before a raid
+  const banner = document.getElementById("invasion-banner");
+  const warning = built && !currentBattle && secondsLeft > 0 && secondsLeft <= INVASION.warningSeconds;
+  banner.hidden = !warning;
+  if (warning) {
+    banner.textContent = `Barbarians approach! Raid in ${formatClock(secondsLeft)} · ${countKnights(m.army)} knights ready`;
+    if (warnedForInvasionAt !== m.invasion.nextAt) {
+      warnedForInvasionAt = m.invasion.nextAt;
+      playSound("horn");
+    }
+  }
+  setNavBadge("army", warning);
+}
+
+
+// ---------- Live battle window ----------
+
+function startLiveBattle() {
+  currentBattle = createBattle();
+  battleView.accumulator = 0;
+  battleView.lastMs = performance.now();
+  battleView.lastHits = 0;
+  document.getElementById("battle-title").textContent = `Barbarian Raid · Wave ${currentBattle.wave}`;
+  document.getElementById("battle-summary").hidden = true;
+  document.getElementById("battle-skip").hidden = false;
+  document.getElementById("battle-continue").hidden = true;
+  openModal("battle-modal");
+  playSound("horn");
+  requestAnimationFrame(battleFrame);
+}
+
+function skipLiveBattle() {
+  if (!currentBattle) return;
+  runBattleToEnd(currentBattle);
+}
+
+// Called once the on-screen battle has ended.
+function finishLiveBattle() {
+  const summary = applyBattleResult(currentBattle);
+  saveGame();
+  playSound(summary.victory ? "victory" : "defeat");
+  showBattleSummary(summary);
+  document.getElementById("battle-skip").hidden = true;
+  document.getElementById("battle-continue").hidden = false;
+  refreshUI();
+}
+
+function showBattleSummary(s) {
+  const box = document.getElementById("battle-summary");
+  const title = s.victory ? (s.timedOut ? "The raiders retreat!" : "Victory!") : "Defeat...";
+  const rows = [
+    ["Result", title],
+    ["Knights surviving", `${s.knightsSurviving} / ${s.knightsStart}`],
+    ["Knights wounded", s.wounded > 0 ? `${s.wounded} (they will recover)` : "None"],
+    ["Enemies defeated", `${s.enemiesDefeated} / ${s.enemiesTotal}`],
+    ["Resources earned", Object.keys(s.rewards).length ? Object.entries(s.rewards).map(([k, v]) => `${formatNumber(v)} ${k}`).join(", ") : "None"],
+    ["Experience earned", formatNumber(s.experience)],
+    ["Repairs needed", Object.keys(s.repairs).length ? Object.entries(s.repairs).map(([k, v]) => `${formatNumber(v)} ${k}`).join(", ") : "None"],
+  ];
+  box.innerHTML = "";
+  box.className = "battle-summary " + (s.victory ? "won" : "lost");
+  for (const [label, value] of rows) {
+    const row = document.createElement("div");
+    row.className = "summary-row";
+    const a = document.createElement("span"); a.textContent = label;
+    const b = document.createElement("strong"); b.textContent = value;
+    row.append(a, b);
+    box.appendChild(row);
+  }
+  box.hidden = false;
+}
+
+function closeBattle() {
+  currentBattle = null;
+  closeModal("battle-modal");
+  playSound("click");
+  refreshUI();
 }
 
 
@@ -1582,6 +2349,10 @@ function midiToFreq(note) {
 }
 
 const SOUNDS = {
+  horn()      { tone(110, 0, 0.9, "sawtooth", 0.07, sfxGain, 147); tone(220, 0.05, 0.8, "square", 0.03, sfxGain, 294); },
+  clash()     { noise(0, 0.05, 0.25, 4000); tone(1400 + Math.random() * 400, 0, 0.06, "square", 0.02); },
+  victory()   { [[72, 0], [76, 0.15], [79, 0.3], [84, 0.45]].forEach(([n, t]) => { tone(midiToFreq(n), t, 0.5, "square", 0.06); tone(midiToFreq(n - 12), t, 0.5, "triangle", 0.1); }); },
+  defeat()    { [[64, 0], [60, 0.25], [57, 0.5]].forEach(([n, t]) => tone(midiToFreq(n), t, 0.6, "triangle", 0.12)); },
   click()     { tone(880, 0, 0.05, "square", 0.05); },
   coins()     { tone(988, 0, 0.08, "square", 0.08); tone(1319, 0.07, 0.25, "square", 0.08); },
   build() {
@@ -1883,6 +2654,7 @@ const VILLAGE_LAYOUT = {
   housePlots:  [{ x: 15, y: 14 }, { x: 17, y: 12 }, { x: 13, y: 17 }, { x: 15, y: 16 },
                 { x: 10, y: 6 }, { x: 12, y: 5 }, { x: 15, y: 2 }, { x: 2, y: 8 }],
   blacksmith:  { x: 13, y: 9 },
+  barracks:    { x: 2, y: 5 },
   academy:     { x: 16, y: 5 },
   quarryCut:   [[12, 1], [13, 1], [12, 2], [13, 2]],   // tiles dug out when a quarry is built
 };
@@ -1906,6 +2678,7 @@ const WORKER_ROUTES = [
   { needs: "academy",    carry: "crate", points: [[15.5, 7.6, 0], [15.5, 9.6, 0]] },
   { needs: "market",     carry: "crate", points: [[9.6, 12.3, 0], [12.5, 12.6, 0]] },
 ];
+const KNIGHT_DRILL_ROUTE = { needs: null, carry: "sword", points: [[2.2, 7.6, 0], [3.9, 7.6, 0]] };
 const SHIRT_COLORS = ["#3a6fb5", "#c8442f", "#4f9a4a", "#8a5aa8", "#d9a441", "#e07a2a", "#5c8a9a"];
 const HAIR_COLORS = ["#4a2f1d", "#2b1d14", "#a8642a", "#d9b25a", "#6b4528"];
 
@@ -2923,6 +3696,12 @@ function buildSceneObjects() {
     addSprite(h.x + h.y + 3.4, boxBounds({ x: h.x, y: h.y, w: 2, d: 2, z: 0 }, 40), ctx => drawHouse(ctx, h.x, h.y, i + 1), "house");
   }
 
+  if (state.military.barracksLevel > 0) {
+    const r = L.barracks;
+    occupy(r.x, r.y, 2, 3);
+    addSprite(r.x + r.y + 3.4, boxBounds({ x: r.x, y: r.y, w: 2, d: 3, z: 0 }, 44), ctx => drawBarracks(ctx, r.x, r.y), "barracks");
+  }
+
   if (b.blacksmith.count > 0) {
     const m = L.blacksmith;
     occupy(m.x, m.y, 2, 2);
@@ -3398,6 +4177,11 @@ function getWorkers() {
   for (let i = 0; i < count; i++) {
     workers.push({ route: routes[i % routes.length], offset: i * 7.3, shirt: SHIRT_COLORS[i % SHIRT_COLORS.length], hair: HAIR_COLORS[(i * 3) % HAIR_COLORS.length], speed: 0.45 + (i % 3) * 0.08 });
   }
+  // Knights drilling in front of the barracks (blue tabards, steel helmets)
+  const knightCount = Math.min(4, countKnights(state.military.army));
+  for (let i = 0; i < knightCount; i++) {
+    workers.push({ route: KNIGHT_DRILL_ROUTE, offset: i * 2.7, shirt: "#3a5fa8", hair: "#cfd4dc", speed: 0.35 });
+  }
   return workers;
 }
 
@@ -3462,6 +4246,7 @@ function drawWorker(ctx, worker, pos, time) {
     case "stone": rect(ctx, x - 1, y - 10 + bob, 3, 2, PAL.stoneLight); break;
     case "crate": rect(ctx, x + side - (side > 0 ? 0 : 1), y - 5 + bob, 2, 2, PAL.woodLight); break;
     case "sack": rect(ctx, x - side, y - 6 + bob, 2, 3, PAL.cloth); break;
+    case "sword": rect(ctx, x + side, y - 9 + bob, 1, 5, PAL.metal); rect(ctx, x + side - 1, y - 5 + bob, 3, 1, PAL.gold); break;
   }
 }
 
@@ -3579,6 +4364,269 @@ function renderLoop(now) {
 
 
 /* =============================================================
+   8b. BATTLE VIEW
+   -------------------------------------------------------------
+   The battlefield is its own small 320x160 canvas, drawn in the
+   same pixel style as the village. Each frame we advance the
+   battle simulation by the real time that passed (in fixed
+   0.05 s steps), then draw every unit, health bar and damage
+   number.
+   ============================================================= */
+
+const BATTLE_WIDTH = 320;
+const BATTLE_HEIGHT = 160;
+const BATTLE_PLAYBACK_SPEED = 1.5;   // battles play 1.5x faster than real time
+
+const battleView = { canvas: null, ctx: null, background: null, accumulator: 0, lastMs: 0, lastHits: 0, lastClash: 0 };
+
+// Colors for each unit type: [main, dark, light/metal, skin or accent]
+const UNIT_COLORS = {
+  swordsman: { body: "#3a5fa8", bodyDark: "#26407a", metal: "#cfd4dc", metalDark: "#8a90a0", accent: "#f2c14e" },
+  raider:    { body: "#9a7448", bodyDark: "#6b4f2e", metal: "#a8a8b0", metalDark: "#6a6a72", accent: "#7a4a24" },
+  berserker: { body: "#e0a07a", bodyDark: "#b8785a", metal: "#a8a8b0", metalDark: "#6a6a72", accent: "#c8442f" },
+};
+
+// Draws one unit standing at (x, y) = the spot between its feet.
+// facing: 1 = looking right, -1 = looking left.
+function drawUnitSprite(ctx, typeId, x, y, facing, o = {}) {
+  const c = UNIT_COLORS[typeId] || UNIT_COLORS.swordsman;
+  const f = facing >= 0 ? 1 : -1;
+  const lunge = o.lunge ? f * 2 : 0;
+  // px() draws a rectangle relative to the feet, mirrored when facing left
+  const px = (dx, dy, w, h, color) => {
+    const rx = f > 0 ? x + dx + lunge : x - dx - w + 1 + lunge;
+    ctx.fillStyle = o.flash ? "#ffffff" : color;
+    ctx.fillRect(Math.round(rx), Math.round(y + dy), w, h);
+  };
+  if (!o.noShadow) {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
+    ctx.fillRect(Math.round(x - 4), Math.round(y), 9, 1);
+  }
+  const step = o.step || 0;
+  const skin = "#e8b796";
+
+  if (typeId === "swordsman") {
+    px(-2, -3, 2, step ? 2 : 3, "#3a3a44");                // legs
+    px(1, -3, 2, step ? 3 : 2, "#3a3a44");
+    px(-4, -8, 2, 5, c.bodyDark);                           // shield (behind)
+    px(-4, -8, 2, 1, c.accent);
+    px(-2, -8, 5, 5, c.body);                               // tabard
+    px(0, -7, 1, 3, c.accent);                              // gold cross
+    px(-1, -6, 3, 1, c.accent);
+    px(3, -8, 1, 3, c.metal);                               // arm
+    px(-2, -11, 5, 3, c.metal);                             // helmet
+    px(1, -10, 2, 1, "#2b1d14");                            // visor slit
+    px(-1, -12, 2, 1, "#c8442f");                           // plume
+    if (o.lunge) { px(4, -7, 5, 1, "#eef2f8"); px(4, -8, 1, 3, c.accent); }     // sword thrust
+    else { px(4, -12, 1, 5, "#eef2f8"); px(3, -7, 3, 1, c.accent); }            // sword raised
+  } else if (typeId === "raider") {
+    px(-2, -3, 2, step ? 2 : 3, "#4a3220");
+    px(1, -3, 2, step ? 3 : 2, "#4a3220");
+    px(-2, -8, 5, 5, c.body);                               // fur vest
+    px(-2, -4, 5, 1, c.bodyDark);                           // belt
+    px(-3, -8, 1, 3, skin);                                 // arms
+    px(3, -8, 1, 3, skin);
+    px(-2, -11, 4, 3, skin);                                // head
+    px(-2, -12, 4, 1, "#6b4528");                           // hair
+    px(-2, -9, 4, 1, "#6b4528");                            // beard
+    px(1, -10, 1, 1, "#2b1d14");                            // eye
+    if (o.lunge) { px(4, -7, 4, 1, c.accent); px(7, -8, 2, 3, c.metal); }     // axe swing
+    else { px(4, -11, 1, 5, c.accent); px(4, -12, 2, 2, c.metal); }
+  } else if (typeId === "berserker") {
+    px(-2, -3, 2, step ? 2 : 3, "#3a2a1a");
+    px(1, -3, 2, step ? 3 : 2, "#3a2a1a");
+    px(-3, -9, 6, 6, c.body);                               // bare chest
+    px(-2, -8, 1, 3, c.accent);                             // war paint
+    px(1, -8, 1, 3, c.accent);
+    px(-3, -4, 6, 1, "#3a2a1a");                            // belt
+    px(-2, -12, 4, 3, c.body);                              // head
+    px(-3, -13, 6, 2, c.accent);                            // wild red hair
+    px(1, -11, 1, 1, "#2b1d14");
+    if (o.lunge) { px(4, -8, 4, 1, "#7a4a24"); px(7, -9, 2, 3, c.metal); px(-5, -6, 2, 2, c.metal); }
+    else { px(4, -12, 1, 5, "#7a4a24"); px(4, -13, 2, 2, c.metal); px(-4, -12, 1, 5, "#7a4a24"); px(-5, -13, 2, 2, c.metal); }
+  }
+}
+
+// A fallen unit lying on the ground.
+function drawFallenUnit(ctx, typeId, x, y, facing) {
+  const c = UNIT_COLORS[typeId] || UNIT_COLORS.swordsman;
+  const f = facing >= 0 ? -1 : 1;     // they fall backwards
+  ctx.globalAlpha = 0.65;
+  rect(ctx, x - 5, y - 2, 10, 2, c.body);
+  rect(ctx, f > 0 ? x + 5 : x - 8, y - 3, 3, 3, typeId === "swordsman" ? c.metal : "#e8b796");
+  rect(ctx, f > 0 ? x - 8 : x + 5, y - 1, 3, 1, "#3a3a44");
+  ctx.globalAlpha = 1;
+}
+
+// Tiny 3x5 pixel digits for damage numbers (crisp at any scale).
+const PIXEL_DIGITS = {
+  0: ["111", "101", "101", "101", "111"], 1: ["010", "110", "010", "010", "111"],
+  2: ["111", "001", "111", "100", "111"], 3: ["111", "001", "111", "001", "111"],
+  4: ["101", "101", "111", "001", "001"], 5: ["111", "100", "111", "001", "111"],
+  6: ["111", "100", "111", "101", "111"], 7: ["111", "001", "010", "010", "010"],
+  8: ["111", "101", "111", "101", "111"], 9: ["111", "101", "111", "001", "111"],
+};
+
+function drawPixelNumber(ctx, value, x, y, color) {
+  const text = String(value);
+  const startX = Math.round(x - (text.length * 4) / 2);
+  for (const pass of [0, 1]) {                 // dark outline first, then the color
+    for (let i = 0; i < text.length; i++) {
+      const glyph = PIXEL_DIGITS[text[i]];
+      if (!glyph) continue;
+      for (let row = 0; row < 5; row++) {
+        for (let col = 0; col < 3; col++) {
+          if (glyph[row][col] !== "1") continue;
+          const gx = startX + i * 4 + col, gy = Math.round(y) + row;
+          if (pass === 0) rect(ctx, gx - 1, gy - 1, 3, 3, "#2b1d14");
+          else rect(ctx, gx, gy, 1, 1, color);
+        }
+      }
+    }
+  }
+}
+
+// The battlefield in front of the castle walls (painted once).
+function paintBattleBackground() {
+  const g = document.createElement("canvas").getContext("2d");
+  g.canvas.width = BATTLE_WIDTH;
+  g.canvas.height = BATTLE_HEIGHT;
+  const random = makeRandom(321);
+  // Sky and distant hills
+  const sky = ["#5a9fda", "#6cafe2", "#80bfe9", "#97cfef"];
+  sky.forEach((color, i) => rect(g, 0, i * 8, BATTLE_WIDTH, 8, color));
+  for (let x = -20; x < BATTLE_WIDTH + 40; x += 44) {
+    fillEllipse(g, x, 44, 34, 14, PAL.mountNearDark);
+    fillEllipse(g, x - 4, 44, 28, 12, PAL.mountNear);
+  }
+  rect(g, 0, 40, BATTLE_WIDTH, 12, PAL.forestFront);
+  for (let x = 0; x < BATTLE_WIDTH; x += 6) {
+    fillEllipse(g, x, 42 + Math.floor(random() * 3), 5, 4, PAL.forestFront);
+    fillEllipse(g, x - 1, 41, 3, 2, PAL.forestFrontLight);
+  }
+  // Grass field
+  rect(g, 0, 50, BATTLE_WIDTH, BATTLE_HEIGHT - 50, PAL.grass);
+  for (let i = 0; i < 160; i++) {
+    const x = Math.floor(random() * BATTLE_WIDTH), y = 52 + Math.floor(random() * 106);
+    rect(g, x, y, 1 + Math.floor(random() * 3), 1, random() < 0.5 ? PAL.grassDark : PAL.grassLight);
+  }
+  // Dirt road across the field
+  for (let x = 0; x < BATTLE_WIDTH; x++) {
+    const y = 100 + Math.round(Math.sin(x / 40) * 4);
+    rect(g, x, y, 1, 10, PAL.dirt);
+    rect(g, x, y, 1, 1, PAL.dirtDark);
+    if (random() < 0.15) rect(g, x, y + 2 + Math.floor(random() * 6), 1, 1, PAL.dirtLight);
+  }
+  // Castle wall on the left
+  rect(g, 0, 30, 18, 130, PAL.stone);
+  rect(g, 14, 30, 4, 130, PAL.stoneDark);
+  for (let y = 33; y < BATTLE_HEIGHT; y += 4) rect(g, 0, y, 14, 1, PAL.stoneDark);
+  for (let y = 26; y < 30; y++) for (let x = 0; x < 18; x += 5) rect(g, x, 26, 3, 4, PAL.stoneLight);
+  rect(g, 6, 92, 8, 22, PAL.door);
+  rect(g, 2, 48, 6, 12, PAL.banner);
+  rect(g, 4, 52, 2, 3, PAL.gold);
+  // Forest on the right where the raiders come from
+  for (let i = 0; i < 9; i++) {
+    const tx = 300 + (i % 3) * 8 + Math.floor(random() * 4), ty = 70 + i * 10;
+    if (i % 2) drawPine(g, tx, ty, 7);
+    else drawTree(g, tx, ty, 6, i + 2);
+  }
+  return g.canvas;
+}
+
+function drawBattle(battle, time) {
+  const ctx = battleView.ctx;
+  if (!battleView.background) battleView.background = paintBattleBackground();
+  ctx.drawImage(battleView.background, 0, 0);
+
+  // Fallen units first, then the living sorted by y (lower = in front)
+  for (const u of battle.units) if (!u.alive) drawFallenUnit(ctx, u.typeId, u.x, u.y, u.facing);
+  const living = battle.units.filter(u => u.alive).sort((a, b) => a.y - b.y);
+  for (const u of living) {
+    const step = u.moving ? Math.floor(time * 8 + u.x) % 2 : 0;
+    drawUnitSprite(ctx, u.typeId, u.x, u.y, u.facing, { step, lunge: u.lunge > 0, flash: u.flash > 0 });
+    // Health bar
+    const ratio = u.hp / u.maxHp;
+    rect(ctx, u.x - 5, u.y - 17, 10, 2, "#2b1d14");
+    rect(ctx, u.x - 5, u.y - 17, Math.max(1, Math.round(10 * ratio)), 2, u.side === "knight" ? "#6fd16a" : "#e0503a");
+  }
+
+  // Floating damage numbers
+  for (const e of battle.effects) {
+    e.age += 1 / 30;
+    if (e.age > 0.8) continue;
+    ctx.globalAlpha = Math.max(0, 1 - e.age / 0.8);
+    drawPixelNumber(ctx, e.value, e.x, e.y - e.age * 14, e.side === "knight" ? "#ff8a6a" : "#fff2a0");
+  }
+  ctx.globalAlpha = 1;
+  battle.effects = battle.effects.filter(e => e.age <= 0.8);
+
+  // Status line under the battlefield
+  const knights = battle.units.filter(u => u.side === "knight" && u.alive).length;
+  const enemies = battle.units.filter(u => u.side === "enemy" && u.alive).length;
+  document.getElementById("battle-knights").textContent = `Knights: ${knights}`;
+  document.getElementById("battle-enemies").textContent = `Barbarians: ${enemies}`;
+  document.getElementById("battle-time").textContent = battle.over ? "Battle over" : `${Math.ceil(INVASION.battleTimeLimit - battle.time)}s`;
+}
+
+// Animation loop for the battle window.
+function battleFrame(now) {
+  const battle = currentBattle;
+  if (!battle) return;
+  const dt = Math.min(0.1, (now - battleView.lastMs) / 1000);
+  battleView.lastMs = now;
+  battleView.accumulator += dt * BATTLE_PLAYBACK_SPEED;
+  while (battleView.accumulator >= BATTLE_STEP && !battle.over) {
+    stepBattle(battle, BATTLE_STEP);
+    battleView.accumulator -= BATTLE_STEP;
+  }
+  // Clash sounds (not too many at once)
+  if (battle.hits > battleView.lastHits && now - battleView.lastClash > 180) {
+    battleView.lastClash = now;
+    playSound("clash");
+  }
+  battleView.lastHits = battle.hits;
+  drawBattle(battle, now / 1000);
+  if (battle.over && !battle.resultApplied) finishLiveBattle();
+  if (currentBattle === battle) requestAnimationFrame(battleFrame);
+}
+
+function setupBattleView() {
+  battleView.canvas = document.getElementById("battle-canvas");
+  battleView.ctx = battleView.canvas.getContext("2d");
+  battleView.ctx.imageSmoothingEnabled = false;
+}
+
+
+// ---------- The barracks in the village ----------
+
+function drawBarracks(ctx, tx, ty) {
+  const box = { x: tx + 0.2, y: ty + 0.2, w: 1.6, d: 1.6, z: 0 };
+  const h = 13;
+  fx.shadows.push({ box, h: h + 8 });
+  drawIsoBox(ctx, box, h, PAL.stone, PAL.stoneDark);
+  paintBricks(ctx, box, h, PAL.stoneDark, PAL.stoneDeep);
+  doorL(ctx, box, 0.6, 0.4, 9);
+  windowR(ctx, box, 0.3, 6, 0.3, 4);
+  windowR(ctx, box, 1.0, 6, 0.3, 4);
+  for (const u of [0.15, 1.15]) {                               // red war banners
+    faceL(ctx, box, u, 3, 0.25, 9, PAL.red);
+    faceL(ctx, box, u + 0.07, 6, 0.1, 2, PAL.gold);
+  }
+  drawRoof(ctx, box, h, 9, ROOF_RED, "x", PAL.stoneDark);
+  // Training dummy and weapon rack in the yard
+  const [dx, dy] = iso(tx + 0.4, ty + 2.2, 0);
+  rect(ctx, dx, dy - 10, 1, 10, PAL.woodDeep);
+  rect(ctx, dx - 2, dy - 9, 5, 5, PAL.thatch);
+  rect(ctx, dx - 1, dy - 12, 3, 3, PAL.thatchLight);
+  rect(ctx, dx - 3, dy - 7, 7, 1, PAL.woodDark);
+  const [rx, ry] = iso(tx + 1.6, ty + 2.1, 0);
+  rect(ctx, rx - 4, ry - 6, 9, 1, PAL.wood);
+  for (let i = 0; i < 4; i++) rect(ctx, rx - 3 + i * 2, ry - 9, 1, 9, i % 2 ? PAL.metal : PAL.woodDark);
+}
+
+
+/* =============================================================
    9. START THE GAME
    ============================================================= */
 
@@ -3598,6 +4646,8 @@ function initGame() {
   buildBuildingPanel();
   buildResearchPanel();
   buildKingdomPanel();
+  buildArmyPanel();
+  setupBattleView();
   setupNavigation();
   setupSaveControls();
   setupAudioControls();
@@ -3610,6 +4660,7 @@ function initGame() {
   refreshUI();
 
   // Start the loops
+  uiReady = true;
   setInterval(gameTick, LOGIC_INTERVAL_MS);
   setInterval(autoSave, AUTOSAVE_INTERVAL_MS);
   document.addEventListener("visibilitychange", handleVisibilityChange);

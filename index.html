@@ -34,6 +34,8 @@
       </div>
       <!-- game.js fills this list with one counter per resource -->
       <ul class="resource-bar" id="resource-bar"></ul>
+      <!-- Shown in the last minutes before a raid -->
+      <button class="invasion-banner" id="invasion-banner" type="button" hidden></button>
     </header>
 
     <!-- ===================== MAIN AREA ===================== -->
@@ -57,6 +59,69 @@
       </section>
 
       <!-- PLACEHOLDER TABS (filled in during later stages) -->
+      <!-- ARMY TAB: barracks, knights and defense -->
+      <section class="screen" id="screen-army">
+        <div class="army-layout">
+          <div class="panel army-panel">
+            <div class="panel-head">
+              <h2 class="panel-title">Knight Barracks</h2>
+              <p class="panel-note" id="barracks-level-note"></p>
+            </div>
+
+            <div id="barracks-locked" class="lock-info">
+              <p>Your kingdom needs more people before it can raise an army.</p>
+              <div id="barracks-lock-text"></div>
+              <div class="progress"><div class="progress-fill" id="barracks-lock-fill"></div></div>
+            </div>
+
+            <div id="barracks-buildable" hidden>
+              <p>Build a barracks to train knights. Once it stands, barbarian
+                 raiders will start testing your defenses.</p>
+              <button class="btn btn-build" id="barracks-build" type="button">
+                <span class="btn-label">Build Knight Barracks</span>
+                <span class="btn-cost" id="barracks-build-cost"></span>
+              </button>
+            </div>
+
+            <div id="barracks-built" hidden>
+              <div class="army-summary">
+                <div><span class="army-big"><span id="army-size">0</span> / <span id="army-capacity">0</span></span> knights ready</div>
+                <div class="army-wounded" id="army-wounded"></div>
+              </div>
+              <div class="training-box">
+                <div class="training-head"><span id="training-current"></span><span id="training-slots"></span></div>
+                <div class="progress"><div class="progress-fill" id="training-fill"></div></div>
+              </div>
+              <ul class="knight-list" id="knight-list"></ul>
+              <button class="btn" id="barracks-upgrade" type="button">
+                <span class="btn-label">Upgrade</span>
+                <span class="btn-cost" id="barracks-upgrade-cost"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="panel army-panel">
+            <div class="panel-head">
+              <h2 class="panel-title">Defense</h2>
+              <p class="panel-note">Battles are fought automatically.</p>
+            </div>
+            <p id="defense-inactive">No enemies know about your kingdom yet. Raids begin once a barracks is built.</p>
+            <div id="defense-active" hidden>
+              <div class="invasion-timer">
+                <span>Next raid: <strong id="invasion-wave"></strong></span>
+                <strong class="countdown" id="invasion-countdown"></strong>
+              </div>
+              <h3 class="sub-title">Scouts report</h3>
+              <ul class="enemy-preview" id="enemy-preview"></ul>
+              <p class="invasion-reward" id="invasion-reward"></p>
+              <h3 class="sub-title">Battle log</h3>
+              <p class="battle-record" id="battle-record"></p>
+              <ul class="battle-log" id="battle-log"></ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- RESEARCH TAB -->
       <section class="screen" id="screen-research">
         <div class="panel">
@@ -120,6 +185,7 @@
     <!-- ===================== BOTTOM NAVIGATION ===================== -->
     <nav class="bottom-nav" id="bottom-nav">
       <button class="nav-btn active" data-screen="village" type="button">Village</button>
+      <button class="nav-btn" data-screen="army" type="button">Army</button>
       <button class="nav-btn" data-screen="research" type="button">Research</button>
       <button class="nav-btn" data-screen="quests" type="button">Quests</button>
       <button class="nav-btn" data-screen="kingdom" type="button">Kingdom</button>
@@ -138,6 +204,24 @@
           Your storehouses can only hold 8 hours of production.
         </p>
         <button class="btn btn-primary btn-wide" id="welcome-collect" type="button">Collect &amp; Continue</button>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="battle-modal" hidden>
+      <div class="modal panel battle-modal" role="dialog" aria-modal="true" aria-labelledby="battle-title">
+        <h2 class="modal-title" id="battle-title">Barbarian Raid</h2>
+        <!-- The battlefield is drawn at 320x160 and scaled up with crisp pixels -->
+        <canvas id="battle-canvas" width="320" height="160"></canvas>
+        <div class="battle-status">
+          <span id="battle-knights"></span>
+          <span id="battle-time"></span>
+          <span id="battle-enemies"></span>
+        </div>
+        <div class="battle-summary" id="battle-summary" hidden></div>
+        <div class="archive-actions battle-actions">
+          <button class="btn" id="battle-skip" type="button">Skip to Result</button>
+          <button class="btn btn-primary btn-wide" id="battle-continue" type="button" hidden>Continue</button>
+        </div>
       </div>
     </div>
 

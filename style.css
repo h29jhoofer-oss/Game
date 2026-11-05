@@ -715,6 +715,251 @@ button:focus-visible {
   color: var(--danger);
 }
 
+/* ---------- Army screen ---------- */
+.army-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 10px;
+  width: 100%;
+  align-items: start;
+}
+
+.army-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  font-size: 20px;
+}
+
+.army-panel > div {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.army-panel [hidden] {
+  display: none !important;
+}
+
+.army-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.army-big {
+  font-size: 30px;
+  color: var(--royal-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+.army-wounded {
+  font-size: 18px;
+  color: var(--danger);
+}
+
+.training-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 18px;
+  color: var(--wood);
+}
+
+.training-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.knight-list,
+.enemy-preview,
+.battle-log {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.knight-card,
+.enemy-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--parchment-lt);
+  border: 3px solid var(--wood-dark);
+}
+
+.enemy-row {
+  flex-direction: row;
+  align-items: center;
+  border-color: var(--danger-dark);
+}
+
+.knight-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.unit-icon {
+  width: 40px;
+  height: 40px;
+  padding: 2px;
+  background: var(--parchment);
+  border: 2px solid var(--wood-dark);
+}
+
+.knight-name,
+.enemy-name {
+  font-size: 23px;
+  color: var(--ink);
+}
+
+.knight-count {
+  font-size: 18px;
+  color: var(--gold-dark);
+}
+
+.knight-desc,
+.enemy-desc,
+.knight-train {
+  font-size: 17px;
+  color: var(--wood);
+}
+
+.knight-stats {
+  font-size: 17px;
+  color: var(--royal-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+.invasion-timer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--wood-dark);
+  color: var(--parchment);
+  border: 3px solid var(--ink);
+}
+
+.countdown {
+  font-family: var(--font-title);
+  font-size: 14px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.sub-title {
+  font-family: var(--font-title);
+  font-size: 11px;
+  color: var(--royal-dark);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.invasion-reward,
+.battle-record {
+  font-size: 18px;
+  color: var(--grass-dark);
+}
+
+.log-entry {
+  font-size: 17px;
+  padding: 4px 8px;
+  border-left: 4px solid var(--grass);
+  background: var(--parchment-lt);
+}
+
+.log-entry.lost {
+  border-left-color: var(--danger);
+}
+
+.log-empty {
+  font-size: 17px;
+  color: var(--wood);
+}
+
+/* Warning banner in the top bar */
+.invasion-banner {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 20px;
+  color: var(--text-light);
+  background: var(--danger);
+  border: 3px solid var(--ink);
+  box-shadow: inset 2px 2px 0 #d8644e, inset -2px -3px 0 var(--danger-dark);
+  animation: banner-pulse 1s steps(2) infinite;
+}
+
+@keyframes banner-pulse {
+  50% { background: var(--danger-dark); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invasion-banner { animation: none; }
+}
+
+/* ---------- Battle window ---------- */
+.modal.battle-modal {
+  max-width: 700px;
+}
+
+#battle-canvas {
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  max-width: 100%;
+  border: 3px solid var(--ink);
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: var(--grass-dark);
+}
+
+.battle-status {
+  display: flex;
+  justify-content: space-between;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.battle-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  background: var(--parchment-lt);
+  border: 3px solid var(--grass-dark);
+}
+
+.battle-summary.lost {
+  border-color: var(--danger);
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 19px;
+}
+
+.summary-row strong {
+  font-weight: normal;
+  color: var(--ink);
+  text-align: right;
+}
+
+.battle-actions {
+  justify-content: center;
+}
+
 /* ---------- Bottom navigation ---------- */
 .bottom-nav {
   position: fixed;
@@ -965,6 +1210,20 @@ button:focus-visible {
 
   .nav-btn {
     font-size: 8px;
+  }
+}
+
+/* Five navigation buttons on narrow phones */
+@media (max-width: 420px) {
+  .bottom-nav {
+    gap: 4px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .nav-btn {
+    font-size: 7px;
+    letter-spacing: 0;
   }
 }
 
