@@ -1,5 +1,5 @@
 /* =============================================================
-   KINGDOM IDLE - GAME LOGIC                       (Stage 5)
+   KINGDOM IDLE - GAME LOGIC                       (Stage 6)
    -------------------------------------------------------------
    This file is split into numbered sections:
 
@@ -13,6 +13,7 @@
      5. NUMBER FORMAT   - turning 12345 into "12.3K"
      6. PIXEL ICONS     - tiny hand-made pixel art for the UI
      7. USER INTERFACE  - resource bar, building panel, tabs
+     7b. SOUND & MUSIC  - sound effects and music made in code
      8. VILLAGE DRAWING - the pixel-art village on the canvas
      9. START THE GAME
    ============================================================= */
@@ -130,7 +131,7 @@ const BUILD_COST_GROWTH = 1.25;
 
 // Taxes: every citizen pays a tiny bit of gold per minute.
 // This gives gold a trickle of income before Markets exist.
-const TAX_GOLD_PER_CITIZEN_PER_MINUTE = 0.1;
+const TAX_GOLD_PER_CITIZEN_PER_MINUTE = 0.2;
 
 // ---- Population ----
 // The starting huts give room for this many citizens; houses add more.
@@ -219,6 +220,9 @@ const RESEARCH = [
   },
 ];
 
+// Player settings and their defaults (saved with the game).
+const DEFAULT_SETTINGS = { sound: true, music: false };
+
 // What a brand-new kingdom starts with.
 const STARTING_RESOURCES = { food: 30, wood: 30, stone: 0, gold: 5 };
 const STARTING_POPULATION = 5;
@@ -265,7 +269,7 @@ function createNewGameState() {
     // means old saves keep working when those features arrive.
     research: {},
     unlocked: {},
-    settings: {},
+    settings: { ...DEFAULT_SETTINGS },
     lastUpdate: Date.now(),   // real-world time (ms) production was last added
     lastSaved: 0,             // real-world time (ms) of the last save
   };
@@ -302,11 +306,14 @@ function calculateRatePerSecond(typeId, count, level) {
 }
 
 // Bonus from a helper building (Blacksmith, Academy), e.g. 0.1 = +10%.
-// It grows with the number built and their level, like production does.
+// Each copy gives boostPerBuilding, and each level adds 15% of that.
+// (It grows in a straight line on purpose: if helpers ALSO grew by
+// x1.15 per level, they would multiply with the boosted building's
+// own x1.15 per level and the economy would run away to infinity.)
 function calculateBoost(typeId, count, level) {
   const type = BUILDING_TYPES[typeId];
   if (!type.boostPerBuilding || count <= 0) return 0;
-  return type.boostPerBuilding * count * Math.pow(1 + LEVEL_PRODUCTION_BONUS, level - 1);
+  return type.boostPerBuilding * count * (1 + LEVEL_PRODUCTION_BONUS * (level - 1));
 }
 
 // All bonuses for one building type added together: research, helper
@@ -449,6 +456,7 @@ function checkMilestones() {
       state.unlocked[key] = true;
       if (m.era) state.era = Math.max(state.era, m.era);
       notify(`Milestone reached: ${m.title}!`);
+      playSound("milestone");
     }
   }
 }
@@ -483,6 +491,7 @@ function researchTech(techId) {
   if (!tech || getResearchStatus(tech) !== "available" || !canAfford(tech.cost)) return false;
   spendResources(tech.cost);
   state.research[tech.id] = true;
+  playSound("research");
   showToast(`Researched: ${tech.name}`);
   refreshUI();
   return true;
@@ -495,6 +504,8 @@ function upgradeCastle() {
   spendResources(CASTLE_UPGRADE.cost);
   state.castleLevel = 2;
   markVillageDirty();
+  requestVillageBurst("castle", "upgrade");
+  playSound("milestone");
   showToast("The keep is now a mighty castle!");
   refreshUI();
   return true;
@@ -527,11 +538,14 @@ function getBuildCost(typeId) {
 }
 
 // Price of the next upgrade.
-// Example (Farm): Lv1->2 = 60 wood, Lv2->3 = 75, Lv3->4 = 94 ...
+// Example (1 Farm): Lv1->2 = 60 wood, Lv2->3 = 75, Lv3->4 = 94 ...
+// An upgrade improves EVERY copy you own, so it is priced per copy:
+// upgrading 3 farms costs 3 times as much as upgrading 1.
 function getUpgradeCost(typeId) {
   const type = BUILDING_TYPES[typeId];
-  const level = state.buildings[typeId].level;
-  return scaleCost(type.upgradeBaseCost, Math.pow(UPGRADE_COST_GROWTH, level - 1));
+  const owned = state.buildings[typeId];
+  const copies = Math.max(1, owned.count);
+  return scaleCost(type.upgradeBaseCost, Math.pow(UPGRADE_COST_GROWTH, owned.level - 1) * copies);
 }
 
 // True if the player has enough of every resource in the cost.
@@ -558,6 +572,8 @@ function buildBuilding(typeId) {
   spendResources(cost);
   state.buildings[typeId].count += 1;
   markVillageDirty();   // a new building appears in the village
+  requestVillageBurst(typeId, "build");
+  playSound("build");
   refreshUI();
   return true;
 }
@@ -571,6 +587,8 @@ function upgradeBuilding(typeId) {
 
   spendResources(cost);
   owned.level += 1;
+  requestVillageBurst(typeId, "upgrade");
+  playSound("upgrade");
   refreshUI();
   return true;
 }
@@ -715,8 +733,14 @@ function cleanSaveData(data) {
   if (isGoodNumber(data.populationProgress)) clean.populationProgress = Math.min(1, data.populationProgress);
   if (isGoodNumber(data.castleLevel) && data.castleLevel >= 1) clean.castleLevel = Math.floor(data.castleLevel);
   if (isGoodNumber(data.era) && data.era >= 1) clean.era = Math.floor(data.era);
-  for (const key of ["research", "unlocked", "settings"]) {
+  for (const key of ["research", "unlocked"]) {
     if (data[key] && typeof data[key] === "object") clean[key] = { ...data[key] };
+  }
+  // Settings: keep only known on/off switches
+  if (data.settings && typeof data.settings === "object") {
+    for (const key in DEFAULT_SETTINGS) {
+      if (typeof data.settings[key] === "boolean") clean.settings[key] = data.settings[key];
+    }
   }
   if (isGoodNumber(data.lastSaved)) clean.lastSaved = data.lastSaved;
   // A timestamp in the future (clock changed) is treated as "now".
@@ -1218,6 +1242,9 @@ function updateBuildingPanel() {
     el.count.textContent = owned.count > 0 ? `×${owned.count} · Lv ${owned.level}` : "";
     el.output.textContent = getOutputText(typeId);
 
+    el.card.classList.toggle("affordable", canAfford(getBuildCost(typeId)) ||
+      (owned.count > 0 && canAfford(getUpgradeCost(typeId))));
+
     // Build button
     const buildCost = getBuildCost(typeId);
     el.buildGain.textContent = getGainText(typeId, 1, 0);
@@ -1227,6 +1254,7 @@ function updateBuildingPanel() {
     // Upgrade button (only possible once you own one)
     const upgradeCost = getUpgradeCost(typeId);
     el.upgradeLabel.textContent = "Upgrade";
+    if (owned.count > 1) el.upgradeLabel.textContent = `Upgrade all ${owned.count}`;
     if (owned.count > 0) {
       el.upgradeGain.textContent = getGainText(typeId, 0, 1);
       el.upgradeBtn.disabled = !canAfford(upgradeCost);
@@ -1281,7 +1309,14 @@ function buildResearchPanel() {
   }
 }
 
+// A small dot on a tab means "something here is ready for you".
+function setNavBadge(screen, on) {
+  const button = document.querySelector(`.nav-btn[data-screen="${screen}"]`);
+  if (button) button.classList.toggle("has-badge", on);
+}
+
 function updateResearchPanel() {
+  setNavBadge("research", RESEARCH.some(t => getResearchStatus(t) === "available" && canAfford(t.cost)));
   const names = { done: "Researched", available: "Available", locked: "Locked" };
   for (const tech of RESEARCH) {
     const el = researchCardElements[tech.id];
@@ -1337,6 +1372,7 @@ function updateKingdomPanel() {
     row.querySelector(".progress-fill").style.width = Math.min(100, (state.population / target) * 100) + "%";
   }
   const done = state.castleLevel >= 2;
+  setNavBadge("kingdom", !done && state.population >= CASTLE_UPGRADE.population && canAfford(CASTLE_UPGRADE.cost));
   const button = document.getElementById("castle-button");
   const status = document.getElementById("castle-status");
   const costEl = document.getElementById("castle-cost");
@@ -1365,6 +1401,7 @@ function setupNavigation() {
         screen.classList.toggle("active", screen.id === "screen-" + target);
       });
       if (target === "village") resizeVillageCanvas();
+      playSound("click");
     });
   });
 }
@@ -1439,6 +1476,7 @@ function showWelcomeBack(secondsAway, secondsPaid, earned) {
 // The earnings were already added when you returned (so nothing is
 // lost if the page closes); this button just closes the window.
 function collectWelcomeBack() {
+  playSound("coins");
   welcomeTotals = null;
   closeModal("welcome-modal");
   refreshUI();
@@ -1450,6 +1488,7 @@ function setupSaveControls() {
       updateGame();
       const ok = saveGame();
       updateSaveStatus();
+      playSound("click");
       showToast(ok ? "Kingdom saved" : "Saving is blocked in this browser");
     });
   }
@@ -1460,6 +1499,234 @@ function setupSaveControls() {
     resetGame();
   });
   document.getElementById("welcome-collect").addEventListener("click", collectWelcomeBack);
+}
+
+
+/* =============================================================
+   7b. SOUND & MUSIC
+   -------------------------------------------------------------
+   No audio files! Every sound is made by the browser's Web Audio
+   API from simple waves (like an old game console):
+     square / triangle / sine waves for notes, and white noise
+     for thuds. An "envelope" makes each note start quickly and
+     fade out, so it sounds plucked instead of beeping forever.
+   Browsers only allow sound after the player clicks something,
+   so audio starts on the first click.
+   ============================================================= */
+
+let audioCtx = null;
+// Browsers block sound until the player has clicked or pressed a key.
+let userHasInteracted = false;
+for (const eventName of ["pointerdown", "keydown"]) {
+  document.addEventListener(eventName, () => { userHasInteracted = true; }, { once: true, capture: true });
+}
+let sfxGain = null, musicGain = null;
+
+// Creates the audio system the first time it's needed.
+function ensureAudio() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  if (!audioCtx) {
+    audioCtx = new AudioContextClass();
+    const master = audioCtx.createGain();
+    master.gain.value = 0.5;
+    master.connect(audioCtx.destination);
+    sfxGain = audioCtx.createGain();
+    sfxGain.gain.value = 0.7;
+    sfxGain.connect(master);
+    musicGain = audioCtx.createGain();
+    musicGain.gain.value = 0.0;
+    musicGain.connect(master);
+  }
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+
+// One note. start = seconds from now. slideTo bends the pitch.
+function tone(freq, start, duration, type, volume, output = sfxGain, slideTo = null) {
+  const t = audioCtx.currentTime + start;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t + duration);
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(volume, t + 0.01);          // quick attack
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);      // fade out
+  osc.connect(gain).connect(output);
+  osc.start(t);
+  osc.stop(t + duration + 0.05);
+}
+
+// A short burst of noise (hammer knocks, dust).
+function noise(start, duration, volume, filterFreq) {
+  const t = audioCtx.currentTime + start;
+  const length = Math.floor(audioCtx.sampleRate * duration);
+  const buffer = audioCtx.createBuffer(1, length, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+  const source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = filterFreq;
+  const gain = audioCtx.createGain();
+  gain.gain.value = volume;
+  source.connect(filter).connect(gain).connect(sfxGain);
+  source.start(t);
+}
+
+// Note number -> frequency (69 = A4 = 440 Hz).
+function midiToFreq(note) {
+  return 440 * Math.pow(2, (note - 69) / 12);
+}
+
+const SOUNDS = {
+  click()     { tone(880, 0, 0.05, "square", 0.05); },
+  coins()     { tone(988, 0, 0.08, "square", 0.08); tone(1319, 0.07, 0.25, "square", 0.08); },
+  build() {
+    noise(0, 0.12, 0.5, 900); noise(0.14, 0.1, 0.4, 700);         // two hammer knocks
+    tone(392, 0.22, 0.12, "triangle", 0.2); tone(523, 0.3, 0.25, "triangle", 0.2);
+  },
+  upgrade()   { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.06, 0.18, "square", 0.06)); },
+  research()  { tone(1047, 0, 1.0, "sine", 0.15); tone(1568, 0.02, 0.8, "sine", 0.07); tone(784, 0.15, 0.9, "triangle", 0.08); },
+  milestone() {
+    const notes = [[67, 0, 0.18], [72, 0.18, 0.18], [76, 0.36, 0.18], [79, 0.54, 0.6]];
+    for (const [n, t, d] of notes) { tone(midiToFreq(n), t, d, "square", 0.07); tone(midiToFreq(n - 12), t, d, "triangle", 0.12); }
+  },
+};
+
+// Plays a sound effect if sound is switched on.
+function playSound(name) {
+  if (!state.settings.sound || !SOUNDS[name] || !userHasInteracted) return;
+  if (!ensureAudio()) return;
+  SOUNDS[name]();
+}
+
+// ---------- Music ----------
+// A gentle lute-like tune in D dorian over a soft drone. Notes are
+// [note number, length in beats]; 0 = rest. Phrases are picked at
+// random, so the tune doesn't repeat exactly.
+const MUSIC_BPM = 84;
+const MUSIC_PHRASES = [
+  [[62, 1], [65, 1], [69, 1], [67, 1], [65, 1], [64, 1], [62, 2]],
+  [[69, 1], [72, 1], [71, 0.5], [69, 0.5], [67, 1], [69, 2], [0, 2]],
+  [[65, 1.5], [67, 0.5], [69, 1], [74, 1], [72, 1], [69, 1], [67, 2]],
+  [[62, 0.5], [64, 0.5], [65, 1], [62, 1], [60, 1], [62, 3], [0, 1]],
+  [[74, 1], [72, 1], [69, 1], [71, 1], [67, 1], [69, 1], [62, 2]],
+];
+let musicTimer = null;
+let musicNextTime = 0;
+let musicNoteQueue = [];
+let droneNodes = [];
+
+// A plucked note: bright at first, then softer (like a lute string).
+function pluck(note, time, duration) {
+  const osc = audioCtx.createOscillator();
+  const filter = audioCtx.createBiquadFilter();
+  const gain = audioCtx.createGain();
+  osc.type = "triangle";
+  osc.frequency.value = midiToFreq(note);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(2400, time);
+  filter.frequency.exponentialRampToValueAtTime(500, time + duration);
+  gain.gain.setValueAtTime(0.0001, time);
+  gain.gain.exponentialRampToValueAtTime(0.35, time + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + duration * 1.6);
+  osc.connect(filter).connect(gain).connect(musicGain);
+  osc.start(time);
+  osc.stop(time + duration * 1.7);
+}
+
+// Looks a little ahead and schedules the next notes on the audio clock,
+// so the timing stays steady even if the page is busy.
+function scheduleMusic() {
+  const beat = 60 / MUSIC_BPM;
+  while (musicNextTime < audioCtx.currentTime + 0.6) {
+    if (musicNoteQueue.length === 0) {
+      musicNoteQueue = MUSIC_PHRASES[Math.floor(Math.random() * MUSIC_PHRASES.length)].slice();
+    }
+    const [note, beats] = musicNoteQueue.shift();
+    if (note) {
+      pluck(note, musicNextTime, beats * beat);
+      if (Math.random() < 0.35) pluck(note - 12, musicNextTime, beats * beat);   // occasional low octave
+    }
+    musicNextTime += beats * beat;
+  }
+}
+
+function startMusic() {
+  if (musicTimer || !ensureAudio()) return;
+  musicGain.gain.cancelScheduledValues(audioCtx.currentTime);
+  musicGain.gain.setTargetAtTime(0.22, audioCtx.currentTime, 0.8);    // fade in
+  // Soft drone on D and A
+  droneNodes = [50, 57].map(note => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = midiToFreq(note);
+    gain.gain.value = 0.08;
+    osc.connect(gain).connect(musicGain);
+    osc.start();
+    return osc;
+  });
+  musicNextTime = audioCtx.currentTime + 0.3;
+  musicNoteQueue = [];
+  scheduleMusic();
+  musicTimer = setInterval(scheduleMusic, 200);
+}
+
+function stopMusic() {
+  if (!musicTimer) return;
+  clearInterval(musicTimer);
+  musicTimer = null;
+  musicGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.3);       // fade out
+  const now = audioCtx.currentTime;
+  for (const osc of droneNodes) osc.stop(now + 1.5);
+  droneNodes = [];
+}
+
+// Applies the saved settings and updates the on/off buttons.
+function applyAudioSettings() {
+  if (state.settings.music) startMusic(); else stopMusic();
+  for (const b of document.querySelectorAll(".toggle-sound")) {
+    b.setAttribute("aria-pressed", state.settings.sound);
+    b.querySelector(".toggle-state").textContent = state.settings.sound ? "On" : "Off";
+  }
+  for (const b of document.querySelectorAll(".toggle-music")) {
+    b.setAttribute("aria-pressed", state.settings.music);
+    b.querySelector(".toggle-state").textContent = state.settings.music ? "On" : "Off";
+  }
+}
+
+function setupAudioControls() {
+  for (const b of document.querySelectorAll(".toggle-sound")) {
+    b.addEventListener("click", () => {
+      state.settings.sound = !state.settings.sound;
+      applyAudioSettings();
+      playSound("click");
+      saveGame();
+    });
+  }
+  for (const b of document.querySelectorAll(".toggle-music")) {
+    b.addEventListener("click", () => {
+      state.settings.music = !state.settings.music;
+      applyAudioSettings();
+      saveGame();
+    });
+  }
+  // Music can only start after a click, so if it was left on, start it
+  // on the player's first click anywhere.
+  document.addEventListener("pointerdown", () => {
+    if (state.settings.music) startMusic();
+  }, { once: true });
+  // Pause all sound while the tab is hidden.
+  document.addEventListener("visibilitychange", () => {
+    if (!audioCtx) return;
+    if (document.hidden) audioCtx.suspend();
+    else if (state.settings.music || state.settings.sound) audioCtx.resume();
+  });
+  applyAudioSettings();
 }
 
 
@@ -1655,6 +1922,8 @@ let skyCache = { key: -1, canvas: null };
 let sceneObjects = [];           // cached buildings, trees, props
 let fx = null;                   // lights, chimneys, flags... found while drawing
 let smokePuffs = [];
+let burstParticles = [];      // dust and sparkles when you build or upgrade
+let pendingBursts = [];       // bursts waiting for the scene to be rebuilt
 let lastFrameMs = 0;
 
 // Call this whenever something visible changes (e.g. a new building).
@@ -2634,10 +2903,10 @@ function buildSceneObjects() {
   const occupy = (x, y, w, d) => {
     for (let ty = y; ty < y + d; ty++) for (let tx = x; tx < x + w; tx++) occupied.add(tx + "," + ty);
   };
-  const addSprite = (depth, bounds, drawFn) => list.push({ depth, sprite: makeSprite(bounds, drawFn) });
+  const addSprite = (depth, bounds, drawFn, tag = null) => list.push({ depth, sprite: makeSprite(bounds, drawFn), tag });
 
   // Castle on its hill (depth chosen so the stairs and roads draw in front)
-  addSprite(17, { x: 140, y: -30, w: 210, h: 170 }, drawCastle);
+  addSprite(17, { x: 140, y: -30, w: 210, h: 170 }, drawCastle, "castle");
   occupy(4, 4, 6, 6);
 
   // Houses
@@ -2651,18 +2920,18 @@ function buildSceneObjects() {
   for (let i = 0; i < houseCount; i++) {
     const h = L.housePlots[i];
     occupy(h.x, h.y, 2, 2);
-    addSprite(h.x + h.y + 3.4, boxBounds({ x: h.x, y: h.y, w: 2, d: 2, z: 0 }, 40), ctx => drawHouse(ctx, h.x, h.y, i + 1));
+    addSprite(h.x + h.y + 3.4, boxBounds({ x: h.x, y: h.y, w: 2, d: 2, z: 0 }, 40), ctx => drawHouse(ctx, h.x, h.y, i + 1), "house");
   }
 
   if (b.blacksmith.count > 0) {
     const m = L.blacksmith;
     occupy(m.x, m.y, 2, 2);
-    addSprite(m.x + m.y + 3.4, boxBounds({ x: m.x, y: m.y, w: 2, d: 2, z: 0 }, 44), ctx => drawBlacksmith(ctx, m.x, m.y));
+    addSprite(m.x + m.y + 3.4, boxBounds({ x: m.x, y: m.y, w: 2, d: 2, z: 0 }, 44), ctx => drawBlacksmith(ctx, m.x, m.y), "blacksmith");
   }
   if (b.academy.count > 0) {
     const a = L.academy;
     occupy(a.x, a.y, 2, 2);
-    addSprite(a.x + a.y + 3.4, boxBounds({ x: a.x, y: a.y, w: 2, d: 2, z: 0 }, 70), ctx => drawAcademy(ctx, a.x, a.y));
+    addSprite(a.x + a.y + 3.4, boxBounds({ x: a.x, y: a.y, w: 2, d: 2, z: 0 }, 70), ctx => drawAcademy(ctx, a.x, a.y), "academy");
   }
 
   // Farm: barn + one field per farm
@@ -2692,28 +2961,28 @@ function buildSceneObjects() {
         },
       });
     }
-    addSprite(f.x + f.w + f.y + f.d, boxBounds({ ...f, z: 0 }, 8), ctx => drawFieldFrontFence(ctx, f));
+    addSprite(f.x + f.w + f.y + f.d, boxBounds({ ...f, z: 0 }, 8), ctx => drawFieldFrontFence(ctx, f), "farm");
   }
 
   // Lumber mill
   if (b.lumberMill.count > 0) {
     const m = L.lumberMill;
     occupy(m.x, m.y, 3, 2);
-    addSprite(m.x + m.y + 3.6, boxBounds({ x: m.x, y: m.y, w: 3, d: 2, z: 0 }, 40), ctx => drawLumberMill(ctx, m.x, m.y));
+    addSprite(m.x + m.y + 3.6, boxBounds({ x: m.x, y: m.y, w: 3, d: 2, z: 0 }, 40), ctx => drawLumberMill(ctx, m.x, m.y), "lumberMill");
     addSprite(14.2 + 9.2 + 0.8, boxBounds({ x: 14.2, y: 9.2, w: 1, d: 0.8, z: 0 }, 12), ctx => drawLogPile(ctx, 14.15, 9.15));
     addSprite(17.2 + 10.2 + 0.8, boxBounds({ x: 17.2, y: 10.2, w: 1, d: 0.8, z: 0 }, 12), ctx => drawLogPile(ctx, 17.15, 10.15));
   }
 
   // Quarry works
   if (b.quarry.count > 0) {
-    addSprite(15.2, { x: 290, y: 80, w: 100, h: 70 }, drawQuarryWorks);
+    addSprite(15.2, { x: 290, y: 80, w: 100, h: 70 }, drawQuarryWorks, "quarry");
   }
 
   // Market stalls: one market = 2 stalls, each extra market adds one (max 4)
   const stallCount = b.market.count > 0 ? Math.min(L.marketStalls.length, b.market.count + 1) : 0;
   for (let i = 0; i < stallCount; i++) {
     const s = L.marketStalls[i];
-    addSprite(s.x + s.y + 1.85, boxBounds({ x: s.x, y: s.y, w: 1, d: 1, z: 0 }, 26), ctx => drawStall(ctx, s.x, s.y, STALL_COLORS[i]));
+    addSprite(s.x + s.y + 1.85, boxBounds({ x: s.x, y: s.y, w: 1, d: 1, z: 0 }, 26), ctx => drawStall(ctx, s.x, s.y, STALL_COLORS[i]), "market");
   }
 
   // Plaza well, lamps and props
@@ -3041,6 +3310,56 @@ function drawFires(ctx, time) {
   }
 }
 
+// Called when something is built or upgraded: a cloud of dust
+// (build) or golden sparkles (upgrade) appears at that building.
+function requestVillageBurst(tag, kind) {
+  pendingBursts.push({ tag, kind });
+}
+
+function spawnPendingBursts() {
+  for (const { tag, kind } of pendingBursts) {
+    // The newest building with this tag is the last one in the list
+    const target = sceneObjects.filter(o => o.tag === tag).pop();
+    if (!target) continue;
+    const s = target.sprite;
+    const cx = s.x + s.canvas.width / 2;
+    const cy = s.y + s.canvas.height - 8;
+    for (let i = 0; i < 24; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 6 + Math.random() * 14;
+      burstParticles.push({
+        x: cx + (Math.random() - 0.5) * 16,
+        y: cy - Math.random() * 14,
+        vx: Math.cos(angle) * speed,
+        vy: kind === "build" ? -Math.abs(Math.sin(angle)) * speed * 0.6 : -10 - Math.random() * 14,
+        age: 0,
+        life: 0.9 + Math.random() * 0.6,
+        color: kind === "build" ? (i % 2 ? "#d8c8a8" : "#b8a684") : (i % 3 ? PAL.gold : "#fff6c0"),
+        kind,
+      });
+    }
+  }
+  pendingBursts = [];
+}
+
+function updateAndDrawBursts(ctx, dt, time) {
+  const next = [];
+  for (const p of burstParticles) {
+    p.age += dt;
+    if (p.age > p.life) continue;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vx *= 0.92;
+    if (p.kind === "build") p.vy += 10 * dt;                  // dust settles
+    ctx.globalAlpha = Math.max(0, 1 - p.age / p.life);
+    const size = p.kind === "build" ? 2 + Math.floor(p.age * 3) : (Math.sin(time * 20 + p.x) > 0 ? 2 : 1);
+    rect(ctx, p.x, p.y, size, size, p.color);
+    next.push(p);
+  }
+  ctx.globalAlpha = 1;
+  burstParticles = next;
+}
+
 // Smoke puffs rising from chimneys and drifting with the wind.
 function updateAndDrawSmoke(ctx, time, dt) {
   for (const c of fx.chimneys) {
@@ -3183,6 +3502,7 @@ function drawFrame(time, dt) {
   drawSaws(ctx, time);
   drawFires(ctx, time);
   updateAndDrawSmoke(ctx, time, dt);
+  updateAndDrawBursts(ctx, dt, time);
   drawLowClouds(ctx, time);
 
   // 5. Day/night lighting: tint everything, then add glowing lights
@@ -3253,6 +3573,7 @@ function renderLoop(now) {
     buildScene();
     villageNeedsRedraw = false;
   }
+  if (pendingBursts.length) spawnPendingBursts();
   drawFrame(now / 1000, dt);
 }
 
@@ -3279,6 +3600,7 @@ function initGame() {
   buildKingdomPanel();
   setupNavigation();
   setupSaveControls();
+  setupAudioControls();
   resizeVillageCanvas();
   window.addEventListener("resize", resizeVillageCanvas);
 

@@ -478,6 +478,50 @@ button:focus-visible {
   color: var(--text-light);
 }
 
+/* ---------- Sound / music toggles ---------- */
+.btn-toggle[aria-pressed="false"] {
+  color: var(--parchment);
+  background: var(--wood-dark);
+  box-shadow: inset 2px 2px 0 var(--wood), inset -2px -3px 0 var(--wood-deep);
+}
+
+.btn.btn-toggle {
+  flex-direction: row;
+  gap: 6px;
+  font-size: 20px;
+}
+
+/* ---------- Cards you can afford glow gold ---------- */
+.building-card.affordable {
+  border-color: var(--gold-dark);
+  box-shadow: inset -2px -2px 0 var(--parchment-dk), 0 0 0 3px var(--gold);
+}
+
+/* ---------- "Something is ready" dot on a tab ---------- */
+.nav-btn {
+  position: relative;
+}
+
+.nav-btn.has-badge::after {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 12px;
+  height: 12px;
+  background: var(--danger);
+  border: 3px solid var(--ink);
+  animation: badge-blink 1.2s steps(2) infinite;
+}
+
+@keyframes badge-blink {
+  50% { background: var(--gold); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-btn.has-badge::after { animation: none; }
+}
+
 /* ---------- Locked buildings ---------- */
 .building-card.locked .building-header {
   opacity: 0.5;
@@ -806,6 +850,32 @@ button:focus-visible {
    NARROW SCREENS (tablets and phones)
    ============================================================= */
 @media (max-width: 760px) {
+  /* Keep resources visible while scrolling through buildings */
+  .top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    padding: 6px 8px 8px;
+  }
+
+  .title-row {
+    margin-bottom: 6px;
+    gap: 4px 8px;
+  }
+
+  .save-block {
+    gap: 6px;
+  }
+
+  .save-block .save-status {
+    display: none;   /* shown on the Kingdom tab instead */
+  }
+
+  .btn-small {
+    font-size: 8px;
+    padding: 6px 7px 7px;
+  }
+
   #game {
     padding: 6px 6px calc(var(--nav-height) + 12px);
     gap: 8px;
@@ -870,3 +940,31 @@ button:focus-visible {
     font-size: 9px;
   }
 }
+
+/* Very small phones (320px wide) */
+@media (max-width: 360px) {
+  .title-block {
+    gap: 2px 8px;
+  }
+
+  .era-label {
+    font-size: 15px;
+  }
+
+  .resource-amount {
+    font-size: 20px;
+  }
+
+  .building-actions {
+    gap: 5px;
+  }
+
+  .btn {
+    padding: 4px 4px 6px;
+  }
+
+  .nav-btn {
+    font-size: 8px;
+  }
+}
+

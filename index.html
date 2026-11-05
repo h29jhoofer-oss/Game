@@ -27,6 +27,8 @@
         </div>
         <div class="save-block">
           <span class="save-status">Not saved yet</span>
+          <button class="btn-small btn-toggle toggle-sound" type="button" aria-pressed="true">Sound <span class="toggle-state">On</span></button>
+          <button class="btn-small btn-toggle toggle-music" type="button" aria-pressed="false">Music <span class="toggle-state">Off</span></button>
           <button class="btn-small save-button" type="button">Save</button>
         </div>
       </div>
@@ -98,11 +100,15 @@
         </div>
 
         <div class="panel placeholder">
-          <h2 class="panel-title">Royal Archives</h2>
+          <h2 class="panel-title">Royal Archives &amp; Settings</h2>
           <p>Your kingdom is saved in this browser automatically every 20 seconds
              and whenever you leave the page.</p>
           <p>While you're away, your buildings keep producing for up to 8 hours.</p>
           <p class="archive-status"><span class="save-status">Not saved yet</span></p>
+          <div class="archive-actions">
+            <button class="btn btn-toggle toggle-sound" type="button" aria-pressed="true">Sound effects: <span class="toggle-state">On</span></button>
+            <button class="btn btn-toggle toggle-music" type="button" aria-pressed="false">Music: <span class="toggle-state">Off</span></button>
+          </div>
           <div class="archive-actions">
             <button class="btn btn-primary save-button" type="button">Save Now</button>
             <button class="btn btn-danger" id="reset-button" type="button">Reset Kingdom</button>
