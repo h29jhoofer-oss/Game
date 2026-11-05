@@ -1,0 +1,383 @@
+/* =============================================================
+   KINGDOM IDLE - STYLES
+   -------------------------------------------------------------
+   All colors live in the :root variables below, so you can
+   re-theme the whole game by changing a few lines.
+   No gradients or soft shadows: every edge is hard and crisp
+   to match the pixel-art style.
+   ============================================================= */
+
+:root {
+  /* Palette: warm greens, browns, golds and stone grays */
+  --ink:          #2b1d14;   /* darkest outline brown */
+  --wood-dark:    #4a2f1d;
+  --wood:         #6b4528;
+  --wood-light:   #8f6238;
+  --parchment:    #e8d3a2;
+  --parchment-dk: #c9ad74;
+  --gold:         #f2c14e;
+  --gold-dark:    #b8862b;
+  --grass:        #5a8f3c;
+  --grass-dark:   #3e6b2a;
+  --stone:        #9a9a8e;
+  --stone-dark:   #5e5e56;
+  --text-light:   #f6ead0;
+  --text-dark:    #2b1d14;
+  --positive:     #8fd16a;
+  --bg:           #1d1611;
+
+  /* Fonts: pixel fonts with safe fallbacks */
+  --font-title: "Press Start 2P", "Courier New", monospace;
+  --font-body:  "VT323", "Courier New", monospace;
+
+  /* Sizes */
+  --nav-height: 56px;
+}
+
+/* ---------- Basic reset ---------- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text-light);
+  font-family: var(--font-body);
+  font-size: 20px;
+  line-height: 1.15;
+  overflow-x: hidden; /* never allow sideways scrolling */
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ---------- Pixel "border" helper ----------
+   A 4px stepped border made from hard box-shadows gives the
+   chunky framed look of old console menus. */
+.panel,
+.top-bar,
+.village-frame {
+  border: 4px solid var(--ink);
+  box-shadow: inset 0 0 0 2px var(--wood-light);
+}
+
+/* ---------- Overall layout ---------- */
+#game {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 8px 8px calc(var(--nav-height) + 12px);
+  gap: 8px;
+}
+
+/* ---------- Top resource bar ---------- */
+.top-bar {
+  background: var(--wood);
+  padding: 8px 10px;
+}
+
+.title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.game-title {
+  font-family: var(--font-title);
+  font-size: 16px;
+  color: var(--gold);
+  text-shadow: 2px 2px 0 var(--ink);
+  letter-spacing: 1px;
+}
+
+.era-label {
+  font-size: 20px;
+  color: var(--parchment);
+}
+
+.resource-bar {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.resource {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--wood-dark);
+  border: 2px solid var(--ink);
+  padding: 4px 8px;
+  min-width: 0; /* lets text shrink on small screens */
+}
+
+/* Icons are tiny canvases drawn by game.js and scaled up crisply */
+.pixel-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.resource-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.resource-name {
+  font-size: 16px;
+  color: var(--parchment-dk);
+  text-transform: uppercase;
+}
+
+.resource-amount {
+  font-size: 24px;
+  color: var(--text-light);
+  white-space: nowrap;
+}
+
+.resource-rate {
+  font-size: 16px;
+  color: var(--positive);
+  white-space: nowrap;
+}
+
+.resource-rate.zero {
+  color: var(--stone);
+}
+
+/* ---------- Main area & screens ---------- */
+.main-area {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.screen {
+  display: none;
+  width: 100%;
+}
+
+.screen.active {
+  display: flex;
+  gap: 8px;
+}
+
+.screen-village {
+  align-items: flex-start;
+}
+
+/* ---------- Village canvas ---------- */
+.village-frame {
+  flex: 0 0 auto;   /* hugs the canvas; the panel takes the leftover space */
+  background: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+
+#village-canvas {
+  display: block;
+  /* The real size is set by game.js (resizeVillageCanvas) so that
+     the 320x180 image is scaled by whole numbers when possible. */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* ---------- Panels ---------- */
+.panel {
+  background: var(--parchment);
+  color: var(--text-dark);
+  padding: 12px;
+}
+
+.panel-title {
+  font-family: var(--font-title);
+  font-size: 13px;
+  color: var(--wood-dark);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 2px dashed var(--parchment-dk);
+}
+
+.panel-note {
+  margin-top: 10px;
+  font-size: 18px;
+  color: var(--wood-light);
+}
+
+.building-panel {
+  flex: 1;
+  min-width: 280px;
+}
+
+.building-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.building-card {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: var(--text-light);
+  border: 2px solid var(--wood-dark);
+  padding: 6px 8px;
+}
+
+.building-card .pixel-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.building-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.building-name {
+  font-size: 22px;
+  color: var(--ink);
+}
+
+.building-meta {
+  font-size: 17px;
+  color: var(--wood);
+}
+
+.building-output {
+  font-size: 18px;
+  color: var(--grass-dark);
+}
+
+.placeholder {
+  max-width: 520px;
+  margin: 0 auto;
+  font-size: 22px;
+}
+
+/* ---------- Bottom navigation ---------- */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--nav-height);
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px;
+  background: var(--wood-dark);
+  border-top: 4px solid var(--ink);
+  z-index: 10;
+}
+
+.nav-btn {
+  flex: 1;
+  max-width: 180px;
+  font-family: var(--font-title);
+  font-size: 11px;
+  color: var(--parchment);
+  background: var(--wood);
+  border: 3px solid var(--ink);
+  box-shadow: inset 0 -4px 0 var(--wood-dark);
+}
+
+.nav-btn:hover {
+  background: var(--wood-light);
+}
+
+.nav-btn.active {
+  color: var(--ink);
+  background: var(--gold);
+  box-shadow: inset 0 -4px 0 var(--gold-dark);
+}
+
+/* =============================================================
+   MOBILE / NARROW SCREENS
+   Switch to one vertical column. The village stays on top so it
+   is always visible, and buttons stay large enough to tap.
+   ============================================================= */
+@media (max-width: 860px) {
+  .screen.active {
+    flex-direction: column;
+  }
+
+  .village-frame,
+  .building-panel {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  #game {
+    padding: 4px 4px calc(var(--nav-height) + 8px);
+    gap: 6px;
+  }
+
+  .game-title {
+    font-size: 12px;
+  }
+
+  .era-label {
+    font-size: 17px;
+  }
+
+  /* 3 counters on the first row, 2 on the second */
+  .resource-bar {
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
+  }
+
+  .resource {
+    grid-column: span 2;
+    gap: 5px;
+    padding: 3px 5px;
+  }
+
+  .resource:nth-child(4),
+  .resource:nth-child(5) {
+    grid-column: span 3;
+  }
+
+  .pixel-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .resource-name {
+    display: none; /* the icon already says what it is */
+  }
+
+  .resource-amount {
+    font-size: 21px;
+  }
+
+  .resource-rate {
+    font-size: 15px;
+  }
+
+  .nav-btn {
+    font-size: 9px;
+  }
+}

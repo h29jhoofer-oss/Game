@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kingdom Idle</title>
+
+  <!-- Pixel fonts (optional). If you are offline, the game falls back to a
+       normal monospace font and still works. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Everything lives inside #game so the whole game can later be
+       dropped into another website as one block. -->
+  <div id="game">
+
+    <!-- ===================== TOP RESOURCE BAR ===================== -->
+    <header class="top-bar">
+      <div class="title-row">
+        <h1 class="game-title">Kingdom Idle</h1>
+        <span class="era-label" id="era-label">Era I &middot; The Settlement</span>
+      </div>
+      <!-- game.js fills this list with one counter per resource -->
+      <ul class="resource-bar" id="resource-bar"></ul>
+    </header>
+
+    <!-- ===================== MAIN AREA ===================== -->
+    <main class="main-area">
+
+      <!-- VILLAGE TAB (the default screen) -->
+      <section class="screen screen-village active" id="screen-village">
+        <div class="village-frame" id="village-frame">
+          <!-- The village is drawn at 320x180 and scaled up with crisp pixels -->
+          <canvas id="village-canvas" width="320" height="180"></canvas>
+        </div>
+
+        <aside class="panel building-panel">
+          <h2 class="panel-title">Buildings</h2>
+          <!-- game.js fills this list with building cards -->
+          <ul class="building-list" id="building-list"></ul>
+          <p class="panel-note">Construction &amp; upgrades arrive in Stage 2.</p>
+        </aside>
+      </section>
+
+      <!-- PLACEHOLDER TABS (filled in during later stages) -->
+      <section class="screen" id="screen-research">
+        <div class="panel placeholder">
+          <h2 class="panel-title">Research</h2>
+          <p>The royal scholars are still unpacking their scrolls.</p>
+          <p class="panel-note">Coming in a later stage.</p>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-quests">
+        <div class="panel placeholder">
+          <h2 class="panel-title">Quests</h2>
+          <p>No heralds have arrived with requests yet.</p>
+          <p class="panel-note">Coming in a later stage.</p>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-kingdom">
+        <div class="panel placeholder">
+          <h2 class="panel-title">Kingdom</h2>
+          <p>Your realm is but a humble settlement for now.</p>
+          <p class="panel-note">Coming in a later stage.</p>
+        </div>
+      </section>
+    </main>
+
+    <!-- ===================== BOTTOM NAVIGATION ===================== -->
+    <nav class="bottom-nav" id="bottom-nav">
+      <button class="nav-btn active" data-screen="village">Village</button>
+      <button class="nav-btn" data-screen="research">Research</button>
+      <button class="nav-btn" data-screen="quests">Quests</button>
+      <button class="nav-btn" data-screen="kingdom">Kingdom</button>
+    </nav>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
