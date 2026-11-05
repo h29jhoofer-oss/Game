@@ -3,35 +3,45 @@
    -------------------------------------------------------------
    All colors live in the :root variables below, so you can
    re-theme the whole game by changing a few lines.
-   No gradients or soft shadows: every edge is hard and crisp
-   to match the pixel-art style.
+
+   The "3D" look of panels and buttons comes from BEVELS: a light
+   edge on the top-left and a dark edge on the bottom-right, made
+   with hard (not blurry) box-shadows. Pressed buttons swap them.
    ============================================================= */
 
 :root {
-  /* Palette: warm greens, browns, golds and stone grays */
-  --ink:          #2b1d14;   /* darkest outline brown */
-  --wood-dark:    #4a2f1d;
-  --wood:         #6b4528;
-  --wood-light:   #8f6238;
-  --parchment:    #e8d3a2;
-  --parchment-dk: #c9ad74;
+  /* Palette: warm woods, parchment, royal gold and blue */
+  --ink:          #20160f;   /* darkest outline */
+  --wood-deep:    #3a2516;
+  --wood-dark:    #4f331f;
+  --wood:         #6e4829;
+  --wood-light:   #94653a;
+  --wood-shine:   #b4824c;
+  --parchment:    #ecd9ad;
+  --parchment-lt: #f7ead0;
+  --parchment-dk: #cdb07a;
   --gold:         #f2c14e;
+  --gold-light:   #ffe08a;
   --gold-dark:    #b8862b;
-  --grass:        #5a8f3c;
-  --grass-dark:   #3e6b2a;
+  --royal:        #3a5fa8;
+  --royal-dark:   #26407a;
+  --grass:        #4f9a4a;
+  --grass-light:  #6fbf5f;
+  --grass-dark:   #2f6a2b;
+  --danger:       #b8402c;
+  --danger-dark:  #7e2418;
   --stone:        #9a9a8e;
   --stone-dark:   #5e5e56;
-  --text-light:   #f6ead0;
+  --text-light:   #f7ead0;
   --text-dark:    #2b1d14;
-  --positive:     #8fd16a;
-  --bg:           #1d1611;
+  --positive:     #9ee07a;
+  --bg:           #17110c;
 
   /* Fonts: pixel fonts with safe fallbacks */
   --font-title: "Press Start 2P", "Courier New", monospace;
   --font-body:  "VT323", "Courier New", monospace;
 
-  /* Sizes */
-  --nav-height: 56px;
+  --nav-height: 60px;
 }
 
 /* ---------- Basic reset ---------- */
@@ -41,12 +51,22 @@
   padding: 0;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html, body {
-  height: 100%;
+  min-height: 100%;
 }
 
 body {
-  background: var(--bg);
+  /* A dark checkerboard of 4x4 "pixels" behind everything */
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(45deg, #1c150f 25%, transparent 25%, transparent 75%, #1c150f 75%),
+    linear-gradient(45deg, #1c150f 25%, transparent 25%, transparent 75%, #1c150f 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
   color: var(--text-light);
   font-family: var(--font-body);
   font-size: 20px;
@@ -59,76 +79,109 @@ button {
   cursor: pointer;
 }
 
-/* ---------- Pixel "border" helper ----------
-   A 4px stepped border made from hard box-shadows gives the
-   chunky framed look of old console menus. */
-.panel,
-.top-bar,
-.village-frame {
-  border: 4px solid var(--ink);
-  box-shadow: inset 0 0 0 2px var(--wood-light);
+button:focus-visible {
+  outline: 3px solid var(--gold-light);
+  outline-offset: 2px;
 }
 
 /* ---------- Overall layout ---------- */
 #game {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  max-width: 1280px;
+  max-width: 1500px;
   margin: 0 auto;
-  padding: 8px 8px calc(var(--nav-height) + 12px);
-  gap: 8px;
+  padding: 8px 10px calc(var(--nav-height) + 16px);
+  gap: 10px;
 }
 
-/* ---------- Top resource bar ---------- */
+/* ---------- Top bar ---------- */
 .top-bar {
   background: var(--wood);
-  padding: 8px 10px;
+  border: 4px solid var(--ink);
+  box-shadow:
+    inset 3px 3px 0 var(--wood-shine),
+    inset -3px -3px 0 var(--wood-deep),
+    0 4px 0 rgba(0, 0, 0, 0.45);
+  padding: 10px 12px 12px;
 }
 
 .title-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.title-block {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
 .game-title {
   font-family: var(--font-title);
-  font-size: 16px;
+  font-size: 18px;
   color: var(--gold);
-  text-shadow: 2px 2px 0 var(--ink);
+  text-shadow: 2px 2px 0 var(--ink), 0 -2px 0 var(--gold-dark);
   letter-spacing: 1px;
 }
 
 .era-label {
-  font-size: 20px;
+  font-size: 21px;
   color: var(--parchment);
 }
 
+.save-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.save-status {
+  font-size: 18px;
+  color: var(--parchment-dk);
+}
+
+.btn-small {
+  font-family: var(--font-title);
+  font-size: 10px;
+  padding: 7px 12px 8px;
+  color: var(--ink);
+  background: var(--gold);
+  border: 3px solid var(--ink);
+  box-shadow: inset 2px 2px 0 var(--gold-light), inset -2px -3px 0 var(--gold-dark);
+}
+
+.btn-small:active {
+  box-shadow: inset 2px 3px 0 var(--gold-dark);
+}
+
+/* ---------- Resource counters ---------- */
 .resource-bar {
   list-style: none;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 6px;
+  gap: 8px;
 }
 
 .resource {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: var(--wood-dark);
-  border: 2px solid var(--ink);
-  padding: 4px 8px;
-  min-width: 0; /* lets text shrink on small screens */
+  gap: 10px;
+  background: var(--wood-deep);
+  border: 3px solid var(--ink);
+  box-shadow: inset 2px 2px 0 #23170d, inset -2px -2px 0 var(--wood-dark);
+  padding: 5px 10px;
+  min-width: 0;
 }
 
 /* Icons are tiny canvases drawn by game.js and scaled up crisply */
 .pixel-icon {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
@@ -141,15 +194,18 @@ button {
 }
 
 .resource-name {
-  font-size: 16px;
+  font-size: 15px;
   color: var(--parchment-dk);
   text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .resource-amount {
-  font-size: 24px;
+  font-size: 27px;
+  line-height: 1;
   color: var(--text-light);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .resource-rate {
@@ -163,12 +219,6 @@ button {
 }
 
 /* ---------- Main area & screens ---------- */
-.main-area {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
-
 .screen {
   display: none;
   width: 100%;
@@ -176,27 +226,30 @@ button {
 
 .screen.active {
   display: flex;
-  gap: 8px;
-}
-
-.screen-village {
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 10px;
 }
 
 /* ---------- Village canvas ---------- */
 .village-frame {
-  flex: 0 0 auto;   /* hugs the canvas; the panel takes the leftover space */
-  background: var(--ink);
+  align-self: center;   /* hugs the canvas instead of stretching */
+  max-width: 100%;
   display: flex;
-  align-items: center;
   justify-content: center;
-  padding: 4px;
+  padding: 6px;
+  background: var(--stone-dark);
+  border: 4px solid var(--ink);
+  box-shadow:
+    inset 3px 3px 0 var(--stone),
+    inset -3px -3px 0 #3c3c36,
+    0 4px 0 rgba(0, 0, 0, 0.45);
 }
 
 #village-canvas {
   display: block;
-  /* The real size is set by game.js (resizeVillageCanvas) so that
-     the 320x180 image is scaled by whole numbers when possible. */
+  max-width: 100%;
+  border: 3px solid var(--ink);
+  /* The real size is set by game.js (resizeVillageCanvas). */
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
@@ -205,48 +258,86 @@ button {
 .panel {
   background: var(--parchment);
   color: var(--text-dark);
-  padding: 12px;
+  border: 4px solid var(--ink);
+  box-shadow:
+    inset 3px 3px 0 var(--parchment-lt),
+    inset -3px -3px 0 var(--parchment-dk),
+    0 4px 0 rgba(0, 0, 0, 0.45);
+  padding: 14px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px dashed var(--parchment-dk);
 }
 
 .panel-title {
   font-family: var(--font-title);
-  font-size: 13px;
+  font-size: 14px;
   color: var(--wood-dark);
-  margin-bottom: 10px;
-  padding-bottom: 6px;
-  border-bottom: 2px dashed var(--parchment-dk);
+  text-wrap: balance;
+}
+
+.placeholder .panel-title {
+  margin-bottom: 12px;
 }
 
 .panel-note {
-  margin-top: 10px;
   font-size: 18px;
   color: var(--wood-light);
 }
 
-.building-panel {
-  flex: 1;
-  min-width: 280px;
-}
-
-.building-list {
-  list-style: none;
+.placeholder {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  font-size: 22px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+}
+
+.archive-status {
+  color: var(--wood);
+}
+
+.archive-status .save-status {
+  color: var(--wood);
+}
+
+.archive-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Building cards ---------- */
+.building-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 12px;
 }
 
 .building-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  background: var(--text-light);
-  border: 2px solid var(--wood-dark);
-  padding: 6px 8px 8px;
+  gap: 8px;
+  background: var(--parchment-lt);
+  border: 3px solid var(--wood-dark);
+  box-shadow: inset -2px -2px 0 var(--parchment-dk), 2px 2px 0 rgba(0, 0, 0, 0.15);
+  padding: 8px 10px 10px;
 }
 
 /* Buildings you don't own yet look a little faded */
 .building-card.not-owned .building-header {
-  opacity: 0.7;
+  opacity: 0.65;
 }
 
 .building-header {
@@ -256,8 +347,11 @@ button {
 }
 
 .building-header .pixel-icon {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
+  padding: 3px;
+  background: var(--parchment);
+  border: 2px solid var(--wood-dark);
 }
 
 .building-info {
@@ -266,7 +360,7 @@ button {
 }
 
 .building-name {
-  font-size: 22px;
+  font-size: 23px;
   color: var(--ink);
 }
 
@@ -285,61 +379,71 @@ button {
   color: var(--grass-dark);
 }
 
-/* ---------- Build / Upgrade buttons ---------- */
+/* ---------- Buttons ---------- */
 .building-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  gap: 8px;
 }
 
 .btn {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 1px;
-  min-height: 44px;          /* comfortable to tap on phones */
-  padding: 4px 4px 6px;
-  font-size: 17px;
+  min-height: 48px;          /* comfortable to tap on phones */
+  padding: 5px 10px 7px;
+  font-size: 18px;
   color: var(--text-light);
-  background: var(--grass-dark);
-  border: 2px solid var(--ink);
-  box-shadow: inset 0 -3px 0 #2c4d1e;
+  background: var(--wood);
+  border: 3px solid var(--ink);
+  box-shadow: inset 2px 2px 0 var(--wood-shine), inset -2px -3px 0 var(--wood-deep);
 }
 
 .btn:hover:not(:disabled) {
-  background: var(--grass);
+  filter: brightness(1.1);
 }
 
 .btn:active:not(:disabled) {
-  box-shadow: inset 0 3px 0 #2c4d1e;   /* "pressed" look */
+  box-shadow: inset 2px 3px 0 rgba(0, 0, 0, 0.35);
+  transform: translateY(1px);
 }
 
-.btn-upgrade {
-  background: var(--wood);
-  box-shadow: inset 0 -3px 0 var(--wood-dark);
+.btn-build {
+  background: var(--grass);
+  box-shadow: inset 2px 2px 0 var(--grass-light), inset -2px -3px 0 var(--grass-dark);
 }
 
-.btn-upgrade:hover:not(:disabled) {
-  background: var(--wood-light);
+.btn-primary {
+  color: var(--ink);
+  background: var(--gold);
+  box-shadow: inset 2px 2px 0 var(--gold-light), inset -2px -3px 0 var(--gold-dark);
 }
 
-.btn-upgrade:active:not(:disabled) {
-  box-shadow: inset 0 3px 0 var(--wood-dark);
+.btn-danger {
+  background: var(--danger);
+  box-shadow: inset 2px 2px 0 #d8644e, inset -2px -3px 0 var(--danger-dark);
+}
+
+.btn-wide {
+  width: 100%;
+  font-size: 21px;
 }
 
 .btn:disabled {
   cursor: not-allowed;
-  color: var(--stone-dark);
+  color: var(--wood);
   background: var(--parchment-dk);
-  box-shadow: inset 0 -3px 0 var(--stone);
+  box-shadow: inset 2px 2px 0 var(--parchment), inset -2px -3px 0 #b39a68;
 }
 
 .btn-label {
-  font-size: 18px;
+  font-size: 19px;
 }
 
 .btn-gain {
-  font-size: 15px;
+  font-size: 16px;
   color: var(--positive);
 }
 
@@ -358,26 +462,20 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  font-variant-numeric: tabular-nums;
 }
 
 .cost-part .pixel-icon {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
 }
 
-/* Amounts you can't afford yet */
 .cost-part.short {
-  color: #c8442f;
+  color: #a8301c;   /* amounts you can't afford yet */
 }
 
 .btn:not(:disabled) .cost-part {
   color: var(--text-light);
-}
-
-.placeholder {
-  max-width: 520px;
-  margin: 0 auto;
-  font-size: 22px;
 }
 
 /* ---------- Bottom navigation ---------- */
@@ -386,78 +484,159 @@ button {
   left: 0;
   right: 0;
   bottom: 0;
-  height: var(--nav-height);
+  min-height: var(--nav-height);
   display: flex;
   justify-content: center;
-  gap: 6px;
-  padding: 6px;
+  gap: 8px;
+  padding: 7px 8px 8px;
   background: var(--wood-dark);
   border-top: 4px solid var(--ink);
+  box-shadow: inset 0 3px 0 var(--wood-light);
   z-index: 10;
 }
 
 .nav-btn {
   flex: 1;
-  max-width: 180px;
+  max-width: 190px;
   font-family: var(--font-title);
   font-size: 11px;
   color: var(--parchment);
   background: var(--wood);
   border: 3px solid var(--ink);
-  box-shadow: inset 0 -4px 0 var(--wood-dark);
+  box-shadow: inset 2px 2px 0 var(--wood-shine), inset -2px -4px 0 var(--wood-deep);
 }
 
 .nav-btn:hover {
-  background: var(--wood-light);
+  filter: brightness(1.12);
 }
 
 .nav-btn.active {
   color: var(--ink);
   background: var(--gold);
-  box-shadow: inset 0 -4px 0 var(--gold-dark);
+  box-shadow: inset 2px 2px 0 var(--gold-light), inset -2px -4px 0 var(--gold-dark);
+}
+
+/* ---------- Toast message ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--nav-height) + 16px);
+  transform: translateX(-50%);
+  z-index: 30;
+  padding: 10px 18px;
+  font-size: 21px;
+  color: var(--ink);
+  background: var(--gold);
+  border: 3px solid var(--ink);
+  box-shadow: inset 2px 2px 0 var(--gold-light), inset -2px -3px 0 var(--gold-dark), 0 4px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- Pop-up windows ---------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(12, 8, 4, 0.72);
+}
+
+.modal {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  animation: modal-pop 0.18s steps(3) both;
+}
+
+@keyframes modal-pop {
+  from { transform: scale(0.85); }
+  to   { transform: scale(1); }
+}
+
+.modal-title {
+  font-family: var(--font-title);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--royal-dark);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.modal-text {
+  font-size: 22px;
+  text-align: center;
+}
+
+.modal-note {
+  font-size: 18px;
+  color: var(--danger);
+  text-align: center;
+}
+
+.earnings-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.earning-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--parchment-lt);
+  border: 2px solid var(--wood-dark);
+}
+
+.earning-name {
+  flex: 1;
+  font-size: 22px;
+}
+
+.earning-amount {
+  font-size: 26px;
+  color: var(--grass-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal { animation: none; }
 }
 
 /* =============================================================
-   MOBILE / NARROW SCREENS
-   Switch to one vertical column. The village stays on top so it
-   is always visible, and buttons stay large enough to tap.
+   NARROW SCREENS (tablets and phones)
    ============================================================= */
-@media (max-width: 860px) {
-  .screen.active {
-    flex-direction: column;
-  }
-
-  .village-frame,
-  .building-panel {
-    width: 100%;
-    min-width: 0;
-  }
-}
-
-@media (max-width: 600px) {
+@media (max-width: 760px) {
   #game {
-    padding: 4px 4px calc(var(--nav-height) + 8px);
-    gap: 6px;
+    padding: 6px 6px calc(var(--nav-height) + 12px);
+    gap: 8px;
   }
 
   .game-title {
-    font-size: 12px;
+    font-size: 13px;
   }
 
-  .era-label {
+  .era-label,
+  .save-status {
     font-size: 17px;
   }
 
   /* 3 counters on the first row, 2 on the second */
   .resource-bar {
     grid-template-columns: repeat(6, 1fr);
-    gap: 4px;
+    gap: 5px;
   }
 
   .resource {
     grid-column: span 2;
-    gap: 5px;
-    padding: 3px 5px;
+    gap: 6px;
+    padding: 4px 6px;
   }
 
   .resource:nth-child(4),
@@ -466,8 +645,8 @@ button {
   }
 
   .pixel-icon {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
   }
 
   .resource-name {
@@ -475,11 +654,23 @@ button {
   }
 
   .resource-amount {
-    font-size: 21px;
+    font-size: 23px;
   }
 
   .resource-rate {
     font-size: 15px;
+  }
+
+  .village-frame {
+    padding: 3px;
+  }
+
+  .panel {
+    padding: 10px;
+  }
+
+  .building-list {
+    grid-template-columns: 1fr;
   }
 
   .nav-btn {

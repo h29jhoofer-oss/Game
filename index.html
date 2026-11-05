@@ -21,8 +21,14 @@
     <!-- ===================== TOP RESOURCE BAR ===================== -->
     <header class="top-bar">
       <div class="title-row">
-        <h1 class="game-title">Kingdom Idle</h1>
-        <span class="era-label" id="era-label">Era I &middot; The Settlement</span>
+        <div class="title-block">
+          <h1 class="game-title">Kingdom Idle</h1>
+          <span class="era-label" id="era-label">Era I &middot; The Settlement</span>
+        </div>
+        <div class="save-block">
+          <span class="save-status">Not saved yet</span>
+          <button class="btn-small save-button" type="button">Save</button>
+        </div>
       </div>
       <!-- game.js fills this list with one counter per resource -->
       <ul class="resource-bar" id="resource-bar"></ul>
@@ -34,16 +40,18 @@
       <!-- VILLAGE TAB (the default screen) -->
       <section class="screen screen-village active" id="screen-village">
         <div class="village-frame" id="village-frame">
-          <!-- The village is drawn at 320x180 and scaled up with crisp pixels -->
-          <canvas id="village-canvas" width="320" height="180"></canvas>
+          <!-- The village is drawn at 480x270 and scaled up with crisp pixels -->
+          <canvas id="village-canvas" width="480" height="270"></canvas>
         </div>
 
-        <aside class="panel building-panel">
-          <h2 class="panel-title">Buildings</h2>
+        <section class="panel building-panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Buildings</h2>
+            <p class="panel-note">Your kingdom keeps working while you're away (up to 8 hours).</p>
+          </div>
           <!-- game.js fills this list with building cards -->
           <ul class="building-list" id="building-list"></ul>
-          <p class="panel-note">Buildings keep producing even while this tab is in the background.</p>
-        </aside>
+        </section>
       </section>
 
       <!-- PLACEHOLDER TABS (filled in during later stages) -->
@@ -63,22 +71,57 @@
         </div>
       </section>
 
+      <!-- KINGDOM TAB: saving and settings -->
       <section class="screen" id="screen-kingdom">
         <div class="panel placeholder">
-          <h2 class="panel-title">Kingdom</h2>
-          <p>Your realm is but a humble settlement for now.</p>
-          <p class="panel-note">Coming in a later stage.</p>
+          <h2 class="panel-title">Royal Archives</h2>
+          <p>Your kingdom is saved in this browser automatically every 20 seconds
+             and whenever you leave the page.</p>
+          <p>While you're away, your buildings keep producing for up to 8 hours.</p>
+          <p class="archive-status"><span class="save-status">Not saved yet</span></p>
+          <div class="archive-actions">
+            <button class="btn btn-primary save-button" type="button">Save Now</button>
+            <button class="btn btn-danger" id="reset-button" type="button">Reset Kingdom</button>
+          </div>
         </div>
       </section>
     </main>
 
     <!-- ===================== BOTTOM NAVIGATION ===================== -->
     <nav class="bottom-nav" id="bottom-nav">
-      <button class="nav-btn active" data-screen="village">Village</button>
-      <button class="nav-btn" data-screen="research">Research</button>
-      <button class="nav-btn" data-screen="quests">Quests</button>
-      <button class="nav-btn" data-screen="kingdom">Kingdom</button>
+      <button class="nav-btn active" data-screen="village" type="button">Village</button>
+      <button class="nav-btn" data-screen="research" type="button">Research</button>
+      <button class="nav-btn" data-screen="quests" type="button">Quests</button>
+      <button class="nav-btn" data-screen="kingdom" type="button">Kingdom</button>
     </nav>
+
+    <!-- ===================== POP-UPS ===================== -->
+    <div class="toast" id="toast" hidden></div>
+
+    <div class="modal-backdrop" id="welcome-modal" hidden>
+      <div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+        <h2 class="modal-title" id="welcome-title">Welcome back, Your Majesty!</h2>
+        <p class="modal-text">You were away for <strong id="welcome-time">0s</strong>.
+           Your loyal subjects kept working:</p>
+        <ul class="earnings-list" id="welcome-earnings"></ul>
+        <p class="modal-note" id="welcome-cap" hidden>
+          Your storehouses can only hold 8 hours of production.
+        </p>
+        <button class="btn btn-primary btn-wide" id="welcome-collect" type="button">Collect &amp; Continue</button>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="reset-modal" hidden>
+      <div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+        <h2 class="modal-title" id="reset-title">Abandon your kingdom?</h2>
+        <p class="modal-text">This erases every building and resource and starts over
+           from a tiny settlement. It cannot be undone.</p>
+        <div class="archive-actions">
+          <button class="btn" id="reset-cancel" type="button">Keep Playing</button>
+          <button class="btn btn-danger" id="reset-confirm" type="button">Yes, Start Over</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="game.js"></script>

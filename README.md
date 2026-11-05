@@ -13,7 +13,7 @@ Double-click `index.html` to open it in any modern browser. No install or build 
 ## Progress
 - [x] Stage 1 – Core idle system
 - [x] Stage 2 – Buildings
-- [ ] Stage 3 – Saving & offline earnings
+- [x] Stage 3 – Saving & offline earnings (+ 3D visual overhaul)
 - [ ] Stage 4 – Kingdom visuals & animation
 - [ ] Stage 5 – Progression (population, research)
 - [ ] Stage 6 – Polish
