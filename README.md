@@ -15,6 +15,6 @@ Double-click `index.html` to open it in any modern browser. No install or build 
 - [x] Stage 2 – Buildings
 - [x] Stage 3 – Saving & offline earnings (+ 3D visual overhaul)
 - [x] Stage 4 – Isometric floating-island village, workers, animations, day/night
-- [ ] Stage 5 – Progression (population, research)
+- [x] Stage 5 – Population, houses, unlocks, research, milestones, castle upgrade
 - [ ] Stage 6 – Polish
 - [ ] Military system (after the economy and saving work)

@@ -1,11 +1,12 @@
 /* =============================================================
-   KINGDOM IDLE - GAME LOGIC                       (Stage 4)
+   KINGDOM IDLE - GAME LOGIC                       (Stage 5)
    -------------------------------------------------------------
    This file is split into numbered sections:
 
      1. CONFIGURATION   - numbers & data you can tweak
      2. GAME STATE      - everything that changes while playing
      3. PRODUCTION      - how resources are generated
+     3a. POPULATION, RESEARCH & MILESTONES
      3b. COSTS & ACTIONS - building and upgrading
      4. GAME LOOP       - time-based updates
      4b. SAVING         - localStorage, offline earnings
@@ -34,9 +35,15 @@ const RESOURCES = [
 // Building types. Rates are written PER MINUTE because that is how the
 // design document describes them; the code converts to per second.
 //
-//   startingCount   - how many you own in a brand-new game
-//   buildCost       - price of your first newly built copy
-//   upgradeBaseCost - price of the FIRST upgrade (level 1 -> 2)
+//   produces         - the resource it makes (null = it does something else)
+//   startingCount    - how many you own in a brand-new game
+//   unlockPopulation - citizens needed before you can build it
+//   buildCost        - price of your first newly built copy
+//   upgradeBaseCost  - price of the FIRST upgrade (level 1 -> 2)
+//   housing          - (houses) citizens each one holds
+//   boosts           - (helpers) building types it makes more productive
+//   boostPerBuilding - (helpers) bonus per copy, e.g. 0.05 = +5%
+//   buildCostGrowth  - (optional) price growth per copy, instead of 25%
 const BUILDING_TYPES = {
   farm: {
     name: "Farm",
@@ -56,12 +63,23 @@ const BUILDING_TYPES = {
     buildCost: { food: 50 },
     upgradeBaseCost: { food: 60 },
   },
+  house: {
+    name: "House",
+    produces: null,
+    housing: 5,
+    description: "Cosy homes so more citizens can move in.",
+    startingCount: 0,
+    buildCost: { wood: 40 },
+    upgradeBaseCost: { wood: 80, stone: 30 },
+    buildCostGrowth: 1.12,
+  },
   quarry: {
     name: "Quarry",
     produces: "stone",
     baseRatePerMinute: 5,
     description: "Cuts sturdy stone from the hillside.",
     startingCount: 0,
+    unlockPopulation: 10,
     buildCost: { wood: 100 },
     upgradeBaseCost: { wood: 120, food: 40 },
   },
@@ -71,8 +89,31 @@ const BUILDING_TYPES = {
     baseRatePerMinute: 2,
     description: "Merchants trade goods for gold.",
     startingCount: 0,
+    unlockPopulation: 25,
     buildCost: { wood: 100, stone: 50 },
     upgradeBaseCost: { wood: 120, stone: 60 },
+  },
+  blacksmith: {
+    name: "Blacksmith",
+    produces: null,
+    boosts: ["lumberMill", "quarry"],
+    boostPerBuilding: 0.05,
+    description: "Forges sharp axes and picks for your workers.",
+    startingCount: 0,
+    unlockPopulation: 50,
+    buildCost: { wood: 250, stone: 120 },
+    upgradeBaseCost: { wood: 300, stone: 200 },
+  },
+  academy: {
+    name: "Academy",
+    produces: null,
+    boosts: ["market"],
+    boostPerBuilding: 0.1,
+    description: "Scholars advise merchants and unlock advanced research.",
+    startingCount: 0,
+    unlockPopulation: 100,
+    buildCost: { wood: 400, stone: 300, gold: 150 },
+    upgradeBaseCost: { wood: 400, stone: 400, gold: 200 },
   },
 };
 
@@ -90,6 +131,93 @@ const BUILD_COST_GROWTH = 1.25;
 // Taxes: every citizen pays a tiny bit of gold per minute.
 // This gives gold a trickle of income before Markets exist.
 const TAX_GOLD_PER_CITIZEN_PER_MINUTE = 0.1;
+
+// ---- Population ----
+// The starting huts give room for this many citizens; houses add more.
+const BASE_HOUSING = 10;
+// When there is room and food, a new citizen arrives this often.
+const SECONDS_PER_NEW_CITIZEN = 20;
+// Food each new citizen needs to settle in: 5 + current population.
+function getCitizenFoodCost(population) {
+  return 5 + population;
+}
+
+// ---- Eras ----
+const ERA_NAMES = ["", "The Settlement", "The Growing Town", "The Walled City", "The Kingdom", "The Empire"];
+const ROMAN = ["", "I", "II", "III", "IV", "V"];
+
+// ---- Kingdom milestones ----
+// Reaching a population unlocks things. (Quarry comes before Market here,
+// because markets cost stone, which only quarries produce.)
+const MILESTONES = [
+  { population: 10,  title: "Village",        reward: "Quarry unlocked" },
+  { population: 25,  title: "Growing Town",   reward: "Market unlocked · Era II begins", era: 2 },
+  { population: 50,  title: "Busy Town",      reward: "Blacksmith unlocked" },
+  { population: 100, title: "Bustling Town",  reward: "Academy unlocked · advanced research" },
+  { population: 250, title: "Proud City",     reward: "Castle Upgrade available" },
+];
+
+// ---- Castle upgrade (a one-time purchase) ----
+const CASTLE_UPGRADE = {
+  population: 250,
+  cost: { wood: 3000, stone: 2500, gold: 1500 },
+  productionBonus: 0.1,   // +10% to everything
+};
+
+// ---- Research ----
+// requires: research ids or building ids (you need at least one built).
+// Effects: `buildings` + `bonus` raise those buildings' production;
+//          `taxBonus` raises gold from taxes.
+const RESEARCH_BRANCHES = [
+  { id: "agriculture", name: "Agriculture" },
+  { id: "industry",    name: "Industry" },
+  { id: "commerce",    name: "Commerce" },
+];
+
+const RESEARCH = [
+  {
+    id: "cropRotation", branch: "agriculture", name: "Crop Rotation",
+    description: "Fields rest in turn, so the soil stays rich.",
+    effectText: "+20% Farm production",
+    cost: { gold: 30, food: 60 }, requires: [],
+    buildings: ["farm"], bonus: 0.2,
+  },
+  {
+    id: "improvedSeeds", branch: "agriculture", name: "Improved Seeds",
+    description: "Scholars breed hardier grain with fuller ears.",
+    effectText: "+30% Farm production",
+    cost: { gold: 250, food: 500 }, requires: ["cropRotation", "academy"],
+    buildings: ["farm"], bonus: 0.3,
+  },
+  {
+    id: "betterTools", branch: "industry", name: "Better Tools",
+    description: "Iron-headed axes and picks replace stone ones.",
+    effectText: "+20% Lumber Mill and Quarry production",
+    cost: { gold: 40, wood: 80 }, requires: [],
+    buildings: ["lumberMill", "quarry"], bonus: 0.2,
+  },
+  {
+    id: "efficientMachinery", branch: "industry", name: "Efficient Machinery",
+    description: "Water-driven saws and stone cranes do the heavy lifting.",
+    effectText: "+30% Lumber Mill and Quarry production",
+    cost: { gold: 300, stone: 400 }, requires: ["betterTools", "academy"],
+    buildings: ["lumberMill", "quarry"], bonus: 0.3,
+  },
+  {
+    id: "tradeRoutes", branch: "commerce", name: "Trade Routes",
+    description: "Caravans carry your goods to distant towns.",
+    effectText: "+25% Market production",
+    cost: { gold: 60, wood: 150 }, requires: ["market"],
+    buildings: ["market"], bonus: 0.25,
+  },
+  {
+    id: "betterTaxation", branch: "commerce", name: "Better Taxation",
+    description: "Fair, well-kept ledgers mean every coin is collected.",
+    effectText: "Taxes give twice as much gold",
+    cost: { gold: 400 }, requires: ["tradeRoutes", "academy"],
+    taxBonus: 1.0,
+  },
+];
 
 // What a brand-new kingdom starts with.
 const STARTING_RESOURCES = { food: 30, wood: 30, stone: 0, gold: 5 };
@@ -125,6 +253,8 @@ function createNewGameState() {
     version: 1,                                  // helps future save upgrades
     resources: { ...STARTING_RESOURCES },        // copy, don't share
     population: STARTING_POPULATION,
+    populationProgress: 0,    // 0..1, how close the next citizen is to arriving
+    castleLevel: 1,           // 2 after the Castle Upgrade
     // One entry per building type, e.g. farm: { count: 1, level: 1 }
     //   count = how many of this building you own
     //   level = upgrade level (shared by all buildings of that type,
@@ -163,12 +293,48 @@ let state = createNewGameState();
 // ("what would I get with one more farm / one more level?").
 function calculateRatePerSecond(typeId, count, level) {
   const type = BUILDING_TYPES[typeId];
-  if (!type || count <= 0) return 0;
+  if (!type || !type.produces || count <= 0) return 0;
 
   // Level 1 = 100%, level 2 = 115%, level 3 = 132.25%, ...
   const levelMultiplier = Math.pow(1 + LEVEL_PRODUCTION_BONUS, level - 1);
-  const perMinute = type.baseRatePerMinute * count * levelMultiplier;
+  const perMinute = type.baseRatePerMinute * count * levelMultiplier * getProductionMultiplier(typeId);
   return perMinute / 60;
+}
+
+// Bonus from a helper building (Blacksmith, Academy), e.g. 0.1 = +10%.
+// It grows with the number built and their level, like production does.
+function calculateBoost(typeId, count, level) {
+  const type = BUILDING_TYPES[typeId];
+  if (!type.boostPerBuilding || count <= 0) return 0;
+  return type.boostPerBuilding * count * Math.pow(1 + LEVEL_PRODUCTION_BONUS, level - 1);
+}
+
+// All bonuses for one building type added together: research, helper
+// buildings and the castle. 1.0 = no bonus, 1.45 = +45%.
+function getProductionMultiplier(typeId) {
+  let bonus = 0;
+  for (const tech of RESEARCH) {
+    if (state.research[tech.id] && tech.buildings && tech.buildings.includes(typeId)) bonus += tech.bonus;
+  }
+  for (const helperId in BUILDING_TYPES) {
+    const helper = BUILDING_TYPES[helperId];
+    if (helper.boosts && helper.boosts.includes(typeId)) {
+      const owned = state.buildings[helperId];
+      bonus += calculateBoost(helperId, owned.count, owned.level);
+    }
+  }
+  if (state.castleLevel >= 2) bonus += CASTLE_UPGRADE.productionBonus;
+  return 1 + bonus;
+}
+
+// Gold from taxes gets its own multiplier (Better Taxation, castle).
+function getTaxMultiplier() {
+  let bonus = 0;
+  for (const tech of RESEARCH) {
+    if (state.research[tech.id] && tech.taxBonus) bonus += tech.taxBonus;
+  }
+  if (state.castleLevel >= 2) bonus += CASTLE_UPGRADE.productionBonus;
+  return 1 + bonus;
 }
 
 // How much a building type produces right now, per second.
@@ -198,11 +364,11 @@ function getProductionPerSecond() {
   // Buildings
   for (const typeId in BUILDING_TYPES) {
     const resourceId = BUILDING_TYPES[typeId].produces;
-    rates[resourceId] += getBuildingRatePerSecond(typeId);
+    if (resourceId) rates[resourceId] += getBuildingRatePerSecond(typeId);
   }
 
   // Taxes
-  rates.gold += (state.population * TAX_GOLD_PER_CITIZEN_PER_MINUTE) / 60;
+  rates.gold += (state.population * TAX_GOLD_PER_CITIZEN_PER_MINUTE * getTaxMultiplier()) / 60;
 
   return rates;
 }
@@ -216,6 +382,122 @@ function applyProduction(seconds) {
   for (const res of RESOURCES) {
     state.resources[res.id] += rates[res.id] * seconds;
   }
+  growPopulation(seconds);
+}
+
+
+/* =============================================================
+   3a. POPULATION, RESEARCH & MILESTONES
+   ============================================================= */
+
+// Citizens that one type of housing holds (houses get +15% per level).
+function calculateHousing(count, level) {
+  return Math.floor(count * BUILDING_TYPES.house.housing * Math.pow(1 + LEVEL_PRODUCTION_BONUS, level - 1));
+}
+
+// Total room for citizens.
+function getHousingCapacity() {
+  const houses = state.buildings.house;
+  return BASE_HOUSING + calculateHousing(houses.count, houses.level);
+}
+
+// Why the population is or isn't growing (shown under the counter).
+function getGrowthStatus() {
+  if (state.population >= getHousingCapacity()) return "needs houses";
+  if (state.resources.food < getCitizenFoodCost(state.population)) return "needs food";
+  return "growing";
+}
+
+// New citizens arrive over time while there is room and food.
+// populationProgress fills from 0 to 1; each time it is full, one
+// citizen moves in and pays their food cost. If there's no room or
+// food, progress waits at "full" until there is.
+function growPopulation(seconds) {
+  let progress = state.populationProgress + seconds / SECONDS_PER_NEW_CITIZEN;
+  const capacity = getHousingCapacity();
+  while (progress >= 1 && state.population < capacity) {
+    const cost = getCitizenFoodCost(state.population);
+    if (state.resources.food < cost) break;
+    state.resources.food -= cost;
+    state.population += 1;
+    progress -= 1;
+  }
+  state.populationProgress = Math.min(progress, 1);
+  checkMilestones();
+}
+
+// True once a building may be built.
+function isBuildingUnlocked(typeId) {
+  const type = BUILDING_TYPES[typeId];
+  if (!type.unlockPopulation) return true;
+  return state.unlocked[typeId] === true || state.buildings[typeId].count > 0 ||
+    state.population >= type.unlockPopulation;
+}
+
+// Records newly reached milestones and building unlocks (only once each).
+function checkMilestones() {
+  for (const typeId in BUILDING_TYPES) {
+    const type = BUILDING_TYPES[typeId];
+    if (type.unlockPopulation && !state.unlocked[typeId] && state.population >= type.unlockPopulation) {
+      state.unlocked[typeId] = true;
+      notify(`New building unlocked: ${type.name}`);
+    }
+  }
+  for (const m of MILESTONES) {
+    const key = "milestone" + m.population;
+    if (!state.unlocked[key] && state.population >= m.population) {
+      state.unlocked[key] = true;
+      if (m.era) state.era = Math.max(state.era, m.era);
+      notify(`Milestone reached: ${m.title}!`);
+    }
+  }
+}
+
+// Shows a message if the page is ready (it may not be while loading).
+function notify(message) {
+  if (typeof showToast === "function" && document.getElementById("toast")) showToast(message);
+}
+
+// Is a single research requirement met? (a research id or a building id)
+function isRequirementMet(req) {
+  if (BUILDING_TYPES[req]) return state.buildings[req].count > 0;
+  return state.research[req] === true;
+}
+
+function getRequirementLabel(req) {
+  if (BUILDING_TYPES[req]) return `Build a${/^[AEIOU]/.test(BUILDING_TYPES[req].name) ? "n" : ""} ${BUILDING_TYPES[req].name}`;
+  const tech = RESEARCH.find(t => t.id === req);
+  return tech ? tech.name : req;
+}
+
+// "done", "available" or "locked"
+function getResearchStatus(tech) {
+  if (state.research[tech.id]) return "done";
+  return tech.requires.every(isRequirementMet) ? "available" : "locked";
+}
+
+// Called by a research button.
+function researchTech(techId) {
+  updateGame();
+  const tech = RESEARCH.find(t => t.id === techId);
+  if (!tech || getResearchStatus(tech) !== "available" || !canAfford(tech.cost)) return false;
+  spendResources(tech.cost);
+  state.research[tech.id] = true;
+  showToast(`Researched: ${tech.name}`);
+  refreshUI();
+  return true;
+}
+
+// Called by the Castle Upgrade button.
+function upgradeCastle() {
+  updateGame();
+  if (state.castleLevel >= 2 || state.population < CASTLE_UPGRADE.population || !canAfford(CASTLE_UPGRADE.cost)) return false;
+  spendResources(CASTLE_UPGRADE.cost);
+  state.castleLevel = 2;
+  markVillageDirty();
+  showToast("The keep is now a mighty castle!");
+  refreshUI();
+  return true;
 }
 
 
@@ -240,7 +522,8 @@ function scaleCost(baseCost, multiplier) {
 function getBuildCost(typeId) {
   const type = BUILDING_TYPES[typeId];
   const extraCopies = Math.max(0, state.buildings[typeId].count - type.startingCount);
-  return scaleCost(type.buildCost, Math.pow(BUILD_COST_GROWTH, extraCopies));
+  const growth = type.buildCostGrowth || BUILD_COST_GROWTH;
+  return scaleCost(type.buildCost, Math.pow(growth, extraCopies));
 }
 
 // Price of the next upgrade.
@@ -270,7 +553,7 @@ function spendResources(cost) {
 function buildBuilding(typeId) {
   updateGame(); // bank all production up to this exact moment first
   const cost = getBuildCost(typeId);
-  if (!canAfford(cost)) return false;
+  if (!isBuildingUnlocked(typeId) || !canAfford(cost)) return false;
 
   spendResources(cost);
   state.buildings[typeId].count += 1;
@@ -326,11 +609,13 @@ function updateGame() {
 // and shows the welcome-back window.
 function handleTimeAway(secondsAway) {
   const secondsPaid = Math.min(secondsAway, OFFLINE_CAP_HOURS * 3600);
-  const rates = getProductionPerSecond();
-  const earned = {};
-  for (const res of RESOURCES) earned[res.id] = rates[res.id] * secondsPaid;
+  const before = { ...state.resources, citizens: state.population };
 
   applyProduction(secondsPaid);
+
+  // Report the real change (new citizens may have eaten some food).
+  const earned = { citizens: state.population - before.citizens };
+  for (const res of RESOURCES) earned[res.id] = state.resources[res.id] - before[res.id];
   showWelcomeBack(secondsAway, secondsPaid, earned);
 }
 
@@ -338,6 +623,8 @@ function handleTimeAway(secondsAway) {
 function refreshUI() {
   updateResourceBar();
   updateBuildingPanel();
+  updateResearchPanel();
+  updateKingdomPanel();
   updateSaveStatus();
 }
 
@@ -425,6 +712,8 @@ function cleanSaveData(data) {
   }
 
   if (isGoodNumber(data.population)) clean.population = Math.floor(data.population);
+  if (isGoodNumber(data.populationProgress)) clean.populationProgress = Math.min(1, data.populationProgress);
+  if (isGoodNumber(data.castleLevel) && data.castleLevel >= 1) clean.castleLevel = Math.floor(data.castleLevel);
   if (isGoodNumber(data.era) && data.era >= 1) clean.era = Math.floor(data.era);
   for (const key of ["research", "unlocked", "settings"]) {
     if (data[key] && typeof data[key] === "object") clean[key] = { ...data[key] };
@@ -648,6 +937,42 @@ const ICON_PIXELS = {
     "obbbbbbbbo",
     "oooooooooo",
   ],
+  house: [ // cottage with a red roof
+    "....oo....",
+    "...orro...",
+    "..orrrro..",
+    ".orrrrrro.",
+    "orrrrrrrro",
+    ".owwwwwwo.",
+    ".owgowwwo.",
+    ".owgowyyo.",
+    ".owgowwwo.",
+    ".oooooooo.",
+  ],
+  blacksmith: [ // anvil and hammer
+    "......oo..",
+    ".....oSSo.",
+    "....oSSo..",
+    "...obo....",
+    "..obo.....",
+    "oooooooo..",
+    "olllllsSo.",
+    ".oSssSSo..",
+    "...oSSo...",
+    "..oSSSSo..",
+  ],
+  academy: [ // open book
+    "..........",
+    ".oo....oo.",
+    "owwoo.owwo",
+    "owSwwowSwo",
+    "owwSwowwwo",
+    "owSwwowSwo",
+    "owwwwowwwo",
+    "ooccooccoo",
+    "..oocco...",
+    "....oo....",
+  ],
   lumberMill: [ // axe in a stump
     "....oo....",
     "...osso...",
@@ -734,9 +1059,13 @@ function updateResourceBar() {
   }
 
   const popEl = resourceElements.population;
-  popEl.amount.textContent = formatNumber(state.population);
-  popEl.rate.textContent = "citizens";
-  popEl.rate.classList.add("zero");
+  popEl.amount.textContent = `${formatNumber(state.population)}/${formatNumber(getHousingCapacity())}`;
+  const status = getGrowthStatus();
+  popEl.rate.textContent = status;
+  popEl.rate.classList.toggle("zero", status !== "growing");
+  popEl.rate.classList.toggle("warn", status !== "growing");
+
+  document.getElementById("era-label").textContent = `Era ${ROMAN[state.era]} · ${ERA_NAMES[state.era]}`;
 }
 
 // ---------- Building panel ----------
@@ -762,6 +1091,10 @@ function buildBuildingPanel() {
           `<div class="building-output"></div>` +
         `</div>` +
       `</div>` +
+      `<div class="lock-info">` +
+        `<div class="lock-text"></div>` +
+        `<div class="progress"><div class="progress-fill"></div></div>` +
+      `</div>` +
       `<div class="building-actions">` +
         `<button class="btn btn-build">` +
           `<span class="btn-label">Build</span>` +
@@ -786,6 +1119,10 @@ function buildBuildingPanel() {
       card,
       count: card.querySelector(".building-count"),
       output: card.querySelector(".building-output"),
+      lockInfo: card.querySelector(".lock-info"),
+      lockText: card.querySelector(".lock-text"),
+      lockFill: card.querySelector(".progress-fill"),
+      actions: card.querySelector(".building-actions"),
       buildBtn,
       buildGain: buildBtn.querySelector(".btn-gain"),
       buildCost: buildBtn.querySelector(".btn-cost"),
@@ -819,38 +1156,201 @@ function showCost(element, cost) {
   }
 }
 
+// Text describing what a building does right now.
+function getOutputText(typeId) {
+  const type = BUILDING_TYPES[typeId];
+  const owned = state.buildings[typeId];
+  if (type.produces) {
+    const resourceName = RESOURCES.find(r => r.id === type.produces).name;
+    return owned.count > 0
+      ? `Producing +${formatPerMinute(getBuildingRatePerSecond(typeId) * 60)} ${resourceName}`
+      : `Not built yet · makes ${formatPerMinute(type.baseRatePerMinute)} ${resourceName}`;
+  }
+  if (type.housing) {
+    return owned.count > 0
+      ? `Housing ${formatNumber(calculateHousing(owned.count, owned.level))} citizens`
+      : `Not built yet · each holds ${type.housing} citizens`;
+  }
+  const targets = type.boosts.map(id => BUILDING_TYPES[id].name).join(" & ");
+  const boost = calculateBoost(typeId, Math.max(1, owned.count), owned.level);
+  return owned.count > 0
+    ? `Boosting ${targets} +${Math.round(boost * 100)}%`
+    : `Not built yet · boosts ${targets} +${Math.round(boost * 100)}%`;
+}
+
+// "+10/min", "+5 room" or "+5%": what one more copy / level would add.
+function getGainText(typeId, extraCount, extraLevel) {
+  const type = BUILDING_TYPES[typeId];
+  const owned = state.buildings[typeId];
+  const count = owned.count + extraCount, level = owned.level + extraLevel;
+  if (type.produces) {
+    const gain = calculateRatePerSecond(typeId, count, level) - getBuildingRatePerSecond(typeId);
+    return `+${formatPerMinute(gain * 60)}`;
+  }
+  if (type.housing) {
+    return `+${calculateHousing(count, level) - calculateHousing(owned.count, owned.level)} room`;
+  }
+  const gain = calculateBoost(typeId, count, level) - calculateBoost(typeId, owned.count, owned.level);
+  return `+${Math.round(gain * 1000) / 10}%`;
+}
+
 // Updates every card: counts, output, costs and button states.
 function updateBuildingPanel() {
   for (const typeId in BUILDING_TYPES) {
     const type = BUILDING_TYPES[typeId];
     const owned = state.buildings[typeId];
     const el = buildingCardElements[typeId];
-    const resourceName = RESOURCES.find(r => r.id === type.produces).name;
+
+    // Locked buildings show how close you are to unlocking them
+    const unlocked = isBuildingUnlocked(typeId);
+    el.card.classList.toggle("locked", !unlocked);
+    el.lockInfo.hidden = unlocked;
+    el.actions.hidden = !unlocked;
+    if (!unlocked) {
+      el.count.textContent = "";
+      el.output.textContent = "Locked";
+      el.lockText.textContent = `Unlocks at ${type.unlockPopulation} citizens (${state.population}/${type.unlockPopulation})`;
+      el.lockFill.style.width = Math.min(100, (state.population / type.unlockPopulation) * 100) + "%";
+      continue;
+    }
 
     el.card.classList.toggle("not-owned", owned.count === 0);
     el.count.textContent = owned.count > 0 ? `×${owned.count} · Lv ${owned.level}` : "";
-    el.output.textContent = owned.count > 0
-      ? `Producing +${formatPerMinute(getBuildingRatePerSecond(typeId) * 60)} ${resourceName}`
-      : `Not built yet · makes ${formatPerMinute(type.baseRatePerMinute)} ${resourceName}`;
+    el.output.textContent = getOutputText(typeId);
 
     // Build button
     const buildCost = getBuildCost(typeId);
-    el.buildGain.textContent = `+${formatPerMinute(getBuildGainPerSecond(typeId) * 60)}`;
+    el.buildGain.textContent = getGainText(typeId, 1, 0);
     showCost(el.buildCost, buildCost);
     el.buildBtn.disabled = !canAfford(buildCost);
 
     // Upgrade button (only possible once you own one)
     const upgradeCost = getUpgradeCost(typeId);
+    el.upgradeLabel.textContent = "Upgrade";
     if (owned.count > 0) {
-      el.upgradeLabel.textContent = "Upgrade";
-      el.upgradeGain.textContent = `+${formatPerMinute(getUpgradeGainPerSecond(typeId) * 60)}`;
+      el.upgradeGain.textContent = getGainText(typeId, 0, 1);
       el.upgradeBtn.disabled = !canAfford(upgradeCost);
     } else {
-      el.upgradeLabel.textContent = "Upgrade";
       el.upgradeGain.textContent = "build one first";
       el.upgradeBtn.disabled = true;
     }
     showCost(el.upgradeCost, upgradeCost);
+  }
+}
+
+// ---------- Research screen ----------
+const researchCardElements = {};
+
+function buildResearchPanel() {
+  const container = document.getElementById("research-branches");
+  container.innerHTML = "";
+  for (const branch of RESEARCH_BRANCHES) {
+    const column = document.createElement("section");
+    column.className = "research-branch";
+    column.innerHTML = `<h3 class="branch-title">${branch.name}</h3><ul class="research-list"></ul>`;
+    const list = column.querySelector(".research-list");
+
+    for (const tech of RESEARCH.filter(t => t.branch === branch.id)) {
+      const card = document.createElement("li");
+      card.className = "research-card";
+      card.innerHTML =
+        `<div class="research-top">` +
+          `<h4 class="research-name">${tech.name}</h4>` +
+          `<span class="status-badge"></span>` +
+        `</div>` +
+        `<p class="research-desc">${tech.description}</p>` +
+        `<p class="research-effect">${tech.effectText}</p>` +
+        `<p class="research-reqs"></p>` +
+        `<button class="btn btn-primary research-btn" type="button">` +
+          `<span class="btn-label">Research</span>` +
+          `<span class="btn-cost"></span>` +
+        `</button>`;
+      const button = card.querySelector(".research-btn");
+      button.addEventListener("click", () => researchTech(tech.id));
+      list.appendChild(card);
+      researchCardElements[tech.id] = {
+        card,
+        badge: card.querySelector(".status-badge"),
+        reqs: card.querySelector(".research-reqs"),
+        button,
+        label: button.querySelector(".btn-label"),
+        cost: button.querySelector(".btn-cost"),
+      };
+    }
+    container.appendChild(column);
+  }
+}
+
+function updateResearchPanel() {
+  const names = { done: "Researched", available: "Available", locked: "Locked" };
+  for (const tech of RESEARCH) {
+    const el = researchCardElements[tech.id];
+    const status = getResearchStatus(tech);
+    el.card.dataset.status = status;
+    el.badge.textContent = names[status];
+
+    // Requirements, each marked as met or not
+    const reqKey = tech.requires.map(r => r + isRequirementMet(r)).join(",");
+    if (el.reqs.dataset.key !== reqKey) {
+      el.reqs.dataset.key = reqKey;
+      el.reqs.innerHTML = tech.requires.length === 0
+        ? `<span class="req met">No requirements</span>`
+        : "Requires: " + tech.requires.map(r =>
+            `<span class="req ${isRequirementMet(r) ? "met" : "unmet"}">${getRequirementLabel(r)}</span>`).join(", ");
+    }
+
+    if (status === "done") {
+      el.label.textContent = "Complete";
+      el.cost.hidden = true;
+      el.button.disabled = true;
+    } else {
+      el.label.textContent = "Research";
+      el.cost.hidden = false;
+      showCost(el.cost, tech.cost);
+      el.button.disabled = status !== "available" || !canAfford(tech.cost);
+    }
+  }
+}
+
+// ---------- Kingdom screen: milestones and castle ----------
+function buildKingdomPanel() {
+  const list = document.getElementById("milestone-list");
+  list.innerHTML = "";
+  for (const m of MILESTONES) {
+    const row = document.createElement("li");
+    row.className = "milestone";
+    row.dataset.population = m.population;
+    row.innerHTML =
+      `<div class="milestone-head"><span class="milestone-title">${m.title}</span>` +
+      `<span class="milestone-target">${m.population} citizens</span></div>` +
+      `<div class="milestone-reward">${m.reward}</div>` +
+      `<div class="progress"><div class="progress-fill"></div></div>`;
+    list.appendChild(row);
+  }
+  document.getElementById("castle-button").addEventListener("click", upgradeCastle);
+}
+
+function updateKingdomPanel() {
+  for (const row of document.querySelectorAll(".milestone")) {
+    const target = Number(row.dataset.population);
+    row.classList.toggle("reached", state.population >= target);
+    row.querySelector(".progress-fill").style.width = Math.min(100, (state.population / target) * 100) + "%";
+  }
+  const done = state.castleLevel >= 2;
+  const button = document.getElementById("castle-button");
+  const status = document.getElementById("castle-status");
+  const costEl = document.getElementById("castle-cost");
+  if (done) {
+    status.textContent = "Complete! Your castle towers over the land (+10% to all production).";
+    button.hidden = true;
+  } else {
+    const ready = state.population >= CASTLE_UPGRADE.population;
+    status.textContent = ready
+      ? "Your people are ready to build a castle."
+      : `Requires ${CASTLE_UPGRADE.population} citizens (${state.population}/${CASTLE_UPGRADE.population}).`;
+    button.hidden = false;
+    showCost(costEl, CASTLE_UPGRADE.cost);
+    button.disabled = !ready || !canAfford(CASTLE_UPGRADE.cost);
   }
 }
 
@@ -907,8 +1407,8 @@ function showWelcomeBack(secondsAway, secondsPaid, earned) {
   if (!welcomeTotals) welcomeTotals = { away: 0, earned: {}, capped: false };
   welcomeTotals.away += secondsAway;
   welcomeTotals.capped = welcomeTotals.capped || secondsAway > secondsPaid;
-  for (const res of RESOURCES) {
-    welcomeTotals.earned[res.id] = (welcomeTotals.earned[res.id] || 0) + earned[res.id];
+  for (const key of [...RESOURCES.map(r => r.id), "citizens"]) {
+    welcomeTotals.earned[key] = (welcomeTotals.earned[key] || 0) + (earned[key] || 0);
   }
 
   document.getElementById("welcome-time").textContent = formatDuration(welcomeTotals.away);
@@ -916,16 +1416,20 @@ function showWelcomeBack(secondsAway, secondsPaid, earned) {
 
   const list = document.getElementById("welcome-earnings");
   list.innerHTML = "";
-  for (const res of RESOURCES) {
+  const rows = [...RESOURCES.map(r => ({ id: r.id, icon: r.id, name: r.name }))];
+  if (welcomeTotals.earned.citizens > 0) rows.push({ id: "citizens", icon: "population", name: "New citizens" });
+  for (const r of rows) {
+    const value = welcomeTotals.earned[r.id];
     const row = document.createElement("li");
     row.className = "earning-row";
-    row.appendChild(createPixelIcon(res.id));
+    row.appendChild(createPixelIcon(r.icon));
     const name = document.createElement("span");
     name.className = "earning-name";
-    name.textContent = res.name;
+    name.textContent = r.name;
     const amount = document.createElement("span");
     amount.className = "earning-amount";
-    amount.textContent = "+" + formatNumber(welcomeTotals.earned[res.id]);
+    if (value < 0) amount.classList.add("negative");
+    amount.textContent = (value < 0 ? "-" : "+") + formatNumber(Math.abs(value));
     row.append(name, amount);
     list.appendChild(row);
   }
@@ -1108,6 +1612,11 @@ const VILLAGE_LAYOUT = {
   lumberMill:  { x: 15, y: 8 },
   marketStalls: [{ x: 9, y: 11 }, { x: 12, y: 11 }, { x: 9, y: 13 }, { x: 12, y: 13 }],
   huts:        [{ x: 12, y: 7 }, { x: 13, y: 13 }, { x: 12, y: 15 }],
+  // Plots for houses you build, filled in this order (2x2 tiles each)
+  housePlots:  [{ x: 15, y: 14 }, { x: 17, y: 12 }, { x: 13, y: 17 }, { x: 15, y: 16 },
+                { x: 10, y: 6 }, { x: 12, y: 5 }, { x: 15, y: 2 }, { x: 2, y: 8 }],
+  blacksmith:  { x: 13, y: 9 },
+  academy:     { x: 16, y: 5 },
   quarryCut:   [[12, 1], [13, 1], [12, 2], [13, 2]],   // tiles dug out when a quarry is built
 };
 
@@ -1125,7 +1634,9 @@ const WORKER_ROUTES = [
   { needs: "farm",       carry: "wheat", points: [[4.6, 15.3, 0], [2.6, 15.3, 0], [2.6, 12.7, 0]] },
   { needs: "lumberMill", carry: "log",   points: [[12.8, 12.5, 0], [15.5, 12.5, 0], [15.5, 10.2, 0]] },
   { needs: "lumberMill", carry: "log",   points: [[14.2, 10.5, 0], [18.2, 10.5, 0]] },
-  { needs: "quarry",     carry: "stone", points: [[11.4, 4.3, 0], [14.6, 4.3, 0], [14.6, 6.5, 0]] },
+  { needs: "quarry",     carry: "stone", points: [[11.2, 3.6, 0], [14.8, 3.6, 0], [14.8, 6.8, 0]] },
+  { needs: "blacksmith", carry: "stone", points: [[13.5, 11.4, 0], [15.4, 11.4, 0]] },
+  { needs: "academy",    carry: "crate", points: [[15.5, 7.6, 0], [15.5, 9.6, 0]] },
   { needs: "market",     carry: "crate", points: [[9.6, 12.3, 0], [12.5, 12.6, 0]] },
 ];
 const SHIRT_COLORS = ["#3a6fb5", "#c8442f", "#4f9a4a", "#8a5aa8", "#d9a441", "#e07a2a", "#5c8a9a"];
@@ -1460,7 +1971,7 @@ function drawCone(ctx, sx, sy, r, coneH, light, dark) {
 }
 
 // A round stone tower with a pointed roof and a flag.
-function drawTower(ctx, tx, ty, z, r, h, coneH) {
+function drawTower(ctx, tx, ty, z, r, h, coneH, flagColor = PAL.banner) {
   const [sx, sy] = iso(tx, ty, z);
   fillEllipse(ctx, sx + 4, sy + 2, r + 3, r / 2 + 1, SHADOW);
   drawCylinder(ctx, sx, sy, r, h, [PAL.stoneLight, PAL.stone, PAL.stoneDark, PAL.stoneDeep], true);
@@ -1472,7 +1983,7 @@ function drawTower(ctx, tx, ty, z, r, h, coneH) {
   rect(ctx, sx - r - 1, sy - h - 1, 2 * r + 2, 2, PAL.stoneLight);   // rim
   drawCone(ctx, sx, sy - h, r + 2, coneH, PAL.slateLight, PAL.slateDark);
   rect(ctx, sx, sy - h - coneH - 8, 1, 8, PAL.outline);             // flagpole
-  fx.flags.push({ x: sx + 1, y: sy - h - coneH - 8, color: PAL.banner });
+  fx.flags.push({ x: sx + 1, y: sy - h - coneH - 8, color: flagColor });
 }
 
 // Low stone wall with battlements along the top.
@@ -1733,7 +2244,11 @@ function paintBridge(g) {
 
 function drawCastle(ctx) {
   const Z = 2 * LEVEL_HEIGHT;   // the castle hill is 2 levels high
-  drawTower(ctx, 5.3, 5.3, Z, 6, 46, 18);                        // tall back tower
+  // After the Castle Upgrade the towers are taller and fly golden flags
+  const big = state.castleLevel >= 2;
+  const extra = big ? 12 : 0;
+  const flag = big ? PAL.gold : PAL.banner;
+  drawTower(ctx, 5.3, 5.3, Z, big ? 7 : 6, 46 + extra * 1.5, 18 + extra / 2, flag);   // tall back tower
 
   // The keep (main hall)
   const keep = { x: 5.8, y: 5.6, w: 2.6, d: 2.4, z: Z };
@@ -1752,11 +2267,11 @@ function drawCastle(ctx) {
   drawRoof(ctx, keep, 26, 14, ROOF_SLATE, "y", PAL.stone);
 
   // Curtain walls and towers along the hill's front edges
-  drawTower(ctx, 9.6, 4.6, Z, 5, 26, 14);
-  drawCastleWall(ctx, { x: 9.45, y: 4.6, w: 0.45, d: 5.0, z: Z }, 9);
-  drawTower(ctx, 4.6, 9.6, Z, 5, 26, 14);
-  drawCastleWall(ctx, { x: 4.6, y: 9.45, w: 2.3, d: 0.45, z: Z }, 9);
-  drawCastleWall(ctx, { x: 8.5, y: 9.45, w: 1.1, d: 0.45, z: Z }, 9);
+  drawTower(ctx, 9.6, 4.6, Z, 5, 26 + extra, 14, flag);
+  drawCastleWall(ctx, { x: 9.45, y: 4.6, w: 0.45, d: 5.0, z: Z }, 9 + extra / 3);
+  drawTower(ctx, 4.6, 9.6, Z, 5, 26 + extra, 14, flag);
+  drawCastleWall(ctx, { x: 4.6, y: 9.45, w: 2.3, d: 0.45, z: Z }, 9 + extra / 3);
+  drawCastleWall(ctx, { x: 8.5, y: 9.45, w: 1.1, d: 0.45, z: Z }, 9 + extra / 3);
 
   // Gatehouse above the stairs
   const gate = { x: 6.9, y: 9.25, w: 1.6, d: 0.7, z: Z };
@@ -1773,7 +2288,7 @@ function drawCastle(ctx) {
   rect(ctx, t1x, t1y, 1, 3, PAL.woodDeep);
   rect(ctx, t2x, t2y, 1, 3, PAL.woodDeep);
 
-  drawTower(ctx, 9.6, 9.6, Z, 6, 30, 16);                        // front tower
+  drawTower(ctx, 9.6, 9.6, Z, 6, 30 + extra, 16, flag);          // front tower
 }
 
 // Timber-framed cottage. `variant` picks the roof.
@@ -1818,6 +2333,51 @@ function drawBarn(ctx, tx, ty) {
   windowL(ctx, box, 2.1, 7, 0.3, 4);
   windowR(ctx, box, 0.7, 7, 0.3, 4);
   drawRoof(ctx, box, h, 12, ROOF_WOOD, "x", PAL.barnDark);
+}
+
+// Stone smithy with a glowing forge, an anvil and a big chimney.
+function drawBlacksmith(ctx, tx, ty) {
+  const box = { x: tx + 0.25, y: ty + 0.25, w: 1.5, d: 1.5, z: 0 };
+  const h = 11;
+  fx.shadows.push({ box, h: h + 8 });
+  drawIsoBox(ctx, box, h, PAL.stone, PAL.stoneDark);
+  paintBricks(ctx, box, h, PAL.stoneDark, PAL.stoneDeep);
+  doorL(ctx, box, 0.95, 0.35, 8);
+  // Open forge on the right wall, glowing orange
+  faceR(ctx, box, 0.35, 1, 0.6, 6, PAL.outline);
+  faceR(ctx, box, 0.42, 1, 0.46, 4, PAL.fire);
+  const [gx, gy] = iso(box.x + box.w, box.y + 0.65, 3);
+  fx.fires.push({ x: gx, y: gy, small: true });
+  addLight(gx, gy - 1, 7);
+  windowL(ctx, box, 0.3, 6, 0.3, 3);
+  drawRoof(ctx, box, h, 8, ROOF_SLATE, "x", PAL.stoneDark, () => drawChimney(ctx, box.x + 0.9, box.y + 0.2, h, 16));
+  // Anvil outside
+  const anvil = { x: tx + 0.4, y: ty + 1.85, w: 0.3, d: 0.18, z: 0 };
+  drawIsoBox(ctx, anvil, 3, PAL.metalDark, PAL.stoneDeep, PAL.metal);
+  drawIsoBox(ctx, { ...anvil, x: anvil.x - 0.08, w: 0.46, z: 3 }, 2, PAL.metalDark, PAL.stoneDeep, PAL.metal);
+}
+
+// Academy: a tall hall with a round library tower.
+function drawAcademy(ctx, tx, ty) {
+  const box = { x: tx + 0.2, y: ty + 0.2, w: 1.6, d: 1.6, z: 0 };
+  const h = 17;
+  fx.shadows.push({ box, h: h + 12 });
+  drawIsoBox(ctx, box, h, PAL.plaster, PAL.plasterShade);
+  lineL(ctx, box, 0, PAL.stoneDark); lineR(ctx, box, 0, PAL.stoneDark);
+  lineL(ctx, box, 8, PAL.stoneDark); lineR(ctx, box, 8, PAL.stoneDark);
+  doorL(ctx, box, 0.65, 0.35, 8);
+  for (const u of [0.2, 1.15]) windowL(ctx, box, u, 2, 0.25, 4);
+  for (const u of [0.2, 0.7, 1.15]) windowL(ctx, box, u, 10, 0.25, 4);
+  for (const u of [0.3, 0.9]) { windowR(ctx, box, u, 2, 0.25, 4); windowR(ctx, box, u, 10, 0.25, 4); }
+  faceL(ctx, box, 0.62, 10, 0.4, 5, PAL.banner);                  // banner over the door
+  drawRoof(ctx, box, h, 11, ROOF_BLUE, "y", PAL.plaster);
+  // Library tower with a blue cone
+  const [sx, sy] = iso(box.x + box.w, box.y + box.d, 0);
+  drawCylinder(ctx, sx, sy, 5, 30, [PAL.plaster, PAL.plaster, PAL.plasterShade, "#a8977a"], false);
+  for (const y of [sy - 24, sy - 14]) { rect(ctx, sx - 2, y, 2, 4, PAL.timber); rect(ctx, sx - 2, y + 1, 2, 2, PAL.glass); addLight(sx - 1, y + 2, 5); }
+  drawCone(ctx, sx, sy - 30, 7, 14, PAL.blueRoofLight, PAL.blueRoofDark);
+  rect(ctx, sx, sy - 52, 1, 8, PAL.outline);
+  fx.flags.push({ x: sx + 1, y: sy - 52, color: PAL.purple });
 }
 
 function drawHay(ctx, tx, ty) {
@@ -2077,7 +2637,7 @@ function buildSceneObjects() {
   const addSprite = (depth, bounds, drawFn) => list.push({ depth, sprite: makeSprite(bounds, drawFn) });
 
   // Castle on its hill (depth chosen so the stairs and roads draw in front)
-  addSprite(17, { x: 140, y: 0, w: 210, h: 140 }, drawCastle);
+  addSprite(17, { x: 140, y: -30, w: 210, h: 170 }, drawCastle);
   occupy(4, 4, 6, 6);
 
   // Houses
@@ -2085,6 +2645,25 @@ function buildSceneObjects() {
     occupy(h.x, h.y, 2, 2);
     addSprite(h.x + h.y + 3.4, boxBounds({ x: h.x, y: h.y, w: 2, d: 2, z: 0 }, 40), ctx => drawHouse(ctx, h.x, h.y, i));
   });
+
+  // Houses you have built fill the plots one by one
+  const houseCount = Math.min(b.house.count, L.housePlots.length);
+  for (let i = 0; i < houseCount; i++) {
+    const h = L.housePlots[i];
+    occupy(h.x, h.y, 2, 2);
+    addSprite(h.x + h.y + 3.4, boxBounds({ x: h.x, y: h.y, w: 2, d: 2, z: 0 }, 40), ctx => drawHouse(ctx, h.x, h.y, i + 1));
+  }
+
+  if (b.blacksmith.count > 0) {
+    const m = L.blacksmith;
+    occupy(m.x, m.y, 2, 2);
+    addSprite(m.x + m.y + 3.4, boxBounds({ x: m.x, y: m.y, w: 2, d: 2, z: 0 }, 44), ctx => drawBlacksmith(ctx, m.x, m.y));
+  }
+  if (b.academy.count > 0) {
+    const a = L.academy;
+    occupy(a.x, a.y, 2, 2);
+    addSprite(a.x + a.y + 3.4, boxBounds({ x: a.x, y: a.y, w: 2, d: 2, z: 0 }, 70), ctx => drawAcademy(ctx, a.x, a.y));
+  }
 
   // Farm: barn + one field per farm
   if (b.farm.count > 0) {
@@ -2696,6 +3275,8 @@ function initGame() {
   // Build the interface
   buildResourceBar();
   buildBuildingPanel();
+  buildResearchPanel();
+  buildKingdomPanel();
   setupNavigation();
   setupSaveControls();
   resizeVillageCanvas();

@@ -55,11 +55,16 @@
       </section>
 
       <!-- PLACEHOLDER TABS (filled in during later stages) -->
+      <!-- RESEARCH TAB -->
       <section class="screen" id="screen-research">
-        <div class="panel placeholder">
-          <h2 class="panel-title">Research</h2>
-          <p>The royal scholars are still unpacking their scrolls.</p>
-          <p class="panel-note">Coming in a later stage.</p>
+        <div class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Royal Library</h2>
+            <p class="panel-note">Spend gold on discoveries that make your kingdom more productive.
+               Advanced research needs an Academy.</p>
+          </div>
+          <!-- game.js fills this with the three research branches -->
+          <div class="research-branches" id="research-branches"></div>
         </div>
       </section>
 
@@ -71,8 +76,27 @@
         </div>
       </section>
 
-      <!-- KINGDOM TAB: saving and settings -->
+      <!-- KINGDOM TAB: milestones, castle, saving -->
       <section class="screen" id="screen-kingdom">
+        <div class="panel kingdom-panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Kingdom Milestones</h2>
+            <p class="panel-note">Grow your population to unlock new buildings and eras.</p>
+          </div>
+          <ol class="milestone-list" id="milestone-list"></ol>
+        </div>
+
+        <div class="panel kingdom-panel castle-panel">
+          <h2 class="panel-title">Castle Upgrade</h2>
+          <p>Rebuild the old keep into a mighty castle with taller towers.
+             Every building and your taxes produce <strong>+10%</strong>.</p>
+          <p class="castle-status" id="castle-status"></p>
+          <button class="btn btn-primary" id="castle-button" type="button">
+            <span class="btn-label">Upgrade the Castle</span>
+            <span class="btn-cost" id="castle-cost"></span>
+          </button>
+        </div>
+
         <div class="panel placeholder">
           <h2 class="panel-title">Royal Archives</h2>
           <p>Your kingdom is saved in this browser automatically every 20 seconds
