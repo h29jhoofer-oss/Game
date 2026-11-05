@@ -23,8 +23,8 @@ Double-click `index.html` to open it in any modern browser. No install or build 
   - [x] 3. Knight stats and army storage
   - [x] 4. Basic automatic battle simulation
   - [x] 5. Barbarian invasions with two enemy types (Raider, Berserker)
-  - [ ] 6. Remaining four barbarian enemies
-  - [ ] 7. Guardian, Cavalier, Ranger, Paladin
+  - [x] 6. Remaining four barbarian enemies (Marauder, Brute, War Drummer, Chieftain boss)
+  - [x] 7. Guardian, Cavalier, Ranger, Paladin (with special abilities)
   - [ ] 8. Elven civilization
   - [ ] 9. Dwarven civilization
   - [ ] 10. Military research, progression and polish

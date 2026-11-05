@@ -257,6 +257,17 @@ const AWAY_THRESHOLD_SECONDS = 60;
 //   attackSpeed  - hits per second
 //   moveSpeed    - battlefield pixels walked per second
 //   range        - how close (pixels) a unit must be to hit
+//   traits       - tags others can be strong against: "fast", "light", "armored"
+//
+// SPECIAL ABILITIES (optional):
+//   aura: { attack, radius }        nearby allies deal +attack (0.25 = +25%) damage
+//   protect: { reduction, radius }  nearby allies take less damage (0.2 = -20%)
+//   heal: { amount, interval, radius }  heals the most hurt ally nearby
+//   ranged: true                    shoots from a distance (shows arrows)
+//   chargeMultiplier: 2.5           the first hit deals x2.5 damage
+//   bonusVs: { fast: 1.5 }          x1.5 damage against units with that trait
+//   support: true                   stays behind the front line
+//   boss: true                      a boss (bigger, worth double rewards)
 // =============================================================
 
 const BARRACKS = {
@@ -274,12 +285,56 @@ const KNIGHT_TYPES = {
   swordsman: {
     name: "Swordsman",
     description: "A balanced, affordable frontline fighter.",
+    abilityText: "No special ability - reliable in any army.",
     hp: 100, attack: 12, defense: 3, attackSpeed: 1.0, moveSpeed: 16, range: 9,
     cost: { food: 60, wood: 20, gold: 25 },
     trainSeconds: 30,
     barracksLevel: 1,          // barracks level needed to train it
   },
+  guardian: {
+    name: "Guardian",
+    description: "A wall of steel with a tower shield. Hard to hurt, slow to kill.",
+    abilityText: "Shield Wall: knights near a Guardian take 20% less damage.",
+    hp: 190, attack: 6, defense: 8, attackSpeed: 0.8, moveSpeed: 12, range: 9,
+    protect: { reduction: 0.2, radius: 28 },
+    cost: { food: 80, wood: 40, stone: 40, gold: 30 },
+    trainSeconds: 40,
+    barracksLevel: 2,
+  },
+  ranger: {
+    name: "Ranger",
+    description: "A sharp-eyed archer who fights from behind the front line.",
+    abilityText: "Longbow: shoots from far away. +40% damage against lightly armored enemies.",
+    hp: 70, attack: 10, defense: 1, attackSpeed: 0.9, moveSpeed: 15, range: 70,
+    ranged: true, bonusVs: { light: 1.4 },
+    cost: { food: 70, wood: 50, gold: 35 },
+    trainSeconds: 40,
+    barracksLevel: 2,
+  },
+  cavalier: {
+    name: "Cavalier",
+    description: "A mounted knight who crashes into the enemy at full gallop.",
+    abilityText: "Charge: first strike deals triple damage. +50% damage against fast enemies.",
+    hp: 140, attack: 15, defense: 4, attackSpeed: 0.9, moveSpeed: 36, range: 10,
+    chargeMultiplier: 3, bonusVs: { fast: 1.5 },
+    cost: { food: 140, wood: 60, gold: 90 },
+    trainSeconds: 55,
+    barracksLevel: 3,
+  },
+  paladin: {
+    name: "Paladin",
+    description: "An elite holy knight in shining armor.",
+    abilityText: "Blessing: heals the most wounded nearby knight for 10 health every 1.5 seconds.",
+    hp: 230, attack: 20, defense: 6, attackSpeed: 0.9, moveSpeed: 15, range: 9,
+    heal: { amount: 10, interval: 1.5, radius: 40 },
+    cost: { food: 220, wood: 100, stone: 80, gold: 160 },
+    trainSeconds: 90,
+    barracksLevel: 5,
+  },
 };
+
+// Front line first: this order decides where knights stand in battle.
+const KNIGHT_FORMATION_ORDER = ["guardian", "cavalier", "swordsman", "paladin", "ranger"];
 
 const ENEMY_CIVILIZATIONS = {
   barbarians: {
@@ -293,11 +348,41 @@ const ENEMY_TYPES = {
     name: "Raider", civilization: "barbarians",
     description: "Basic barbarian infantry with a hand axe.",
     hp: 70, attack: 9, defense: 1, attackSpeed: 1.0, moveSpeed: 18, range: 9,
+    traits: ["light"],
   },
   berserker: {
     name: "Berserker", civilization: "barbarians",
     description: "Hits very hard, but wears no armor at all.",
     hp: 60, attack: 17, defense: 0, attackSpeed: 1.25, moveSpeed: 22, range: 9,
+    traits: ["light"],
+  },
+  marauder: {
+    name: "Marauder", civilization: "barbarians",
+    description: "A quick raider in a wolf pelt who darts in with twin knives.",
+    hp: 65, attack: 10, defense: 1, attackSpeed: 1.4, moveSpeed: 36, range: 9,
+    traits: ["fast", "light"],
+  },
+  brute: {
+    name: "Brute", civilization: "barbarians",
+    description: "A giant with a tree-trunk club. Takes a lot of punishment.",
+    hp: 240, attack: 15, defense: 4, attackSpeed: 0.65, moveSpeed: 11, range: 10,
+    traits: ["armored"],
+  },
+  drummer: {
+    name: "War Drummer", civilization: "barbarians",
+    description: "Beats a war drum behind the lines.",
+    abilityText: "War Drums: nearby barbarians deal 25% more damage.",
+    hp: 80, attack: 5, defense: 1, attackSpeed: 0.8, moveSpeed: 14, range: 9,
+    aura: { attack: 0.25, radius: 40 }, support: true,
+    traits: ["light"],
+  },
+  chieftain: {
+    name: "Chieftain", civilization: "barbarians",
+    description: "The horned warlord of the northern clans. A boss!",
+    abilityText: "Warlord: nearby barbarians deal 15% more damage. Appears every 5th wave.",
+    hp: 750, attack: 30, defense: 6, attackSpeed: 0.8, moveSpeed: 14, range: 11,
+    aura: { attack: 0.15, radius: 50 }, boss: true,
+    traits: ["armored"],
   },
 };
 
@@ -306,23 +391,33 @@ const INVASION = {
   intervalSeconds: 1200,       // then one raid every 20 minutes
   warningSeconds: 120,         // warning banner in the last 2 minutes
   maxOfflineBattles: 3,        // at most this many raids are fought while you're away
-  battleTimeLimit: 60,         // after 60 seconds the raiders give up and retreat
+  battleTimeLimit: 60,         // after 60 seconds the side with more health left wins
   statGrowthPerWave: 0.08,     // enemies get 8% stronger every wave
   woundedHealSeconds: 20,      // one wounded knight recovers this often
 };
 
-// Which enemies attack in a given wave. Raiders from the start;
-// Berserkers join from wave 2.
+// Which enemies attack in a given wave. New enemy types join as the
+// waves grow, and every 5th wave the Chieftain leads the raid.
+// (Listed front line first: this is also their battle formation.)
 function getWaveEnemies(wave) {
   return [
-    { type: "raider", count: 2 + wave },
+    { type: "brute",     count: wave >= 4 ? Math.floor((wave - 1) / 3) : 0 },
+    { type: "raider",    count: 2 + Math.ceil(wave * 0.6) },
     { type: "berserker", count: Math.floor(wave / 2) },
+    { type: "marauder",  count: wave >= 3 ? Math.floor((wave - 1) / 2) : 0 },
+    { type: "chieftain", count: isBossWave(wave) ? 1 : 0 },
+    { type: "drummer",   count: wave >= 6 ? 1 + Math.floor((wave - 6) / 4) : 0 },
   ].filter(group => group.count > 0);
+}
+
+function isBossWave(wave) {
+  return wave % 5 === 0;
 }
 
 // Loot for winning, and the repair bill for losing.
 function getWaveRewards(wave) {
-  return { gold: Math.round(30 * Math.pow(wave, 1.2)), food: 50 * wave };
+  const boss = isBossWave(wave) ? 2 : 1;      // boss raids pay double
+  return { gold: Math.round(30 * Math.pow(wave, 1.2)) * boss, food: 50 * wave * boss };
 }
 function getWaveRepairs(wave) {
   return { wood: 80 * wave, stone: 50 * wave };
@@ -845,6 +940,12 @@ function makeUnit(side, typeId, stats, x, y) {
     maxHp: stats.hp, hp: stats.hp,
     attack: stats.attack, defense: stats.defense,
     attackSpeed: stats.attackSpeed, moveSpeed: stats.moveSpeed, range: stats.range,
+    traits: stats.traits || [],
+    // special abilities (undefined when the unit has none)
+    aura: stats.aura, protect: stats.protect, heal: stats.heal, ranged: stats.ranged,
+    chargeMultiplier: stats.chargeMultiplier, bonusVs: stats.bonusVs, support: stats.support, boss: stats.boss,
+    hasCharged: false, healTimer: stats.heal ? stats.heal.interval : 0,
+    attackBoost: 0, protection: 0,
     cooldown: 0.4, target: null, alive: true, facing: side === "knight" ? 1 : -1,
     flash: 0, lunge: 0, moving: false, deathTime: 0,
   };
@@ -862,7 +963,7 @@ function createBattle() {
   const wave = m.invasion.wave;
   const units = [];
   let i = 0;
-  for (const typeId in m.army) {
+  for (const typeId of KNIGHT_FORMATION_ORDER) {
     for (let k = 0; k < m.army[typeId]; k++) {
       const [x, y] = formationPosition(i++, 60, 1);
       units.push(makeUnit("knight", typeId, KNIGHT_TYPES[typeId], x, y));
@@ -892,21 +993,71 @@ function nearestFoe(battle, unit) {
   return best;
 }
 
+// One attack. Damage = attack (with bonuses) minus the target's defense,
+// times a small random spread, reduced by any Guardian protection.
 function strike(battle, attacker, target) {
+  let power = attacker.attack * (1 + attacker.attackBoost);
+  if (attacker.chargeMultiplier && !attacker.hasCharged) {
+    power *= attacker.chargeMultiplier;          // the first hit of a charge
+    attacker.hasCharged = true;
+  }
+  if (attacker.bonusVs) {
+    for (const trait of target.traits) if (attacker.bonusVs[trait]) power *= attacker.bonusVs[trait];
+  }
   const variance = 0.85 + battle.rng() * 0.3;
-  const damage = Math.max(1, Math.round((attacker.attack - target.defense) * variance));
+  const damage = Math.max(1, Math.round((power - target.defense) * variance * (1 - target.protection)));
   target.hp -= damage;
   target.flash = 0.12;
   attacker.lunge = 0.15;
   attacker.cooldown = 1 / attacker.attackSpeed;
   battle.hits += 1;
+  if (attacker.ranged) {
+    battle.effects.push({ arrow: true, x1: attacker.x, y1: attacker.y - 8, x2: target.x, y2: target.y - 7, age: 0 });
+  }
   battle.effects.push({ x: target.x, y: target.y - 15, value: damage, age: 0, side: target.side });
-  if (battle.effects.length > 60) battle.effects.shift();
+  if (battle.effects.length > 80) battle.effects.shift();
   if (target.hp <= 0) {
     target.hp = 0;
     target.alive = false;
     target.deathTime = battle.time;
   }
+}
+
+// Works out aura bonuses for this step: War Drums / Warlord (+damage)
+// and Shield Wall (-damage taken). The strongest nearby aura counts.
+function applyAuras(alive) {
+  for (const u of alive) { u.attackBoost = 0; u.protection = 0; }
+  for (const source of alive) {
+    if (!source.aura && !source.protect) continue;
+    for (const u of alive) {
+      if (u.side !== source.side) continue;
+      const d2 = (u.x - source.x) ** 2 + (u.y - source.y) ** 2;
+      if (source.aura && u !== source && d2 <= source.aura.radius ** 2) {
+        u.attackBoost = Math.max(u.attackBoost, source.aura.attack);
+      }
+      if (source.protect && d2 <= source.protect.radius ** 2) {
+        u.protection = Math.max(u.protection, source.protect.reduction);
+      }
+    }
+  }
+}
+
+// Paladin Blessing: heal the most hurt ally in range.
+function tryHeal(battle, healer, alive, dt) {
+  healer.healTimer -= dt;
+  if (healer.healTimer > 0) return;
+  let best = null, bestRatio = 1;
+  for (const u of alive) {
+    if (u.side !== healer.side || u.hp >= u.maxHp) continue;
+    if ((u.x - healer.x) ** 2 + (u.y - healer.y) ** 2 > healer.heal.radius ** 2) continue;
+    const ratio = u.hp / u.maxHp;
+    if (ratio < bestRatio) { bestRatio = ratio; best = u; }
+  }
+  if (!best) { healer.healTimer = 0.2; return; }
+  const amount = Math.min(healer.heal.amount, best.maxHp - best.hp);
+  best.hp += amount;
+  healer.healTimer = healer.heal.interval;
+  battle.effects.push({ x: best.x, y: best.y - 15, value: Math.round(amount), age: 0, heal: true });
 }
 
 // Moves the battle forward by one small step.
@@ -915,25 +1066,29 @@ function strike(battle, attacker, target) {
 function stepBattle(battle, dt) {
   if (battle.over) return;
   battle.time += dt;
+  applyAuras(battle.units.filter(u => u.alive));
   for (const u of battle.units) {
     u.flash = Math.max(0, u.flash - dt);
     u.lunge = Math.max(0, u.lunge - dt);
     if (!u.alive) continue;
     u.cooldown -= dt;
+    if (u.heal) tryHeal(battle, u, battle.units.filter(o => o.alive), dt);
     if (!u.target || !u.target.alive) u.target = nearestFoe(battle, u);
     const t = u.target;
     if (!t) { u.moving = false; continue; }
     const dx = t.x - u.x, dy = t.y - u.y;
     const distance = Math.hypot(dx, dy) || 0.001;
     u.facing = dx >= 0 ? 1 : -1;
-    if (distance > u.range) {
-      const move = Math.min(distance - u.range, u.moveSpeed * dt);
+    // Support units (drummers) hang back instead of charging in
+    const holdDistance = u.support ? Math.max(u.range, 34) : u.range;
+    if (distance > holdDistance) {
+      const move = Math.min(distance - holdDistance, u.moveSpeed * dt);
       u.x += (dx / distance) * move;
       u.y += (dy / distance) * move;
       u.moving = true;
     } else {
       u.moving = false;
-      if (u.cooldown <= 0) strike(battle, u, t);
+      if (distance <= u.range && u.cooldown <= 0) strike(battle, u, t);
     }
   }
 
@@ -959,7 +1114,14 @@ function stepBattle(battle, dt) {
   if (!enemiesLeft) { battle.over = true; battle.victory = true; }
   else if (!knightsLeft) { battle.over = true; battle.victory = false; }
   else if (battle.time >= INVASION.battleTimeLimit) {
-    battle.over = true; battle.victory = true; battle.timedOut = true;   // raiders retreat
+    // Time's up: the side with more of its health left holds the field
+    const healthLeft = side => {
+      const team = battle.units.filter(u => u.side === side);
+      return team.reduce((sum, u) => sum + u.hp, 0) / team.reduce((sum, u) => sum + u.maxHp, 0);
+    };
+    battle.over = true;
+    battle.timedOut = true;
+    battle.victory = healthLeft("knight") >= healthLeft("enemy");
   }
 }
 
@@ -2031,7 +2193,8 @@ function createUnitIcon(typeId) {
 }
 
 function statLine(t) {
-  return `HP ${Math.round(t.hp)} · ATK ${Math.round(t.attack)} · DEF ${t.defense} · SPD ${t.attackSpeed}/s`;
+  const range = t.ranged ? ` · RANGE ${t.range}` : "";
+  return `HP ${Math.round(t.hp)} · ATK ${Math.round(t.attack)} · DEF ${t.defense} · SPD ${t.attackSpeed}/s${range}`;
 }
 
 const armyElements = {};
@@ -2049,6 +2212,7 @@ function buildArmyPanel() {
         `<div class="knight-info">` +
           `<div class="knight-name">${t.name} <span class="knight-count"></span></div>` +
           `<div class="knight-desc">${t.description}</div>` +
+          `<div class="knight-ability">${t.abilityText}</div>` +
           `<div class="knight-stats">${statLine(t)}</div>` +
           `<div class="knight-train">Training time: ${t.trainSeconds}s · Requires Barracks Lv ${t.barracksLevel}</div>` +
         `</div>` +
@@ -2150,7 +2314,7 @@ function updateArmyPanel() {
   if (built) {
     document.getElementById("invasion-countdown").textContent =
       currentBattle ? "Under attack!" : secondsLeft > 0 ? formatClock(secondsLeft) : "Any moment...";
-    document.getElementById("invasion-wave").textContent = `Wave ${m.invasion.wave}`;
+    document.getElementById("invasion-wave").textContent = `Wave ${m.invasion.wave}${isBossWave(m.invasion.wave) ? " (BOSS)" : ""}`;
     const previewKey = String(m.invasion.wave);
     const preview = document.getElementById("enemy-preview");
     if (preview.dataset.key !== previewKey) {
@@ -2163,7 +2327,10 @@ function updateArmyPanel() {
         row.appendChild(createUnitIcon(group.type));
         const text = document.createElement("div");
         text.innerHTML = `<div class="enemy-name">${group.count} × ${s.name}</div>` +
-          `<div class="enemy-desc">${s.description}</div><div class="knight-stats">${statLine(s)}</div>`;
+          `<div class="enemy-desc">${s.description}</div>` +
+          (s.abilityText ? `<div class="knight-ability">${s.abilityText}</div>` : "") +
+          `<div class="knight-stats">${statLine(s)}</div>`;
+        if (s.boss) row.classList.add("boss");
         row.appendChild(text);
         preview.appendChild(row);
       }
@@ -2211,7 +2378,8 @@ function startLiveBattle() {
   battleView.accumulator = 0;
   battleView.lastMs = performance.now();
   battleView.lastHits = 0;
-  document.getElementById("battle-title").textContent = `Barbarian Raid · Wave ${currentBattle.wave}`;
+  document.getElementById("battle-title").textContent = isBossWave(currentBattle.wave)
+    ? `The Chieftain Attacks! · Wave ${currentBattle.wave}` : `Barbarian Raid · Wave ${currentBattle.wave}`;
   document.getElementById("battle-summary").hidden = true;
   document.getElementById("battle-skip").hidden = false;
   document.getElementById("battle-continue").hidden = true;
@@ -2238,7 +2406,7 @@ function finishLiveBattle() {
 
 function showBattleSummary(s) {
   const box = document.getElementById("battle-summary");
-  const title = s.victory ? (s.timedOut ? "The raiders retreat!" : "Victory!") : "Defeat...";
+  const title = s.victory ? (s.timedOut ? "The raiders retreat!" : "Victory!") : (s.timedOut ? "Your knights fall back..." : "Defeat...");
   const rows = [
     ["Result", title],
     ["Knights surviving", `${s.knightsSurviving} / ${s.knightsStart}`],
@@ -4379,15 +4547,27 @@ const BATTLE_PLAYBACK_SPEED = 1.5;   // battles play 1.5x faster than real time
 
 const battleView = { canvas: null, ctx: null, background: null, accumulator: 0, lastMs: 0, lastHits: 0, lastClash: 0 };
 
-// Colors for each unit type: [main, dark, light/metal, skin or accent]
+// Main colors for each unit type (also used for fallen units).
 const UNIT_COLORS = {
-  swordsman: { body: "#3a5fa8", bodyDark: "#26407a", metal: "#cfd4dc", metalDark: "#8a90a0", accent: "#f2c14e" },
-  raider:    { body: "#9a7448", bodyDark: "#6b4f2e", metal: "#a8a8b0", metalDark: "#6a6a72", accent: "#7a4a24" },
-  berserker: { body: "#e0a07a", bodyDark: "#b8785a", metal: "#a8a8b0", metalDark: "#6a6a72", accent: "#c8442f" },
+  swordsman: { body: "#3a5fa8", bodyDark: "#26407a", metal: "#cfd4dc", accent: "#f2c14e" },
+  guardian:  { body: "#8a90a0", bodyDark: "#5e6474", metal: "#cfd4dc", accent: "#3a5fa8" },
+  ranger:    { body: "#4f7a3a", bodyDark: "#35552a", metal: "#cfd4dc", accent: "#8a5a32" },
+  cavalier:  { body: "#3a5fa8", bodyDark: "#26407a", metal: "#cfd4dc", accent: "#8a5a32" },
+  paladin:   { body: "#ece6d6", bodyDark: "#c9bfa6", metal: "#f2c14e", accent: "#f2c14e" },
+  raider:    { body: "#9a7448", bodyDark: "#6b4f2e", metal: "#a8a8b0", accent: "#7a4a24" },
+  berserker: { body: "#e0a07a", bodyDark: "#b8785a", metal: "#a8a8b0", accent: "#c8442f" },
+  marauder:  { body: "#5a4636", bodyDark: "#3e3026", metal: "#c8c8d0", accent: "#9a9aa2" },
+  brute:     { body: "#c9946e", bodyDark: "#9a6e50", metal: "#8a5a32", accent: "#6b4f2e" },
+  drummer:   { body: "#8a6a44", bodyDark: "#5e472c", metal: "#a8642a", accent: "#f1e8d4" },
+  chieftain: { body: "#6b4f2e", bodyDark: "#4a3620", metal: "#b8b8c0", accent: "#8e2a20" },
 };
+
+// How tall each sprite is (so health bars sit just above its head).
+const UNIT_HEIGHTS = { cavalier: 20, brute: 16, chieftain: 21, berserker: 13, guardian: 13 };
 
 // Draws one unit standing at (x, y) = the spot between its feet.
 // facing: 1 = looking right, -1 = looking left.
+// o.step = walking frame, o.lunge = attacking, o.flash = just got hit.
 function drawUnitSprite(ctx, typeId, x, y, facing, o = {}) {
   const c = UNIT_COLORS[typeId] || UNIT_COLORS.swordsman;
   const f = facing >= 0 ? 1 : -1;
@@ -4398,52 +4578,126 @@ function drawUnitSprite(ctx, typeId, x, y, facing, o = {}) {
     ctx.fillStyle = o.flash ? "#ffffff" : color;
     ctx.fillRect(Math.round(rx), Math.round(y + dy), w, h);
   };
+  const shadowWidth = typeId === "cavalier" || typeId === "chieftain" || typeId === "brute" ? 13 : 9;
   if (!o.noShadow) {
     ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
-    ctx.fillRect(Math.round(x - 4), Math.round(y), 9, 1);
+    ctx.fillRect(Math.round(x - shadowWidth / 2), Math.round(y), shadowWidth, 1);
   }
   const step = o.step || 0;
   const skin = "#e8b796";
+  const legs = (color, wide = false) => {
+    px(wide ? -3 : -2, -3, 2, step ? 2 : 3, color);
+    px(wide ? 2 : 1, -3, 2, step ? 3 : 2, color);
+  };
 
-  if (typeId === "swordsman") {
-    px(-2, -3, 2, step ? 2 : 3, "#3a3a44");                // legs
-    px(1, -3, 2, step ? 3 : 2, "#3a3a44");
-    px(-4, -8, 2, 5, c.bodyDark);                           // shield (behind)
-    px(-4, -8, 2, 1, c.accent);
-    px(-2, -8, 5, 5, c.body);                               // tabard
-    px(0, -7, 1, 3, c.accent);                              // gold cross
-    px(-1, -6, 3, 1, c.accent);
-    px(3, -8, 1, 3, c.metal);                               // arm
-    px(-2, -11, 5, 3, c.metal);                             // helmet
-    px(1, -10, 2, 1, "#2b1d14");                            // visor slit
-    px(-1, -12, 2, 1, "#c8442f");                           // plume
-    if (o.lunge) { px(4, -7, 5, 1, "#eef2f8"); px(4, -8, 1, 3, c.accent); }     // sword thrust
-    else { px(4, -12, 1, 5, "#eef2f8"); px(3, -7, 3, 1, c.accent); }            // sword raised
-  } else if (typeId === "raider") {
-    px(-2, -3, 2, step ? 2 : 3, "#4a3220");
-    px(1, -3, 2, step ? 3 : 2, "#4a3220");
-    px(-2, -8, 5, 5, c.body);                               // fur vest
-    px(-2, -4, 5, 1, c.bodyDark);                           // belt
-    px(-3, -8, 1, 3, skin);                                 // arms
-    px(3, -8, 1, 3, skin);
-    px(-2, -11, 4, 3, skin);                                // head
-    px(-2, -12, 4, 1, "#6b4528");                           // hair
-    px(-2, -9, 4, 1, "#6b4528");                            // beard
-    px(1, -10, 1, 1, "#2b1d14");                            // eye
-    if (o.lunge) { px(4, -7, 4, 1, c.accent); px(7, -8, 2, 3, c.metal); }     // axe swing
-    else { px(4, -11, 1, 5, c.accent); px(4, -12, 2, 2, c.metal); }
-  } else if (typeId === "berserker") {
-    px(-2, -3, 2, step ? 2 : 3, "#3a2a1a");
-    px(1, -3, 2, step ? 3 : 2, "#3a2a1a");
-    px(-3, -9, 6, 6, c.body);                               // bare chest
-    px(-2, -8, 1, 3, c.accent);                             // war paint
-    px(1, -8, 1, 3, c.accent);
-    px(-3, -4, 6, 1, "#3a2a1a");                            // belt
-    px(-2, -12, 4, 3, c.body);                              // head
-    px(-3, -13, 6, 2, c.accent);                            // wild red hair
-    px(1, -11, 1, 1, "#2b1d14");
-    if (o.lunge) { px(4, -8, 4, 1, "#7a4a24"); px(7, -9, 2, 3, c.metal); px(-5, -6, 2, 2, c.metal); }
-    else { px(4, -12, 1, 5, "#7a4a24"); px(4, -13, 2, 2, c.metal); px(-4, -12, 1, 5, "#7a4a24"); px(-5, -13, 2, 2, c.metal); }
+  switch (typeId) {
+    case "swordsman":
+      legs("#3a3a44");
+      px(-4, -8, 2, 5, c.bodyDark); px(-4, -8, 2, 1, c.accent);          // shield
+      px(-2, -8, 5, 5, c.body);                                          // tabard
+      px(0, -7, 1, 3, c.accent); px(-1, -6, 3, 1, c.accent);             // gold cross
+      px(3, -8, 1, 3, c.metal);
+      px(-2, -11, 5, 3, c.metal); px(1, -10, 2, 1, "#2b1d14");           // helmet
+      px(-1, -12, 2, 1, "#c8442f");                                      // plume
+      if (o.lunge) { px(4, -7, 5, 1, "#eef2f8"); px(4, -8, 1, 3, c.accent); }
+      else { px(4, -12, 1, 5, "#eef2f8"); px(3, -7, 3, 1, c.accent); }
+      break;
+    case "guardian":
+      legs("#4a4e5a", true);
+      px(-3, -9, 6, 6, c.body);                                          // heavy plate
+      px(-3, -9, 6, 1, c.metal);
+      px(-2, -13, 5, 4, c.metal); px(0, -11, 3, 1, "#2b1d14");           // great helm
+      px(3, -12, 3, 10, c.accent); px(3, -12, 3, 1, "#f2c14e");          // tower shield
+      px(4, -9, 1, 4, "#f2c14e");
+      break;
+    case "ranger":
+      legs("#5a3e26");
+      px(-3, -9, 1, 5, c.accent);                                        // quiver
+      px(-3, -10, 1, 1, "#e8e4d8");
+      px(-2, -8, 4, 5, c.body);                                          // green tunic
+      px(-2, -4, 4, 1, c.accent);
+      px(-2, -11, 4, 3, c.bodyDark); px(0, -10, 2, 1, skin);             // hood and face
+      px(4, -11, 1, 7, c.accent); px(3, -11, 1, 1, c.accent); px(3, -5, 1, 1, c.accent);   // bow
+      px(o.lunge ? 2 : 3, -10, 1, 5, "#e8e4d8");                         // bowstring
+      break;
+    case "cavalier": {
+      const gallop = step ? 1 : 0;
+      px(-6, -3, 1, 3 - gallop, "#4a2f1d"); px(-4, -3, 1, 2 + gallop, "#4a2f1d");      // horse legs
+      px(2, -3, 1, 2 + gallop, "#4a2f1d"); px(4, -3, 1, 3 - gallop, "#4a2f1d");
+      px(-6, -7, 11, 4, "#8a5a32"); px(-6, -7, 11, 1, "#a87443");                       // horse body
+      px(4, -10, 2, 4, "#8a5a32"); px(5, -11, 3, 3, "#8a5a32"); px(7, -10, 1, 1, "#2b1d14");   // neck, head
+      px(-7, -7, 1, 4, "#4a2f1d");                                                      // tail
+      px(-3, -7, 5, 3, c.body); px(-3, -5, 5, 1, c.accent);                             // saddle cloth
+      px(-1, -12, 3, 5, c.body);                                                        // rider
+      px(-1, -15, 3, 3, c.metal); px(0, -16, 1, 1, "#c8442f");
+      if (o.lunge) px(2, -11, 8, 1, "#eef2f8");                                         // lance lowered
+      else px(2, -19, 1, 9, "#eef2f8");
+      break;
+    }
+    case "paladin":
+      legs(c.bodyDark);
+      px(-4, -9, 1, 7, "#f4f0e6");                                       // white cape
+      px(-3, -9, 6, 6, c.body);                                          // shining armor
+      px(-3, -9, 6, 1, c.accent); px(0, -8, 1, 4, c.accent);
+      px(-2, -12, 5, 3, c.metal); px(1, -11, 2, 1, "#2b1d14");           // golden helm
+      px(-1, -13, 3, 1, "#fff6c0");                                      // halo glint
+      if (o.lunge) { px(4, -8, 4, 1, c.bodyDark); px(7, -10, 2, 4, "#cfd4dc"); }   // warhammer swing
+      else { px(4, -13, 1, 6, c.bodyDark); px(3, -14, 3, 2, "#cfd4dc"); }
+      break;
+    case "raider":
+      legs("#4a3220");
+      px(-2, -8, 5, 5, c.body); px(-2, -4, 5, 1, c.bodyDark);
+      px(-3, -8, 1, 3, skin); px(3, -8, 1, 3, skin);
+      px(-2, -11, 4, 3, skin); px(-2, -12, 4, 1, "#6b4528"); px(-2, -9, 4, 1, "#6b4528");
+      px(1, -10, 1, 1, "#2b1d14");
+      if (o.lunge) { px(4, -7, 4, 1, c.accent); px(7, -8, 2, 3, c.metal); }
+      else { px(4, -11, 1, 5, c.accent); px(4, -12, 2, 2, c.metal); }
+      break;
+    case "berserker":
+      legs("#3a2a1a");
+      px(-3, -9, 6, 6, c.body); px(-2, -8, 1, 3, c.accent); px(1, -8, 1, 3, c.accent);
+      px(-3, -4, 6, 1, "#3a2a1a");
+      px(-2, -12, 4, 3, c.body); px(-3, -13, 6, 2, c.accent); px(1, -11, 1, 1, "#2b1d14");
+      if (o.lunge) { px(4, -8, 4, 1, "#7a4a24"); px(7, -9, 2, 3, c.metal); px(-5, -6, 2, 2, c.metal); }
+      else { px(4, -12, 1, 5, "#7a4a24"); px(4, -13, 2, 2, c.metal); px(-4, -12, 1, 5, "#7a4a24"); px(-5, -13, 2, 2, c.metal); }
+      break;
+    case "marauder":
+      legs("#3e3026");
+      px(-2, -8, 4, 5, c.body);
+      px(-3, -9, 6, 2, "#9a9aa2");                                       // wolf pelt
+      px(-2, -12, 4, 3, "#8a8a92"); px(-2, -13, 1, 1, "#8a8a92"); px(1, -13, 1, 1, "#8a8a92");   // wolf hood + ears
+      px(0, -11, 2, 1, skin); px(1, -11, 1, 1, "#2b1d14");
+      if (o.lunge) { px(3, -7, 4, 1, c.metal); px(-5, -6, 3, 1, c.metal); }      // twin knives
+      else { px(3, -8, 1, 3, c.metal); px(-3, -7, 1, 3, c.metal); }
+      break;
+    case "brute":
+      legs("#4a3620", true);
+      px(-4, -11, 9, 8, c.body);                                         // huge chest
+      px(-4, -11, 9, 2, "#6b5a46"); px(-3, -5, 7, 1, "#4a3620");         // fur shoulders, belt
+      px(-2, -14, 4, 3, c.body); px(1, -13, 1, 1, "#2b1d14");            // bald head
+      if (o.lunge) { px(4, -9, 6, 2, c.metal); px(8, -10, 3, 4, c.accent); }     // club smash
+      else { px(5, -15, 2, 9, c.metal); px(4, -16, 4, 3, c.accent); }
+      break;
+    case "drummer": {
+      const beat = o.beat ? 1 : 0;
+      legs("#4a3220");
+      px(-2, -8, 4, 5, c.body);
+      px(-2, -11, 4, 3, skin); px(-2, -12, 4, 1, "#c08040"); px(1, -10, 1, 1, "#2b1d14");
+      px(2, -8, 4, 5, c.metal); px(2, -8, 4, 1, c.accent); px(2, -4, 4, 1, c.accent);   // war drum
+      px(3, -10 + beat, 1, 2, "#e8e4d8"); px(5, -9 - beat, 1, 2, "#e8e4d8");            // drumsticks
+      break;
+    }
+    case "chieftain":
+      legs("#3a2a1a", true);
+      px(-5, -13, 2, 11, c.accent);                                      // red fur cape
+      px(-3, -13, 8, 9, c.body); px(-1, -13, 3, 1, "#f2c14e");           // armor, golden torc
+      px(-3, -5, 8, 1, "#3a2a1a");
+      px(-2, -17, 5, 4, skin); px(-2, -14, 5, 2, "#c08040"); px(2, -16, 1, 1, "#2b1d14");   // face, braided beard
+      px(-3, -19, 7, 2, c.metal);                                        // horned helmet
+      px(-4, -21, 1, 3, "#f0e8d0"); px(4, -21, 1, 3, "#f0e8d0");
+      if (o.lunge) { px(5, -11, 7, 1, "#7a4a24"); px(10, -13, 3, 5, c.metal); }        // great axe swing
+      else { px(5, -20, 1, 13, "#7a4a24"); px(5, -21, 4, 5, c.metal); px(6, -20, 2, 3, "#e8e8f0"); }
+      break;
   }
 }
 
@@ -4453,7 +4707,7 @@ function drawFallenUnit(ctx, typeId, x, y, facing) {
   const f = facing >= 0 ? -1 : 1;     // they fall backwards
   ctx.globalAlpha = 0.65;
   rect(ctx, x - 5, y - 2, 10, 2, c.body);
-  rect(ctx, f > 0 ? x + 5 : x - 8, y - 3, 3, 3, typeId === "swordsman" ? c.metal : "#e8b796");
+  rect(ctx, f > 0 ? x + 5 : x - 8, y - 3, 3, 3, KNIGHT_TYPES[typeId] ? c.metal : "#e8b796");
   rect(ctx, f > 0 ? x - 8 : x + 5, y - 1, 3, 1, "#3a3a44");
   ctx.globalAlpha = 1;
 }
@@ -4542,24 +4796,45 @@ function drawBattle(battle, time) {
   // Fallen units first, then the living sorted by y (lower = in front)
   for (const u of battle.units) if (!u.alive) drawFallenUnit(ctx, u.typeId, u.x, u.y, u.facing);
   const living = battle.units.filter(u => u.alive).sort((a, b) => a.y - b.y);
+  const beat = Math.floor(time * 4) % 2;
   for (const u of living) {
     const step = u.moving ? Math.floor(time * 8 + u.x) % 2 : 0;
-    drawUnitSprite(ctx, u.typeId, u.x, u.y, u.facing, { step, lunge: u.lunge > 0, flash: u.flash > 0 });
-    // Health bar
+    // A soft ring shows who is inside a protective or war-drum aura
+    if (u.protection > 0) rect(ctx, u.x - 3, u.y + 1, 7, 1, "rgba(120, 170, 255, 0.7)");
+    if (u.attackBoost > 0) rect(ctx, u.x - 3, u.y + 1, 7, 1, "rgba(255, 120, 60, 0.7)");
+    drawUnitSprite(ctx, u.typeId, u.x, u.y, u.facing, { step, beat, lunge: u.lunge > 0, flash: u.flash > 0 });
+    // Health bar (bosses get a longer one)
+    const height = UNIT_HEIGHTS[u.typeId] || 12;
+    const width = u.boss ? 18 : 10;
     const ratio = u.hp / u.maxHp;
-    rect(ctx, u.x - 5, u.y - 17, 10, 2, "#2b1d14");
-    rect(ctx, u.x - 5, u.y - 17, Math.max(1, Math.round(10 * ratio)), 2, u.side === "knight" ? "#6fd16a" : "#e0503a");
+    rect(ctx, u.x - width / 2, u.y - height - 5, width, 2, "#2b1d14");
+    rect(ctx, u.x - width / 2, u.y - height - 5, Math.max(1, Math.round(width * ratio)), 2, u.side === "knight" ? "#6fd16a" : "#e0503a");
+    if (u.boss) {                                          // a little crown over the boss
+      rect(ctx, u.x - 2, u.y - height - 9, 5, 2, PAL.gold);
+      rect(ctx, u.x - 2, u.y - height - 10, 1, 1, PAL.gold);
+      rect(ctx, u.x + 2, u.y - height - 10, 1, 1, PAL.gold);
+    }
   }
 
-  // Floating damage numbers
+  // Arrows flying, then floating damage (and green heal) numbers
   for (const e of battle.effects) {
     e.age += 1 / 30;
+    if (e.arrow) {
+      if (e.age > 0.25) continue;
+      const t = e.age / 0.25;
+      const ax = lerp(e.x1, e.x2, t), ay = lerp(e.y1, e.y2, t) - Math.sin(t * Math.PI) * 8;
+      const dir = e.x2 >= e.x1 ? 1 : -1;
+      rect(ctx, ax - 2 * dir, ay, 4, 1, "#e8e4d8");
+      rect(ctx, ax + 2 * dir, ay, 1, 1, PAL.metalDark);
+      continue;
+    }
     if (e.age > 0.8) continue;
     ctx.globalAlpha = Math.max(0, 1 - e.age / 0.8);
-    drawPixelNumber(ctx, e.value, e.x, e.y - e.age * 14, e.side === "knight" ? "#ff8a6a" : "#fff2a0");
+    const color = e.heal ? "#7dff7a" : e.side === "knight" ? "#ff8a6a" : "#fff2a0";
+    drawPixelNumber(ctx, e.value, e.x, e.y - e.age * 14, color);
   }
   ctx.globalAlpha = 1;
-  battle.effects = battle.effects.filter(e => e.age <= 0.8);
+  battle.effects = battle.effects.filter(e => e.age <= (e.arrow ? 0.25 : 0.8));
 
   // Status line under the battlefield
   const knights = battle.units.filter(u => u.side === "knight" && u.alive).length;

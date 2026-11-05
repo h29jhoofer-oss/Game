@@ -832,6 +832,21 @@ button:focus-visible {
   color: var(--wood);
 }
 
+.knight-ability {
+  font-size: 17px;
+  color: var(--grass-dark);
+}
+
+.enemy-row .knight-ability {
+  color: var(--danger-dark);
+}
+
+.enemy-row.boss {
+  border-color: var(--gold-dark);
+  background: #f6e7b8;
+  box-shadow: 0 0 0 3px var(--gold);
+}
+
 .knight-stats {
   font-size: 17px;
   color: var(--royal-dark);
