@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Kingdom Idle</title>
 
-  <!-- Pixel fonts (optional). If you are offline, the game falls back to a
-       normal monospace font and still works. -->
+  <!-- Pixel fonts: a pixel blackletter for titles, a pixel sans for text.
+       If you are offline, the game falls back to normal fonts and still works. -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Jacquard+12&family=Pixelify+Sans:wght@400;600&family=VT323&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="style.css">
 </head>
@@ -18,22 +18,32 @@
        dropped into another website as one block. -->
   <div id="game">
 
-    <!-- ===================== TOP RESOURCE BAR ===================== -->
+    <!-- ===================== TOP BAR: crest, resources, settings ===================== -->
     <header class="top-bar">
-      <div class="title-row">
-        <div class="title-block">
+      <div class="crest-block">
+        <span class="icon-slot crest" data-icon="crest" data-size="large"></span>
+        <div class="title-text">
           <h1 class="game-title">Kingdom Idle</h1>
           <span class="era-label" id="era-label">Era I &middot; The Settlement</span>
         </div>
-        <div class="save-block">
-          <span class="save-status">Not saved yet</span>
-          <button class="btn-small btn-toggle toggle-sound" type="button" aria-pressed="true">Sound <span class="toggle-state">On</span></button>
-          <button class="btn-small btn-toggle toggle-music" type="button" aria-pressed="false">Music <span class="toggle-state">Off</span></button>
-          <button class="btn-small save-button" type="button">Save</button>
-        </div>
       </div>
-      <!-- game.js fills this list with one counter per resource -->
+
+      <!-- game.js fills this list with one plaque per resource -->
       <ul class="resource-bar" id="resource-bar"></ul>
+
+      <div class="save-block">
+        <span class="save-status">Not saved yet</span>
+        <button class="icon-btn toggle-sound" type="button" aria-pressed="true" title="Sound effects">
+          <span class="icon-slot" data-icon="speaker"></span><span class="toggle-state">On</span>
+        </button>
+        <button class="icon-btn toggle-music" type="button" aria-pressed="false" title="Music">
+          <span class="icon-slot" data-icon="note"></span><span class="toggle-state">Off</span>
+        </button>
+        <button class="icon-btn save-button" type="button" title="Save the kingdom">
+          <span class="icon-slot" data-icon="quill"></span><span>Save</span>
+        </button>
+      </div>
+
       <!-- Shown in the last minutes before a raid -->
       <button class="invasion-banner" id="invasion-banner" type="button" hidden></button>
     </header>
@@ -41,7 +51,7 @@
     <!-- ===================== MAIN AREA ===================== -->
     <main class="main-area">
 
-      <!-- VILLAGE TAB (the default screen) -->
+      <!-- VILLAGE TAB: the kingdom view and the architect's catalog -->
       <section class="screen screen-village active" id="screen-village">
         <div class="village-frame" id="village-frame">
           <!-- The village is drawn at 480x270 and scaled up with crisp pixels -->
@@ -50,23 +60,23 @@
 
         <section class="panel building-panel">
           <div class="panel-head">
-            <h2 class="panel-title">Buildings</h2>
-            <p class="panel-note">Your kingdom keeps working while you're away (up to 8 hours).</p>
+            <h2 class="panel-title">Royal Architect&rsquo;s Catalog</h2>
+            <p class="panel-note">Your kingdom keeps working while you&rsquo;re away (up to 8 hours).</p>
           </div>
-          <!-- game.js fills this list with building cards -->
+          <!-- game.js fills this list with illustrated building pages -->
           <ul class="building-list" id="building-list"></ul>
         </section>
       </section>
 
-      <!-- PLACEHOLDER TABS (filled in during later stages) -->
-      <!-- ARMY TAB: barracks, knights and defense -->
-      <section class="screen" id="screen-army">
+      <!-- ARMY TAB: the war room -->
+      <section class="screen screen-army" id="screen-army">
         <div class="army-layout">
-          <div class="panel army-panel">
+          <div class="panel panel-dark army-panel">
             <div class="panel-head">
               <h2 class="panel-title">Knight Barracks</h2>
               <p class="panel-note" id="barracks-level-note"></p>
             </div>
+            <div class="barracks-art" id="barracks-art"></div>
 
             <div id="barracks-locked" class="lock-info">
               <p>Your kingdom needs more people before it can raise an army.</p>
@@ -93,16 +103,16 @@
                 <div class="progress"><div class="progress-fill" id="training-fill"></div></div>
               </div>
               <ul class="knight-list" id="knight-list"></ul>
-              <button class="btn" id="barracks-upgrade" type="button">
+              <button class="btn btn-upgrade" id="barracks-upgrade" type="button">
                 <span class="btn-label">Upgrade</span>
                 <span class="btn-cost" id="barracks-upgrade-cost"></span>
               </button>
             </div>
           </div>
 
-          <div class="panel army-panel">
+          <div class="panel panel-dark army-panel">
             <div class="panel-head">
-              <h2 class="panel-title">Defense</h2>
+              <h2 class="panel-title">War Table</h2>
               <p class="panel-note">Battles are fought automatically.</p>
             </div>
             <p id="defense-inactive">No enemies know about your kingdom yet. Raids begin once a barracks is built.</p>
@@ -114,7 +124,7 @@
               <h3 class="sub-title">Scouts report</h3>
               <ul class="enemy-preview" id="enemy-preview"></ul>
               <p class="invasion-reward" id="invasion-reward"></p>
-              <h3 class="sub-title">Battle log</h3>
+              <h3 class="sub-title">Battle chronicle</h3>
               <p class="battle-record" id="battle-record"></p>
               <ul class="battle-log" id="battle-log"></ul>
             </div>
@@ -122,9 +132,9 @@
         </div>
       </section>
 
-      <!-- RESEARCH TAB -->
-      <section class="screen" id="screen-research">
-        <div class="panel">
+      <!-- RESEARCH TAB: the royal library -->
+      <section class="screen screen-research" id="screen-research">
+        <div class="panel library-panel">
           <div class="panel-head">
             <h2 class="panel-title">Royal Library</h2>
             <p class="panel-note">Spend gold on discoveries that make your kingdom more productive.
@@ -137,7 +147,7 @@
 
       <section class="screen" id="screen-quests">
         <div class="panel placeholder">
-          <h2 class="panel-title">Quests</h2>
+          <div class="panel-head"><h2 class="panel-title">Quests</h2></div>
           <p>No heralds have arrived with requests yet.</p>
           <p class="panel-note">Coming in a later stage.</p>
         </div>
@@ -154,7 +164,7 @@
         </div>
 
         <div class="panel kingdom-panel castle-panel">
-          <h2 class="panel-title">Castle Upgrade</h2>
+          <div class="panel-head"><h2 class="panel-title">Castle Upgrade</h2></div>
           <p>Rebuild the old keep into a mighty castle with taller towers.
              Every building and your taxes produce <strong>+10%</strong>.</p>
           <p class="castle-status" id="castle-status"></p>
@@ -164,11 +174,11 @@
           </button>
         </div>
 
-        <div class="panel placeholder">
-          <h2 class="panel-title">Royal Archives &amp; Settings</h2>
+        <div class="panel kingdom-panel">
+          <div class="panel-head"><h2 class="panel-title">Royal Archives</h2></div>
           <p>Your kingdom is saved in this browser automatically every 20 seconds
              and whenever you leave the page.</p>
-          <p>While you're away, your buildings keep producing for up to 8 hours.</p>
+          <p>While you&rsquo;re away, your buildings keep producing for up to 8 hours.</p>
           <p class="archive-status"><span class="save-status">Not saved yet</span></p>
           <div class="archive-actions">
             <button class="btn btn-toggle toggle-sound" type="button" aria-pressed="true">Sound effects: <span class="toggle-state">On</span></button>
@@ -184,15 +194,25 @@
 
     <!-- ===================== BOTTOM NAVIGATION ===================== -->
     <nav class="bottom-nav" id="bottom-nav">
-      <button class="nav-btn active" data-screen="village" type="button">Village</button>
-      <button class="nav-btn" data-screen="army" type="button">Army</button>
-      <button class="nav-btn" data-screen="research" type="button">Research</button>
-      <button class="nav-btn" data-screen="quests" type="button">Quests</button>
-      <button class="nav-btn" data-screen="kingdom" type="button">Kingdom</button>
+      <button class="nav-btn active" data-screen="village" type="button"><span class="icon-slot" data-icon="house"></span><span>Village</span></button>
+      <button class="nav-btn" data-screen="army" type="button"><span class="icon-slot" data-icon="sword"></span><span>Army</span></button>
+      <button class="nav-btn" data-screen="research" type="button"><span class="icon-slot" data-icon="book"></span><span>Library</span></button>
+      <button class="nav-btn" data-screen="quests" type="button"><span class="icon-slot" data-icon="scroll"></span><span>Quests</span></button>
+      <button class="nav-btn" data-screen="kingdom" type="button"><span class="icon-slot" data-icon="crown"></span><span>Kingdom</span></button>
     </nav>
 
     <!-- ===================== POP-UPS ===================== -->
     <div class="toast" id="toast" hidden></div>
+
+    <!-- Unlocks, milestones and discoveries are presented here -->
+    <div class="announcement" id="announcement" hidden>
+      <div class="announce-art" id="announce-art"></div>
+      <div class="announce-text-block">
+        <div class="announce-kicker" id="announce-kicker"></div>
+        <div class="announce-title" id="announce-title"></div>
+        <div class="announce-text" id="announce-text"></div>
+      </div>
+    </div>
 
     <div class="modal-backdrop" id="welcome-modal" hidden>
       <div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
@@ -210,8 +230,25 @@
     <div class="modal-backdrop" id="battle-modal" hidden>
       <div class="modal panel battle-modal" role="dialog" aria-modal="true" aria-labelledby="battle-title">
         <h2 class="modal-title" id="battle-title">Barbarian Raid</h2>
-        <!-- The battlefield is drawn at 320x160 and scaled up with crisp pixels -->
-        <canvas id="battle-canvas" width="320" height="160"></canvas>
+        <div class="battle-stage">
+          <!-- The battlefield is drawn at 320x160 and scaled up with crisp pixels -->
+          <canvas id="battle-canvas" width="320" height="160"></canvas>
+          <!-- Battle preparation: the two armies face each other -->
+          <div class="battle-prep" id="battle-prep" hidden>
+            <div class="prep-sides">
+              <div class="prep-side">
+                <h3 class="prep-title">Your Knights</h3>
+                <ul class="prep-list" id="prep-knights"></ul>
+              </div>
+              <div class="prep-vs">VS</div>
+              <div class="prep-side enemy">
+                <h3 class="prep-title" id="prep-enemy-title">Barbarians</h3>
+                <ul class="prep-list" id="prep-enemies"></ul>
+              </div>
+            </div>
+            <button class="btn btn-danger btn-wide" id="battle-start" type="button">To Battle! <span id="battle-countdown"></span></button>
+          </div>
+        </div>
         <div class="battle-status">
           <span id="battle-knights"></span>
           <span id="battle-time"></span>

@@ -1,47 +1,83 @@
 /* =============================================================
-   KINGDOM IDLE - STYLES
+   KINGDOM IDLE - STYLES  (Visual overhaul)
    -------------------------------------------------------------
-   All colors live in the :root variables below, so you can
-   re-theme the whole game by changing a few lines.
+   The look is built from real pixel-art textures: parchment,
+   wood planks, stone bricks and gold-riveted frames. They are
+   painted by game.js when the game starts (section 6b) and
+   handed to CSS as the --tex-* and --frame-* variables below.
+   Until they are ready (or if something fails) the plain
+   colors underneath are used, so the game always looks fine.
 
-   The "3D" look of panels and buttons comes from BEVELS: a light
-   edge on the top-left and a dark edge on the bottom-right, made
-   with hard (not blurry) box-shadows. Pressed buttons swap them.
+   Frames use "border-image": a small pixel picture of a frame
+   is cut into 9 pieces - the corners stay as they are and the
+   edges repeat - so every panel gets the same ornate border.
    ============================================================= */
 
 :root {
-  /* Palette: warm woods, parchment, royal gold and blue */
-  --ink:          #20160f;   /* darkest outline */
-  --wood-deep:    #3a2516;
-  --wood-dark:    #4f331f;
+  color-scheme: dark;
+
+  /* Ink, parchment, wood, metal and cloth */
+  --ink:          #1b120b;
+  --ink-soft:     #3a2616;
+  --parch:        #e8d3a2;
+  --parch-light:  #f4e6c2;
+  --parch-deep:   #d6bb82;
+  --parch-shadow: #b89a5e;
   --wood:         #6e4829;
   --wood-light:   #94653a;
-  --wood-shine:   #b4824c;
-  --parchment:    #ecd9ad;
-  --parchment-lt: #f7ead0;
-  --parchment-dk: #cdb07a;
-  --gold:         #f2c14e;
+  --wood-dark:    #4a2f1b;
+  --wood-deep:    #2b1b0f;
+  --bronze:       #a8742e;
+  --gold:         #e8b64a;
   --gold-light:   #ffe08a;
-  --gold-dark:    #b8862b;
-  --royal:        #3a5fa8;
-  --royal-dark:   #26407a;
-  --grass:        #4f9a4a;
-  --grass-light:  #6fbf5f;
-  --grass-dark:   #2f6a2b;
-  --danger:       #b8402c;
-  --danger-dark:  #7e2418;
-  --stone:        #9a9a8e;
-  --stone-dark:   #5e5e56;
-  --text-light:   #f7ead0;
-  --text-dark:    #2b1d14;
-  --positive:     #9ee07a;
-  --bg:           #17110c;
+  --gold-dark:    #9c6f22;
+  --royal:        #2f4f8f;
+  --royal-light:  #4a6fb8;
+  --royal-dark:   #1e335e;
+  --forest:       #3f7a34;
+  --forest-light: #5fa04a;
+  --forest-dark:  #27501f;
+  --crimson:      #9e2b25;
+  --crimson-light:#c8442f;
+  --crimson-dark: #64170f;
+  --stone:        #8d887c;
+  --stone-dark:   #57524a;
 
-  /* Fonts: pixel fonts with safe fallbacks */
-  --font-title: "Press Start 2P", "Courier New", monospace;
-  --font-body:  "VT323", "Courier New", monospace;
+  --text:         #2b1b0e;
+  --text-soft:    #6b4a2a;
+  --text-light:   #f6ead0;
+  --text-dim:     #c9b58c;
+  --good:         #3f7a34;
+  --good-light:   #9ee07a;
+  --bad:          #a8301c;
 
-  --nav-height: 60px;
+  /* Fonts: pixel blackletter for titles, pixel sans for text */
+  --font-display: "Jacquard 12", "Pixelify Sans", Georgia, serif;
+  --font-body:    "Pixelify Sans", "VT323", "Courier New", monospace;
+  --font-num:     "VT323", "Courier New", monospace;
+
+  --nav-height: 66px;
+
+  /* Pixel-art textures and frames (filled in by game.js) */
+  --tex-parchment: none;
+  --tex-parchment-deep: none;
+  --tex-wood: none;
+  --tex-wood-dark: none;
+  --tex-stone: none;
+  --tex-stone-dark: none;
+  --tex-hide: none;
+  --tex-cloth: none;
+  --frame-gold: none;
+  --frame-wood: none;
+  --frame-stone: none;
+  --frame-iron: none;
+  --frame-hide: none;
+  --ribbon: none;
+  --ribbon-blue: none;
+  --divider-line: none;
+  --divider-gem: none;
+  --seal: none;
+  --socket: none;
 }
 
 /* ---------- Basic reset ---------- */
@@ -60,18 +96,15 @@ html, body {
 }
 
 body {
-  /* A dark checkerboard of 4x4 "pixels" behind everything */
-  background-color: var(--bg);
-  background-image:
-    linear-gradient(45deg, #1c150f 25%, transparent 25%, transparent 75%, #1c150f 75%),
-    linear-gradient(45deg, #1c150f 25%, transparent 25%, transparent 75%, #1c150f 75%);
-  background-size: 8px 8px;
-  background-position: 0 0, 4px 4px;
+  background-color: #241d18;
+  background-image: var(--tex-stone-dark);
+  background-size: 128px 64px;
   color: var(--text-light);
   font-family: var(--font-body);
-  font-size: 20px;
-  line-height: 1.15;
-  overflow-x: hidden; /* never allow sideways scrolling */
+  font-size: 17px;
+  line-height: 1.3;
+  overflow-x: hidden;
+  image-rendering: pixelated;     /* every texture stays crisp */
 }
 
 button {
@@ -84,107 +117,128 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+strong {
+  font-weight: 600;
+}
+
+/* Tiny pixel icons (canvases drawn by game.js) */
+.pixel-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.icon-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* ---------- Overall layout ---------- */
 #game {
   display: flex;
   flex-direction: column;
   max-width: 1500px;
   margin: 0 auto;
-  padding: 8px 10px calc(var(--nav-height) + 16px);
-  gap: 10px;
+  padding: 8px 12px calc(var(--nav-height) + 18px);
+  gap: 12px;
 }
 
-/* ---------- Top bar ---------- */
+/* =============================================================
+   TOP BAR - a carved wooden beam with gold fittings
+   ============================================================= */
 .top-bar {
-  background: var(--wood);
-  border: 4px solid var(--ink);
-  box-shadow:
-    inset 3px 3px 0 var(--wood-shine),
-    inset -3px -3px 0 var(--wood-deep),
-    0 4px 0 rgba(0, 0, 0, 0.45);
-  padding: 10px 12px 12px;
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 2px 4px;
+  background: var(--wood) var(--tex-wood) 0 0 / 128px 64px;
+  border: 16px solid var(--wood-dark);
+  border-image: var(--frame-gold) 8 round;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.45);
 }
 
-.title-row {
+.crest-block {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
 }
 
-.title-block {
+.crest .pixel-icon {
+  width: 44px;
+  height: 48px;
+}
+
+.title-text {
   display: flex;
-  align-items: baseline;
-  gap: 14px;
-  flex-wrap: wrap;
+  flex-direction: column;
 }
 
 .game-title {
-  font-family: var(--font-title);
-  font-size: 18px;
-  color: var(--gold);
-  text-shadow: 2px 2px 0 var(--ink), 0 -2px 0 var(--gold-dark);
+  font-family: var(--font-display);
+  font-weight: normal;
+  font-size: 40px;
+  line-height: 0.9;
+  color: var(--gold-light);
+  text-shadow: 2px 2px 0 var(--ink), -1px -1px 0 var(--gold-dark);
   letter-spacing: 1px;
+  white-space: nowrap;
 }
 
 .era-label {
-  font-size: 21px;
-  color: var(--parchment);
+  font-size: 15px;
+  color: var(--parch);
+  text-shadow: 1px 1px 0 var(--ink);
+  white-space: nowrap;
 }
 
-.save-block {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.save-status {
-  font-size: 18px;
-  color: var(--parchment-dk);
-}
-
-.btn-small {
-  font-family: var(--font-title);
-  font-size: 10px;
-  padding: 7px 12px 8px;
-  color: var(--ink);
-  background: var(--gold);
-  border: 3px solid var(--ink);
-  box-shadow: inset 2px 2px 0 var(--gold-light), inset -2px -3px 0 var(--gold-dark);
-}
-
-.btn-small:active {
-  box-shadow: inset 2px 3px 0 var(--gold-dark);
-}
-
-/* ---------- Resource counters ---------- */
+/* ---------- Resource plaques ---------- */
 .resource-bar {
   list-style: none;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
 }
 
 .resource {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: var(--wood-deep);
+  gap: 6px;
+  min-width: 128px;
+  padding: 2px 10px 2px 2px;
+  background: var(--wood-deep) var(--tex-wood-dark) 0 0 / 128px 64px;
   border: 3px solid var(--ink);
-  box-shadow: inset 2px 2px 0 #23170d, inset -2px -2px 0 var(--wood-dark);
-  padding: 5px 10px;
-  min-width: 0;
+  box-shadow: inset 0 0 0 2px rgba(232, 182, 74, 0.28), 0 3px 0 rgba(0, 0, 0, 0.4);
 }
 
-/* Icons are tiny canvases drawn by game.js and scaled up crisply */
-.pixel-icon {
-  width: 28px;
-  height: 28px;
+.res-socket {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
   flex-shrink: 0;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  background: var(--socket) center / 38px 38px no-repeat;
+}
+
+.res-socket .pixel-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.res-socket.bump .pixel-icon {
+  animation: icon-bump 0.4s steps(4);
+}
+
+@keyframes icon-bump {
+  0%   { transform: translateY(0) scale(1); }
+  40%  { transform: translateY(-4px) scale(1.15); }
+  100% { transform: translateY(0) scale(1); }
 }
 
 .resource-text {
@@ -194,31 +248,118 @@ button:focus-visible {
 }
 
 .resource-name {
-  font-size: 15px;
-  color: var(--parchment-dk);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  display: none;
 }
 
 .resource-amount {
-  font-size: 27px;
-  line-height: 1;
+  font-family: var(--font-num);
+  font-size: 26px;
+  line-height: 0.95;
   color: var(--text-light);
+  text-shadow: 2px 2px 0 var(--ink);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
 .resource-rate {
-  font-size: 16px;
-  color: var(--positive);
+  font-size: 13px;
+  line-height: 1.1;
+  color: var(--good-light);
   white-space: nowrap;
 }
 
 .resource-rate.zero {
-  color: var(--stone);
+  color: var(--text-dim);
 }
 
-/* ---------- Main area & screens ---------- */
+.resource-rate.warn {
+  color: var(--gold);
+}
+
+/* "+12" floating up when a resource grows */
+.gain-float {
+  position: absolute;
+  right: 4px;
+  top: -14px;
+  font-family: var(--font-num);
+  font-size: 20px;
+  color: var(--gold-light);
+  text-shadow: 1px 1px 0 var(--ink), -1px -1px 0 var(--ink);
+  pointer-events: none;
+  animation: float-up 1.3s steps(10) forwards;
+}
+
+@keyframes float-up {
+  0%   { transform: translateY(6px); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translateY(-18px); opacity: 0; }
+}
+
+/* ---------- Header buttons ---------- */
+.save-block {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.save-status {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 5px 5px;
+  font-size: 14px;
+  color: var(--text-light);
+  background: var(--wood-dark) var(--tex-wood-dark) 0 0 / 128px 64px;
+  border: 3px solid var(--ink);
+  box-shadow: inset 0 2px 0 rgba(255, 230, 180, 0.2), inset 0 -3px 0 rgba(0, 0, 0, 0.35);
+  text-shadow: 1px 1px 0 var(--ink);
+}
+
+.icon-btn .pixel-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.icon-btn:hover {
+  filter: brightness(1.15);
+}
+
+.icon-btn:active {
+  transform: translateY(2px);
+}
+
+.icon-btn[aria-pressed="false"] {
+  opacity: 0.6;
+}
+
+/* Raid warning banner */
+.invasion-banner {
+  grid-column: 1 / -1;
+  width: 100%;
+  padding: 5px 10px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 1;
+  color: var(--text-light);
+  background: var(--tex-cloth) 0 0 / 64px 64px, var(--crimson);
+  border: 3px solid var(--ink);
+  box-shadow: inset 0 0 0 2px var(--gold-dark);
+  text-shadow: 2px 2px 0 var(--ink);
+  animation: banner-pulse 1.2s steps(2) infinite;
+}
+
+@keyframes banner-pulse {
+  50% { background-color: var(--crimson-dark); }
+}
+
+/* =============================================================
+   MAIN AREA AND SCREENS
+   ============================================================= */
 .screen {
   display: none;
   width: 100%;
@@ -227,88 +368,242 @@ button:focus-visible {
 .screen.active {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-/* ---------- Village canvas ---------- */
+/* ---------- The kingdom view in its stone frame ---------- */
 .village-frame {
-  align-self: center;   /* hugs the canvas instead of stretching */
+  align-self: center;
   max-width: 100%;
   display: flex;
   justify-content: center;
-  padding: 6px;
-  background: var(--stone-dark);
-  border: 4px solid var(--ink);
-  box-shadow:
-    inset 3px 3px 0 var(--stone),
-    inset -3px -3px 0 #3c3c36,
-    0 4px 0 rgba(0, 0, 0, 0.45);
+  padding: 0;
+  background: var(--ink);
+  border: 24px solid var(--stone-dark);
+  border-image: var(--frame-stone) 12 round;
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.5);
 }
 
 #village-canvas {
   display: block;
   max-width: 100%;
-  border: 3px solid var(--ink);
-  /* The real size is set by game.js (resizeVillageCanvas). */
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
 
-/* ---------- Panels ---------- */
+/* =============================================================
+   PANELS - parchment in a gold-riveted frame
+   ============================================================= */
 .panel {
-  background: var(--parchment);
-  color: var(--text-dark);
-  border: 4px solid var(--ink);
-  box-shadow:
-    inset 3px 3px 0 var(--parchment-lt),
-    inset -3px -3px 0 var(--parchment-dk),
-    0 4px 0 rgba(0, 0, 0, 0.45);
-  padding: 14px;
+  position: relative;
+  color: var(--text);
+  background: var(--parch) var(--tex-parchment) 0 0 / 128px 128px;
+  border: 16px solid var(--wood-dark);
+  border-image: var(--frame-gold) 8 round;
+  padding: 4px 10px 12px;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.45);
+}
+
+/* War room panels: a dark wooden map table */
+.panel-dark {
+  color: var(--text-light);
+  background: var(--wood-dark) var(--tex-wood-dark) 0 0 / 128px 64px;
 }
 
 .panel-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 4px 16px;
   flex-wrap: wrap;
   margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 2px dashed var(--parchment-dk);
+  padding-bottom: 20px;
+  position: relative;
 }
 
+/* Ornamental divider under every panel heading */
+.panel-head::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 16px;
+  background:
+    var(--divider-gem) center / 64px 16px no-repeat,
+    var(--divider-line) 0 50% / 16px 16px repeat-x;
+}
+
+/* Panel titles sit on a cloth ribbon */
 .panel-title {
-  font-family: var(--font-title);
-  font-size: 14px;
-  color: var(--wood-dark);
+  display: inline-block;
+  margin-left: 2px;
+  padding: 0 6px;
+  font-family: var(--font-display);
+  font-weight: normal;
+  font-size: 30px;
+  line-height: 34px;
+  color: var(--text-light);
+  text-shadow: 2px 2px 0 var(--ink);
+  border-style: solid;
+  border-width: 0 24px;
+  border-color: var(--crimson);
+  background: var(--crimson);
+  border-image: var(--ribbon) 0 12 fill / 0 24px / 0 stretch;
   text-wrap: balance;
 }
 
-.placeholder .panel-title {
-  margin-bottom: 12px;
+.panel-dark .panel-title {
+  border-image-source: var(--ribbon-blue);
+  border-color: var(--royal);
+  background: var(--royal);
 }
 
 .panel-note {
-  font-size: 18px;
-  color: var(--wood-light);
+  font-size: 15px;
+  color: var(--text-soft);
+}
+
+.panel-dark .panel-note,
+.panel-dark p {
+  color: var(--parch);
 }
 
 .placeholder {
   width: 100%;
-  max-width: 620px;
+  max-width: 660px;
   margin: 0 auto;
-  font-size: 22px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  font-size: 18px;
 }
 
-.archive-status {
-  color: var(--wood);
+.progress {
+  height: 12px;
+  background: var(--wood-deep);
+  border: 2px solid var(--ink);
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.5);
 }
 
-.archive-status .save-status {
-  color: var(--wood);
+.progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--forest-light);
+  box-shadow: inset 0 2px 0 #8fd16a, inset 0 -2px 0 var(--forest-dark);
+}
+
+/* =============================================================
+   BUTTONS - carved wood with cloth inlays
+   ============================================================= */
+.btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-height: 46px;
+  padding: 5px 10px 7px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-light);
+  background: var(--tex-cloth) 0 0 / 64px 64px, var(--wood);
+  border: 3px solid var(--ink);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 235, 190, 0.35),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.35),
+    inset 0 0 0 1px rgba(232, 182, 74, 0.35),
+    0 3px 0 var(--ink);
+  text-shadow: 1px 1px 0 var(--ink);
+  transition: transform 0.08s steps(2), filter 0.1s;
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(1.12);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 235, 190, 0.35),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.35),
+    0 0 0 2px var(--gold),
+    0 3px 0 var(--ink);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: inset 0 3px 0 rgba(0, 0, 0, 0.45), 0 0 0 var(--ink);
+}
+
+.btn-build   { background-color: var(--forest); }
+.btn-upgrade { background-color: var(--royal); }
+.btn-primary { background-color: var(--gold-dark); }
+.btn-danger  { background-color: var(--crimson); }
+
+.btn-primary {
+  color: var(--gold-light);
+}
+
+.btn-wide {
+  width: 100%;
+  font-size: 18px;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  color: #a39a88;
+  background: var(--tex-stone) 0 0 / 128px 64px, #6b665c;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.35), 0 3px 0 var(--ink);
+  filter: saturate(0.6);
+}
+
+.btn-label {
+  font-size: 16px;
+}
+
+.btn-gain {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--good-light);
+}
+
+.btn:disabled .btn-gain {
+  color: #b9b0a0;
+}
+
+.btn-cost {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 8px;
+  font-weight: 400;
+}
+
+.cost-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-num);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cost-part .pixel-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.cost-part.short {
+  color: #ff9a80;
+}
+
+.btn.btn-toggle {
+  flex-direction: row;
+  gap: 6px;
+}
+
+.btn-toggle[aria-pressed="false"] {
+  background-color: var(--wood-dark);
+  color: var(--text-dim);
 }
 
 .archive-actions {
@@ -317,343 +612,324 @@ button:focus-visible {
   flex-wrap: wrap;
 }
 
-/* ---------- Building cards ---------- */
+/* =============================================================
+   ROYAL ARCHITECT'S CATALOG - illustrated building pages
+   ============================================================= */
 .building-list {
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  gap: 14px;
 }
 
 .building-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: var(--parchment-lt);
-  border: 3px solid var(--wood-dark);
-  box-shadow: inset -2px -2px 0 var(--parchment-dk), 2px 2px 0 rgba(0, 0, 0, 0.15);
-  padding: 8px 10px 10px;
+  padding: 2px 4px 6px;
+  background: var(--parch-deep) var(--tex-parchment-deep) 0 0 / 128px 128px;
+  border: 10px solid var(--wood);
+  border-image: var(--frame-wood) 5 round;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.3);
 }
 
-/* Buildings you don't own yet look a little faded */
-.building-card.not-owned .building-header {
-  opacity: 0.65;
+.building-card.affordable {
+  box-shadow: 0 0 0 3px var(--gold), 0 4px 0 rgba(0, 0, 0, 0.3);
+}
+
+.building-card.bump {
+  animation: card-bump 0.45s steps(5);
+}
+
+@keyframes card-bump {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.03) rotate(-0.5deg); }
+  60%  { transform: scale(0.99); }
+  100% { transform: scale(1); }
+}
+
+/* The illustration: a small diorama of the building */
+.building-art {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  height: 140px;
+  background:
+    var(--tex-parchment) 0 0 / 128px 128px,
+    var(--parch-light);
+  border: 2px solid var(--ink-soft);
+  box-shadow: inset 0 -10px 0 rgba(120, 90, 40, 0.15);
+  overflow: hidden;
+}
+
+.building-art canvas {
+  width: 176px;
+  height: 144px;
+  margin-bottom: -6px;
+  image-rendering: pixelated;
+}
+
+/* Wax seal with the level in Roman numerals */
+.level-seal {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--parch-light);
+  text-shadow: 1px 1px 0 var(--crimson-dark);
+  background: var(--seal) center / 44px 44px no-repeat;
+  z-index: 1;
+}
+
+.building-card.not-owned .level-seal,
+.building-card.locked .level-seal {
+  display: none;
 }
 
 .building-header {
   display: flex;
   gap: 10px;
-  align-items: center;
+  align-items: flex-start;
 }
 
-.building-header .pixel-icon {
-  width: 40px;
-  height: 40px;
-  padding: 3px;
-  background: var(--parchment);
-  border: 2px solid var(--wood-dark);
+.building-header > .pixel-icon {
+  display: none;    /* the illustration replaces the small icon */
 }
 
 .building-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .building-name {
-  font-size: 23px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1;
   color: var(--ink);
 }
 
 .building-count {
-  font-size: 18px;
+  font-family: var(--font-body);
+  font-size: 14px;
   color: var(--gold-dark);
 }
 
 .building-meta {
-  font-size: 17px;
-  color: var(--wood);
+  font-size: 14px;
+  color: var(--text-soft);
 }
 
 .building-output {
-  font-size: 18px;
-  color: var(--grass-dark);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--forest-dark);
 }
 
-/* ---------- Buttons ---------- */
-.building-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+.building-card.locked .building-art canvas {
+  filter: grayscale(1) brightness(0.8) sepia(0.4);
+  opacity: 0.55;
 }
 
-.btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  min-height: 48px;          /* comfortable to tap on phones */
-  padding: 5px 10px 7px;
-  font-size: 18px;
-  color: var(--text-light);
-  background: var(--wood);
-  border: 3px solid var(--ink);
-  box-shadow: inset 2px 2px 0 var(--wood-shine), inset -2px -3px 0 var(--wood-deep);
-}
-
-.btn:hover:not(:disabled) {
-  filter: brightness(1.1);
-}
-
-.btn:active:not(:disabled) {
-  box-shadow: inset 2px 3px 0 rgba(0, 0, 0, 0.35);
-  transform: translateY(1px);
-}
-
-.btn-build {
-  background: var(--grass);
-  box-shadow: inset 2px 2px 0 var(--grass-light), inset -2px -3px 0 var(--grass-dark);
-}
-
-.btn-primary {
-  color: var(--ink);
-  background: var(--gold);
-  box-shadow: inset 2px 2px 0 var(--gold-light), inset -2px -3px 0 var(--gold-dark);
-}
-
-.btn-danger {
-  background: var(--danger);
-  box-shadow: inset 2px 2px 0 #d8644e, inset -2px -3px 0 var(--danger-dark);
-}
-
-.btn-wide {
-  width: 100%;
-  font-size: 21px;
-}
-
-.btn:disabled {
-  cursor: not-allowed;
-  color: var(--wood);
-  background: var(--parchment-dk);
-  box-shadow: inset 2px 2px 0 var(--parchment), inset -2px -3px 0 #b39a68;
-}
-
-.btn-label {
-  font-size: 19px;
-}
-
-.btn-gain {
-  font-size: 16px;
-  color: var(--positive);
-}
-
-.btn:disabled .btn-gain {
-  color: var(--wood);
-}
-
-.btn-cost {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 2px 8px;
-}
-
-.cost-part {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-variant-numeric: tabular-nums;
-}
-
-.cost-part .pixel-icon {
-  width: 15px;
-  height: 15px;
-}
-
-.cost-part.short {
-  color: #a8301c;   /* amounts you can't afford yet */
-}
-
-.btn:not(:disabled) .cost-part {
-  color: var(--text-light);
-}
-
-/* ---------- Sound / music toggles ---------- */
-.btn-toggle[aria-pressed="false"] {
-  color: var(--parchment);
-  background: var(--wood-dark);
-  box-shadow: inset 2px 2px 0 var(--wood), inset -2px -3px 0 var(--wood-deep);
-}
-
-.btn.btn-toggle {
-  flex-direction: row;
-  gap: 6px;
-  font-size: 20px;
-}
-
-/* ---------- Cards you can afford glow gold ---------- */
-.building-card.affordable {
-  border-color: var(--gold-dark);
-  box-shadow: inset -2px -2px 0 var(--parchment-dk), 0 0 0 3px var(--gold);
-}
-
-/* ---------- "Something is ready" dot on a tab ---------- */
-.nav-btn {
-  position: relative;
-}
-
-.nav-btn.has-badge::after {
-  content: "";
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 12px;
-  height: 12px;
-  background: var(--danger);
-  border: 3px solid var(--ink);
-  animation: badge-blink 1.2s steps(2) infinite;
-}
-
-@keyframes badge-blink {
-  50% { background: var(--gold); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .nav-btn.has-badge::after { animation: none; }
-}
-
-/* ---------- Locked buildings ---------- */
-.building-card.locked .building-header {
-  opacity: 0.5;
-  filter: grayscale(0.7);
+.building-card.locked .building-info {
+  opacity: 0.7;
 }
 
 .lock-info {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 17px;
-  color: var(--wood);
+  font-size: 14px;
+  color: var(--text-soft);
 }
 
-.progress {
-  height: 10px;
-  background: var(--parchment-dk);
-  border: 2px solid var(--wood-dark);
+.panel-dark .lock-info {
+  color: var(--parch);
 }
 
-.progress-fill {
-  height: 100%;
-  width: 0;
-  background: var(--grass);
-  box-shadow: inset 0 2px 0 var(--grass-light);
+.building-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
-.resource-rate.warn {
-  color: var(--gold);
-}
-
-/* ---------- Research ---------- */
+/* =============================================================
+   ROYAL LIBRARY - connected research paths
+   ============================================================= */
 .research-branches {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr));
+  gap: 18px;
 }
 
 .research-branch {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
+  padding: 8px;
+  background: rgba(120, 80, 30, 0.12);
+  border: 2px dashed var(--parch-shadow);
 }
 
 .branch-title {
-  font-family: var(--font-title);
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-weight: normal;
+  font-size: 30px;
+  line-height: 1;
   color: var(--royal-dark);
-  letter-spacing: 1px;
-  text-transform: uppercase;
+}
+
+.branch-title .res-socket .pixel-icon {
+  width: 24px;
+  height: 24px;
 }
 
 .research-list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 30px;
 }
 
 .research-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px 10px 10px;
-  background: var(--parchment-lt);
-  border: 3px solid var(--wood-dark);
-  box-shadow: inset -2px -2px 0 var(--parchment-dk);
+  padding: 4px 6px 6px;
+  background: var(--parch-light) var(--tex-parchment) 0 0 / 128px 128px;
+  border: 10px solid var(--wood);
+  border-image: var(--frame-wood) 5 round;
+}
+
+/* The chain that links a technology to the one before it */
+.research-card + .research-card::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -42px;
+  width: 6px;
+  height: 32px;
+  margin-left: -3px;
+  background: repeating-linear-gradient(var(--stone) 0 5px, var(--ink) 5px 7px);
+  border-left: 1px solid var(--ink);
+  border-right: 1px solid var(--ink);
+}
+
+.research-card[data-prev-done="true"]::before {
+  background: repeating-linear-gradient(var(--gold) 0 5px, var(--gold-dark) 5px 7px);
 }
 
 .research-card[data-status="done"] {
-  border-color: var(--grass-dark);
-  background: #e6efcf;
+  background-color: #e3ecc6;
 }
 
-.research-card[data-status="locked"] {
-  opacity: 0.75;
+.research-card[data-status="locked"] .research-top,
+.research-card[data-status="locked"] .research-desc,
+.research-card[data-status="locked"] .research-effect {
+  opacity: 0.6;
+}
+
+.research-card.just-done {
+  animation: research-glow 1.2s steps(6);
+}
+
+@keyframes research-glow {
+  0%   { box-shadow: 0 0 0 0 var(--gold); }
+  30%  { box-shadow: 0 0 0 8px var(--gold-light); }
+  100% { box-shadow: 0 0 0 0 var(--gold); }
 }
 
 .research-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
 }
 
+.research-top .res-socket {
+  width: 44px;
+  height: 44px;
+  background-size: 44px 44px;
+}
+
+.research-top .res-socket .pixel-icon {
+  width: 26px;
+  height: 26px;
+}
+
 .research-name {
-  font-size: 23px;
+  flex: 1;
+  font-family: var(--font-display);
   font-weight: normal;
+  font-size: 26px;
+  line-height: 1;
   color: var(--ink);
 }
 
 .status-badge {
-  font-size: 15px;
-  padding: 1px 6px;
+  font-size: 12px;
+  padding: 2px 6px;
+  color: var(--text-light);
+  background: var(--stone-dark);
   border: 2px solid var(--ink);
-  background: var(--parchment-dk);
-  color: var(--ink);
   white-space: nowrap;
+  transform: rotate(-3deg);
 }
 
-.research-card[data-status="available"] .status-badge { background: var(--gold); }
-.research-card[data-status="done"] .status-badge { background: var(--grass); color: var(--text-light); }
+.research-card[data-status="available"] .status-badge { background: var(--gold-dark); }
+.research-card[data-status="done"] .status-badge { background: var(--forest); }
+
+.research-card[data-status="done"] .status-badge.stamp {
+  animation: stamp 0.5s steps(4);
+}
+
+@keyframes stamp {
+  0%   { transform: scale(2.2) rotate(-12deg); opacity: 0; }
+  60%  { transform: scale(0.9) rotate(-3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(-3deg); }
+}
 
 .research-desc {
-  font-size: 18px;
-  color: var(--wood);
+  font-size: 14px;
+  color: var(--text-soft);
 }
 
 .research-effect {
-  font-size: 19px;
-  color: var(--grass-dark);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--forest-dark);
 }
 
 .research-reqs {
-  font-size: 17px;
-  color: var(--wood);
+  font-size: 13px;
+  color: var(--text-soft);
 }
 
-.req.met { color: var(--grass-dark); }
-.req.unmet { color: var(--danger); }
+.req.met { color: var(--forest-dark); }
+.req.unmet { color: var(--bad); }
 
-.research-btn {
-  margin-top: 4px;
-}
-
-/* ---------- Kingdom screen ---------- */
+/* =============================================================
+   KINGDOM - milestones and the castle
+   ============================================================= */
 .kingdom-panel {
   width: 100%;
-  max-width: 620px;
+  max-width: 680px;
   margin: 0 auto;
-  font-size: 21px;
+  font-size: 17px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -671,55 +947,59 @@ button:focus-visible {
   flex-direction: column;
   gap: 3px;
   padding: 6px 10px 8px;
-  background: var(--parchment-lt);
-  border: 2px solid var(--wood-dark);
+  background: var(--parch-light);
+  border: 3px solid var(--wood-dark);
+  box-shadow: inset 0 0 0 1px var(--parch-shadow);
 }
 
 .milestone-head {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 8px;
 }
 
 .milestone-title {
-  font-size: 22px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 1;
   color: var(--ink);
 }
 
 .milestone-target {
-  font-size: 18px;
-  color: var(--wood);
+  font-size: 14px;
+  color: var(--text-soft);
   font-variant-numeric: tabular-nums;
 }
 
 .milestone-reward {
-  font-size: 18px;
-  color: var(--wood);
+  font-size: 14px;
+  color: var(--text-soft);
 }
 
 .milestone.reached {
-  border-color: var(--grass-dark);
-  background: #e6efcf;
+  border-color: var(--forest-dark);
+  background: #e3ecc6;
 }
 
 .milestone.reached .milestone-target::before {
   content: "Reached · ";
-  color: var(--grass-dark);
+  color: var(--forest-dark);
+  font-weight: 600;
 }
 
-.castle-status {
-  color: var(--wood);
+.castle-status,
+.archive-status {
+  color: var(--text-soft);
 }
 
-.earning-amount.negative {
-  color: var(--danger);
-}
-
-/* ---------- Army screen ---------- */
+/* =============================================================
+   WAR ROOM - barracks, knights and the war table
+   ============================================================= */
 .army-layout {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 12px;
   width: 100%;
   align-items: start;
 }
@@ -729,7 +1009,7 @@ button:focus-visible {
   flex-direction: column;
   gap: 10px;
   min-width: 0;
-  font-size: 20px;
+  font-size: 16px;
 }
 
 .army-panel > div {
@@ -738,8 +1018,28 @@ button:focus-visible {
   gap: 10px;
 }
 
-.army-panel [hidden] {
-  display: none !important;
+.army-panel > .barracks-art,
+.barracks-art {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  height: 150px;
+  overflow: hidden;
+  align-items: flex-end;
+  background: var(--tex-parchment) 0 0 / 128px 128px, var(--parch);
+  border: 10px solid var(--wood);
+  border-image: var(--frame-wood) 5 round;
+}
+
+.barracks-art.locked canvas {
+  filter: grayscale(1) sepia(0.4);
+  opacity: 0.55;
+}
+
+.barracks-art canvas {
+  width: 176px;
+  height: 144px;
+  image-rendering: pixelated;
 }
 
 .army-summary {
@@ -751,22 +1051,24 @@ button:focus-visible {
 }
 
 .army-big {
-  font-size: 30px;
-  color: var(--royal-dark);
+  font-family: var(--font-num);
+  font-size: 34px;
+  color: var(--gold-light);
+  text-shadow: 2px 2px 0 var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
 .army-wounded {
-  font-size: 18px;
-  color: var(--danger);
+  font-size: 14px;
+  color: #ff9a80;
 }
 
 .training-box {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 18px;
-  color: var(--wood);
+  font-size: 14px;
+  color: var(--parch);
 }
 
 .training-head {
@@ -781,201 +1083,229 @@ button:focus-visible {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
-.knight-card,
-.enemy-row {
+/* A knight's page: portrait, description, stat bars, recruit */
+.knight-card {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px 10px;
-  background: var(--parchment-lt);
-  border: 3px solid var(--wood-dark);
+  padding: 4px 6px 6px;
+  color: var(--text);
+  background: var(--parch-light) var(--tex-parchment) 0 0 / 128px 128px;
+  border: 10px solid var(--wood);
+  border-image: var(--frame-wood) 5 round;
 }
 
-.enemy-row {
-  flex-direction: row;
-  align-items: center;
-  border-color: var(--danger-dark);
+.knight-card.locked {
+  opacity: 0.7;
 }
 
 .knight-head {
   display: flex;
   gap: 10px;
-  align-items: center;
+  align-items: flex-start;
 }
 
-.unit-icon {
-  width: 40px;
-  height: 40px;
-  padding: 2px;
-  background: var(--parchment);
-  border: 2px solid var(--wood-dark);
+/* Portrait in a gold frame */
+.portrait {
+  flex-shrink: 0;
+  width: 78px;
+  height: 84px;
+  border: 10px solid var(--gold-dark);
+  border-image: var(--frame-gold) 8 round;
+  image-rendering: pixelated;
+  box-sizing: content-box;
+}
+
+.knight-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .knight-name,
 .enemy-name {
-  font-size: 23px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1;
   color: var(--ink);
 }
 
 .knight-count {
-  font-size: 18px;
+  font-family: var(--font-body);
+  font-size: 14px;
   color: var(--gold-dark);
 }
 
 .knight-desc,
 .enemy-desc,
 .knight-train {
-  font-size: 17px;
-  color: var(--wood);
+  font-size: 14px;
+  color: var(--text-soft);
 }
 
 .knight-ability {
-  font-size: 17px;
-  color: var(--grass-dark);
-}
-
-.enemy-row .knight-ability {
-  color: var(--danger-dark);
-}
-
-.enemy-row.boss {
-  border-color: var(--gold-dark);
-  background: #f6e7b8;
-  box-shadow: 0 0 0 3px var(--gold);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--forest-dark);
 }
 
 .knight-stats {
-  font-size: 17px;
+  font-size: 13px;
   color: var(--royal-dark);
+}
+
+/* Stat bars with little icons */
+.stat-bars {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 2px 6px;
+  font-size: 13px;
+}
+
+.stat-bars .pixel-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.stat-bar {
+  height: 8px;
+  background: var(--wood-deep);
+  border: 2px solid var(--ink);
+}
+
+.stat-bar > span {
+  display: block;
+  height: 100%;
+}
+
+.stat-hp  > span { background: #d0463a; }
+.stat-atk > span { background: var(--gold); }
+.stat-def > span { background: #8fa3c4; }
+.stat-spd > span { background: var(--forest-light); }
+
+.stat-value {
+  font-family: var(--font-num);
+  font-size: 16px;
+  color: var(--text);
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
+/* The war table: countdown and scouts */
 .invasion-timer {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: var(--wood-dark);
-  color: var(--parchment);
+  color: var(--parch);
+  background: var(--wood-deep);
   border: 3px solid var(--ink);
+  box-shadow: inset 0 0 0 2px rgba(232, 182, 74, 0.3);
 }
 
 .countdown {
-  font-family: var(--font-title);
-  font-size: 14px;
-  color: var(--gold);
+  font-family: var(--font-num);
+  font-size: 32px;
+  line-height: 1;
+  color: var(--gold-light);
+  text-shadow: 2px 2px 0 var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
 .sub-title {
-  font-family: var(--font-title);
-  font-size: 11px;
-  color: var(--royal-dark);
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  font-family: var(--font-display);
+  font-weight: normal;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--gold-light);
+  text-shadow: 2px 2px 0 var(--ink);
+}
+
+/* Enemy cards: each civilization has its own materials */
+.enemy-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 4px 6px 6px;
+  color: var(--parch-light);
+  background: var(--tex-hide) 0 0 / 128px 128px, #6e4b2e;
+  border: 10px solid var(--crimson-dark);
+  border-image: var(--frame-hide) 5 round;
+}
+
+.enemy-row .enemy-name {
+  color: var(--parch-light);
+  text-shadow: 2px 2px 0 var(--ink);
+}
+
+.enemy-row .enemy-desc { color: var(--parch); }
+.enemy-row .knight-ability { color: #ffb08a; }
+.enemy-row .stat-value { color: var(--parch-light); }
+.enemy-row .knight-stats { color: var(--parch); }
+
+.enemy-row .portrait {
+  width: 52px;
+  height: 56px;
+  border-width: 8px;
+}
+
+/* Elves: elegant forest greens and silver (for the coming update) */
+.enemy-row[data-civ="elves"] {
+  background: var(--tex-cloth) 0 0 / 64px 64px, #2f5a3a;
+  border-image: var(--frame-iron) 5 round;
+}
+
+/* Dwarves: iron, stone and soot (for the coming update) */
+.enemy-row[data-civ="dwarves"] {
+  background: var(--tex-stone) 0 0 / 128px 64px, #4a4a4e;
+  border-image: var(--frame-iron) 5 round;
+}
+
+.enemy-row.boss {
+  box-shadow: 0 0 0 3px var(--gold), 0 0 0 6px var(--ink);
+}
+
+.enemy-row.boss .enemy-name::after {
+  content: " · BOSS";
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--gold-light);
 }
 
 .invasion-reward,
 .battle-record {
-  font-size: 18px;
-  color: var(--grass-dark);
+  font-size: 15px;
+  color: var(--good-light);
 }
 
 .log-entry {
-  font-size: 17px;
+  font-size: 14px;
   padding: 4px 8px;
-  border-left: 4px solid var(--grass);
-  background: var(--parchment-lt);
+  color: var(--text);
+  background: var(--parch-light);
+  border-left: 6px solid var(--forest);
 }
 
 .log-entry.lost {
-  border-left-color: var(--danger);
+  border-left-color: var(--crimson);
 }
 
 .log-empty {
-  font-size: 17px;
-  color: var(--wood);
+  font-size: 14px;
+  color: var(--parch);
 }
 
-/* Warning banner in the top bar */
-.invasion-banner {
-  width: 100%;
-  margin-top: 8px;
-  padding: 6px 10px;
-  font-family: inherit;
-  font-size: 20px;
-  color: var(--text-light);
-  background: var(--danger);
-  border: 3px solid var(--ink);
-  box-shadow: inset 2px 2px 0 #d8644e, inset -2px -3px 0 var(--danger-dark);
-  animation: banner-pulse 1s steps(2) infinite;
-}
-
-@keyframes banner-pulse {
-  50% { background: var(--danger-dark); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .invasion-banner { animation: none; }
-}
-
-/* ---------- Battle window ---------- */
-.modal.battle-modal {
-  max-width: 700px;
-}
-
-#battle-canvas {
-  width: 100%;
-  aspect-ratio: 2 / 1;
-  max-width: 100%;
-  border: 3px solid var(--ink);
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  background: var(--grass-dark);
-}
-
-.battle-status {
-  display: flex;
-  justify-content: space-between;
-  font-size: 20px;
-  font-variant-numeric: tabular-nums;
-}
-
-.battle-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 12px;
-  background: var(--parchment-lt);
-  border: 3px solid var(--grass-dark);
-}
-
-.battle-summary.lost {
-  border-color: var(--danger);
-}
-
-.summary-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 19px;
-}
-
-.summary-row strong {
-  font-weight: normal;
-  color: var(--ink);
-  text-align: right;
-}
-
-.battle-actions {
-  justify-content: center;
-}
-
-/* ---------- Bottom navigation ---------- */
+/* =============================================================
+   BOTTOM NAVIGATION - hanging wooden signs
+   ============================================================= */
 .bottom-nav {
   position: fixed;
   left: 0;
@@ -985,50 +1315,159 @@ button:focus-visible {
   display: flex;
   justify-content: center;
   gap: 8px;
-  padding: 7px 8px 8px;
-  background: var(--wood-dark);
+  padding: 6px 8px 8px;
+  background: var(--wood-dark) var(--tex-wood-dark) 0 0 / 128px 64px;
   border-top: 4px solid var(--ink);
-  box-shadow: inset 0 3px 0 var(--wood-light);
+  box-shadow: inset 0 3px 0 var(--gold-dark), 0 -4px 0 rgba(0, 0, 0, 0.35);
   z-index: 10;
 }
 
 .nav-btn {
+  position: relative;
   flex: 1;
-  max-width: 190px;
-  font-family: var(--font-title);
-  font-size: 11px;
-  color: var(--parchment);
-  background: var(--wood);
+  max-width: 170px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 2px 4px 4px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--parch);
+  text-shadow: 2px 2px 0 var(--ink);
+  background: var(--wood) var(--tex-wood) 0 0 / 128px 64px;
   border: 3px solid var(--ink);
-  box-shadow: inset 2px 2px 0 var(--wood-shine), inset -2px -4px 0 var(--wood-deep);
+  box-shadow: inset 0 2px 0 rgba(255, 230, 180, 0.25), inset 0 -4px 0 rgba(0, 0, 0, 0.35);
+}
+
+.nav-btn .pixel-icon {
+  width: 22px;
+  height: 22px;
 }
 
 .nav-btn:hover {
-  filter: brightness(1.12);
+  filter: brightness(1.15);
 }
 
 .nav-btn.active {
   color: var(--ink);
-  background: var(--gold);
-  box-shadow: inset 2px 2px 0 var(--gold-light), inset -2px -4px 0 var(--gold-dark);
+  text-shadow: none;
+  background: var(--parch-light) var(--tex-parchment) 0 0 / 128px 128px;
+  box-shadow: inset 0 0 0 2px var(--gold), 0 -4px 0 var(--gold-dark);
+  transform: translateY(-3px);
 }
 
-/* ---------- Toast message ---------- */
+.nav-btn.has-badge::after {
+  content: "";
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 14px;
+  height: 14px;
+  background: var(--crimson-light);
+  border: 3px solid var(--ink);
+  animation: badge-blink 1.2s steps(2) infinite;
+}
+
+@keyframes badge-blink {
+  50% { background: var(--gold); }
+}
+
+/* =============================================================
+   POP-UPS
+   ============================================================= */
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--nav-height) + 16px);
+  bottom: calc(var(--nav-height) + 18px);
   transform: translateX(-50%);
   z-index: 30;
-  padding: 10px 18px;
-  font-size: 21px;
+  padding: 8px 16px;
+  font-size: 17px;
   color: var(--ink);
-  background: var(--gold);
+  background: var(--gold) var(--tex-cloth) 0 0 / 64px 64px;
   border: 3px solid var(--ink);
-  box-shadow: inset 2px 2px 0 var(--gold-light), inset -2px -3px 0 var(--gold-dark), 0 4px 0 rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 0 0 2px var(--gold-light), 0 4px 0 rgba(0, 0, 0, 0.5);
 }
 
-/* ---------- Pop-up windows ---------- */
+/* Announcement: unlocks, milestones and discoveries */
+.announcement {
+  position: fixed;
+  left: 50%;
+  top: 150px;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(460px, calc(100% - 24px));
+  padding: 4px 12px 6px 4px;
+  color: var(--text);
+  background: var(--parch) var(--tex-parchment) 0 0 / 128px 128px;
+  border: 16px solid var(--wood-dark);
+  border-image: var(--frame-gold) 8 round;
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.5);
+  transform: translateX(-50%);
+  animation: announce-in 0.5s steps(6);
+}
+
+.announcement.leaving {
+  animation: announce-out 0.4s steps(4) forwards;
+}
+
+@keyframes announce-in {
+  from { transform: translate(-50%, -30px) scale(0.9); opacity: 0; }
+  to   { transform: translate(-50%, 0) scale(1); opacity: 1; }
+}
+
+@keyframes announce-out {
+  to { transform: translate(-50%, -30px) scale(0.9); opacity: 0; }
+}
+
+.announce-art {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 72px;
+  background: var(--parch-light);
+  border: 2px solid var(--ink-soft);
+  overflow: hidden;
+}
+
+.announce-art canvas {
+  max-width: 100%;
+  max-height: 100%;
+  image-rendering: pixelated;
+}
+
+.announce-art .pixel-icon {
+  width: 48px;
+  height: 48px;
+}
+
+.announce-kicker {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--crimson);
+}
+
+.announce-title {
+  font-family: var(--font-display);
+  font-size: 32px;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.announce-text {
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+/* Modal windows */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1037,17 +1476,19 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(12, 8, 4, 0.72);
+  background: rgba(12, 8, 4, 0.75);
 }
 
 .modal {
   width: 100%;
-  max-width: 440px;
+  max-width: 470px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 20px;
-  animation: modal-pop 0.18s steps(3) both;
+  gap: 12px;
+  padding: 10px 14px 16px;
+  animation: modal-pop 0.2s steps(3) both;
 }
 
 @keyframes modal-pop {
@@ -1056,22 +1497,23 @@ button:focus-visible {
 }
 
 .modal-title {
-  font-family: var(--font-title);
-  font-size: 15px;
-  line-height: 1.5;
-  color: var(--royal-dark);
+  font-family: var(--font-display);
+  font-weight: normal;
+  font-size: 36px;
+  line-height: 1;
+  color: var(--crimson-dark);
   text-align: center;
   text-wrap: balance;
 }
 
 .modal-text {
-  font-size: 22px;
+  font-size: 17px;
   text-align: center;
 }
 
 .modal-note {
-  font-size: 18px;
-  color: var(--danger);
+  font-size: 14px;
+  color: var(--bad);
   text-align: center;
 }
 
@@ -1086,80 +1528,313 @@ button:focus-visible {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 10px;
-  background: var(--parchment-lt);
-  border: 2px solid var(--wood-dark);
+  padding: 4px 10px;
+  background: var(--parch-light);
+  border: 3px solid var(--wood-dark);
+}
+
+.earning-row .pixel-icon {
+  width: 26px;
+  height: 26px;
 }
 
 .earning-name {
   flex: 1;
-  font-size: 22px;
+  font-size: 17px;
 }
 
 .earning-amount {
+  font-family: var(--font-num);
   font-size: 26px;
-  color: var(--grass-dark);
+  color: var(--forest-dark);
   font-variant-numeric: tabular-nums;
 }
 
+.earning-amount.negative {
+  color: var(--bad);
+}
+
+/* ---------- Battle window ---------- */
+.modal.battle-modal {
+  max-width: 720px;
+}
+
+.battle-stage {
+  position: relative;
+}
+
+#battle-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  border: 3px solid var(--ink);
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: var(--forest-dark);
+}
+
+/* Preparation screen laid over the battlefield */
+.battle-prep {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(20, 12, 6, 0.72);
+  border: 3px solid var(--ink);
+}
+
+.prep-sides {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.prep-side {
+  min-width: 0;
+}
+
+.prep-title {
+  font-family: var(--font-display);
+  font-weight: normal;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--gold-light);
+  text-shadow: 2px 2px 0 var(--ink);
+  margin-bottom: 4px;
+}
+
+.prep-side.enemy .prep-title {
+  color: #ffb08a;
+  text-align: right;
+}
+
+.prep-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.prep-side.enemy .prep-list {
+  justify-content: flex-end;
+}
+
+.prep-list li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px 2px 2px;
+  font-family: var(--font-num);
+  font-size: 20px;
+  color: var(--text-light);
+  background: rgba(0, 0, 0, 0.45);
+  border: 2px solid var(--ink);
+}
+
+.prep-list .pixel-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.prep-vs {
+  font-family: var(--font-display);
+  font-size: 44px;
+  color: var(--crimson-light);
+  text-shadow: 3px 3px 0 var(--ink);
+}
+
+.battle-status {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-num);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Victory / defeat report */
+.battle-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 10px;
+  background: var(--parch-light);
+  border: 3px solid var(--forest-dark);
+  box-shadow: inset 0 0 0 2px var(--parch-shadow);
+}
+
+.battle-summary.lost {
+  border-color: var(--crimson);
+}
+
+.result-banner {
+  align-self: center;
+  padding: 0 10px;
+  font-family: var(--font-display);
+  font-size: 40px;
+  line-height: 44px;
+  color: var(--gold-light);
+  text-shadow: 3px 3px 0 var(--ink);
+  border-style: solid;
+  border-width: 0 24px;
+  border-color: var(--royal);
+  background: var(--royal);
+  border-image: var(--ribbon-blue) 0 12 fill / 0 24px / 0 stretch;
+  animation: stamp 0.6s steps(5);
+}
+
+.battle-summary.lost .result-banner {
+  border-image-source: var(--ribbon);
+  background: var(--crimson);
+  color: var(--parch-light);
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.result-stat {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px;
+  background: var(--parch);
+  border: 2px solid var(--wood-dark);
+}
+
+.result-stat span {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.result-stat strong {
+  font-family: var(--font-num);
+  font-size: 24px;
+  font-weight: normal;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.loot-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.loot-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 4px;
+  font-family: var(--font-num);
+  font-size: 20px;
+  background: var(--parch);
+  border: 2px solid var(--gold-dark);
+}
+
+.loot-chip.repair {
+  border-color: var(--crimson);
+  color: var(--bad);
+}
+
+.loot-chip .pixel-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.fallen-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.fallen-row .pixel-icon {
+  width: 26px;
+  height: 26px;
+  background: var(--parch);
+  border: 2px solid var(--wood-dark);
+}
+
+.battle-actions {
+  justify-content: center;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .modal { animation: none; }
+  .modal, .announcement, .result-banner, .status-badge.stamp,
+  .building-card.bump, .research-card.just-done,
+  .nav-btn.has-badge::after, .invasion-banner, .gain-float {
+    animation: none !important;
+  }
 }
 
 /* =============================================================
-   NARROW SCREENS (tablets and phones)
+   NARROW SCREENS
    ============================================================= */
+@media (max-width: 980px) {
+  .top-bar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .resource-bar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
 @media (max-width: 760px) {
-  /* Keep resources visible while scrolling through buildings */
+  #game {
+    padding: 4px 4px calc(var(--nav-height) + 12px);
+    gap: 8px;
+  }
+
   .top-bar {
     position: sticky;
     top: 0;
     z-index: 20;
-    padding: 6px 8px 8px;
-  }
-
-  .title-row {
-    margin-bottom: 6px;
+    border-width: 12px;
     gap: 4px 8px;
+    padding: 0;
   }
 
-  .save-block {
-    gap: 6px;
-  }
-
-  .save-block .save-status {
-    display: none;   /* shown on the Kingdom tab instead */
-  }
-
-  .btn-small {
-    font-size: 8px;
-    padding: 6px 7px 7px;
-  }
-
-  #game {
-    padding: 6px 6px calc(var(--nav-height) + 12px);
-    gap: 8px;
+  .crest .pixel-icon {
+    width: 30px;
+    height: 32px;
   }
 
   .game-title {
-    font-size: 13px;
+    font-size: 30px;
   }
 
-  .era-label,
-  .save-status {
-    font-size: 17px;
+  .era-label {
+    font-size: 12px;
   }
 
-  /* 3 counters on the first row, 2 on the second */
+  .save-block .save-status,
+  .icon-btn span:not(.icon-slot) {
+    display: none;
+  }
+
+  .icon-btn {
+    padding: 3px;
+  }
+
   .resource-bar {
+    display: grid;
     grid-template-columns: repeat(6, 1fr);
-    gap: 5px;
+    gap: 4px;
   }
 
   .resource {
     grid-column: span 2;
-    gap: 6px;
-    padding: 4px 6px;
+    min-width: 0;
+    gap: 2px;
+    padding: 1px 4px 1px 0;
   }
 
   .resource:nth-child(4),
@@ -1167,29 +1842,37 @@ button:focus-visible {
     grid-column: span 3;
   }
 
-  .pixel-icon {
-    width: 22px;
-    height: 22px;
+  .res-socket {
+    width: 30px;
+    height: 30px;
+    background-size: 30px 30px;
   }
 
-  .resource-name {
-    display: none; /* the icon already says what it is */
+  .res-socket .pixel-icon {
+    width: 18px;
+    height: 18px;
   }
 
   .resource-amount {
-    font-size: 23px;
+    font-size: 21px;
   }
 
   .resource-rate {
-    font-size: 15px;
+    font-size: 11px;
   }
 
   .village-frame {
-    padding: 3px;
+    border-width: 12px;
   }
 
   .panel {
-    padding: 10px;
+    border-width: 12px;
+    padding: 2px 6px 10px;
+  }
+
+  .panel-title {
+    font-size: 26px;
+    line-height: 30px;
   }
 
   .building-list {
@@ -1197,22 +1880,46 @@ button:focus-visible {
   }
 
   .nav-btn {
-    font-size: 9px;
+    font-size: 18px;
+  }
+
+  .prep-vs {
+    font-size: 30px;
+  }
+
+  .prep-list .pixel-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .prep-list li {
+    font-size: 16px;
   }
 }
 
-/* Very small phones (320px wide) */
-@media (max-width: 360px) {
-  .title-block {
-    gap: 2px 8px;
+@media (max-width: 420px) {
+  .bottom-nav {
+    gap: 3px;
+    padding-left: 3px;
+    padding-right: 3px;
   }
 
-  .era-label {
+  .nav-btn {
     font-size: 15px;
+    padding: 2px 1px 4px;
+  }
+
+  .nav-btn .pixel-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .game-title {
+    font-size: 26px;
   }
 
   .resource-amount {
-    font-size: 20px;
+    font-size: 19px;
   }
 
   .building-actions {
@@ -1223,22 +1930,12 @@ button:focus-visible {
     padding: 4px 4px 6px;
   }
 
-  .nav-btn {
-    font-size: 8px;
-  }
-}
-
-/* Five navigation buttons on narrow phones */
-@media (max-width: 420px) {
-  .bottom-nav {
+  .battle-prep {
+    padding: 4px 6px;
     gap: 4px;
-    padding-left: 4px;
-    padding-right: 4px;
   }
 
-  .nav-btn {
-    font-size: 7px;
-    letter-spacing: 0;
+  .prep-title {
+    font-size: 18px;
   }
 }
-

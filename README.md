@@ -11,6 +11,7 @@ Double-click `index.html` to open it in any modern browser. No install or build 
 - `game.js` – game logic, split into numbered sections
 
 ## Progress
+- [x] Visual overhaul: pixel-art textured interface, illustrated catalog, royal library, war room, living village
 - [x] Stage 1 – Core idle system
 - [x] Stage 2 – Buildings
 - [x] Stage 3 – Saving & offline earnings (+ 3D visual overhaul)

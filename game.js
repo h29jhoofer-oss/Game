@@ -13,6 +13,7 @@
      4b. SAVING         - localStorage, offline earnings
      5. NUMBER FORMAT   - turning 12345 into "12.3K"
      6. PIXEL ICONS     - tiny hand-made pixel art for the UI
+     6b. UI ARTWORK     - parchment, wood, stone and frames painted in code
      7. USER INTERFACE  - resource bar, building panel, tabs
      7b. SOUND & MUSIC  - sound effects and music made in code
      7c. ARMY SCREEN    - barracks panel and the live battle window
@@ -629,7 +630,7 @@ function checkMilestones() {
     const type = BUILDING_TYPES[typeId];
     if (type.unlockPopulation && !state.unlocked[typeId] && state.population >= type.unlockPopulation) {
       state.unlocked[typeId] = true;
-      notify(`New building unlocked: ${type.name}`);
+      if (uiReady) announce("New building unlocked", type.name, type.description, renderBuildingArt(typeId));
     }
   }
   for (const m of MILESTONES) {
@@ -637,7 +638,7 @@ function checkMilestones() {
     if (!state.unlocked[key] && state.population >= m.population) {
       state.unlocked[key] = true;
       if (m.era) state.era = Math.max(state.era, m.era);
-      notify(`Milestone reached: ${m.title}!`);
+      if (uiReady) announce("Milestone reached", m.title, m.reward, createPixelIcon("crown"));
       playSound("milestone");
     }
   }
@@ -674,7 +675,9 @@ function researchTech(techId) {
   spendResources(tech.cost);
   state.research[tech.id] = true;
   playSound("research");
-  showToast(`Researched: ${tech.name}`);
+  announce("Discovery", tech.name, tech.effectText, createPixelIcon(tech.id));
+  const el = researchCardElements[tech.id];
+  if (el) { bumpElement(el.card, "just-done"); bumpElement(el.badge, "stamp"); }
   refreshUI();
   return true;
 }
@@ -688,7 +691,7 @@ function upgradeCastle() {
   markVillageDirty();
   requestVillageBurst("castle", "upgrade");
   playSound("milestone");
-  showToast("The keep is now a mighty castle!");
+  announce("Royal decree", "A Mighty Castle", "Every building and your taxes now produce 10% more.", createPixelIcon("crest"));
   refreshUI();
   return true;
 }
@@ -745,6 +748,18 @@ function spendResources(cost) {
   }
 }
 
+// Visual "level tier" of a building: 0 (Lv 1-2), 1 (Lv 3-5), 2 (Lv 6-9), 3 (Lv 10+).
+// Buildings look grander in the village and the catalog at each tier.
+function getBuildingTier(typeId) {
+  const level = typeId === "barracks" ? state.military.barracksLevel : state.buildings[typeId].level;
+  return level >= 10 ? 3 : level >= 6 ? 2 : level >= 3 ? 1 : 0;
+}
+
+function bumpCard(typeId) {
+  const el = typeof buildingCardElements !== "undefined" && buildingCardElements[typeId];
+  if (el) bumpElement(el.card);
+}
+
 // Called by the "Build" button. Returns true if it worked.
 function buildBuilding(typeId) {
   updateGame(); // bank all production up to this exact moment first
@@ -754,6 +769,7 @@ function buildBuilding(typeId) {
   spendResources(cost);
   state.buildings[typeId].count += 1;
   markVillageDirty();   // a new building appears in the village
+  bumpCard(typeId);
   requestVillageBurst(typeId, "build");
   playSound("build");
   refreshUI();
@@ -769,6 +785,8 @@ function upgradeBuilding(typeId) {
 
   spendResources(cost);
   owned.level += 1;
+  markVillageDirty();   // the building may now look grander
+  bumpCard(typeId);
   requestVillageBurst(typeId, "upgrade");
   playSound("upgrade");
   refreshUI();
@@ -853,7 +871,7 @@ function buildBarracks() {
   markVillageDirty();
   requestVillageBurst("barracks", "build");
   playSound("build");
-  showToast("The Knight Barracks is open! Scouts warn of barbarians...");
+  announce("New building", "Knight Barracks", "Train knights here. Scouts warn of barbarians in the hills...", renderBuildingArt("barracks"));
   refreshUI();
   return true;
 }
@@ -1478,6 +1496,11 @@ function formatPerMinute(perMinute) {
    ============================================================= */
 
 const ICON_COLORS = {
+  e: "#efdcae", // paper
+  n: "#9e2b25", // crimson cloth
+  u: "#3a5fa8", // royal blue
+  U: "#26407a", // dark royal blue
+  v: "#f6f6f0", // white
   o: "#2b1d14", // outline
   r: "#c8442f", // red
   R: "#8e2a20", // dark red
@@ -1600,6 +1623,195 @@ const ICON_PIXELS = {
     "obbbbbbbbo",
     "oooooooooo",
   ],
+  crest: [ // the royal crest
+    "oooooooooooo",
+    "oyyyyyyyyyyo",
+    "oyUuuyyuuuyo",
+    "oyuuuyyuuuyo",
+    "oyyyyyyyyyyo",
+    "oyyyyyyyyyyo",
+    "oyuuuyyuuuyo",
+    "oyuuuyyuuuyo",
+    "oyuuuyyuuuyo",
+    ".oyuuyyuuyo.",
+    "..oyuyyuyo..",
+    "...oyyyyo...",
+    "....oooo....",
+  ],
+  speaker: [
+    "..........",
+    "....o.....",
+    "...oso..o.",
+    "oooSso.o..",
+    "ollSso..o.",
+    "ollSso.oo.",
+    "oooSso..o.",
+    "...oso.o..",
+    "....o...o.",
+    "..........",
+  ],
+  note: [
+    "....oooooo",
+    "....oyyyyo",
+    "....ooooyo",
+    "....o..oyo",
+    "....o..oyo",
+    "..ooo..oyo",
+    ".oyyo.ooyo",
+    ".oyyooyyyo",
+    "..oo.oyyo.",
+    "......oo..",
+  ],
+  quill: [
+    "........oo",
+    ".......owo",
+    "......owwo",
+    ".....owwo.",
+    "....owwo..",
+    "...owwo...",
+    "..owwo....",
+    "..obo.....",
+    ".obo......",
+    "oo........",
+  ],
+  book: [
+    "..........",
+    ".oooooooo.",
+    "onnnnnnnwo",
+    "onyyyynnwo",
+    "onnnnnnnwo",
+    "onnyynnnwo",
+    "onnnnnnnwo",
+    "onnnnnnnwo",
+    "oooooooowo",
+    ".oeeeeeeeo",
+  ],
+  scroll: [
+    ".oooooooo.",
+    "oeeeeeeeeo",
+    ".oeeeeeeo.",
+    ".oeTTTTeo.",
+    ".oeeeeeeo.",
+    ".oeTTTeeo.",
+    ".oeeeeeeo.",
+    ".oeTTTTeo.",
+    "oeeeeeeeeo",
+    ".oooooooo.",
+  ],
+  crown: [
+    "..........",
+    ".o..o...o.",
+    "oyooyo.oyo",
+    "oyyoyyoyyo",
+    "oyyyyyyyyo",
+    "oyhyyhyyyo",
+    "oyyyyyyyyo",
+    "oYYYYYYYYo",
+    "oooooooooo",
+    "..........",
+  ],
+  heart: [
+    ".oo.oo.",
+    "orrorro",
+    "orwrrro",
+    "orrrrro",
+    ".orrro.",
+    "..oro..",
+    "...o...",
+  ],
+  shield: [
+    "oooooooo",
+    "ollllsSo",
+    "olsssSSo",
+    "olsSsSSo",
+    "olsssSSo",
+    ".olssSo.",
+    ".olsSSo.",
+    "..oSSo..",
+    "...oo...",
+  ],
+  boot: [
+    "..oooo..",
+    "..oBbo..",
+    "..oBbo..",
+    "..oBbo..",
+    "..oBbooo",
+    ".oBbbbbo",
+    "obbbbbbo",
+    "oooooooo",
+  ],
+  cropRotation: [
+    "...d.d.d..",
+    "..ddddddd.",
+    "...ddddd..",
+    "....ddd...",
+    "....oGo...",
+    "...odddo..",
+    "..ddoGodd.",
+    "..d.dGd.d.",
+    ".....G....",
+    "....GGG...",
+  ],
+  improvedSeeds: [
+    "....oo....",
+    "...oTTo...",
+    "...oyyo...",
+    "..obbbbo..",
+    ".obbBbbbo.",
+    "obbbbbBbbo",
+    "obBbbbbbbo",
+    "obbbbBbbbo",
+    ".obbbbbbo.",
+    "..oooooo.d",
+  ],
+  betterTools: [
+    "oo......oo",
+    "oso....oSo",
+    ".oso..oso.",
+    "..obooSo..",
+    "...obbo...",
+    "...obbo...",
+    "..oboobo..",
+    ".obo..obo.",
+    "obo....obo",
+    "oo......oo",
+  ],
+  efficientMachinery: [
+    "...oo.oo..",
+    "..ossoso..",
+    ".osssssso.",
+    "oossoossoo",
+    "osso..osso",
+    "osso..osso",
+    "oossoossoo",
+    ".osssssso.",
+    "..ossoso..",
+    "...oo.oo..",
+  ],
+  tradeRoutes: [
+    "..........",
+    ".oo.oo....",
+    "odoodwo...",
+    "oooooooooo",
+    "obbbbbbbbo",
+    "oBBBBBBBBo",
+    "oooooooooo",
+    ".ooo..ooo.",
+    "oSsSo.oSso",
+    ".ooo..ooo.",
+  ],
+  betterTaxation: [
+    "..oooooo..",
+    ".ohyyyyYo.",
+    "..oooooo..",
+    ".ohyyyyYo.",
+    "..oooooo..",
+    ".ohyyyyYo.",
+    "..oooooo..",
+    ".ohyyyyYo.",
+    "..oooooo..",
+    "..........",
+  ],
   sword: [ // a knight's sword
     "........oo",
     ".......olo",
@@ -1686,6 +1898,240 @@ function createPixelIcon(iconName) {
 
 
 /* =============================================================
+   6b. UI ARTWORK - textures and frames painted with code
+   -------------------------------------------------------------
+   Instead of image files, the interface's materials (parchment,
+   wood planks, stone bricks, gold-riveted frames, ribbons, wax
+   seals) are painted pixel by pixel on small hidden canvases.
+   Each picture is turned into a "data URL" and handed to CSS as
+   a variable, e.g.  --tex-wood: url(data:image/png;base64,...)
+   style.css then uses them as backgrounds and border-images,
+   scaled up 2x with crisp pixels.
+   ============================================================= */
+
+// Paints a small picture and returns it as a CSS url(...).
+function paintArt(width, height, seed, draw) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const g = canvas.getContext("2d");
+  draw(g, makeRandom(seed), width, height);
+  return `url(${canvas.toDataURL()})`;
+}
+
+// Scatters single pixels of the given shades over the picture.
+function speckle(g, random, width, height, shades, amount) {
+  for (let i = 0; i < width * height * amount; i++) {
+    rect(g, Math.floor(random() * width), Math.floor(random() * height), 1, 1,
+      shades[Math.floor(random() * shades.length)]);
+  }
+}
+
+function paintParchment(base, shades) {
+  return (g, random, w, h) => {
+    rect(g, 0, 0, w, h, base);
+    speckle(g, random, w, h, shades, 0.28);
+    for (let i = 0; i < 26; i++) {                         // paper fibers
+      const x = Math.floor(random() * w), y = Math.floor(random() * h);
+      rect(g, x, y, 2 + Math.floor(random() * 5), 1, shades[i % shades.length]);
+    }
+    for (let i = 0; i < 4; i++) {                          // faint stains
+      const x = Math.floor(random() * w), y = Math.floor(random() * h);
+      rect(g, x, y, 3, 2, shades[2]);
+      rect(g, x + 1, y - 1, 2, 4, shades[2]);
+    }
+  };
+}
+
+function paintPlanks(colors, seam, grainDark, grainLight, nail) {
+  return (g, random, w, h) => {
+    for (let y = 0; y < h; y += 8) {
+      rect(g, 0, y, w, 8, colors[(y / 8) % colors.length]);
+      for (let i = 0; i < 9; i++) {                        // wood grain
+        rect(g, Math.floor(random() * w), y + 1 + Math.floor(random() * 6),
+          4 + Math.floor(random() * 16), 1, random() < 0.6 ? grainDark : grainLight);
+      }
+      rect(g, 0, y, w, 1, grainLight);                     // top edge catches light
+      rect(g, 0, y + 7, w, 1, seam);                       // gap between planks
+      const end = Math.floor(random() * (w - 4)) + 2;      // plank joint with nails
+      rect(g, end, y, 1, 7, seam);
+      rect(g, end - 2, y + 2, 1, 1, nail);
+      rect(g, end + 2, y + 4, 1, 1, nail);
+      if (random() < 0.5) {                                // a knot
+        const kx = Math.floor(random() * w);
+        rect(g, kx, y + 3, 3, 2, seam);
+        rect(g, kx + 1, y + 3, 1, 1, grainDark);
+      }
+    }
+  };
+}
+
+function paintBrickTexture(colors, mortar, light, dark) {
+  return (g, random, w, h) => {
+    rect(g, 0, 0, w, h, mortar);
+    for (let row = 0; row * 8 < h; row++) {
+      const y = row * 8;
+      const offset = row % 2 ? 8 : 0;
+      for (let x = -offset; x < w; x += 16) {
+        const color = colors[Math.floor(random() * colors.length)];
+        rect(g, x + 1, y + 1, 15, 7, color);
+        rect(g, x + 1, y + 1, 15, 1, light);               // lit top edge
+        rect(g, x + 1, y + 7, 15, 1, dark);                // shaded bottom edge
+        for (let i = 0; i < 5; i++) rect(g, x + 2 + Math.floor(random() * 13), y + 2 + Math.floor(random() * 5), 1, 1, random() < 0.5 ? light : dark);
+      }
+    }
+  };
+}
+
+// Frames: a square picture whose outer `slice` pixels form the border.
+// Corners get ornaments; edges get studs that repeat along the frame.
+function paintFrame(size, slice, colors) {
+  const { outer, band, bandLight, bandDark, inner, corner, cornerLight, cornerDark, stud } = colors;
+  return (g) => {
+    const s = size, b = slice;
+    // Border band on all four sides
+    rect(g, 0, 0, s, b - 2, band);
+    rect(g, 0, s - b + 2, s, b - 2, band);
+    rect(g, 0, 0, b - 2, s, band);
+    rect(g, s - b + 2, 0, b - 2, s, band);
+    rect(g, 0, 0, s, 1, outer); rect(g, 0, s - 1, s, 1, outer);
+    rect(g, 0, 0, 1, s, outer); rect(g, s - 1, 0, 1, s, outer);
+    rect(g, 1, 1, s - 2, 1, bandLight); rect(g, 1, 1, 1, s - 2, bandLight);           // light from top-left
+    rect(g, 1, s - 2, s - 2, 1, bandDark); rect(g, s - 2, 1, 1, s - 2, bandDark);
+    rect(g, b - 2, b - 2, s - 2 * b + 4, 1, inner); rect(g, b - 2, s - b + 1, s - 2 * b + 4, 1, inner);
+    rect(g, b - 2, b - 2, 1, s - 2 * b + 4, inner); rect(g, s - b + 1, b - 2, 1, s - 2 * b + 4, inner);
+    // Studs in the middle of each edge piece (they repeat along the edges)
+    if (stud) {
+      const m = Math.floor(s / 2) - 1, c = Math.floor((b - 2) / 2) - 1;
+      for (const [x, y] of [[m, c], [m, s - c - 2], [c, m], [s - c - 2, m]]) {
+        rect(g, x, y, 2, 2, stud);
+        rect(g, x, y, 1, 1, cornerLight);
+      }
+    }
+    // Corner ornaments
+    for (const [x, y] of [[0, 0], [s - b, 0], [0, s - b], [s - b, s - b]]) {
+      rect(g, x, y, b, b, outer);
+      rect(g, x + 1, y + 1, b - 2, b - 2, corner);
+      rect(g, x + 1, y + 1, b - 2, 1, cornerLight);
+      rect(g, x + 1, y + 1, 1, b - 2, cornerLight);
+      rect(g, x + 1, y + b - 2, b - 2, 1, cornerDark);
+      rect(g, x + b - 2, y + 1, 1, b - 2, cornerDark);
+      const r = Math.floor(b / 2) - 1;
+      rect(g, x + r, y + r, 2, 2, cornerDark);               // rivet
+      rect(g, x + r, y + r, 1, 1, cornerLight);
+    }
+  };
+}
+
+// A cloth ribbon for titles: the middle stretches, the ends are notched tails.
+function paintRibbon(main, light, dark, stitch) {
+  return (g, random, w, h) => {
+    rect(g, 0, 0, w, h, main);
+    rect(g, 0, 1, w, 1, light);
+    rect(g, 0, h - 2, w, 1, dark);
+    rect(g, 0, 0, w, 1, "#1b120b");
+    rect(g, 0, h - 1, w, 1, "#1b120b");
+    for (let x = 12; x < w - 12; x += 3) { rect(g, x, 3, 2, 1, stitch); rect(g, x, h - 4, 2, 1, stitch); }
+    // notched tails (cut out a V on each end)
+    g.clearRect(0, 4, 1, h - 8); g.clearRect(1, 6, 1, h - 12); g.clearRect(2, 7, 1, h - 14);
+    g.clearRect(w - 1, 4, 1, h - 8); g.clearRect(w - 2, 6, 1, h - 12); g.clearRect(w - 3, 7, 1, h - 14);
+    rect(g, 10, 0, 1, h, dark);                               // folds where the tails start
+    rect(g, w - 11, 0, 1, h, dark);
+  };
+}
+
+// Pours all textures into CSS variables. Called once at start-up.
+function applyUiArt() {
+  const css = document.documentElement.style;
+  const set = (name, value) => css.setProperty(name, value);
+
+  set("--tex-parchment", paintArt(64, 64, 11, paintParchment("#e8d3a2", ["#dfc690", "#efdcae", "#d6bb82", "#f3e3b8"])));
+  set("--tex-parchment-deep", paintArt(64, 64, 12, paintParchment("#d9be86", ["#cfb276", "#e2c994", "#c4a468", "#e8d3a2"])));
+  set("--tex-wood", paintArt(64, 32, 13, paintPlanks(["#6e4829", "#744c2b", "#6a4527", "#78502e"], "#2e1d10", "#553820", "#8f6238", "#c8b89a")));
+  set("--tex-wood-dark", paintArt(64, 32, 14, paintPlanks(["#3f2817", "#442b19", "#3b2615", "#47301c"], "#1b120b", "#2f1e10", "#5a3c22", "#9c8a6a")));
+  set("--tex-stone", paintArt(64, 32, 15, paintBrickTexture(["#6b665c", "#726c61", "#655f56", "#777166"], "#3a3630", "#888276", "#4e4a43")));
+  set("--tex-stone-dark", paintArt(64, 32, 16, paintBrickTexture(["#2f2a25", "#332e28", "#2b2622", "#37312a"], "#1a1612", "#3e3830", "#211c18")));
+  set("--tex-hide", paintArt(64, 64, 17, (g, random, w, h) => {
+    rect(g, 0, 0, w, h, "#6e4b2e");
+    for (let i = 0; i < 40; i++) fillEllipse(g, random() * w, random() * h, 2 + random() * 5, 1 + random() * 3, random() < 0.5 ? "#5e3f26" : "#7a5636");
+    speckle(g, random, w, h, ["#4e3420", "#86603c"], 0.12);
+  }));
+  set("--tex-cloth", paintArt(32, 32, 18, (g, random, w, h) => {
+    for (let y = 0; y < h; y += 2) rect(g, 0, y, w, 1, "rgba(0, 0, 0, 0.08)");      // woven rows
+    speckle(g, random, w, h, ["rgba(255,255,255,0.10)", "rgba(0,0,0,0.12)"], 0.25);
+  }));
+
+  set("--frame-gold", paintArt(24, 24, 1, paintFrame(24, 8, {
+    outer: "#1b120b", band: "#8a5a22", bandLight: "#c08a3a", bandDark: "#5a3a16", inner: "#1b120b",
+    corner: "#d9a53a", cornerLight: "#ffe08a", cornerDark: "#7a5216", stud: "#e8b64a" })));
+  set("--frame-wood", paintArt(15, 15, 2, paintFrame(15, 5, {
+    outer: "#1b120b", band: "#6e4829", bandLight: "#94653a", bandDark: "#3f2817", inner: "#2b1b0f",
+    corner: "#8a8f9a", cornerLight: "#c8ccd4", cornerDark: "#4a4e56", stud: null })));
+  set("--frame-stone", paintArt(36, 36, 3, (g, random) => {
+    paintFrame(36, 12, { outer: "#1b120b", band: "#6b665c", bandLight: "#8d887c", bandDark: "#3e3a34", inner: "#1b120b",
+      corner: "#7a756a", cornerLight: "#a29d90", cornerDark: "#3e3a34", stud: null })(g);
+    for (let i = 0; i < 4; i++) {                                     // mortar lines in the stone band
+      const v = 4 + i * 8;
+      rect(g, 12, 3 + (i % 2) * 4, 1, 4, "#3e3a34");
+      rect(g, v, 3, 1, 3, "#4e4a43");
+      rect(g, v, 30, 1, 3, "#4e4a43");
+      rect(g, 3, v, 3, 1, "#4e4a43");
+      rect(g, 30, v, 3, 1, "#4e4a43");
+    }
+    for (const [x, y] of [[4, 4], [28, 4], [4, 28], [28, 28]]) {   // gold caps on the corners
+      rect(g, x, y, 4, 4, "#d9a53a"); rect(g, x, y, 4, 1, "#ffe08a"); rect(g, x + 1, y + 1, 2, 2, "#9c6f22");
+    }
+  }));
+  set("--frame-iron", paintArt(15, 15, 4, paintFrame(15, 5, {
+    outer: "#1b120b", band: "#5a5e66", bandLight: "#8a8f9a", bandDark: "#33363c", inner: "#1b120b",
+    corner: "#a8acb4", cornerLight: "#e0e4ea", cornerDark: "#4a4e56", stud: null })));
+  set("--frame-hide", paintArt(15, 15, 5, paintFrame(15, 5, {
+    outer: "#1b120b", band: "#64170f", bandLight: "#9e2b25", bandDark: "#3e0e08", inner: "#1b120b",
+    corner: "#d8cbb0", cornerLight: "#fff4dc", cornerDark: "#8a7a5a", stud: null })));   // bone corners
+
+  set("--ribbon", paintArt(32, 17, 6, paintRibbon("#9e2b25", "#c8442f", "#64170f", "#e8b64a")));
+  set("--ribbon-blue", paintArt(32, 17, 7, paintRibbon("#2f4f8f", "#4a6fb8", "#1e335e", "#e8b64a")));
+  set("--divider-line", paintArt(8, 8, 8, g => {
+    rect(g, 0, 3, 8, 1, "#6b4a2a"); rect(g, 0, 4, 8, 1, "#c8a060");
+  }));
+  set("--divider-gem", paintArt(32, 8, 9, g => {
+    rect(g, 4, 3, 24, 2, "#6b4a2a");
+    fillPoly(g, [[16, 0], [21, 4], [16, 8], [11, 4]], "#1b120b");
+    fillPoly(g, [[16, 1], [20, 4], [16, 7], [12, 4]], "#9e2b25");
+    rect(g, 15, 2, 1, 2, "#e8665a");
+    for (const x of [6, 25]) { rect(g, x, 2, 2, 4, "#1b120b"); rect(g, x, 3, 1, 1, "#e8b64a"); }
+  }));
+  set("--seal", paintArt(22, 22, 10, (g, random) => {
+    fillEllipse(g, 11, 11, 11, 11, "#64170f");
+    for (let a = 0; a < 12; a++) {                                     // wobbly wax edge
+      const ang = (a / 12) * Math.PI * 2;
+      fillEllipse(g, 11 + Math.cos(ang) * 9, 11 + Math.sin(ang) * 9, 2.5, 2.5, "#7e2018");
+    }
+    fillEllipse(g, 11, 11, 8, 8, "#9e2b25");
+    fillEllipse(g, 10, 10, 7, 7, "#b8352b");
+    fillEllipse(g, 11, 11, 6, 6, "#9e2b25");
+    rect(g, 6, 5, 3, 1, "#e8665a");
+  }));
+  set("--socket", paintArt(19, 19, 20, g => {
+    fillEllipse(g, 9.5, 9.5, 9.5, 9.5, "#1b120b");
+    fillEllipse(g, 9.5, 9.5, 8.5, 8.5, "#9c6f22");
+    fillEllipse(g, 9.5, 9.5, 7.5, 7.5, "#e8b64a");
+    fillEllipse(g, 9.5, 10, 7, 7, "#7a5216");
+    fillEllipse(g, 9.5, 9.5, 6.5, 6.5, "#2b1b0f");
+    rect(g, 5, 3, 3, 1, "#ffe08a");
+  }));
+}
+
+// Puts pixel icons into every <span class="icon-slot" data-icon="..."> in the page.
+function fillIconSlots(root = document) {
+  for (const slot of root.querySelectorAll(".icon-slot[data-icon]")) {
+    if (slot.firstChild && slot.firstChild.tagName === "CANVAS") continue;
+    const name = slot.dataset.icon;
+    if (ICON_PIXELS[name]) slot.prepend(createPixelIcon(name));
+  }
+}
+
+/* =============================================================
    7. USER INTERFACE
    ============================================================= */
 
@@ -1704,7 +2150,10 @@ function buildResourceBar() {
     const item = document.createElement("li");
     item.className = "resource";
     item.title = entry.name;
-    item.appendChild(createPixelIcon(entry.id));
+    const socket = document.createElement("span");
+    socket.className = "res-socket";
+    socket.appendChild(createPixelIcon(entry.id));
+    item.appendChild(socket);
 
     const text = document.createElement("div");
     text.className = "resource-text";
@@ -1716,10 +2165,52 @@ function buildResourceBar() {
     bar.appendChild(item);
 
     resourceElements[entry.id] = {
+      item, socket,
       amount: text.querySelector(".resource-amount"),
       rate: text.querySelector(".resource-rate"),
+      lastValue: null, lastPulse: 0,
     };
   }
+}
+
+// "+12/min" for the resource bar.
+function formatRatePerMinute(perMinute) {
+  if (perMinute <= 0) return "+0/min";
+  if (perMinute < 10) return "+" + (Math.round(perMinute * 10) / 10) + "/min";
+  return "+" + formatNumber(perMinute) + "/min";
+}
+
+// Every 1.5 seconds, if a resource went up by at least 1, a little
+// "+N" floats up from its plaque and the icon hops.
+function showResourceGain(el, value) {
+  const now = performance.now();
+  if (el.lastValue === null) { el.lastValue = value; el.lastPulse = now; return; }
+  if (now - el.lastPulse < 1500) return;
+  const gained = Math.floor(value) - Math.floor(el.lastValue);
+  el.lastValue = value;
+  el.lastPulse = now;
+  if (gained < 1 || document.hidden) return;
+  const float = document.createElement("span");
+  float.className = "gain-float";
+  float.textContent = "+" + formatNumber(gained);
+  el.item.appendChild(float);
+  setTimeout(() => float.remove(), 1300);
+  bumpElement(el.socket);
+}
+
+// Restarts a short CSS "bump" animation on an element.
+function bumpElement(element, className = "bump") {
+  element.classList.remove(className);
+  void element.offsetWidth;            // forces the browser to restart the animation
+  element.classList.add(className);
+}
+
+// I, II, III, IV ... for levels on wax seals.
+function toRoman(n) {
+  const table = [[1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"], [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
+  let out = "";
+  for (const [value, letters] of table) while (n >= value) { out += letters; n -= value; }
+  return out;
 }
 
 // Refreshes the numbers in the top bar.
@@ -1729,8 +2220,9 @@ function updateResourceBar() {
   for (const res of RESOURCES) {
     const el = resourceElements[res.id];
     el.amount.textContent = formatNumber(state.resources[res.id]);
-    el.rate.textContent = formatRate(rates[res.id]);
+    el.rate.textContent = formatRatePerMinute(rates[res.id] * 60);
     el.rate.classList.toggle("zero", rates[res.id] <= 0);
+    showResourceGain(el, state.resources[res.id]);
   }
 
   const popEl = resourceElements.population;
@@ -1759,6 +2251,8 @@ function buildBuildingPanel() {
     const card = document.createElement("li");
     card.className = "building-card";
     card.innerHTML =
+      `<div class="building-art"></div>` +
+      `<div class="level-seal"></div>` +
       `<div class="building-header">` +
         `<div class="building-info">` +
           `<div class="building-name">${type.name} <span class="building-count"></span></div>` +
@@ -1792,6 +2286,9 @@ function buildBuildingPanel() {
     list.appendChild(card);
     buildingCardElements[typeId] = {
       card,
+      art: card.querySelector(".building-art"),
+      seal: card.querySelector(".level-seal"),
+      artKey: "",
       count: card.querySelector(".building-count"),
       output: card.querySelector(".building-output"),
       lockInfo: card.querySelector(".lock-info"),
@@ -1876,6 +2373,14 @@ function updateBuildingPanel() {
     const owned = state.buildings[typeId];
     const el = buildingCardElements[typeId];
 
+    // The illustration is redrawn only when its look changes
+    const artKey = getBuildingTier(typeId) + ":" + (owned.count > 0);
+    if (el.artKey !== artKey) {
+      el.artKey = artKey;
+      el.art.replaceChildren(renderBuildingArt(typeId));
+    }
+    el.seal.textContent = toRoman(owned.level);
+
     // Locked buildings show how close you are to unlocking them
     const unlocked = isBuildingUnlocked(typeId);
     el.card.classList.toggle("locked", !unlocked);
@@ -1920,13 +2425,17 @@ function updateBuildingPanel() {
 // ---------- Research screen ----------
 const researchCardElements = {};
 
+// Small emblem shown at the top of each research branch.
+const BRANCH_EMBLEMS = { agriculture: "food", industry: "blacksmith", commerce: "gold" };
+
 function buildResearchPanel() {
   const container = document.getElementById("research-branches");
   container.innerHTML = "";
   for (const branch of RESEARCH_BRANCHES) {
     const column = document.createElement("section");
     column.className = "research-branch";
-    column.innerHTML = `<h3 class="branch-title">${branch.name}</h3><ul class="research-list"></ul>`;
+    column.innerHTML = `<h3 class="branch-title"><span class="res-socket"></span>${branch.name}</h3><ul class="research-list"></ul>`;
+    column.querySelector(".res-socket").appendChild(createPixelIcon(BRANCH_EMBLEMS[branch.id]));
     const list = column.querySelector(".research-list");
 
     for (const tech of RESEARCH.filter(t => t.branch === branch.id)) {
@@ -1934,6 +2443,7 @@ function buildResearchPanel() {
       card.className = "research-card";
       card.innerHTML =
         `<div class="research-top">` +
+          `<span class="res-socket"></span>` +
           `<h4 class="research-name">${tech.name}</h4>` +
           `<span class="status-badge"></span>` +
         `</div>` +
@@ -1944,6 +2454,7 @@ function buildResearchPanel() {
           `<span class="btn-label">Research</span>` +
           `<span class="btn-cost"></span>` +
         `</button>`;
+      card.querySelector(".research-top .res-socket").appendChild(createPixelIcon(tech.id));
       const button = card.querySelector(".research-btn");
       button.addEventListener("click", () => researchTech(tech.id));
       list.appendChild(card);
@@ -1973,6 +2484,10 @@ function updateResearchPanel() {
     const el = researchCardElements[tech.id];
     const status = getResearchStatus(tech);
     el.card.dataset.status = status;
+    // The chain from the previous technology turns gold once it is learned
+    const branchTechs = RESEARCH.filter(t => t.branch === tech.branch);
+    const previous = branchTechs[branchTechs.indexOf(tech) - 1];
+    el.card.dataset.prevDone = previous ? String(!!state.research[previous.id]) : "false";
     el.badge.textContent = names[status];
 
     // Requirements, each marked as met or not
@@ -2087,6 +2602,35 @@ function showToast(message) {
   toastTimer = setTimeout(() => { toast.hidden = true; }, 1800);
 }
 
+// ---------- Announcements ----------
+// Unlocks, milestones and discoveries slide in from the top with an
+// illustration. They queue up so several never overlap.
+const announcementQueue = [];
+let announcementShowing = false;
+
+function announce(kicker, title, text, art) {
+  if (announcementQueue.length >= 4) return;          // don't flood the screen
+  announcementQueue.push({ kicker, title, text, art });
+  if (!announcementShowing) showNextAnnouncement();
+}
+
+function showNextAnnouncement() {
+  const next = announcementQueue.shift();
+  const box = document.getElementById("announcement");
+  if (!next || !box) { announcementShowing = false; return; }
+  announcementShowing = true;
+  document.getElementById("announce-kicker").textContent = next.kicker;
+  document.getElementById("announce-title").textContent = next.title;
+  document.getElementById("announce-text").textContent = next.text;
+  document.getElementById("announce-art").replaceChildren(next.art || createPixelIcon("crown"));
+  box.classList.remove("leaving");
+  box.hidden = false;
+  setTimeout(() => {
+    box.classList.add("leaving");
+    setTimeout(() => { box.hidden = true; showNextAnnouncement(); }, 400);
+  }, 3600);
+}
+
 // Totals shown in the welcome-back window. If the player leaves again
 // before closing it, the new earnings are added on top.
 let welcomeTotals = null;
@@ -2197,6 +2741,54 @@ function statLine(t) {
   return `HP ${Math.round(t.hp)} · ATK ${Math.round(t.attack)} · DEF ${t.defense} · SPD ${t.attackSpeed}/s${range}`;
 }
 
+// A framed portrait: the unit's battle sprite on a banner backdrop.
+function createPortrait(typeId) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 26;
+  canvas.height = 28;
+  canvas.className = "portrait";
+  const g = canvas.getContext("2d");
+  const enemy = !KNIGHT_TYPES[typeId];
+  const back = enemy ? "#5a3a24" : "#26407a", stripe = enemy ? "#7a4a2e" : "#3a5fa8";
+  rect(g, 0, 0, 26, 28, back);
+  for (let x = 0; x < 26; x += 6) rect(g, x, 0, 3, 28, stripe);           // banner stripes
+  rect(g, 0, 22, 26, 6, enemy ? "#4a3a24" : "#4d8236");                  // ground
+  rect(g, 0, 22, 26, 1, enemy ? "#6b5436" : "#72ab4e");
+  rect(g, 4, 25, 18, 1, "rgba(0,0,0,0.3)");
+  drawUnitSprite(g, typeId, 13, 25, 1, { noShadow: true });
+  return canvas;
+}
+
+// Health, attack, defense and speed as little bars with icons.
+function createStatBars(t) {
+  const box = document.createElement("div");
+  box.className = "stat-bars";
+  const rows = [
+    ["heart", "stat-hp", t.hp / 250, Math.round(t.hp)],
+    ["sword", "stat-atk", t.attack / 30, Math.round(t.attack)],
+    ["shield", "stat-def", t.defense / 10, t.defense],
+    ["boot", "stat-spd", t.moveSpeed / 40, t.moveSpeed],
+  ];
+  for (const [icon, cls, ratio, value] of rows) {
+    box.appendChild(createPixelIcon(icon));
+    const bar = document.createElement("div");
+    bar.className = "stat-bar " + cls;
+    const fill = document.createElement("span");
+    fill.style.width = Math.max(4, Math.min(100, ratio * 100)) + "%";
+    bar.appendChild(fill);
+    const label = document.createElement("span");
+    label.className = "stat-value";
+    label.textContent = value;
+    box.append(bar, label);
+  }
+  const note = document.createElement("div");
+  note.className = "knight-stats";
+  note.style.gridColumn = "1 / -1";
+  note.textContent = `${t.attackSpeed} hits/s` + (t.ranged ? ` · range ${t.range}` : "");
+  box.appendChild(note);
+  return box;
+}
+
 const armyElements = {};
 
 function buildArmyPanel() {
@@ -2220,7 +2812,8 @@ function buildArmyPanel() {
       `<button class="btn btn-build recruit-btn" type="button">` +
         `<span class="btn-label">Recruit</span><span class="btn-cost"></span>` +
       `</button>`;
-    card.querySelector(".knight-head").prepend(createUnitIcon(typeId));
+    card.querySelector(".knight-head").prepend(createPortrait(typeId));
+    card.querySelector(".knight-stats").replaceWith(createStatBars(t));
     const button = card.querySelector(".recruit-btn");
     button.addEventListener("click", () => recruitKnight(typeId));
     list.appendChild(card);
@@ -2233,6 +2826,7 @@ function buildArmyPanel() {
     document.querySelector('.nav-btn[data-screen="army"]').click();
   });
   document.getElementById("battle-skip").addEventListener("click", skipLiveBattle);
+  document.getElementById("battle-start").addEventListener("click", beginFight);
   document.getElementById("battle-continue").addEventListener("click", closeBattle);
 }
 
@@ -2245,6 +2839,15 @@ function updateArmyPanel() {
   const m = state.military;
   const built = m.barracksLevel > 0;
   const unlocked = isBarracksUnlocked();
+
+  // Barracks illustration (it grows with the barracks level)
+  const art = document.getElementById("barracks-art");
+  const artKey = (built ? getBuildingTier("barracks") : -1) + ":" + unlocked;
+  if (art.dataset.key !== artKey) {
+    art.dataset.key = artKey;
+    art.replaceChildren(renderBuildingArt("barracks"));
+    art.classList.toggle("locked", !built);
+  }
 
   // Barracks: locked / ready to build / built
   document.getElementById("barracks-locked").hidden = unlocked;
@@ -2286,6 +2889,7 @@ function updateArmyPanel() {
     for (const typeId in KNIGHT_TYPES) {
       const t = KNIGHT_TYPES[typeId], el = armyElements[typeId];
       el.count.textContent = `×${m.army[typeId]}`;
+      el.card.classList.toggle("locked", !isKnightTypeUnlocked(typeId));
       showCost(el.cost, t.cost);
       const typeOpen = isKnightTypeUnlocked(typeId);
       el.label.textContent = !typeOpen ? `Needs Barracks Lv ${t.barracksLevel}`
@@ -2324,12 +2928,15 @@ function updateArmyPanel() {
         const s = getEnemyStats(group.type, m.invasion.wave);
         const row = document.createElement("li");
         row.className = "enemy-row";
-        row.appendChild(createUnitIcon(group.type));
+        row.dataset.civ = s.civilization;
+        row.appendChild(createPortrait(group.type));
         const text = document.createElement("div");
+        text.className = "knight-info";
         text.innerHTML = `<div class="enemy-name">${group.count} × ${s.name}</div>` +
           `<div class="enemy-desc">${s.description}</div>` +
           (s.abilityText ? `<div class="knight-ability">${s.abilityText}</div>` : "") +
           `<div class="knight-stats">${statLine(s)}</div>`;
+        text.querySelector(".knight-stats").replaceWith(createStatBars(s));
         if (s.boss) row.classList.add("boss");
         row.appendChild(text);
         preview.appendChild(row);
@@ -2378,8 +2985,15 @@ function startLiveBattle() {
   battleView.accumulator = 0;
   battleView.lastMs = performance.now();
   battleView.lastHits = 0;
+  battleView.phase = "prep";
+  battleView.prepEndsAt = performance.now() + 7000;     // the battle starts by itself after 7 s
   document.getElementById("battle-title").textContent = isBossWave(currentBattle.wave)
-    ? `The Chieftain Attacks! · Wave ${currentBattle.wave}` : `Barbarian Raid · Wave ${currentBattle.wave}`;
+    ? `The Chieftain Attacks! · Wave ${currentBattle.wave}` : `Barbarians at the Gates! · Wave ${currentBattle.wave}`;
+  fillPrepList("prep-knights", currentBattle.units.filter(u => u.side === "knight"));
+  fillPrepList("prep-enemies", currentBattle.units.filter(u => u.side === "enemy"));
+  document.getElementById("prep-knights").closest(".prep-side").querySelector(".prep-title").textContent =
+    `Your Knights (${currentBattle.units.filter(u => u.side === "knight").length})`;
+  document.getElementById("battle-prep").hidden = false;
   document.getElementById("battle-summary").hidden = true;
   document.getElementById("battle-skip").hidden = false;
   document.getElementById("battle-continue").hidden = true;
@@ -2388,8 +3002,33 @@ function startLiveBattle() {
   requestAnimationFrame(battleFrame);
 }
 
+// Lists units by type with a sprite and a count, for the preparation screen.
+function fillPrepList(id, units) {
+  const list = document.getElementById(id);
+  list.innerHTML = "";
+  const counts = {};
+  for (const u of units) counts[u.typeId] = (counts[u.typeId] || 0) + 1;
+  if (units.length === 0) { list.innerHTML = "<li>No knights!</li>"; return; }
+  for (const typeId in counts) {
+    const li = document.createElement("li");
+    li.title = (KNIGHT_TYPES[typeId] || ENEMY_TYPES[typeId]).name;
+    li.appendChild(createUnitIcon(typeId));
+    li.appendChild(document.createTextNode("×" + counts[typeId]));
+    list.appendChild(li);
+  }
+}
+
+function beginFight() {
+  if (!currentBattle || battleView.phase !== "prep") return;
+  battleView.phase = "fight";
+  battleView.lastMs = performance.now();
+  document.getElementById("battle-prep").hidden = true;
+  playSound("clash");
+}
+
 function skipLiveBattle() {
   if (!currentBattle) return;
+  beginFight();
   runBattleToEnd(currentBattle);
 }
 
@@ -2406,25 +3045,59 @@ function finishLiveBattle() {
 
 function showBattleSummary(s) {
   const box = document.getElementById("battle-summary");
-  const title = s.victory ? (s.timedOut ? "The raiders retreat!" : "Victory!") : (s.timedOut ? "Your knights fall back..." : "Defeat...");
-  const rows = [
-    ["Result", title],
-    ["Knights surviving", `${s.knightsSurviving} / ${s.knightsStart}`],
-    ["Knights wounded", s.wounded > 0 ? `${s.wounded} (they will recover)` : "None"],
-    ["Enemies defeated", `${s.enemiesDefeated} / ${s.enemiesTotal}`],
-    ["Resources earned", Object.keys(s.rewards).length ? Object.entries(s.rewards).map(([k, v]) => `${formatNumber(v)} ${k}`).join(", ") : "None"],
-    ["Experience earned", formatNumber(s.experience)],
-    ["Repairs needed", Object.keys(s.repairs).length ? Object.entries(s.repairs).map(([k, v]) => `${formatNumber(v)} ${k}`).join(", ") : "None"],
-  ];
+  const title = s.victory ? (s.timedOut ? "The Raiders Flee!" : "Victory!") : (s.timedOut ? "Your Knights Fall Back" : "Defeat");
   box.innerHTML = "";
   box.className = "battle-summary " + (s.victory ? "won" : "lost");
-  for (const [label, value] of rows) {
-    const row = document.createElement("div");
-    row.className = "summary-row";
+
+  const banner = document.createElement("div");
+  banner.className = "result-banner";
+  banner.textContent = title;
+  box.appendChild(banner);
+
+  const grid = document.createElement("div");
+  grid.className = "result-grid";
+  const stats = [
+    ["Knights surviving", `${s.knightsSurviving} / ${s.knightsStart}`],
+    ["Enemies defeated", `${s.enemiesDefeated} / ${s.enemiesTotal}`],
+    ["Experience earned", formatNumber(s.experience)],
+    ["Knights wounded", s.wounded > 0 ? `${s.wounded}` : "None"],
+  ];
+  for (const [label, value] of stats) {
+    const cell = document.createElement("div");
+    cell.className = "result-stat";
     const a = document.createElement("span"); a.textContent = label;
     const b = document.createElement("strong"); b.textContent = value;
-    row.append(a, b);
-    box.appendChild(row);
+    cell.append(a, b);
+    grid.appendChild(cell);
+  }
+  box.appendChild(grid);
+
+  // Spoils of war and repair bills, shown with resource icons
+  const loot = document.createElement("div");
+  loot.className = "loot-row";
+  const addChips = (label, items, repair) => {
+    const entries = Object.entries(items).filter(([, v]) => v > 0);
+    if (!entries.length) return;
+    const tag = document.createElement("span");
+    tag.textContent = label;
+    loot.appendChild(tag);
+    for (const [id, value] of entries) {
+      const chip = document.createElement("span");
+      chip.className = "loot-chip" + (repair ? " repair" : "");
+      chip.appendChild(createPixelIcon(id));
+      chip.appendChild(document.createTextNode((repair ? "-" : "+") + formatNumber(value)));
+      loot.appendChild(chip);
+    }
+  };
+  addChips("Spoils of war:", s.rewards, false);
+  addChips("Repairs:", s.repairs, true);
+  if (loot.childNodes.length) box.appendChild(loot);
+
+  if (s.wounded > 0) {
+    const note = document.createElement("p");
+    note.className = "modal-note";
+    note.textContent = `${s.wounded} wounded knights are resting in the infirmary and will return soon.`;
+    box.appendChild(note);
   }
   box.hidden = false;
 }
@@ -2770,14 +3443,15 @@ const SHADOW = "rgba(16, 32, 8, 0.32)";
 // One letter per tile. Row = ty (0 at the back), column = tx.
 // On screen, rows run down-left and columns run down-right.
 //   G grass   F forest   H castle hill   m/M mountain   q/Q quarry hill
+//   h grassy hill   f forested hill (both one level up)
 //   W water   B bridge   S sand   R road   P plaza   T stairs
 const VILLAGE_MAP = [
-  "MMMmmFFFFFFqQQqFFFFF",
-  "MMmmFFGGGGGqQQqGFFFF",
-  "MmmFGGGGGGGGqqGGGFFF",
-  "mmFGGGGGGGGGGGGGGGFF",
-  "mWGGHHHHHHGGGGGGGGFF",
-  "FWGGHHHHHHGGGGGGGGGF",
+  "MMMmmFFFFFFqQQqffffF",
+  "MMmmFFGGGGGqQQqGffff",
+  "MmmFGGGGGGGGqqGGGFff",
+  "mmFGGGGGGGGGGGGGGGff",
+  "mWGGHHHHHHGGGGGGGGff",
+  "FWGGHHHHHHGGGGGGGGGf",
   "FWGGHHHHHHGGGGGGGGGF",
   "FWGGHHHHHHGGGGGGGGGF",
   "FWGGHHHHHHGGGGGGGGFF",
@@ -2788,16 +3462,18 @@ const VILLAGE_MAP = [
   "GWSGGGGGGPPPPGGGGGGG",
   "GWSGGGGGGGRRGGGGGGGG",
   "GWSGGGGGGGRRGGGGGGGF",
-  "GWWSGGGGGGRRGGGGGGFF",
-  "GGWSGGGGGGRRGGGGGFFF",
-  "GGWWSGGGGGRRGGGGFFFF",
-  "GGGWSGGGGGRRGGGFFFFF",
+  "GWWSGGGGGGRRGGGGGGff",
+  "hhWSGGGGGGRRGGGGGfff",
+  "hhWWSGGGGGRRGGGGffff",
+  "hhhWSGGGGGRRGGGfffff",
 ];
 
 // What each letter means: the kind of ground and its height level.
 const TILE_TYPES = {
   G: { kind: "grass",  level: 0 },
   F: { kind: "forest", level: 0 },
+  h: { kind: "grass",  level: 1 },
+  f: { kind: "forest", level: 1 },
   H: { kind: "grass",  level: 2 },
   m: { kind: "rock",   level: 3 },
   M: { kind: "snow",   level: 4 },
@@ -3452,8 +4128,29 @@ function paintBridge(g) {
 
 // ---------- Buildings ----------
 
+// How grand the castle is: 0 = a wooden-walled keep (small settlement),
+// 1 = stone walls and towers (from 25 citizens), 2 = mighty castle (Castle Upgrade).
+function getCastleTier() {
+  if (state.castleLevel >= 2) return 2;
+  return state.population >= 25 ? 1 : 0;
+}
+
+// A wooden palisade of sharpened logs along the hill's edges (castle tier 0).
+function drawPalisade(ctx, from, to, z) {
+  const steps = Math.round(Math.hypot(to[0] - from[0], to[1] - from[1]) / 0.22);
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const x = lerp(from[0], to[0], t), y = lerp(from[1], to[1], t);
+    const [px, py] = iso(x, y, z);
+    const h = 8 + (i % 3 === 0 ? 1 : 0);
+    rect(ctx, px - 1, py - h, 2, h, i % 2 ? PAL.wood : PAL.woodDark);
+    rect(ctx, px - 1, py - h - 1, 1, 1, PAL.woodLight);
+  }
+}
+
 function drawCastle(ctx) {
   const Z = 2 * LEVEL_HEIGHT;   // the castle hill is 2 levels high
+  const tier = getCastleTier();
   // After the Castle Upgrade the towers are taller and fly golden flags
   const big = state.castleLevel >= 2;
   const extra = big ? 12 : 0;
@@ -3474,7 +4171,21 @@ function drawCastle(ctx) {
     faceL(ctx, keep, u, 6, 0.28, 12, PAL.banner);
     faceL(ctx, keep, u + 0.08, 10, 0.12, 4, PAL.gold);
   }
-  drawRoof(ctx, keep, 26, 14, ROOF_SLATE, "y", PAL.stone);
+  drawRoof(ctx, keep, 26, 14, tier === 0 ? ROOF_WOOD : ROOF_SLATE, "y", PAL.stone);
+
+  if (tier === 0) {
+    // A young settlement: just a wooden palisade with a log gate
+    drawPalisade(ctx, [9.7, 4.4], [9.7, 9.7], Z);
+    drawPalisade(ctx, [4.4, 9.7], [6.9, 9.7], Z);
+    drawPalisade(ctx, [8.5, 9.7], [9.7, 9.7], Z);
+    const gate = { x: 6.95, y: 9.45, w: 1.5, d: 0.35, z: Z };
+    drawIsoBox(ctx, gate, 11, PAL.wood, PAL.woodDark, PAL.woodLight);
+    faceL(ctx, gate, 0.4, 0, 0.7, 8, PAL.door);
+    const [tx1, ty1] = iso(gate.x + 0.2, gate.y + gate.d, Z + 9);
+    fx.fires.push({ x: tx1, y: ty1, small: true });
+    rect(ctx, tx1, ty1, 1, 3, PAL.woodDeep);
+    return;
+  }
 
   // Curtain walls and towers along the hill's front edges
   drawTower(ctx, 9.6, 4.6, Z, 5, 26 + extra, 14, flag);
@@ -3502,11 +4213,12 @@ function drawCastle(ctx) {
 }
 
 // Timber-framed cottage. `variant` picks the roof.
-function drawHouse(ctx, tx, ty, variant) {
+function drawHouse(ctx, tx, ty, variant, tier = getBuildingTier("house")) {
   const box = { x: tx + 0.25, y: ty + 0.25, w: 1.5, d: 1.5, z: 0 };
-  const h = 13;
+  const h = tier >= 2 ? 17 : 13;                       // grander houses are taller
   fx.shadows.push({ box, h: h + 8 });
   drawIsoBox(ctx, box, h, PAL.plaster, PAL.plasterShade);
+  if (tier >= 2) drawFoundation(ctx, box, 4);
   // Timber frame
   lineL(ctx, box, 6, PAL.timber); lineL(ctx, box, h - 1, PAL.timber); lineL(ctx, box, 0, PAL.timber);
   lineR(ctx, box, 6, PAL.timber); lineR(ctx, box, h - 1, PAL.timber); lineR(ctx, box, 0, PAL.timber);
@@ -3522,9 +4234,14 @@ function drawHouse(ctx, tx, ty, variant) {
   const gable = axis === "x" ? PAL.plasterShade : PAL.plaster;
   const chimney = () => drawChimney(ctx, box.x + 1.0, box.y + 0.3, h, 13);
   drawRoof(ctx, box, h, 10, style, axis, gable, chimney);
+  if (tier >= 1) drawGarden(ctx, tx, ty);
+  if (tier >= 3) {
+    const [fx1, fy1] = iso(box.x + 0.4, box.y + box.d / 2, h + 10);
+    addRoofFlag(ctx, fx1, fy1 - 8, PAL.gold);
+  }
 }
 
-function drawBarn(ctx, tx, ty) {
+function drawBarn(ctx, tx, ty, tier = getBuildingTier("farm")) {
   const box = { x: tx + 0.15, y: ty + 0.15, w: 2.7, d: 1.7, z: 0 };
   const h = 15;
   fx.shadows.push({ box, h: h + 10 });
@@ -3542,11 +4259,19 @@ function drawBarn(ctx, tx, ty) {
   windowL(ctx, box, 0.3, 7, 0.3, 4);
   windowL(ctx, box, 2.1, 7, 0.3, 4);
   windowR(ctx, box, 0.7, 7, 0.3, 4);
-  drawRoof(ctx, box, h, 12, ROOF_WOOD, "x", PAL.barnDark);
+  drawRoof(ctx, box, h, 12, tier >= 2 ? ROOF_RED : ROOF_WOOD, "x", PAL.barnDark);
+  if (tier >= 1) {
+    const [vx, vy] = iso(box.x + box.w / 2 + 0.4, box.y + box.d / 2, h + 12);
+    drawWeathervane(ctx, vx, vy);
+  }
+  if (tier >= 3) {
+    const [fx1, fy1] = iso(box.x + 0.3, box.y + box.d / 2, h + 12);
+    addRoofFlag(ctx, fx1, fy1 - 8, PAL.gold);
+  }
 }
 
 // Stone smithy with a glowing forge, an anvil and a big chimney.
-function drawBlacksmith(ctx, tx, ty) {
+function drawBlacksmith(ctx, tx, ty, tier = getBuildingTier("blacksmith")) {
   const box = { x: tx + 0.25, y: ty + 0.25, w: 1.5, d: 1.5, z: 0 };
   const h = 11;
   fx.shadows.push({ box, h: h + 8 });
@@ -3560,7 +4285,19 @@ function drawBlacksmith(ctx, tx, ty) {
   fx.fires.push({ x: gx, y: gy, small: true });
   addLight(gx, gy - 1, 7);
   windowL(ctx, box, 0.3, 6, 0.3, 3);
-  drawRoof(ctx, box, h, 8, ROOF_SLATE, "x", PAL.stoneDark, () => drawChimney(ctx, box.x + 0.9, box.y + 0.2, h, 16));
+  drawRoof(ctx, box, h, 8, ROOF_SLATE, "x", PAL.stoneDark, () => {
+    drawChimney(ctx, box.x + 0.9, box.y + 0.2, h, 16);
+    if (tier >= 2) drawChimney(ctx, box.x + 0.3, box.y + 0.25, h, 12);
+  });
+  if (tier >= 1) {                                                   // weapon rack
+    const [rx, ry] = iso(tx + 1.55, ty + 1.9, 0);
+    rect(ctx, rx - 4, ry - 6, 9, 1, PAL.wood);
+    for (let i = 0; i < 4; i++) rect(ctx, rx - 3 + i * 2, ry - 9, 1, 9, i % 2 ? PAL.metal : PAL.woodDark);
+  }
+  if (tier >= 3) {
+    const [fx1, fy1] = iso(box.x + 1.2, box.y + box.d / 2, h + 8);
+    addRoofFlag(ctx, fx1, fy1 - 8, PAL.red);
+  }
   // Anvil outside
   const anvil = { x: tx + 0.4, y: ty + 1.85, w: 0.3, d: 0.18, z: 0 };
   drawIsoBox(ctx, anvil, 3, PAL.metalDark, PAL.stoneDeep, PAL.metal);
@@ -3568,7 +4305,7 @@ function drawBlacksmith(ctx, tx, ty) {
 }
 
 // Academy: a tall hall with a round library tower.
-function drawAcademy(ctx, tx, ty) {
+function drawAcademy(ctx, tx, ty, tier = getBuildingTier("academy")) {
   const box = { x: tx + 0.2, y: ty + 0.2, w: 1.6, d: 1.6, z: 0 };
   const h = 17;
   fx.shadows.push({ box, h: h + 12 });
@@ -3585,18 +4322,32 @@ function drawAcademy(ctx, tx, ty) {
   const [sx, sy] = iso(box.x + box.w, box.y + box.d, 0);
   drawCylinder(ctx, sx, sy, 5, 30, [PAL.plaster, PAL.plaster, PAL.plasterShade, "#a8977a"], false);
   for (const y of [sy - 24, sy - 14]) { rect(ctx, sx - 2, y, 2, 4, PAL.timber); rect(ctx, sx - 2, y + 1, 2, 2, PAL.glass); addLight(sx - 1, y + 2, 5); }
-  drawCone(ctx, sx, sy - 30, 7, 14, PAL.blueRoofLight, PAL.blueRoofDark);
-  rect(ctx, sx, sy - 52, 1, 8, PAL.outline);
-  fx.flags.push({ x: sx + 1, y: sy - 52, color: PAL.purple });
+  if (tier >= 2) {
+    // An observatory dome with a brass telescope
+    fillEllipse(ctx, sx, sy - 30, 7, 2, PAL.blueRoofDark);
+    for (let dy = 0; dy < 7; dy++) {
+      const half = Math.round(7 * Math.sqrt(1 - (dy / 7) ** 2));
+      rect(ctx, sx - half, sy - 31 - dy, half, 1, PAL.blueRoofLight);
+      rect(ctx, sx, sy - 31 - dy, half, 1, PAL.blueRoof);
+    }
+    drawLine(ctx, sx + 1, sy - 36, sx + 7, sy - 41, PAL.goldDark);
+    rect(ctx, sx + 6, sy - 42, 2, 2, PAL.gold);
+    rect(ctx, sx, sy - 46, 1, 8, PAL.outline);
+    fx.flags.push({ x: sx + 1, y: sy - 46, color: PAL.purple });
+  } else {
+    drawCone(ctx, sx, sy - 30, 7, 14, PAL.blueRoofLight, PAL.blueRoofDark);
+    rect(ctx, sx, sy - 52, 1, 8, PAL.outline);
+    fx.flags.push({ x: sx + 1, y: sy - 52, color: PAL.purple });
+  }
 }
 
 function drawHay(ctx, tx, ty) {
   drawIsoBox(ctx, { x: tx, y: ty, w: 0.5, d: 0.35, z: 0 }, 4, PAL.thatch, PAL.thatchDark, PAL.thatchLight);
 }
 
-function drawLumberMill(ctx, tx, ty) {
+function drawLumberMill(ctx, tx, ty, tier = getBuildingTier("lumberMill")) {
   const box = { x: tx + 0.2, y: ty + 0.2, w: 1.6, d: 1.6, z: 0 };
-  const h = 12;
+  const h = tier >= 2 ? 16 : 12;
   fx.shadows.push({ box, h: h + 8 });
   drawIsoBox(ctx, box, h, PAL.wood, PAL.woodDark);
   for (let v = 2; v < h; v += 3) {                               // stacked logs
@@ -3611,7 +4362,12 @@ function drawLumberMill(ctx, tx, ty) {
   doorL(ctx, box, 0.9, 0.4, 9);
   windowL(ctx, box, 0.25, 6, 0.3, 4);
   windowR(ctx, box, 0.6, 6, 0.3, 4);
-  drawRoof(ctx, box, h, 9, ROOF_RED, "y", PAL.wood, () => drawChimney(ctx, box.x + 1.1, box.y + 0.25, h, 12));
+  drawRoof(ctx, box, h, 9, tier >= 2 ? ROOF_SLATE : ROOF_RED, "y", PAL.wood, () => drawChimney(ctx, box.x + 1.1, box.y + 0.25, h, 12));
+  if (tier >= 1) drawLogPile(ctx, tx - 0.15, ty + 1.95);
+  if (tier >= 3) {
+    const [fx1, fy1] = iso(box.x + box.w / 2, box.y + 0.2, h + 9);
+    addRoofFlag(ctx, fx1, fy1 - 8, PAL.gold);
+  }
 
   // Open saw shed beside it
   const shed = { x: tx + 2.1, y: ty + 0.3, w: 0.9, d: 1.4, z: 0 };
@@ -3636,7 +4392,22 @@ function drawLogPile(ctx, tx, ty) {
   }
 }
 
-function drawQuarryWorks(ctx) {
+function drawQuarryWorks(ctx, tier = getBuildingTier("quarry")) {
+  if (tier >= 1) {
+    for (const [x, y] of [[11.15, 3.75], [11.55, 3.8]]) {
+      drawIsoBox(ctx, { x, y, w: 0.35, d: 0.35, z: 0 }, 4, PAL.stoneLight, PAL.stone, PAL.cloth);
+    }
+  }
+  if (tier >= 2) {                                                   // a second crane
+    const [c2x, c2y] = iso(11.3, 2.9, 0);
+    rect(ctx, c2x, c2y - 20, 2, 20, PAL.wood);
+    drawLine(ctx, c2x + 1, c2y - 20, c2x + 16, c2y - 26, PAL.wood);
+    rect(ctx, c2x + 14, c2y - 25, 1, 9, PAL.outline);
+  }
+  if (tier >= 3) {
+    const [fx1, fy1] = iso(13, 1.5, 24);
+    addRoofFlag(ctx, fx1, fy1 - 8, PAL.gold);
+  }
   // Wooden crane
   const [cx, cy] = iso(14.7, 3.4, 0);
   rect(ctx, cx, cy - 26, 2, 26, PAL.wood);
@@ -3659,7 +4430,7 @@ function drawQuarryWorks(ctx) {
   }
 }
 
-function drawStall(ctx, tx, ty, color) {
+function drawStall(ctx, tx, ty, color, tier = getBuildingTier("market")) {
   const box = { x: tx + 0.15, y: ty + 0.15, w: 0.7, d: 0.7, z: 0 };
   fx.shadows.push({ box, h: 10 });
   for (const [u, v] of [[0, 0], [0.7, 0], [0, 0.7], [0.7, 0.7]]) {
@@ -3673,7 +4444,8 @@ function drawStall(ctx, tx, ty, color) {
     rect(ctx, gx, gy - 1, 2, 2, c);
   });
   const roofBox = { x: box.x - 0.05, y: box.y - 0.05, w: 0.8, d: 0.8, z: 0 };
-  drawRoof(ctx, roofBox, 13, 5, { roof: PAL.cloth, dark: "#cfc5ae", light: "#fffaf0", kind: "stripes", stripe: color }, "x", color);
+  const stripe = tier >= 3 ? PAL.gold : color;                    // golden awnings at the top tier
+  drawRoof(ctx, roofBox, 13, 5, { roof: PAL.cloth, dark: "#cfc5ae", light: "#fffaf0", kind: "stripes", stripe }, "x", stripe);
   const [lx, ly] = iso(box.x + 0.35, box.y + box.d, 11);
   addLight(lx, ly, 6);
 }
@@ -3714,11 +4486,12 @@ function drawCampfire(ctx, sx, sy) {
   fx.fires.push({ x: sx, y: sy - 2, small: false });
 }
 
-function drawTree(ctx, x, y, s, seed) {
+function drawTree(ctx, x, y, s, seed, sway = 0) {
   fillEllipse(ctx, x + Math.round(s * 0.7), y, s, Math.max(2, Math.round(s * 0.35)), SHADOW);
   rect(ctx, x - 1, y - s - 2, 3, s + 2, PAL.trunk);
   rect(ctx, x + 1, y - s - 2, 1, s + 2, PAL.trunkDark);
   const cy = y - s - Math.round(s * 0.7);
+  x += sway;                                   // the crown leans a little in the wind
   fillEllipse(ctx, x + 1, cy + 1, s + 1, Math.round(s * 0.9) + 1, PAL.leafDeep);
   fillEllipse(ctx, x, cy, s, Math.round(s * 0.9), PAL.leafDark);
   fillEllipse(ctx, x - Math.round(s * 0.2), cy - Math.round(s * 0.2), Math.round(s * 0.75), Math.round(s * 0.65), PAL.leaf);
@@ -3732,10 +4505,12 @@ function drawTree(ctx, x, y, s, seed) {
   }
 }
 
-function drawPine(ctx, x, y, s) {
+function drawPine(ctx, x, y, s, sway = 0) {
   fillEllipse(ctx, x + Math.round(s * 0.6), y, Math.round(s * 0.9), Math.max(2, Math.round(s * 0.3)), SHADOW);
   rect(ctx, x - 1, y - 4, 2, 4, PAL.trunk);
+  const baseX = x;
   for (let t = 0; t < 3; t++) {
+    x = baseX + (t === 2 ? sway : 0);          // the tip sways in the wind
     const bottom = y - 3 - Math.round(t * s * 0.75);
     const halfW = Math.round(s - t * s * 0.25);
     const height = Math.round(s * 1.0);
@@ -3820,10 +4595,384 @@ function getCropRowSprite(f, row, crop, stage, sway) {
 }
 
 
+// ---------- Upgrade extras (buildings look grander at higher levels) ----------
+
+// A little flag on a pole (animated by drawFlags).
+function addRoofFlag(ctx, x, y, color) {
+  rect(ctx, x, y, 1, 9, PAL.outline);
+  fx.flags.push({ x: x + 1, y, color });
+}
+
+// Picket fence and flowers in front of a house (tier 1+).
+function drawGarden(ctx, tx, ty) {
+  const y = ty + 1.95;
+  drawLine(ctx, ...iso(tx + 0.15, y, 3), ...iso(tx + 1.85, y, 3), PAL.cloth);
+  for (let u = 0.15; u <= 1.86; u += 0.28) {
+    const [px, py] = iso(tx + u, y, 0);
+    rect(ctx, px, py - 4, 1, 4, PAL.cloth);
+  }
+  const flowers = [PAL.flowerR, PAL.flowerY, PAL.flowerP, PAL.flowerW];
+  for (let i = 0; i < 6; i++) {
+    const [fx0, fy0] = iso(tx + 0.25 + i * 0.25, y - 0.12, 1);
+    rect(ctx, fx0, fy0, 1, 1, flowers[i % flowers.length]);
+    rect(ctx, fx0, fy0 + 1, 1, 1, PAL.leafDark);
+  }
+}
+
+// Stone foundation on the bottom of a building (tier 2+).
+function drawFoundation(ctx, box, height) {
+  faceL(ctx, box, 0, 0, box.w, height, PAL.stone);
+  faceR(ctx, box, 0, 0, box.d, height, PAL.stoneDark);
+  lineL(ctx, box, height, PAL.stoneDeep);
+  lineR(ctx, box, height, PAL.stoneDeep);
+  for (let u = 0.2; u < box.w; u += 0.35) faceL(ctx, box, u, 0, 0.04, height, PAL.stoneDark);
+}
+
+// A tall grain silo next to the barn (farm tier 2+).
+function drawSilo(ctx, tx, ty) {
+  const [sx, sy] = iso(tx, ty, 0);
+  fillEllipse(ctx, sx + 4, sy + 1, 7, 3, SHADOW);
+  drawCylinder(ctx, sx, sy, 5, 24, [PAL.stoneLight, PAL.stone, PAL.stoneDark, PAL.stoneDeep], true);
+  for (let y = sy - 22; y < sy; y += 6) rect(ctx, sx - 5, y, 10, 1, PAL.metalDark);   // iron hoops
+  fillEllipse(ctx, sx, sy - 24, 6, 3, PAL.roofRed);
+  fillEllipse(ctx, sx - 1, sy - 26, 4, 3, PAL.roofRedLight);
+  rect(ctx, sx, sy - 31, 1, 4, PAL.outline);
+}
+
+// Rooster weathervane on a roof.
+function drawWeathervane(ctx, x, y) {
+  rect(ctx, x, y - 8, 1, 8, PAL.outline);
+  rect(ctx, x - 2, y - 6, 5, 1, PAL.goldDark);
+  rect(ctx, x - 1, y - 10, 3, 2, PAL.gold);
+  rect(ctx, x + 1, y - 11, 1, 1, PAL.gold);
+}
+
+// Archery target for the barracks yard.
+function drawArcheryTarget(ctx, x, y) {
+  rect(ctx, x - 1, y - 9, 1, 9, PAL.woodDeep);
+  rect(ctx, x + 2, y - 9, 1, 9, PAL.woodDeep);
+  fillEllipse(ctx, x + 1, y - 10, 4, 4, PAL.cloth);
+  fillEllipse(ctx, x + 1, y - 10, 3, 3, PAL.red);
+  fillEllipse(ctx, x + 1, y - 10, 1.5, 1.5, PAL.cloth);
+  rect(ctx, x + 1, y - 11, 1, 1, PAL.red);
+}
+
+// A horse at a hitching post (barracks tier 2+).
+function drawHorse(ctx, x, y) {
+  fillEllipse(ctx, x + 2, y, 7, 2, SHADOW);
+  for (const lx of [-4, -2, 2, 4]) rect(ctx, x + lx, y - 3, 1, 3, "#4a2f1d");
+  rect(ctx, x - 5, y - 7, 11, 4, "#8a5a32");
+  rect(ctx, x - 5, y - 7, 11, 1, "#a87443");
+  rect(ctx, x + 5, y - 10, 2, 4, "#8a5a32");
+  rect(ctx, x + 6, y - 11, 3, 3, "#8a5a32");
+  rect(ctx, x + 8, y - 10, 1, 1, PAL.outline);
+  rect(ctx, x + 5, y - 11, 1, 4, "#3a2416");          // mane
+  rect(ctx, x - 6, y - 7, 1, 4, "#3a2416");          // tail
+  rect(ctx, x - 2, y - 8, 4, 2, PAL.banner);           // saddle cloth
+}
+
+
+// ---------- Hills ----------
+// (letters h and f in VILLAGE_MAP are grass and forest one level up)
+
+
+// ---------- Animals ----------
+const ANIMAL_HERDS = [
+  { kind: "chicken", needs: "farm",  anchor: [4.6, 15.45], radius: 0.4,  count: 4, speed: 0.55 },
+  { kind: "cow",     needs: "farm",  anchor: [8.4, 19.45], radius: 0.45, count: 2, speed: 0.1 },
+  { kind: "sheep",   needs: null,    anchor: [17.9, 14.9], radius: 0.55, count: 3, speed: 0.16 },
+];
+
+// Where an animal is right now: a slow, wandering loop around its anchor.
+function getAnimalPosition(herd, index, time) {
+  const phase = index * 2.17 + herd.anchor[0];
+  const u = time * herd.speed + phase;
+  const at = t => [
+    herd.anchor[0] + Math.sin(t) * herd.radius * 0.8 + Math.sin(t * 0.37 + 1) * herd.radius * 0.2,
+    herd.anchor[1] + Math.cos(t * 0.73) * herd.radius * 0.6,
+  ];
+  const [x, y] = at(u);
+  const [nx, ny] = at(u + 0.05);
+  const screenDx = (nx - x) - (ny - y);
+  // Animals stop now and then (to graze or peck)
+  const resting = Math.sin(u * 2.3) > 0.55;
+  return { x, y, facing: screenDx >= 0 ? 1 : -1, resting };
+}
+
+function drawAnimal(ctx, kind, pos, time, index) {
+  const [fx0, fy0] = iso(pos.x, pos.y, 0);
+  const x = Math.round(fx0), y = Math.round(fy0), f = pos.facing;
+  const step = pos.resting ? 0 : Math.floor(time * 6 + index) % 2;
+  // px() mirrors drawing when the animal faces left
+  const px = (dx, dy, w, h, color) => rect(ctx, f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h, color);
+  if (kind === "chicken") {
+    const peck = pos.resting && Math.floor(time * 4 + index) % 2;
+    rect(ctx, x - 2, y, 4, 1, SHADOW);
+    px(-1, -1, 1, 1, PAL.gold); px(1, -1, 1, 1, PAL.gold);         // legs
+    px(-2, -4, 4, 3, "#f6f2e6");                                   // body
+    px(-2, -4, 1, 1, "#d8d0c0");
+    if (peck) { px(2, -2, 2, 2, "#f6f2e6"); px(4, -1, 1, 1, PAL.gold); px(2, -3, 1, 1, PAL.red); }
+    else { px(1, -6, 2, 2, "#f6f2e6"); px(3, -5, 1, 1, PAL.gold); px(1, -7, 1, 1, PAL.red); px(2, -6, 1, 1, PAL.outline); }
+  } else if (kind === "cow") {
+    rect(ctx, x - 5, y, 10, 1, SHADOW);
+    for (const lx of [-4, -2, 1, 3]) px(lx, -3, 1, 3 - ((lx > 0) === !!step ? 1 : 0), "#3a3030");
+    px(-5, -7, 9, 4, "#f2eee6");                                   // body
+    px(-3, -7, 3, 2, "#2b2626"); px(1, -5, 2, 2, "#2b2626");       // patches
+    px(-6, -7, 1, 3, "#3a3030");                                   // tail
+    const graze = pos.resting ? 2 : 0;
+    px(4, -8 + graze, 3, 3, "#f2eee6"); px(6, -7 + graze, 1, 1, "#e8a8a0");   // head and nose
+    px(4, -9 + graze, 1, 1, "#d8d0c0");
+  } else if (kind === "sheep") {
+    rect(ctx, x - 4, y, 8, 1, SHADOW);
+    for (const lx of [-3, -1, 1, 2]) px(lx, -2, 1, 2 - (step && lx > 0 ? 1 : 0), "#3a3030");
+    px(-4, -6, 7, 4, "#f4f0e6");                                   // woolly body
+    px(-3, -7, 5, 1, "#f4f0e6");
+    px(-4, -6, 1, 1, "#d8d2c4"); px(0, -7, 1, 1, "#d8d2c4");
+    const graze = pos.resting ? 2 : 0;
+    px(3, -6 + graze, 2, 3, "#3a3030");                            // dark face
+  }
+}
+
+
+// ---------- Workers at their jobs ----------
+const WORK_STATIONS = [
+  { job: "hoe",    needs: "farm",       field: 0, pos: [7.4, 14.2], facing: 1 },
+  { job: "hoe",    needs: "farm",       field: 1, pos: [5.0, 16.5], facing: -1 },
+  { job: "hoe",    needs: "farm",       field: 2, pos: [8.6, 17.4], facing: 1 },
+  { job: "chop",   needs: "lumberMill",           pos: [14.45, 10.75], facing: -1 },
+  { job: "mine",   needs: "quarry",               pos: [12.6, 3.25], facing: -1 },
+  { job: "hammer", needs: "blacksmith",           pos: [13.95, 11.0], facing: -1 },
+  { job: "sell",   needs: "market",               pos: [9.95, 11.55], facing: 1 },
+];
+
+function getActiveStations() {
+  const b = state.buildings;
+  const fields = Math.min(b.farm.count, VILLAGE_LAYOUT.farmFields.length);
+  return WORK_STATIONS.filter(s => b[s.needs].count > 0 && (s.field === undefined || s.field < fields));
+}
+
+// A villager doing their job, with a looping tool animation.
+function drawJobWorker(ctx, station, time, index) {
+  const [fx0, fy0] = iso(station.pos[0], station.pos[1], 0);
+  const x = Math.round(fx0), y = Math.round(fy0), f = station.facing;
+  const px = (dx, dy, w, h, color) => rect(ctx, f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h, color);
+  const cycle = station.job === "hammer" ? 0.5 : station.job === "sell" ? 2.4 : 1.1;
+  const t = ((time + index * 0.37) % cycle) / cycle;
+  const down = t > 0.5;                                   // the tool comes down in the second half
+  const shirts = { hoe: "#4f9a4a", chop: "#c8442f", mine: "#7a776c", hammer: "#5a3a24", sell: "#8a5aa8" };
+  rect(ctx, x - 2, y, 5, 1, SHADOW);
+  px(-1, -2, 1, 2, PAL.woodDeep); px(1, -2, 1, 2, PAL.woodDeep);              // legs
+  const bend = down && station.job !== "sell" ? 1 : 0;
+  px(-1, -5 + bend, 3, 3, shirts[station.job]);                                 // body
+  px(-1, -7 + bend, 3, 2, PAL.skin);                                            // head
+  px(-1, -8 + bend, 3, 1, station.job === "mine" ? PAL.gold : PAL.trunkDark);   // hair / miner's cap
+  px(1, -6 + bend, 1, 1, PAL.outline);
+
+  switch (station.job) {
+    case "hoe":
+      if (down) { px(2, -4, 3, 1, PAL.wood); px(5, -4, 1, 3, PAL.metalDark); }
+      else { px(2, -8, 1, 5, PAL.wood); px(2, -9, 2, 1, PAL.metalDark); }
+      if (down && t < 0.65) { px(5, -2, 1, 1, PAL.soilLight); px(6, -3, 1, 1, PAL.soil); }
+      break;
+    case "chop":
+      px(3, -1, 4, 2, PAL.woodLight); px(3, -1, 4, 1, PAL.logEnd);              // log on the block
+      if (down) { px(2, -4, 3, 1, PAL.wood); px(4, -5, 2, 2, PAL.metal); }
+      else { px(1, -10, 1, 5, PAL.wood); px(1, -11, 2, 2, PAL.metal); }
+      if (down && t < 0.62) { px(6, -4, 1, 1, PAL.logEnd); px(7, -2, 1, 1, PAL.woodLight); }   // wood chips
+      break;
+    case "mine":
+      if (down) { px(2, -5, 3, 1, PAL.wood); px(4, -6, 1, 3, PAL.metalDark); }
+      else { px(1, -10, 1, 5, PAL.wood); px(0, -11, 3, 1, PAL.metalDark); }
+      if (down && t < 0.6) { px(5, -4, 1, 1, PAL.stoneLight); px(6, -6, 1, 1, PAL.fireLight); }
+      break;
+    case "hammer":
+      if (down) { px(2, -4, 2, 1, PAL.wood); px(3, -5, 2, 2, PAL.metalDark); }
+      else { px(2, -8, 1, 4, PAL.wood); px(2, -9, 2, 2, PAL.metalDark); }
+      if (down && t < 0.7) {                                                  // sparks fly
+        px(4, -6, 1, 1, PAL.fireLight); px(6, -7, 1, 1, PAL.fire); px(5, -9, 1, 1, PAL.fireLight);
+        addLight(x + f * 4, y - 5, 4);
+      }
+      break;
+    case "sell": {
+      const wave = Math.floor(t * 8) % 2 && t < 0.4;
+      if (wave) px(2, -9, 1, 3, PAL.skin); else px(2, -5, 1, 2, PAL.skin);
+      break;
+    }
+  }
+}
+
+
+// ---------- Windmill (farm tier 3) and fountain (market tier 2) ----------
+
+function drawWindmillBody(ctx, tx, ty) {
+  const [sx, sy] = iso(tx, ty, 0);
+  fillEllipse(ctx, sx + 5, sy + 1, 9, 3, SHADOW);
+  fillPoly(ctx, [[sx - 6, sy], [sx - 3, sy - 26], [sx, sy - 26], [sx, sy + 2]], PAL.plaster);
+  fillPoly(ctx, [[sx, sy - 26], [sx + 3, sy - 26], [sx + 6, sy], [sx, sy + 2]], PAL.plasterShade);
+  for (let y = sy - 20; y < sy; y += 6) rect(ctx, sx - 5 + (sy - y) / 8, y, 10 - (sy - y) / 4, 1, PAL.plasterDeep);
+  rect(ctx, sx - 2, sy - 7, 3, 7, PAL.door);
+  rect(ctx, sx - 1, sy - 18, 2, 3, PAL.glass);
+  addLight(sx, sy - 17, 5);
+  fillPoly(ctx, [[sx - 5, sy - 26], [sx, sy - 34], [sx, sy - 26]], PAL.roofRedLight);
+  fillPoly(ctx, [[sx, sy - 34], [sx + 5, sy - 26], [sx, sy - 26]], PAL.roofRedDark);
+}
+
+function drawWindmillSails(ctx, tx, ty, time) {
+  const [sx, sy] = iso(tx, ty, 0);
+  const cx = sx - 1, cy = sy - 27;
+  const angle = time * 0.9;
+  for (let k = 0; k < 4; k++) {
+    const a = angle + (k * Math.PI) / 2;
+    const ex = cx + Math.cos(a) * 15, ey = cy + Math.sin(a) * 15;
+    drawLine(ctx, cx, cy, ex, ey, PAL.woodDark);
+    // sail cloth beside each arm
+    const nx = -Math.sin(a) * 3, ny = Math.cos(a) * 3;
+    fillPoly(ctx, [[cx + Math.cos(a) * 5, cy + Math.sin(a) * 5], [ex, ey], [ex + nx, ey + ny], [cx + Math.cos(a) * 5 + nx, cy + Math.sin(a) * 5 + ny]], PAL.cloth);
+  }
+  rect(ctx, cx - 1, cy - 1, 3, 3, PAL.woodDeep);
+}
+
+function drawFountainBasin(ctx, tx, ty) {
+  const [sx, sy] = iso(tx, ty, 0);
+  fillEllipse(ctx, sx + 2, sy + 1, 11, 4, SHADOW);
+  fillEllipse(ctx, sx, sy - 1, 10, 4, PAL.stoneDark);
+  fillEllipse(ctx, sx, sy - 3, 10, 4, PAL.stoneLight);
+  fillEllipse(ctx, sx, sy - 3, 8, 3, PAL.waterDark);
+  fillEllipse(ctx, sx - 1, sy - 3, 6, 2, PAL.water);
+  rect(ctx, sx - 1, sy - 12, 3, 9, PAL.stone);
+  rect(ctx, sx + 1, sy - 12, 1, 9, PAL.stoneDark);
+  fillEllipse(ctx, sx, sy - 12, 4, 1.5, PAL.stoneLight);
+}
+
+function drawFountainWater(ctx, tx, ty, time) {
+  const [sx, sy] = iso(tx, ty, 0);
+  for (let i = 0; i < 6; i++) {                      // arcs of falling droplets
+    const t = ((time * 1.6 + i / 6) % 1);
+    const side = i % 2 ? 1 : -1;
+    const dx = side * t * 6, dy = -14 - Math.sin(t * Math.PI) * 5 + t * 10;
+    rect(ctx, sx + dx, sy + dy, 1, 1, PAL.waterLight);
+  }
+  rect(ctx, sx, sy - 15 - (Math.floor(time * 6) % 2), 1, 2, PAL.foam);
+  if (Math.floor(time * 3) % 2) rect(ctx, sx - 5, sy - 4, 2, 1, PAL.foam);
+  else rect(ctx, sx + 4, sy - 3, 2, 1, PAL.foam);
+}
+
+// Strings of colorful flags across the plaza (market tier 1+).
+function drawBunting(ctx, a, b) {
+  const [x1, y1] = iso(a[0], a[1], 14), [x2, y2] = iso(b[0], b[1], 14);
+  const colors = [PAL.red, PAL.gold, PAL.blue, PAL.green, PAL.purple];
+  const steps = Math.max(4, Math.round(Math.hypot(x2 - x1, y2 - y1) / 5));
+  let last = [x1, y1];
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const p = [lerp(x1, x2, t), lerp(y1, y2, t) + Math.sin(t * Math.PI) * 4];
+    drawLine(ctx, ...last, ...p, PAL.woodDeep);
+    if (i < steps) {
+      const c = colors[i % colors.length];
+      rect(ctx, p[0] - 1, p[1] + 1, 3, 1, c);
+      rect(ctx, p[0], p[1] + 2, 1, 1, c);
+    }
+    last = p;
+  }
+}
+
+
+// ---------- Butterflies ----------
+
+const BUTTERFLIES = [
+  { anchor: [6.5, 12.6], color: "#f6f2a0" }, { anchor: [14.2, 16.5], color: "#f6f6f0" },
+  { anchor: [3.5, 9.5], color: "#f0a8d8" }, { anchor: [16.8, 6.8], color: "#a8d0f6" },
+];
+
+function drawButterflies(ctx, time, light) {
+  if (light.darkness > 0.4) return;
+  BUTTERFLIES.forEach((b, i) => {
+    const u = time * 0.5 + i * 1.7;
+    const [sx, sy] = iso(b.anchor[0] + Math.sin(u) * 0.8, b.anchor[1] + Math.cos(u * 1.3) * 0.6, 10 + Math.sin(u * 3) * 4);
+    const flap = Math.floor(time * 10 + i) % 2;
+    rect(ctx, sx - (flap ? 2 : 1), sy, flap ? 2 : 1, 1, b.color);
+    rect(ctx, sx + 1, sy, flap ? 2 : 1, 1, b.color);
+    rect(ctx, sx, sy, 1, 1, PAL.outline);
+  });
+}
+
+// ---------- Building illustrations for the catalog ----------
+// Each building is drawn on a small square plot of land, like a
+// diorama, using the same drawing code as the village.
+
+const BUILDING_ART = {
+  farm:       { w: 3, d: 2, draw: (g, t) => { if (t >= 2) drawSilo(g, -0.15, 0.55); drawBarn(g, 0, 0, t); drawHay(g, 0.2, 2.05); } },
+  lumberMill: { w: 3, d: 2, draw: (g, t) => { drawLumberMill(g, 0, 0, t); drawLogPile(g, 0.1, 1.95); } },
+  quarry:     { w: 2, d: 2, draw: (g, t) => drawQuarryArt(g, t) },
+  market:     { w: 2, d: 1, draw: (g, t) => { drawStall(g, 0, 0, PAL.red, t); drawStall(g, 1, 0.1, PAL.blue, t); } },
+  house:      { w: 2, d: 2, draw: (g, t) => drawHouse(g, 0, 0, 1, t) },
+  blacksmith: { w: 2, d: 2, draw: (g, t) => drawBlacksmith(g, 0, 0, t) },
+  academy:    { w: 2, d: 2, draw: (g, t) => drawAcademy(g, 0, 0, t) },
+  barracks:   { w: 2, d: 3, draw: (g, t) => drawBarracks(g, 0, 0, t) },
+};
+
+// A small rocky outcrop with a cut face, for the quarry illustration.
+function drawQuarryArt(g, tier) {
+  drawIsoBox(g, { x: 0.1, y: 0.1, w: 1.8, d: 1.2, z: 0 }, 16, PAL.rock, PAL.rockDark, PAL.rockLight);
+  drawIsoBox(g, { x: 0.5, y: 0.2, w: 1.1, d: 0.7, z: 16 }, 8, PAL.rock, PAL.rockDark, PAL.rockLight);
+  drawIsoBox(g, { x: 0.4, y: 1.3, w: 1.2, d: 0.5, z: 0 }, 6, PAL.rockLight, PAL.rock, PAL.rockLight);
+  for (let i = 0; i < 2 + tier; i++) {
+    drawIsoBox(g, { x: 0.15 + i * 0.4, y: 1.9, w: 0.3, d: 0.3, z: 0 }, 4, PAL.stoneLight, PAL.stone, PAL.cloth);
+  }
+  const [cx, cy] = iso(1.85, 1.6, 0);
+  rect(g, cx, cy - 22, 2, 22, PAL.wood);
+  drawLine(g, cx + 1, cy - 22, cx - 16, cy - 28, PAL.wood);
+  rect(g, cx - 14, cy - 27, 1, 10, PAL.outline);
+  if (tier >= 3) addRoofFlag(g, cx, cy - 31, PAL.gold);
+}
+
+// The patch of land under an illustrated building.
+function drawPlot(g, plot) {
+  const { x, y, w, d } = plot;
+  const depth = 5;
+  fillPoly(g, [iso(x, y + d, 0), iso(x + w, y + d, 0), iso(x + w, y + d, -depth), iso(x, y + d, -depth)], PAL.soilL);
+  fillPoly(g, [iso(x + w, y, 0), iso(x + w, y + d, 0), iso(x + w, y + d, -depth), iso(x + w, y, -depth)], PAL.soilR);
+  drawLine(g, ...iso(x, y + d, 0), ...iso(x + w, y + d, 0), PAL.grassDark);
+  fillPoly(g, [iso(x, y, 0), iso(x + w, y, 0), iso(x + w, y + d, 0), iso(x, y + d, 0)], PAL.grass);
+  const random = makeRandom(Math.round(w * 13 + d * 7));
+  for (let i = 0; i < 18; i++) {
+    const [px, py] = iso(x + random() * w, y + random() * d, 0);
+    rect(g, px, py, 1, 1, random() < 0.5 ? PAL.grassDeep : PAL.grassLight);
+  }
+}
+
+function renderBuildingArt(typeId) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 88;
+  canvas.height = 72;
+  const spec = BUILDING_ART[typeId];
+  if (!spec) return canvas;
+  const g = canvas.getContext("2d");
+  const tier = typeId === "barracks"
+    ? (state.military.barracksLevel > 0 ? getBuildingTier("barracks") : 0)
+    : getBuildingTier(typeId);
+  const savedFx = fx;
+  fx = newEffects();                                   // collect flags/fires just for this picture
+  const plot = { x: -0.3, y: -0.3, w: spec.w + 0.6, d: spec.d + 0.6 };
+  const left = iso(plot.x, plot.y + plot.d)[0], right = iso(plot.x + plot.w, plot.y)[0];
+  const bottom = iso(plot.x + plot.w, plot.y + plot.d)[1] + 5;
+  g.translate(Math.round(44 - (left + right) / 2), Math.round(70 - bottom));
+  drawPlot(g, plot);
+  spec.draw(g, tier);
+  drawFlags(g, 0);
+  drawSaws(g, 0);
+  drawFires(g, 0);
+  fx = savedFx;
+  return canvas;
+}
+
 // ---------- Building the scene ----------
 
 // Rebuilds all cached art from the current game state.
+let sceneCastleTier = -1;
+
 function buildScene() {
+  sceneCastleTier = getCastleTier();
   fx = newEffects();
   tiles = buildTileMap();
   sceneObjects = buildSceneObjects();
@@ -3922,7 +5071,7 @@ function buildSceneObjects() {
 
   // Quarry works
   if (b.quarry.count > 0) {
-    addSprite(15.2, { x: 290, y: 80, w: 100, h: 70 }, drawQuarryWorks, "quarry");
+    addSprite(15.2, { x: 280, y: 60, w: 120, h: 90 }, ctx => drawQuarryWorks(ctx), "quarry");
   }
 
   // Market stalls: one market = 2 stalls, each extra market adds one (max 4)
@@ -3932,9 +5081,31 @@ function buildSceneObjects() {
     addSprite(s.x + s.y + 1.85, boxBounds({ x: s.x, y: s.y, w: 1, d: 1, z: 0 }, 26), ctx => drawStall(ctx, s.x, s.y, STALL_COLORS[i]), "market");
   }
 
-  // Plaza well, lamps and props
+  // Plaza: a well, or a fountain once the markets prosper
   const [wx, wy] = iso(11, 12.5, 0);
-  addSprite(23.5, { x: wx - 10, y: wy - 24, w: 22, h: 30 }, ctx => drawWell(ctx, 11, 12.5));
+  const marketTier = b.market.count > 0 ? getBuildingTier("market") : 0;
+  if (marketTier >= 2) {
+    const basin = makeSprite({ x: wx - 14, y: wy - 18, w: 28, h: 24 }, ctx => drawFountainBasin(ctx, 11, 12.5));
+    list.push({ depth: 23.5, draw(c, time) { c.drawImage(basin.canvas, basin.x, basin.y); drawFountainWater(c, 11, 12.5, time); } });
+  } else {
+    addSprite(23.5, { x: wx - 10, y: wy - 24, w: 22, h: 30 }, ctx => drawWell(ctx, 11, 12.5));
+  }
+  if (b.market.count > 0 && marketTier >= 1) {
+    addSprite(22.2, { x: 190, y: 90, w: 110, h: 50 }, ctx => drawBunting(ctx, [9.05, 11.05], [12.95, 11.05]));
+    addSprite(23.2, { x: 160, y: 90, w: 110, h: 70 }, ctx => drawBunting(ctx, [9.05, 11.05], [9.05, 13.95]));
+  }
+
+  // Farm extras: a grain silo, then a windmill with turning sails
+  if (b.farm.count > 0 && getBuildingTier("farm") >= 2) {
+    const [sx2, sy2] = iso(2.75, 13.65, 0);
+    addSprite(16.3, { x: sx2 - 10, y: sy2 - 34, w: 22, h: 40 }, ctx => drawSilo(ctx, 2.75, 13.65));
+  }
+  if (b.farm.count > 0 && getBuildingTier("farm") >= 3) {
+    occupy(3, 17, 1, 1);
+    const [mx, my] = iso(3.4, 17.5, 0);
+    const body = makeSprite({ x: mx - 12, y: my - 38, w: 26, h: 44 }, ctx => drawWindmillBody(ctx, 3.4, 17.5));
+    list.push({ depth: 20.9, draw(c, time) { c.drawImage(body.canvas, body.x, body.y); drawWindmillSails(c, 3.4, 17.5, time); } });
+  }
   for (const [lx, ly] of [[9.05, 11.05], [12.95, 11.05], [9.05, 13.95], [12.95, 13.95], [11.1, 16], [11.1, 19], [6, 12.05], [2.8, 12.05], [15.1, 12.05]]) {
     const [sx, sy] = iso(lx, ly, 0);
     addSprite(lx + ly, { x: sx - 8, y: sy - 18, w: 16, h: 22 }, ctx => drawLamp(ctx, sx, sy));
@@ -3955,16 +5126,26 @@ function buildSceneObjects() {
     const [sx, sy] = iso(tx, ty, z);
     const key = kind + size + (seed % 4);
     if (!treeSprites[key]) {
-      treeSprites[key] = makeSprite({ x: -16, y: -size * 3 - 6, w: 34, h: size * 3 + 12 }, ctx => {
-        if (kind === "pine") drawPine(ctx, 0, 0, size);
+      // Two pictures per tree: standing straight and leaning in the wind
+      treeSprites[key] = [0, 1].map(sway => makeSprite({ x: -16, y: -size * 3 - 6, w: 34, h: size * 3 + 12 }, ctx => {
+        if (kind === "pine") drawPine(ctx, 0, 0, size, sway);
         else if (kind === "bush") drawBush(ctx, 0, 0, size);
         else if (kind === "boulder") drawBoulder(ctx, 0, 0, size);
-        else drawTree(ctx, 0, 0, size, seed % 4 + 3);
-      });
+        else drawTree(ctx, 0, 0, size, seed % 4 + 3, sway);
+      }));
     }
     if (kind === "tree" || kind === "pine") fx.fireflies.push({ x: sx, y: sy - size * 2 });
-    const s = treeSprites[key];
-    list.push({ depth: tx + ty, sprite: s, ax: Math.round(sx), ay: Math.round(sy) });
+    const frames = treeSprites[key];
+    const ax = Math.round(sx), ay = Math.round(sy), phase = tx * 0.9 + ty * 0.5;
+    const sways = kind === "tree" || kind === "pine";
+    list.push({
+      depth: tx + ty,
+      draw(c, time) {
+        // a gentle gust rolls across the island from left to right
+        const frame = sways && Math.sin(time * 1.1 - phase) > 0.75 ? 1 : 0;
+        c.drawImage(frames[frame].canvas, ax + frames[frame].x, ay + frames[frame].y);
+      },
+    });
   };
   for (let ty = 0; ty < MAP_SIZE; ty++) {
     for (let tx = 0; tx < MAP_SIZE; tx++) {
@@ -4197,7 +5378,9 @@ function drawBirds(ctx, time, light) {
 // Shimmering water and falling waterfalls.
 function drawWater(ctx, time) {
   for (const s of fx.sparkles) {
-    if (Math.sin(time * 2.2 + s.phase) > 0.55) rect(ctx, s.x, s.y, 2, 1, PAL.waterLight);
+    // highlights drift slowly downstream so the river seems to flow
+    const drift = ((time * 3 + s.phase * 4) % 6) - 3;
+    if (Math.sin(time * 2.2 + s.phase) > 0.35) rect(ctx, s.x + drift, s.y + drift * 0.5, 2, 1, PAL.waterLight);
   }
   for (const f of fx.falls) {
     const width = Math.round(Math.abs(f.b[0] - f.a[0]));
@@ -4444,6 +5627,19 @@ function drawFrame(time, dt) {
     depth: pos.x + pos.y + (pos.z > 0 ? 1 : 0),
     draw: (c, t) => drawWorker(c, w, pos, t),
   })));
+  // Villagers working at their stations
+  getActiveStations().forEach((station, i) => items.push({
+    depth: station.pos[0] + station.pos[1],
+    draw: (c, t) => drawJobWorker(c, station, t, i),
+  }));
+  // Farm animals and sheep wandering about
+  for (const herd of ANIMAL_HERDS) {
+    if (herd.needs && state.buildings[herd.needs].count === 0) continue;
+    for (let i = 0; i < herd.count; i++) {
+      const pos = getAnimalPosition(herd, i, time);
+      items.push({ depth: pos.x + pos.y, draw: (c, t) => drawAnimal(c, herd.kind, pos, t, i) });
+    }
+  }
   items.sort((a, b) => a.depth - b.depth);
   for (const item of items) {
     if (item.sprite) ctx.drawImage(item.sprite.canvas, (item.ax || 0) + item.sprite.x, (item.ay || 0) + item.sprite.y);
@@ -4456,6 +5652,7 @@ function drawFrame(time, dt) {
   drawFires(ctx, time);
   updateAndDrawSmoke(ctx, time, dt);
   updateAndDrawBursts(ctx, dt, time);
+  drawButterflies(ctx, time, light);
   drawLowClouds(ctx, time);
 
   // 5. Day/night lighting: tint everything, then add glowing lights
@@ -4522,6 +5719,7 @@ function renderLoop(now) {
   if (now - lastFrameMs < FRAME_INTERVAL_MS) return;
   const dt = Math.min(0.1, (now - lastFrameMs) / 1000);
   lastFrameMs = now;
+  if (getCastleTier() !== sceneCastleTier) villageNeedsRedraw = true;   // the castle has grown
   if (villageNeedsRedraw) {
     buildScene();
     villageNeedsRedraw = false;
@@ -4848,8 +6046,19 @@ function drawBattle(battle, time) {
 function battleFrame(now) {
   const battle = currentBattle;
   if (!battle) return;
+  // Preparation: the armies stand ready until the countdown ends
+  if (battleView.phase === "prep") {
+    const left = Math.ceil((battleView.prepEndsAt - now) / 1000);
+    document.getElementById("battle-countdown").textContent = left > 0 ? `(${left})` : "";
+    if (left <= 0) beginFight();
+  }
   const dt = Math.min(0.1, (now - battleView.lastMs) / 1000);
   battleView.lastMs = now;
+  if (battleView.phase === "prep") {
+    drawBattle(battle, now / 1000);
+    requestAnimationFrame(battleFrame);
+    return;
+  }
   battleView.accumulator += dt * BATTLE_PLAYBACK_SPEED;
   while (battleView.accumulator >= BATTLE_STEP && !battle.over) {
     stepBattle(battle, BATTLE_STEP);
@@ -4875,7 +6084,7 @@ function setupBattleView() {
 
 // ---------- The barracks in the village ----------
 
-function drawBarracks(ctx, tx, ty) {
+function drawBarracks(ctx, tx, ty, tier = getBuildingTier("barracks")) {
   const box = { x: tx + 0.2, y: ty + 0.2, w: 1.6, d: 1.6, z: 0 };
   const h = 13;
   fx.shadows.push({ box, h: h + 8 });
@@ -4898,6 +6107,12 @@ function drawBarracks(ctx, tx, ty) {
   const [rx, ry] = iso(tx + 1.6, ty + 2.1, 0);
   rect(ctx, rx - 4, ry - 6, 9, 1, PAL.wood);
   for (let i = 0; i < 4; i++) rect(ctx, rx - 3 + i * 2, ry - 9, 1, 9, i % 2 ? PAL.metal : PAL.woodDark);
+  if (tier >= 1) drawArcheryTarget(ctx, ...iso(tx + 1.9, ty + 2.8, 0));
+  if (tier >= 2) drawHorse(ctx, ...iso(tx + 0.9, ty + 2.75, 0));
+  if (tier >= 3) {
+    const [fx1, fy1] = iso(tx + 1.0, ty + 1.0, 22);
+    addRoofFlag(ctx, fx1, fy1 - 8, PAL.red);
+  }
 }
 
 
@@ -4906,6 +6121,9 @@ function drawBarracks(ctx, tx, ty) {
    ============================================================= */
 
 function initGame() {
+  // Paint the interface textures and fill in the pixel icons first
+  applyUiArt();
+  fillIconSlots();
   // Set up the village canvas
   villageCanvas = document.getElementById("village-canvas");
   villageCtx = villageCanvas.getContext("2d");
