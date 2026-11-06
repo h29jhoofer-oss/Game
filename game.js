@@ -269,6 +269,8 @@ const AWAY_THRESHOLD_SECONDS = 60;
 //   bonusVs: { fast: 1.5 }          x1.5 damage against units with that trait
 //   support: true                   stays behind the front line
 //   boss: true                      a boss (bigger, worth double rewards)
+//   magic: true                     attacks ignore the target's defense (magic bolts)
+//   regen: 0.02                     heals 2% of its health every second
 // =============================================================
 
 const BARRACKS = {
@@ -337,12 +339,31 @@ const KNIGHT_TYPES = {
 // Front line first: this order decides where knights stand in battle.
 const KNIGHT_FORMATION_ORDER = ["guardian", "cavalier", "swordsman", "paladin", "ranger"];
 
+// Each civilization has its own enemies, waves, boss, rewards and look.
+//   unlockAfter: the civilization first attacks once you have beaten
+//                that wave of another civilization.
 const ENEMY_CIVILIZATIONS = {
   barbarians: {
-    name: "Barbarians",
+    name: "Barbarians", adjective: "Barbarian",
     description: "Wild raiders from the northern hills. They come in great numbers and hit hard.",
+    bossName: "Chieftain",
+    raidTitle: "Barbarians at the Gates!", bossTitle: "The Chieftain Attacks!",
+    rewardBonus: { food: 50 },                     // extra loot per wave besides gold
+    colors: { back: "#5a3a24", stripe: "#7a4a2e", ground: "#4a3a24", groundLight: "#6b5436" },
+  },
+  elves: {
+    name: "Elves", adjective: "Elven",
+    description: "Graceful warriors of the Silverwood. Swift, deadly with the bow and protected by druid magic.",
+    bossName: "Forest Guardian",
+    raidTitle: "The Elves Strike!", bossTitle: "The Forest Guardian Awakens!",
+    unlockAfter: { civ: "barbarians", wave: 5 },
+    rewardBonus: { wood: 70 },
+    colors: { back: "#1f3d2e", stripe: "#2f5a44", ground: "#2f5a2a", groundLight: "#5fa04a" },
   },
 };
+
+// The order civilizations are introduced in.
+const CIV_ORDER = ["barbarians", "elves"];
 
 const ENEMY_TYPES = {
   raider: {
@@ -377,6 +398,50 @@ const ENEMY_TYPES = {
     aura: { attack: 0.25, radius: 40 }, support: true,
     traits: ["light"],
   },
+  // ----- Elves of the Silverwood -----
+  scout: {
+    name: "Elven Scout", civilization: "elves",
+    description: "A swift forest runner in a green cloak.",
+    hp: 60, attack: 9, defense: 1, attackSpeed: 1.2, moveSpeed: 38, range: 9,
+    traits: ["fast", "light"],
+  },
+  archer: {
+    name: "Elven Archer", civilization: "elves",
+    description: "Looses arrows from far behind the line.",
+    abilityText: "Longbow: attacks from a long distance.",
+    hp: 55, attack: 11, defense: 1, attackSpeed: 0.9, moveSpeed: 16, range: 75,
+    ranged: true, traits: ["light"],
+  },
+  bladedancer: {
+    name: "Bladedancer", civilization: "elves",
+    description: "Spins through the ranks with twin curved blades.",
+    abilityText: "Whirling Blades: strikes more than twice every second.",
+    hp: 85, attack: 8, defense: 2, attackSpeed: 2.4, moveSpeed: 30, range: 9,
+    traits: ["fast", "light"],
+  },
+  druid: {
+    name: "Druid", civilization: "elves",
+    description: "A keeper of the old grove, crowned with antlers.",
+    abilityText: "Grove Mending: heals the most wounded nearby elf for 9 health every 1.6 seconds.",
+    hp: 90, attack: 5, defense: 1, attackSpeed: 0.7, moveSpeed: 14, range: 9,
+    heal: { amount: 9, interval: 1.6, radius: 45 }, support: true,
+    traits: ["light"],
+  },
+  spellweaver: {
+    name: "Spellweaver", civilization: "elves",
+    description: "Weaves starlight into bolts of violet fire.",
+    abilityText: "Arcane Bolt: magic from afar that ignores all armor.",
+    hp: 65, attack: 16, defense: 0, attackSpeed: 0.6, moveSpeed: 14, range: 80,
+    ranged: true, magic: true, traits: ["light"],
+  },
+  forestGuardian: {
+    name: "Forest Guardian", civilization: "elves",
+    description: "An ancient tree spirit that wakes when the Silverwood calls. A boss!",
+    abilityText: "Ancient Bark: regrows 2% of its health every second. Appears every 5th elven wave.",
+    hp: 1100, attack: 26, defense: 8, attackSpeed: 0.7, moveSpeed: 10, range: 12,
+    regen: 0.02, boss: true,
+    traits: ["armored"],
+  },
   chieftain: {
     name: "Chieftain", civilization: "barbarians",
     description: "The horned warlord of the northern clans. A boss!",
@@ -397,10 +462,20 @@ const INVASION = {
   woundedHealSeconds: 20,      // one wounded knight recovers this often
 };
 
-// Which enemies attack in a given wave. New enemy types join as the
-// waves grow, and every 5th wave the Chieftain leads the raid.
+// Which enemies attack in a given wave of a civilization. New enemy
+// types join as the waves grow, and every 5th wave the boss leads.
 // (Listed front line first: this is also their battle formation.)
-function getWaveEnemies(wave) {
+function getWaveEnemies(civ, wave) {
+  if (civ === "elves") {
+    return [
+      { type: "bladedancer",    count: wave >= 2 ? Math.floor(wave / 2) : 0 },
+      { type: "scout",          count: 2 + Math.ceil(wave * 0.6) },
+      { type: "forestGuardian", count: isBossWave(wave) ? 1 : 0 },
+      { type: "archer",         count: 1 + Math.floor(wave / 2) },
+      { type: "spellweaver",    count: wave >= 3 ? Math.floor((wave - 1) / 2) : 0 },
+      { type: "druid",          count: wave >= 4 ? 1 + Math.floor((wave - 4) / 3) : 0 },
+    ].filter(group => group.count > 0);
+  }
   return [
     { type: "brute",     count: wave >= 4 ? Math.floor((wave - 1) / 3) : 0 },
     { type: "raider",    count: 2 + Math.ceil(wave * 0.6) },
@@ -416,11 +491,16 @@ function isBossWave(wave) {
 }
 
 // Loot for winning, and the repair bill for losing.
-function getWaveRewards(wave) {
+// Elves are richer foes, and their loot includes fine Silverwood timber.
+function getWaveRewards(civ, wave) {
+  const c = ENEMY_CIVILIZATIONS[civ];
   const boss = isBossWave(wave) ? 2 : 1;      // boss raids pay double
-  return { gold: Math.round(30 * Math.pow(wave, 1.2)) * boss, food: 50 * wave * boss };
+  const goldFactor = civ === "elves" ? 1.3 : 1;
+  const rewards = { gold: Math.round(30 * Math.pow(wave, 1.2) * goldFactor) * boss };
+  for (const id in c.rewardBonus) rewards[id] = c.rewardBonus[id] * wave * boss;
+  return rewards;
 }
-function getWaveRepairs(wave) {
+function getWaveRepairs(civ, wave) {
   return { wood: 80 * wave, stone: 50 * wave };
 }
 
@@ -819,7 +899,12 @@ function createMilitaryState() {
     wounded,
     healProgress: 0,                          // 0..1 toward the next healed knight
     training: { queue: [], progress: 0 },     // queue of knight type ids
-    invasion: { wave: 1, nextAt: 0 },         // nextAt = real time (ms) of the next raid
+    invasion: {
+      nextAt: 0,                              // real time (ms) of the next raid
+      civ: "barbarians",                      // who attacks next
+      waves: { barbarians: 1, elves: 1 },     // each civilization has its own wave count
+      unlocked: ["barbarians"],               // civilizations that have found your kingdom
+    },
     experience: 0,
     battlesWon: 0,
     battlesLost: 0,
@@ -942,6 +1027,36 @@ function getEnemyStats(typeId, wave) {
   return { ...t, hp: Math.round(t.hp * k), attack: t.attack * k };
 }
 
+// The wave number of the next raid (for whichever civilization comes next).
+function getRaidWave() {
+  const inv = state.military.invasion;
+  return inv.waves[inv.civ] || 1;
+}
+
+// After a victory, the next raid comes from the next civilization in
+// turn, so known enemies take turns attacking.
+function chooseNextCiv() {
+  const inv = state.military.invasion;
+  const list = CIV_ORDER.filter(c => inv.unlocked.includes(c));
+  inv.civ = list[(list.indexOf(inv.civ) + 1) % list.length];
+}
+
+// A new civilization notices your kingdom once you beat a certain wave.
+function checkCivUnlocks() {
+  const inv = state.military.invasion;
+  let unlockedNow = false;
+  for (const civ of CIV_ORDER) {
+    const rule = ENEMY_CIVILIZATIONS[civ].unlockAfter;
+    if (!rule || inv.unlocked.includes(civ)) continue;
+    if ((inv.waves[rule.civ] || 1) > rule.wave) {
+      inv.unlocked.push(civ);
+      unlockedNow = true;
+      if (uiReady) announce("A new enemy", `The ${ENEMY_CIVILIZATIONS[civ].name}`, ENEMY_CIVILIZATIONS[civ].description, createPortrait(civ === "elves" ? "bladedancer" : "raider"));
+    }
+  }
+  return unlockedNow;
+}
+
 function getSecondsUntilInvasion() {
   return (state.military.invasion.nextAt - Date.now()) / 1000;
 }
@@ -962,6 +1077,7 @@ function makeUnit(side, typeId, stats, x, y) {
     // special abilities (undefined when the unit has none)
     aura: stats.aura, protect: stats.protect, heal: stats.heal, ranged: stats.ranged,
     chargeMultiplier: stats.chargeMultiplier, bonusVs: stats.bonusVs, support: stats.support, boss: stats.boss,
+    magic: stats.magic, regen: stats.regen,
     hasCharged: false, healTimer: stats.heal ? stats.heal.interval : 0,
     attackBoost: 0, protection: 0,
     cooldown: 0.4, target: null, alive: true, facing: side === "knight" ? 1 : -1,
@@ -978,7 +1094,8 @@ function formationPosition(index, frontX, direction) {
 // Sets up a battle between the current army and the next wave.
 function createBattle() {
   const m = state.military;
-  const wave = m.invasion.wave;
+  const civ = m.invasion.civ;
+  const wave = getRaidWave();
   const units = [];
   let i = 0;
   for (const typeId of KNIGHT_FORMATION_ORDER) {
@@ -988,15 +1105,15 @@ function createBattle() {
     }
   }
   let j = 0;
-  for (const group of getWaveEnemies(wave)) {
+  for (const group of getWaveEnemies(civ, wave)) {
     for (let k = 0; k < group.count; k++) {
       const [x, y] = formationPosition(j++, 262, -1);
       units.push(makeUnit("enemy", group.type, getEnemyStats(group.type, wave), x, y));
     }
   }
   return {
-    wave, units, time: 0, over: false, victory: false, timedOut: false,
-    rng: makeRandom(wave * 7919 + i * 131 + 17),
+    civ, wave, units, time: 0, over: false, victory: false, timedOut: false,
+    rng: makeRandom(wave * 7919 + i * 131 + 17 + (civ === "elves" ? 5003 : 0)),
     effects: [], hits: 0, resultApplied: false,
   };
 }
@@ -1023,14 +1140,15 @@ function strike(battle, attacker, target) {
     for (const trait of target.traits) if (attacker.bonusVs[trait]) power *= attacker.bonusVs[trait];
   }
   const variance = 0.85 + battle.rng() * 0.3;
-  const damage = Math.max(1, Math.round((power - target.defense) * variance * (1 - target.protection)));
+  const armor = attacker.magic ? 0 : target.defense;          // magic ignores armor
+  const damage = Math.max(1, Math.round((power - armor) * variance * (1 - target.protection)));
   target.hp -= damage;
   target.flash = 0.12;
   attacker.lunge = 0.15;
   attacker.cooldown = 1 / attacker.attackSpeed;
   battle.hits += 1;
   if (attacker.ranged) {
-    battle.effects.push({ arrow: true, x1: attacker.x, y1: attacker.y - 8, x2: target.x, y2: target.y - 7, age: 0 });
+    battle.effects.push({ arrow: true, magic: !!attacker.magic, x1: attacker.x, y1: attacker.y - 8, x2: target.x, y2: target.y - 7, age: 0 });
   }
   battle.effects.push({ x: target.x, y: target.y - 15, value: damage, age: 0, side: target.side });
   if (battle.effects.length > 80) battle.effects.shift();
@@ -1091,6 +1209,7 @@ function stepBattle(battle, dt) {
     if (!u.alive) continue;
     u.cooldown -= dt;
     if (u.heal) tryHeal(battle, u, battle.units.filter(o => o.alive), dt);
+    if (u.regen) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * u.regen * dt);   // Ancient Bark
     if (!u.target || !u.target.alive) u.target = nearestFoe(battle, u);
     const t = u.target;
     if (!t) { u.moving = false; continue; }
@@ -1171,20 +1290,25 @@ function applyBattleResult(battle) {
   }
 
   const summary = {
-    time: Date.now(), wave: battle.wave, civilization: "Barbarians",
+    time: Date.now(), wave: battle.wave, civ: battle.civ, civilization: ENEMY_CIVILIZATIONS[battle.civ].name,
     victory: battle.victory, timedOut: battle.timedOut,
     knightsStart, knightsSurviving, wounded: knightsStart - knightsSurviving,
     enemiesTotal, enemiesDefeated, rewards: {}, repairs: {}, experience: 0,
   };
 
   if (battle.victory) {
-    summary.rewards = getWaveRewards(battle.wave);
+    summary.rewards = getWaveRewards(battle.civ, battle.wave);
     for (const id in summary.rewards) state.resources[id] += summary.rewards[id];
     m.battlesWon += 1;
-    m.invasion.wave += 1;                       // the next wave is stronger
+    m.invasion.waves[battle.civ] = battle.wave + 1;   // their next wave is stronger
+    // Newly discovered enemies attack next; otherwise civilizations take turns
+    const before = m.invasion.unlocked.length;
+    checkCivUnlocks();
+    if (m.invasion.unlocked.length > before) m.invasion.civ = m.invasion.unlocked[m.invasion.unlocked.length - 1];
+    else chooseNextCiv();
   } else {
     // Temporary repairs: never more than 20% of what you have stored
-    const bill = getWaveRepairs(battle.wave);
+    const bill = getWaveRepairs(battle.civ, battle.wave);
     for (const id in bill) {
       const paid = Math.floor(Math.min(bill[id], state.resources[id] * 0.2));
       state.resources[id] -= paid;
@@ -1397,7 +1521,23 @@ function cleanMilitaryData(m, clean, isGoodNumber) {
     if (isGoodNumber(m.training.progress)) clean.training.progress = m.training.progress;
   }
   if (m.invasion) {
-    if (isGoodNumber(m.invasion.wave) && m.invasion.wave >= 1) clean.invasion.wave = Math.floor(m.invasion.wave);
+    // Old saves had a single wave counter (barbarians only)
+    if (isGoodNumber(m.invasion.wave) && m.invasion.wave >= 1) clean.invasion.waves.barbarians = Math.floor(m.invasion.wave);
+    if (m.invasion.waves && typeof m.invasion.waves === "object") {
+      for (const civ of CIV_ORDER) {
+        const w = m.invasion.waves[civ];
+        if (isGoodNumber(w) && w >= 1) clean.invasion.waves[civ] = Math.floor(w);
+      }
+    }
+    if (Array.isArray(m.invasion.unlocked)) {
+      clean.invasion.unlocked = CIV_ORDER.filter(c => c === "barbarians" || m.invasion.unlocked.includes(c));
+    }
+    if (CIV_ORDER.includes(m.invasion.civ) && clean.invasion.unlocked.includes(m.invasion.civ)) clean.invasion.civ = m.invasion.civ;
+    // Saves from before a civilization existed: discover it if its wave was already beaten
+    for (const civ of CIV_ORDER) {
+      const rule = ENEMY_CIVILIZATIONS[civ].unlockAfter;
+      if (rule && !clean.invasion.unlocked.includes(civ) && clean.invasion.waves[rule.civ] > rule.wave) clean.invasion.unlocked.push(civ);
+    }
     if (isGoodNumber(m.invasion.nextAt)) clean.invasion.nextAt = m.invasion.nextAt;
   }
   for (const key of ["experience", "battlesWon", "battlesLost", "totalTrained"]) {
@@ -2674,7 +2814,7 @@ function showWelcomeBack(secondsAway, secondsPaid, earned, battles = []) {
     row.appendChild(createPixelIcon("sword"));
     const name = document.createElement("span");
     name.className = "earning-name";
-    name.textContent = `Raid, wave ${b.wave}`;
+    name.textContent = `${ENEMY_CIVILIZATIONS[b.civ || "barbarians"].adjective} raid, wave ${b.wave}`;
     const amount = document.createElement("span");
     amount.className = "earning-amount" + (b.victory ? "" : " negative");
     amount.textContent = b.victory ? "Victory" : "Defeat";
@@ -2749,11 +2889,12 @@ function createPortrait(typeId) {
   canvas.className = "portrait";
   const g = canvas.getContext("2d");
   const enemy = !KNIGHT_TYPES[typeId];
-  const back = enemy ? "#5a3a24" : "#26407a", stripe = enemy ? "#7a4a2e" : "#3a5fa8";
+  const civColors = enemy ? ENEMY_CIVILIZATIONS[ENEMY_TYPES[typeId].civilization].colors : null;
+  const back = enemy ? civColors.back : "#26407a", stripe = enemy ? civColors.stripe : "#3a5fa8";
   rect(g, 0, 0, 26, 28, back);
   for (let x = 0; x < 26; x += 6) rect(g, x, 0, 3, 28, stripe);           // banner stripes
-  rect(g, 0, 22, 26, 6, enemy ? "#4a3a24" : "#4d8236");                  // ground
-  rect(g, 0, 22, 26, 1, enemy ? "#6b5436" : "#72ab4e");
+  rect(g, 0, 22, 26, 6, enemy ? civColors.ground : "#4d8236");             // ground
+  rect(g, 0, 22, 26, 1, enemy ? civColors.groundLight : "#72ab4e");
   rect(g, 4, 25, 18, 1, "rgba(0,0,0,0.3)");
   drawUnitSprite(g, typeId, 13, 25, 1, { noShadow: true });
   return canvas;
@@ -2833,6 +2974,38 @@ function buildArmyPanel() {
 function formatClock(seconds) {
   const s = Math.max(0, Math.ceil(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+// "Known enemies": every civilization, its next wave, or how to meet it.
+function updateKnownEnemies() {
+  const list = document.getElementById("known-enemies");
+  const inv = state.military.invasion;
+  const key = CIV_ORDER.map(c => c + inv.waves[c] + inv.unlocked.includes(c) + (inv.civ === c)).join() + "dwarves";
+  if (list.dataset.key === key) return;
+  list.dataset.key = key;
+  list.innerHTML = "";
+  const rows = CIV_ORDER.map(civ => {
+    const c = ENEMY_CIVILIZATIONS[civ];
+    const known = inv.unlocked.includes(civ);
+    const rule = c.unlockAfter;
+    return {
+      civ, name: c.name, known,
+      text: known ? `Next wave ${inv.waves[civ]}${inv.civ === civ ? " · attacking next" : ""}`
+        : `Unknown · appear after ${ENEMY_CIVILIZATIONS[rule.civ].name.toLowerCase()} wave ${rule.wave} is beaten`,
+    };
+  });
+  rows.push({ civ: "dwarves", name: "???", known: false, text: "Rumors speak of a people under the mountains..." });
+  for (const r of rows) {
+    const li = document.createElement("li");
+    li.className = "known-enemy" + (r.known ? "" : " unknown");
+    li.dataset.civ = r.civ;
+    const name = document.createElement("strong");
+    name.textContent = r.name;
+    const text = document.createElement("span");
+    text.textContent = r.text;
+    li.append(name, text);
+    list.appendChild(li);
+  }
 }
 
 function updateArmyPanel() {
@@ -2918,14 +3091,16 @@ function updateArmyPanel() {
   if (built) {
     document.getElementById("invasion-countdown").textContent =
       currentBattle ? "Under attack!" : secondsLeft > 0 ? formatClock(secondsLeft) : "Any moment...";
-    document.getElementById("invasion-wave").textContent = `Wave ${m.invasion.wave}${isBossWave(m.invasion.wave) ? " (BOSS)" : ""}`;
-    const previewKey = String(m.invasion.wave);
+    const civ = m.invasion.civ, wave = getRaidWave();
+    document.getElementById("invasion-wave").textContent = `${ENEMY_CIVILIZATIONS[civ].name} · Wave ${wave}${isBossWave(wave) ? " (BOSS)" : ""}`;
+    updateKnownEnemies();
+    const previewKey = civ + wave;
     const preview = document.getElementById("enemy-preview");
     if (preview.dataset.key !== previewKey) {
       preview.dataset.key = previewKey;
       preview.innerHTML = "";
-      for (const group of getWaveEnemies(m.invasion.wave)) {
-        const s = getEnemyStats(group.type, m.invasion.wave);
+      for (const group of getWaveEnemies(civ, wave)) {
+        const s = getEnemyStats(group.type, wave);
         const row = document.createElement("li");
         row.className = "enemy-row";
         row.dataset.civ = s.civilization;
@@ -2941,8 +3116,9 @@ function updateArmyPanel() {
         row.appendChild(text);
         preview.appendChild(row);
       }
-      const r = getWaveRewards(m.invasion.wave);
-      document.getElementById("invasion-reward").textContent = `Victory reward: ${formatNumber(r.gold)} gold, ${formatNumber(r.food)} food`;
+      const r = getWaveRewards(civ, wave);
+      document.getElementById("invasion-reward").textContent = "Victory reward: " +
+        Object.entries(r).map(([id, v]) => `${formatNumber(v)} ${id}`).join(", ");
     }
     document.getElementById("battle-record").textContent =
       `Victories ${m.battlesWon} · Defeats ${m.battlesLost} · Army experience ${formatNumber(m.experience)}`;
@@ -2956,8 +3132,9 @@ function updateArmyPanel() {
       for (const entry of m.log) {
         const li = document.createElement("li");
         li.className = "log-entry " + (entry.victory ? "won" : "lost");
-        li.textContent = `Wave ${entry.wave}: ${entry.victory ? (entry.timedOut ? "Raiders retreated" : "Victory") : "Defeat"} · ` +
-          `${entry.enemiesDefeated}/${entry.enemiesTotal} raiders defeated · ${entry.wounded} knights wounded`;
+        li.dataset.civ = entry.civ || "barbarians";
+        li.textContent = `${entry.civilization || "Barbarians"}, wave ${entry.wave}: ${entry.victory ? (entry.timedOut ? "Raiders retreated" : "Victory") : "Defeat"} · ` +
+          `${entry.enemiesDefeated}/${entry.enemiesTotal} ${(entry.civilization || "Barbarians").toLowerCase()} defeated · ${entry.wounded} knights wounded`;
         log.appendChild(li);
       }
     }
@@ -2968,7 +3145,7 @@ function updateArmyPanel() {
   const warning = built && !currentBattle && secondsLeft > 0 && secondsLeft <= INVASION.warningSeconds;
   banner.hidden = !warning;
   if (warning) {
-    banner.textContent = `Barbarians approach! Raid in ${formatClock(secondsLeft)} · ${countKnights(m.army)} knights ready`;
+    banner.textContent = `${ENEMY_CIVILIZATIONS[m.invasion.civ].name} approach! Raid in ${formatClock(secondsLeft)} · ${countKnights(m.army)} knights ready`;
     if (warnedForInvasionAt !== m.invasion.nextAt) {
       warnedForInvasionAt = m.invasion.nextAt;
       playSound("horn");
@@ -2987,8 +3164,11 @@ function startLiveBattle() {
   battleView.lastHits = 0;
   battleView.phase = "prep";
   battleView.prepEndsAt = performance.now() + 7000;     // the battle starts by itself after 7 s
-  document.getElementById("battle-title").textContent = isBossWave(currentBattle.wave)
-    ? `The Chieftain Attacks! · Wave ${currentBattle.wave}` : `Barbarians at the Gates! · Wave ${currentBattle.wave}`;
+  const civInfo = ENEMY_CIVILIZATIONS[currentBattle.civ];
+  document.getElementById("battle-title").textContent =
+    `${isBossWave(currentBattle.wave) ? civInfo.bossTitle : civInfo.raidTitle} · Wave ${currentBattle.wave}`;
+  document.getElementById("prep-enemy-title").textContent = civInfo.name;
+  document.querySelector(".battle-modal").dataset.civ = currentBattle.civ;
   fillPrepList("prep-knights", currentBattle.units.filter(u => u.side === "knight"));
   fillPrepList("prep-enemies", currentBattle.units.filter(u => u.side === "enemy"));
   document.getElementById("prep-knights").closest(".prep-side").querySelector(".prep-title").textContent =
@@ -3045,7 +3225,7 @@ function finishLiveBattle() {
 
 function showBattleSummary(s) {
   const box = document.getElementById("battle-summary");
-  const title = s.victory ? (s.timedOut ? "The Raiders Flee!" : "Victory!") : (s.timedOut ? "Your Knights Fall Back" : "Defeat");
+  const title = s.victory ? (s.timedOut ? `The ${s.civilization || "Raiders"} Flee!` : "Victory!") : (s.timedOut ? "Your Knights Fall Back" : "Defeat");
   box.innerHTML = "";
   box.className = "battle-summary " + (s.victory ? "won" : "lost");
 
@@ -5758,10 +5938,16 @@ const UNIT_COLORS = {
   brute:     { body: "#c9946e", bodyDark: "#9a6e50", metal: "#8a5a32", accent: "#6b4f2e" },
   drummer:   { body: "#8a6a44", bodyDark: "#5e472c", metal: "#a8642a", accent: "#f1e8d4" },
   chieftain: { body: "#6b4f2e", bodyDark: "#4a3620", metal: "#b8b8c0", accent: "#8e2a20" },
+  scout:          { body: "#4f8a4a", bodyDark: "#2f5a2e", metal: "#dfe6ee", accent: "#e8d890" },
+  archer:         { body: "#3f7a5a", bodyDark: "#28503a", metal: "#dfe6ee", accent: "#c8b070" },
+  bladedancer:    { body: "#3a8a8a", bodyDark: "#245a5a", metal: "#eef4fa", accent: "#d8e0e8" },
+  druid:          { body: "#7a6a3e", bodyDark: "#4f4428", metal: "#8ad86a", accent: "#e8e0c8" },
+  spellweaver:    { body: "#5a3a8a", bodyDark: "#3a2460", metal: "#c890f0", accent: "#e8e8f0" },
+  forestGuardian: { body: "#6b4a2a", bodyDark: "#4a321c", metal: "#d8ff80", accent: "#4f9a4a" },
 };
 
 // How tall each sprite is (so health bars sit just above its head).
-const UNIT_HEIGHTS = { cavalier: 20, brute: 16, chieftain: 21, berserker: 13, guardian: 13 };
+const UNIT_HEIGHTS = { cavalier: 20, brute: 16, chieftain: 21, berserker: 13, guardian: 13, druid: 15, forestGuardian: 26 };
 
 // Draws one unit standing at (x, y) = the spot between its feet.
 // facing: 1 = looking right, -1 = looking left.
@@ -5776,7 +5962,7 @@ function drawUnitSprite(ctx, typeId, x, y, facing, o = {}) {
     ctx.fillStyle = o.flash ? "#ffffff" : color;
     ctx.fillRect(Math.round(rx), Math.round(y + dy), w, h);
   };
-  const shadowWidth = typeId === "cavalier" || typeId === "chieftain" || typeId === "brute" ? 13 : 9;
+  const shadowWidth = typeId === "forestGuardian" ? 17 : typeId === "cavalier" || typeId === "chieftain" || typeId === "brute" ? 13 : 9;
   if (!o.noShadow) {
     ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
     ctx.fillRect(Math.round(x - shadowWidth / 2), Math.round(y), shadowWidth, 1);
@@ -5885,6 +6071,61 @@ function drawUnitSprite(ctx, typeId, x, y, facing, o = {}) {
       px(3, -10 + beat, 1, 2, "#e8e4d8"); px(5, -9 - beat, 1, 2, "#e8e4d8");            // drumsticks
       break;
     }
+    case "scout":
+      legs("#3a4a2a");
+      px(-2, -8, 4, 5, c.body); px(-3, -9, 1, 6, c.bodyDark);           // cloak
+      px(-1, -11, 3, 3, skin); px(-2, -12, 4, 1, c.accent); px(-2, -11, 1, 3, c.accent);   // face, blond hair
+      px(2, -11, 1, 1, skin);                                           // pointed ear
+      px(1, -10, 1, 1, "#2b1d14");
+      if (o.lunge) px(3, -7, 4, 1, c.metal); else px(3, -9, 1, 4, c.metal);   // slim blade
+      break;
+    case "archer":
+      legs("#3a4a2a");
+      px(-3, -9, 1, 5, "#8a6a3a"); px(-3, -10, 1, 1, c.metal);           // quiver
+      px(-2, -8, 4, 5, c.body); px(-2, -4, 4, 1, c.accent);
+      px(-1, -11, 3, 3, skin); px(-2, -12, 4, 1, "#e8e0b0"); px(-2, -11, 1, 4, "#e8e0b0");   // silver-blond hair
+      px(2, -11, 1, 1, skin); px(1, -10, 1, 1, "#2b1d14");
+      px(4, -12, 1, 9, "#a8823a"); px(3, -12, 1, 1, "#a8823a"); px(3, -4, 1, 1, "#a8823a");   // tall elven bow
+      px(o.lunge ? 2 : 3, -11, 1, 7, "#f0f0e8");
+      break;
+    case "bladedancer":
+      legs("#244a4a");
+      px(-2, -8, 4, 5, c.body); px(-2, -6, 4, 1, c.metal);                // sash
+      px(-1, -11, 3, 3, skin); px(-3, -12, 5, 1, c.accent); px(-3, -11, 1, 4, c.accent);   // long silver hair
+      px(2, -11, 1, 1, skin); px(1, -10, 1, 1, "#2b1d14");
+      if (o.lunge) { px(3, -8, 5, 1, c.metal); px(-6, -6, 4, 1, c.metal); }     // whirling blades
+      else { px(3, -10, 1, 5, c.metal); px(4, -11, 1, 1, c.metal); px(-3, -7, 1, 4, c.metal); }
+      break;
+    case "druid":
+      legs(c.bodyDark);
+      px(-3, -9, 6, 7, c.body); px(-3, -9, 6, 1, c.accent);             // robe
+      px(-1, -12, 3, 3, skin); px(1, -11, 1, 1, "#2b1d14");
+      px(-2, -15, 1, 3, "#c8b08a"); px(2, -15, 1, 3, "#c8b08a");        // antler crown
+      px(-3, -16, 1, 1, "#c8b08a"); px(3, -16, 1, 1, "#c8b08a");
+      px(4, -14, 1, 12, "#6b4a2a");                                    // staff
+      px(3, -16, 3, 3, c.metal); px(4, -15, 1, 1, "#f4ffe0");          // glowing orb
+      break;
+    case "spellweaver":
+      legs(c.bodyDark);
+      px(-3, -9, 6, 7, c.body); px(-1, -9, 2, 7, c.bodyDark);           // starry robe
+      px(-2, -6, 1, 1, "#f2e08a"); px(1, -4, 1, 1, "#f2e08a");
+      px(-1, -12, 3, 3, skin); px(-2, -13, 4, 1, c.accent); px(-2, -12, 1, 4, c.accent);   // silver hair
+      px(2, -12, 1, 1, skin); px(1, -11, 1, 1, "#2b1d14");
+      px(3, -9, 2, 2, c.metal); if (o.lunge) px(5, -10, 2, 2, "#f4e0ff");      // magic in hand
+      break;
+    case "forestGuardian":
+      px(-5, -4, 3, 4, c.bodyDark); px(3, -4, 3, 4, c.bodyDark);       // root feet
+      px(-4, -16, 9, 13, c.body);                                       // bark trunk body
+      for (let k = 0; k < 4; k++) px(-3 + k * 2, -15 + (k % 2) * 3, 1, 9, c.bodyDark);   // bark grooves
+      px(-1, -13, 1, 1, c.metal); px(2, -13, 1, 1, c.metal);           // glowing eyes
+      px(-1, -10, 4, 1, "#2b1d14");                                    // mouth
+      if (o.lunge) { px(5, -12, 7, 2, c.body); px(11, -13, 2, 4, c.accent); }   // branch arm swing
+      else { px(5, -14, 2, 8, c.body); px(6, -16, 3, 3, c.accent); }
+      px(-6, -13, 2, 7, c.body);
+      fillEllipse(ctx, x + lunge, y - 20, 9, 6, o.flash ? "#ffffff" : c.accent);   // leafy crown
+      fillEllipse(ctx, x - 2 + lunge, y - 22, 5, 3, o.flash ? "#ffffff" : "#6fc05a");
+      px(-3, -24, 2, 1, "#c8f0a0"); px(3, -21, 1, 1, "#f0a8d8");       // a blossom
+      break;
     case "chieftain":
       legs("#3a2a1a", true);
       px(-5, -13, 2, 11, c.accent);                                      // red fur cape
@@ -5939,7 +6180,7 @@ function drawPixelNumber(ctx, value, x, y, color) {
 }
 
 // The battlefield in front of the castle walls (painted once).
-function paintBattleBackground() {
+function paintBattleBackground(civ = "barbarians") {
   const g = document.createElement("canvas").getContext("2d");
   g.canvas.width = BATTLE_WIDTH;
   g.canvas.height = BATTLE_HEIGHT;
@@ -5977,19 +6218,38 @@ function paintBattleBackground() {
   rect(g, 6, 92, 8, 22, PAL.door);
   rect(g, 2, 48, 6, 12, PAL.banner);
   rect(g, 4, 52, 2, 3, PAL.gold);
-  // Forest on the right where the raiders come from
-  for (let i = 0; i < 9; i++) {
-    const tx = 300 + (i % 3) * 8 + Math.floor(random() * 4), ty = 70 + i * 10;
-    if (i % 2) drawPine(g, tx, ty, 7);
-    else drawTree(g, tx, ty, 6, i + 2);
+  if (civ === "elves") {
+    // The Silverwood: pale birches, glowing mushrooms and drifting motes
+    for (let i = 0; i < 14; i++) {
+      const tx = 282 + (i % 4) * 10 + Math.floor(random() * 5), ty = 60 + i * 7;
+      rect(g, tx, ty - 22, 2, 22, "#e8e8e0");
+      for (let k = 0; k < 4; k++) rect(g, tx + (k % 2), ty - 20 + k * 5, 1, 1, "#3a3a34");
+      fillEllipse(g, tx + 1, ty - 26, 7, 6, "#5aa85a");
+      fillEllipse(g, tx, ty - 27, 5, 4, "#86cc6a");
+      rect(g, tx - 2, ty - 29, 2, 1, "#c8f0a0");
+    }
+    for (let i = 0; i < 10; i++) {
+      const mx = 250 + Math.floor(random() * 60), my = 70 + Math.floor(random() * 80);
+      rect(g, mx, my, 1, 2, "#e8e4d8");
+      rect(g, mx - 1, my - 1, 3, 1, i % 2 ? "#7ad8e8" : "#c890f0");
+    }
+    for (let i = 0; i < 18; i++) rect(g, 230 + Math.floor(random() * 90), 50 + Math.floor(random() * 100), 1, 1, "#d8ffb0");
+  } else {
+    // Forest on the right where the raiders come from
+    for (let i = 0; i < 9; i++) {
+      const tx = 300 + (i % 3) * 8 + Math.floor(random() * 4), ty = 70 + i * 10;
+      if (i % 2) drawPine(g, tx, ty, 7);
+      else drawTree(g, tx, ty, 6, i + 2);
+    }
   }
   return g.canvas;
 }
 
 function drawBattle(battle, time) {
   const ctx = battleView.ctx;
-  if (!battleView.background) battleView.background = paintBattleBackground();
-  ctx.drawImage(battleView.background, 0, 0);
+  battleView.backgrounds = battleView.backgrounds || {};
+  if (!battleView.backgrounds[battle.civ]) battleView.backgrounds[battle.civ] = paintBattleBackground(battle.civ);
+  ctx.drawImage(battleView.backgrounds[battle.civ], 0, 0);
 
   // Fallen units first, then the living sorted by y (lower = in front)
   for (const u of battle.units) if (!u.alive) drawFallenUnit(ctx, u.typeId, u.x, u.y, u.facing);
@@ -6022,8 +6282,14 @@ function drawBattle(battle, time) {
       const t = e.age / 0.25;
       const ax = lerp(e.x1, e.x2, t), ay = lerp(e.y1, e.y2, t) - Math.sin(t * Math.PI) * 8;
       const dir = e.x2 >= e.x1 ? 1 : -1;
-      rect(ctx, ax - 2 * dir, ay, 4, 1, "#e8e4d8");
-      rect(ctx, ax + 2 * dir, ay, 1, 1, PAL.metalDark);
+      if (e.magic) {                                   // a glowing violet bolt with a trail
+        rect(ctx, ax - 4 * dir, ay, 2, 1, "rgba(200, 140, 255, 0.5)");
+        rect(ctx, ax - 2 * dir, ay - 1, 3, 3, "#b070f0");
+        rect(ctx, ax - 1 * dir, ay, 1, 1, "#f4e0ff");
+      } else {
+        rect(ctx, ax - 2 * dir, ay, 4, 1, "#e8e4d8");
+        rect(ctx, ax + 2 * dir, ay, 1, 1, PAL.metalDark);
+      }
       continue;
     }
     if (e.age > 0.8) continue;
@@ -6038,7 +6304,7 @@ function drawBattle(battle, time) {
   const knights = battle.units.filter(u => u.side === "knight" && u.alive).length;
   const enemies = battle.units.filter(u => u.side === "enemy" && u.alive).length;
   document.getElementById("battle-knights").textContent = `Knights: ${knights}`;
-  document.getElementById("battle-enemies").textContent = `Barbarians: ${enemies}`;
+  document.getElementById("battle-enemies").textContent = `${ENEMY_CIVILIZATIONS[battle.civ].name}: ${enemies}`;
   document.getElementById("battle-time").textContent = battle.over ? "Battle over" : `${Math.ceil(INVASION.battleTimeLimit - battle.time)}s`;
 }
 

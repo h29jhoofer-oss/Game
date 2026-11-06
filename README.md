@@ -26,6 +26,6 @@ Double-click `index.html` to open it in any modern browser. No install or build 
   - [x] 5. Barbarian invasions with two enemy types (Raider, Berserker)
   - [x] 6. Remaining four barbarian enemies (Marauder, Brute, War Drummer, Chieftain boss)
   - [x] 7. Guardian, Cavalier, Ranger, Paladin (with special abilities)
-  - [ ] 8. Elven civilization
+  - [x] 8. Elven civilization (Scout, Archer, Bladedancer, Druid, Spellweaver, Forest Guardian boss)
   - [ ] 9. Dwarven civilization
   - [ ] 10. Military research, progression and polish
