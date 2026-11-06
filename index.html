@@ -5,10 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Little Lure Co.</title>
   <style>
+    /* One dark look: the game sits in a wooden frame on a night-sea backdrop. */
+    :root {
+      color-scheme: dark;
+      --sea-deep: #050b18;
+      --sea: #0d2440;
+      --frame: #5a3418;
+      --frame-hi: #c89050;
+    }
     html, body {
       margin: 0;
       height: 100%;
-      background: #111;
+      background: var(--sea-deep);
       overflow: hidden;
       touch-action: none;
       -webkit-user-select: none;
@@ -19,14 +27,25 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      box-sizing: border-box;
+      padding-block: 12px;
+      padding-left: max(16px, env(safe-area-inset-left, 0px));
+      padding-right: max(16px, env(safe-area-inset-right, 0px));
+      background:
+        radial-gradient(ellipse at 50% 35%, var(--sea) 0%, var(--sea-deep) 70%) var(--sea-deep);
     }
     #game {
       image-rendering: pixelated;
       image-rendering: crisp-edges;
       display: block;
-      background: #000;
+      background: var(--sea-deep);
       touch-action: none;
+      border: 3px solid var(--frame);
+      outline: 1px solid var(--frame-hi);
+      outline-offset: -4px;
+      box-shadow: 0 0 0 1px #2a1406, 0 12px 40px rgba(0, 0, 0, 0.6);
     }
+    #game:focus-visible { outline: 2px solid var(--frame-hi); outline-offset: 2px; }
   </style>
 </head>
 <body>
@@ -233,9 +252,13 @@
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
 
+  // Fit the space inside the page's gutters and the frame, in half-pixel steps.
   function resize() {
-    const s = Math.min(innerWidth / W, innerHeight / H);
-    const scale = s >= 1 ? Math.floor(s) : s;
+    const cs = getComputedStyle(document.body);
+    const aw = document.body.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 6;
+    const ah = document.body.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 6;
+    const s = Math.max(0.5, Math.min(aw / W, ah / H));
+    const scale = s >= 1 ? Math.floor(s * S) / S : s;
     canvas.style.width = W * scale + 'px';
     canvas.style.height = H * scale + 'px';
   }
@@ -960,6 +983,8 @@
     coin(i) { this.tone(988 + (i % 6) * 60, 0.06, 'square', 0.05); this.tone(1319 + (i % 6) * 60, 0.08, 'square', 0.05, null, 0.04); },
     coinTick() { this.tone(2093 + rand(0, 200), 0.03, 'square', 0.025); },
     meow() { this.tone(700, 0.18, 'triangle', 0.05, 1000); this.tone(1000, 0.15, 'triangle', 0.04, 600, 0.15); },
+    // A receipt printer chattering out the catch report.
+    print() { for (let i = 0; i < 10; i++) this.noise(0.02, 0.06, 3500, i * 0.065, 'highpass'); },
     // The outboard: a yank of the cord, a sputter, then a roar that fades away.
     engineStart() {
       this.noise(0.22, 0.3, 300, 0, 'bandpass', 1400, 2);
@@ -1511,11 +1536,26 @@
     ctx.fillRect(x, y + h - 1, w, 1);
     ctx.fillRect(x, y, 1, h);
     ctx.fillRect(x + w - 1, y, 1, h);
+    if (opts.wood) {
+      // Grain and a nail at each end of the plank
+      ctx.fillStyle = 'rgba(40,20,6,0.35)';
+      for (let i = 0; i < Math.floor(h / 3); i++) ctx.fillRect(x + 2 + hash(i, x) * w * 0.4, y + 2.5 + i * 3, w * 0.35 + hash(i, y) * w * 0.25, 0.5);
+      ctx.fillStyle = '#4a2a12';
+      ctx.fillRect(x + 1, y + h - 1.5, w - 2, 0.5);
+      for (const nx of [x + 2, x + w - 3.5]) {
+        ctx.fillStyle = '#a0a0aa';
+        ctx.fillRect(nx, y + h / 2 - 0.75, 1.5, 1.5);
+        ctx.fillStyle = '#e0e0e8';
+        ctx.fillRect(nx, y + h / 2 - 0.75, 0.5, 0.5);
+      }
+    }
     if (label) {
       const s = opts.scale || 1;
-      drawText(label, x + w / 2, Math.round(y + (h - 5 * s) / 2), opts.color || (sel ? '#ffe070' : '#fff'), s, 'center');
+      const col = opts.color || (sel ? '#ffe070' : '#fff');
+      drawText(label, x + w / 2, Math.round(y + (h - 5 * s) / 2), sel && opts.wood ? '#ffe070' : col, s, 'center', opts.wood ? '#2a1406' : '#000');
     }
   }
+  const WOOD = { wood: true, bg: '#6a3e1c', hi: '#8a5a30', border: '#2a1406', color: '#f8e8c0' };
   function tappedButton() {
     for (const t of pointer.taps) {
       for (const b of buttons) {
@@ -1838,6 +1878,7 @@
   function finishHaul() {
     state = 'report';
     const r = report;
+    sfx.print();
     if (run.floor && !save.chest) {
       save.chest = true;
       r.chest = true;
@@ -2188,6 +2229,7 @@
     } else if (state === 'haul') {
       updateHaul(dt);
     } else if (state === 'report') {
+      report.age = (report.age || 0) + dt;
       if (pressed.has('ok') || pressed.has('back') || tap) {
         toTitle();
         sfx.select();
@@ -3081,28 +3123,30 @@
     // Logo
     drawWavyText('LITTLE LURE', W / 2, 8, '#ffe070', 2, '#1c4a7a', 1.5, 3);
     drawText('- FISHING CO. -', W / 2, 24, '#1c4a7a', 1, 'center', '#ffffff');
-    // Menu panel
-    ctx.fillStyle = 'rgba(8,24,48,0.6)';
-    ctx.fillRect(14, 112, 100, 72);
-    drawText('CASH $' + fmt(save.money), W / 2, 116, '#a0f0a0', 1, 'center');
-    button(34, 125, 60, 17, 'CAST', 'cast', { selected: menuSel === 0, scale: 2 });
-    button(20, 147, 42, 13, 'SHOP', 'shop', { selected: menuSel === 1 });
-    button(66, 147, 42, 13, 'FISH LOG', 'log', { selected: menuSel === 2 });
+    // A paper cash tag on a string, swaying a little
+    const cash = '$' + fmt(save.money);
+    const tw = textWidth(cash) + 12, sway = Math.round(Math.sin(time * 1.4) * 1) / S;
+    const tx = W / 2 - tw / 2 + sway;
+    ctx.fillStyle = '#d8c49a';
+    ctx.fillRect(W / 2, 104, 0.5, 7);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(tx + 1, 112, tw, 10);
+    ctx.fillStyle = '#efe2c0';
+    ctx.fillRect(tx, 111, tw, 10);
+    ctx.fillStyle = '#e2d2a8';
+    ctx.fillRect(tx, 120, tw, 1);
+    ctx.fillStyle = '#8a7a5a';
+    ctx.fillRect(tx + 2.5, 115, 1.5, 1.5);
+    drawText(cash, tx + tw / 2 + 2, 114, '#2a6a2a', 1, 'center', null);
+    // Wooden plank buttons
+    button(34, 127, 60, 17, 'CAST', 'cast', { ...WOOD, selected: menuSel === 0, scale: 2 });
+    button(18, 149, 44, 13, 'SHOP', 'shop', { ...WOOD, selected: menuSel === 1 });
+    button(66, 149, 44, 13, 'FISH LOG', 'log', { ...WOOD, selected: menuSel === 2 });
     const zone = ZONES[Math.min(save.zones, ZONES.length) - 1];
-    drawText('BEST ' + save.best + 'M', W / 2, 165, '#8fe0ff', 1, 'center');
-    drawText(zone.name, W / 2, 173, zone.color, 1, 'center');
+    if (save.best) drawText('BEST DEPTH ' + save.best + 'M', W / 2, 168, '#8fe0ff', 1, 'center', '#0a1a30');
+    drawText(zone.name, W / 2, 176, zone.color, 1, 'center', '#0a1a30');
     if (save.dives === 0 && Math.floor(time * 2) % 2) drawText('TAP CAST TO FISH!', W / 2, 100, '#fff', 1, 'center', '#1c4a7a');
     drawText(AUDIO_MODES[sfx.mode], 2, H - 7, '#8a9ab0');
-  }
-
-  function drawPanel(x, y, w, h) {
-    ctx.fillStyle = 'rgba(6,16,34,0.88)';
-    ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = '#5a8ab8';
-    ctx.fillRect(x, y, w, 1);
-    ctx.fillRect(x, y + h - 1, w, 1);
-    ctx.fillRect(x, y, 1, h);
-    ctx.fillRect(x + w - 1, y, 1, h);
   }
 
   // Draw a species' sprite to fit inside a box, swimming in place.
@@ -3113,47 +3157,88 @@
     ctx.drawImage(img, snap(x + (bw - w) / 2), snap(y + (bh - h) / 2), w, h);
   }
 
+  // The catch report prints out as a paper receipt from a slot at the top.
   function drawReport() {
     const r = report;
     const groups = Object.values(r.groups).sort((a, b) => b.value - a.value);
-    drawPanel(6, 36, 116, 146);
-    drawWavyText('CATCH REPORT', W / 2, 41, '#ffe070', 1, '#000', 1, 5);
-    let y = 52;
+    const ink = '#2a2a3a', grey = '#7a6a54';
+    const x = 12, w = 104, top = 30;
+    // Work out how long the receipt is
+    let rows = groups.length ? Math.min(6, groups.length) + (groups.length > 6 ? 1 : 0) : 3;
+    let extra = (run.newSpecies.length ? 1 : 0) + (r.chest ? 2 : 0);
+    const h = 30 + rows * 9 + 30 + extra * 9 + 14;
+    const t = clamp((r.age || 0) / 0.7, 0, 1);
+    const oy = Math.round(-(1 - (1 - (1 - t) ** 3)) * h);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, top, W, H - top);
+    ctx.clip();
+    ctx.translate(0, oy);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(x + 2, top + 2, w, h);
+    ctx.fillStyle = '#f6f0e0';
+    ctx.fillRect(x, top, w, h);
+    for (let i = 0; i < 50; i++) dot(x + hash(i, 3) * w, top + hash(i, 4) * h, '#ebe2cc');
+    // Torn, zig-zag bottom edge
+    for (let k = 0; k < w; k += 4) {
+      ctx.fillRect(x + k, top + h, 3, 1);
+      ctx.fillRect(x + k + 0.5, top + h + 1, 2, 1);
+      ctx.fillRect(x + k + 1, top + h + 2, 1, 0.5);
+    }
+    let y = top + 4;
+    drawText('LITTLE LURE CO.', W / 2, y, ink, 1, 'center', null);
+    drawText('RECEIPT NO.' + String(save.dives).padStart(4, '0'), W / 2, y + 8, grey, 1, 'center', null);
+    const dash = (yy) => {
+      ctx.fillStyle = '#b8a888';
+      for (let k = x + 4; k < x + w - 4; k += 2) ctx.fillRect(k, yy, 1, 0.5);
+    };
+    dash(y + 17);
+    y += 21;
     if (!groups.length) {
-      drawText('NOTHING BIT...', W / 2, y + 6, '#8a9ab0', 1, 'center');
-      drawText('CATCH FISH ON', W / 2, y + 20, '#fff', 1, 'center');
-      drawText('THE WAY UP!', W / 2, y + 28, '#fff', 1, 'center');
-      y += 44;
+      drawText('NOTHING BIT...', W / 2, y + 1, grey, 1, 'center', null);
+      drawText('CATCH FISH ON', W / 2, y + 10, ink, 1, 'center', null);
+      drawText('THE WAY UP!', W / 2, y + 18, ink, 1, 'center', null);
+      y += 27;
     }
     groups.slice(0, 6).forEach((gr, i) => {
-      fishIcon(gr.sp, gr.golden > 0, 9, y - 2, 16, 9, time * 6 + i);
-      drawText(gr.n + 'X ' + gr.sp.name, 27, y, gr.golden ? '#f2c200' : '#fff');
-      drawText('$' + fmt(gr.value), 118, y, '#a0f0a0', 1, 'right');
+      fishIcon(gr.sp, gr.golden > 0, x + 3, y - 2, 14, 9, time * 6 + i);
+      drawText(gr.n + 'X ' + gr.sp.name, x + 19, y, gr.golden ? '#a07010' : ink, 1, 'left', null);
+      drawText('$' + fmt(gr.value), x + w - 4, y, '#2a6a2a', 1, 'right', null);
       y += 9;
     });
     if (groups.length > 6) {
-      drawText('+' + (groups.length - 6) + ' MORE KINDS', W / 2, y, '#8a9ab0', 1, 'center');
+      drawText('+' + (groups.length - 6) + ' MORE KINDS', W / 2, y, grey, 1, 'center', null);
       y += 9;
     }
-    y = Math.max(y + 2, 108);
-    ctx.fillStyle = '#5a8ab8';
-    ctx.fillRect(10, y, 108, 1);
-    drawText('TOTAL', 10, y + 4, '#fff');
-    drawText('$' + fmt(r.total), 118, y + 4, '#a0f0a0', 1, 'right');
-    drawText('DEPTH ' + r.depth + 'M', 10, y + 13, '#8fe0ff');
-    if (r.record) drawText('RECORD!', 118, y + 13 + (Math.floor(time * 6) % 2 ? -1 : 0), '#ff7a7a', 1, 'right');
-    let ny = y + 22;
+    dash(y);
+    drawText('TOTAL', x + 4, y + 4, ink, 1, 'left', null);
+    drawText('$' + fmt(r.total), x + w - 4, y + 4, '#2a6a2a', 1, 'right', null);
+    drawText('DEPTH ' + r.depth + 'M', x + 4, y + 13, '#1e4a7a', 1, 'left', null);
+    if (r.record) drawText('RECORD!', x + w - 4, y + 13 + (Math.floor(time * 6) % 2 ? -1 : 0), '#b03020', 1, 'right', null);
+    y += 22;
     if (run.newSpecies.length) {
       const more = run.newSpecies.length - 1;
-      drawText('NEW: ' + run.newSpecies[0].name + (more ? ' +' + more : ''), 10, ny, '#ffe070');
-      ny += 9;
+      drawText('NEW: ' + run.newSpecies[0].name + (more ? ' +' + more : ''), x + 4, y, '#a07010', 1, 'left', null);
+      y += 9;
     }
     if (r.chest) {
-      spr(chestSprite, 10, ny);
-      drawText('SUNKEN CHEST!', 70, ny, '#f2c200', 1, 'center');
-      drawText('+$' + fmt(CHEST_BONUS), 70, ny + 8, '#f2c200', 1, 'center');
+      spr(chestSprite, x + 4, y);
+      drawText('SUNKEN CHEST!', x + 62, y, '#a07010', 1, 'center', null);
+      drawText('+$' + fmt(CHEST_BONUS), x + 62, y + 8, '#a07010', 1, 'center', null);
+      y += 18;
     }
-    if (Math.floor(time * 2) % 2) drawText('TAP TO CONTINUE', W / 2, 172, '#fff', 1, 'center');
+    drawText('THANK YOU!', W / 2, y + 2, grey, 1, 'center', null);
+    ctx.restore();
+
+    // The printer slot it comes out of
+    ctx.fillStyle = '#1a1c24';
+    ctx.fillRect(x - 4, top - 4, w + 8, 5);
+    ctx.fillStyle = '#3a3e4a';
+    ctx.fillRect(x - 4, top - 4, w + 8, 1);
+    ctx.fillStyle = '#05060a';
+    ctx.fillRect(x - 1, top - 1, w + 2, 1);
+    if (t >= 1 && Math.floor(time * 2) % 2) drawText('TAP TO CONTINUE', W / 2, Math.min(H - 8, top + h + 8), '#fff', 1, 'center', '#0a1a30');
   }
 
   // An old wooden tabletop for the shop, generated once at detail resolution:
@@ -3392,7 +3477,7 @@
     drawTableProps();
     if (shopMsg && shopMsg.t < 1.6) drawText(shopMsg.text, W / 2, 174, shopMsg.color, 1, 'center', '#1a0c04');
     button(44, 181, 40, 10, 'BACK', 'back', {
-      selected: shopSel === UPGRADES.length, bg: '#5a3418', hi: '#7a4a24', border: '#c89050', color: '#f8e8c0',
+      ...WOOD, selected: shopSel === UPGRADES.length,
     });
   }
 
@@ -3565,20 +3650,21 @@
     ctx.fillRect(35, 174, 1, 9);
     if (save.chest) spr(chestSprite, 2, 2);
 
-    const wood = { bg: '#5a3418', hi: '#7a4a24', border: '#c89050', color: '#f8e8c0' };
+    const wood = WOOD;
     button(6, 181, 24, 10, '<', 'prev', wood);
     button(98, 181, 24, 10, '>', 'next', wood);
     button(44, 181, 40, 10, 'BACK', 'back', Object.assign({ selected: true }, wood));
   }
 
   function drawPause() {
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillStyle = 'rgba(2,6,14,0.6)';
     ctx.fillRect(0, 0, W, H);
-    drawText('PAUSED', W / 2, 70, '#ffe070', 2, 'center');
-    button(34, 92, 60, 14, 'RESUME', 'resume', { selected: true });
-    button(34, 112, 60, 14, 'GIVE UP', 'quit');
-    drawText('GIVING UP LOSES', W / 2, 134, '#8a9ab0', 1, 'center');
-    drawText('THIS CATCH', W / 2, 142, '#8a9ab0', 1, 'center');
+    const y = drawCard(24, 62, 80, 84, false);
+    drawText('PAUSED', W / 2, y + 8, '#3a2410', 2, 'center', null);
+    button(34, y + 26, 60, 14, 'RESUME', 'resume', { ...WOOD, selected: true });
+    button(34, y + 45, 60, 14, 'GIVE UP', 'quit', WOOD);
+    drawText('GIVING UP LOSES', W / 2, y + 65, '#7a6a54', 1, 'center', null);
+    drawText('THIS CATCH', W / 2, y + 73, '#7a6a54', 1, 'center', null);
   }
 
   function draw() {
@@ -3627,6 +3713,8 @@
   });
 
   toTitle();
+  fadeA = 1;
+  fadeDir = -1;
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
