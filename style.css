@@ -1280,6 +1280,93 @@ strong {
   color: var(--gold-light);
 }
 
+/* Military honors: medals that shine once earned */
+.glory-text {
+  font-size: 14px;
+  color: var(--gold-light);
+}
+
+.honor-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+  gap: 6px;
+}
+
+.honor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  color: var(--text-dim);
+  background: var(--wood-deep);
+  border: 3px solid var(--ink);
+}
+
+.honor .pixel-icon {
+  width: 28px;
+  height: 32px;
+  filter: grayscale(1) brightness(0.6);
+}
+
+.honor div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.honor strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.honor span {
+  font-size: 12px;
+}
+
+.honor.earned {
+  color: var(--parch-light);
+  background: var(--tex-cloth) 0 0 / 64px 64px, var(--royal-dark);
+  box-shadow: inset 0 0 0 2px var(--gold-dark);
+}
+
+.honor.earned .pixel-icon {
+  filter: none;
+}
+
+.honor.earned strong {
+  color: var(--gold-light);
+}
+
+/* Veterancy bar on each knight card */
+.knight-vet {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--royal-dark);
+}
+
+.vet-bar {
+  height: 8px;
+}
+
+.vet-bar .progress-fill {
+  background: var(--gold);
+  box-shadow: inset 0 2px 0 var(--gold-light), inset 0 -2px 0 var(--gold-dark);
+}
+
+.loot-chip.promotion {
+  border-color: var(--royal);
+}
+
+.loot-chip.honor-chip {
+  border-color: var(--gold);
+  background: var(--royal-dark);
+  color: var(--gold-light);
+}
+
 /* Known enemies: one plaque per civilization */
 .known-enemies {
   list-style: none;

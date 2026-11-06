@@ -18,7 +18,7 @@ Double-click `index.html` to open it in any modern browser. No install or build 
 - [x] Stage 4 – Isometric floating-island village, workers, animations, day/night
 - [x] Stage 5 – Population, houses, unlocks, research, milestones, castle upgrade
 - [x] Stage 6 – Sound & music, visual feedback, mobile polish, economy balance
-- [ ] Military system
+- [x] Military system
   - [x] 1. Knight Barracks interface
   - [x] 2. Swordsman recruitment
   - [x] 3. Knight stats and army storage
@@ -28,4 +28,4 @@ Double-click `index.html` to open it in any modern browser. No install or build 
   - [x] 7. Guardian, Cavalier, Ranger, Paladin (with special abilities)
   - [x] 8. Elven civilization (Scout, Archer, Bladedancer, Druid, Spellweaver, Forest Guardian boss)
   - [x] 9. Dwarven civilization (Miner, Shieldbearer, Axethrower, Engineer + Bolt Thrower, Ironclad, Mountain King boss)
-  - [ ] 10. Military research, progression and polish
+  - [x] 10. Knight veterancy, Warfare research, military honors and balance

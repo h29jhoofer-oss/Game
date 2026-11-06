@@ -177,6 +177,7 @@ const RESEARCH_BRANCHES = [
   { id: "agriculture", name: "Agriculture" },
   { id: "industry",    name: "Industry" },
   { id: "commerce",    name: "Commerce" },
+  { id: "warfare",     name: "Warfare" },
 ];
 
 const RESEARCH = [
@@ -222,6 +223,67 @@ const RESEARCH = [
     cost: { gold: 400 }, requires: ["tradeRoutes", "academy"],
     taxBonus: 1.0,
   },
+  // ----- Warfare: makes your knights stronger (needs the Knight Barracks) -----
+  {
+    id: "forgedSteel", branch: "warfare", name: "Forged Steel",
+    description: "Smiths fold and temper every blade twice over.",
+    effectText: "+15% knight attack",
+    cost: { gold: 300, stone: 300 }, requires: ["barracks"],
+    knightAttack: 0.15,
+  },
+  {
+    id: "drillSergeants", branch: "warfare", name: "Drill Sergeants",
+    description: "Veterans shout recruits into shape at dawn.",
+    effectText: "Knights train 30% faster",
+    cost: { gold: 350, food: 600 }, requires: ["forgedSteel"],
+    trainSpeed: 0.3,
+  },
+  {
+    id: "temperedArmor", branch: "warfare", name: "Tempered Armor",
+    description: "Hardened plates and padded gambesons for every knight.",
+    effectText: "+2 defense for all knights",
+    cost: { gold: 500, stone: 600 }, requires: ["drillSergeants", "blacksmith"],
+    knightDefense: 2,
+  },
+  {
+    id: "armorPiercing", branch: "warfare", name: "Armor-Piercing Tips",
+    description: "Narrow bodkin points and spiked hammers punch through mail.",
+    effectText: "Knights ignore 3 points of enemy armor",
+    cost: { gold: 700, stone: 500 }, requires: ["temperedArmor"],
+    armorPierce: 3,
+  },
+  {
+    id: "fieldMedicine", branch: "warfare", name: "Field Medicine",
+    description: "Scholars teach the healers herbs, splints and clean bandages.",
+    effectText: "Wounded recover twice as fast; Paladins heal 50% more",
+    cost: { gold: 800, food: 1000 }, requires: ["armorPiercing", "academy"],
+    woundedHealSpeed: 2, healBonus: 0.5,
+  },
+];
+
+// ---- Knight veterancy ----
+// Every knight type earns experience in battle and levels up.
+const KNIGHT_MAX_LEVEL = 10;
+const KNIGHT_LEVEL_BONUS = 0.05;     // +5% attack and health per level above 1
+// Total experience needed to reach a level (level 2 = 120, level 5 = 1100 ...)
+function getKnightXpForLevel(level) {
+  return Math.round(120 * Math.pow(level - 1, 1.6));
+}
+
+// ---- Military honors (achievements) ----
+// Each honor earned adds GLORY_PER_HONOR to all knights' attack and health.
+const GLORY_PER_HONOR = 0.02;
+const MILITARY_HONORS = [
+  { id: "firstBlood",   name: "First Blood",          text: "Win your first battle." },
+  { id: "chieftain",    name: "Bane of the Clans",    text: "Defeat the Barbarian Chieftain." },
+  { id: "guardian",     name: "Peace in the Silverwood", text: "Defeat the Forest Guardian." },
+  { id: "mountainKing", name: "King of the Mountain", text: "Defeat the Mountain King." },
+  { id: "flawless",     name: "Flawless Victory",     text: "Win against 10+ enemies with no knight wounded." },
+  { id: "streak",       name: "Unbroken Line",        text: "Win 5 battles in a row." },
+  { id: "centurion",    name: "Centurion",            text: "Defeat 100 enemies in total." },
+  { id: "warlord",      name: "Warlord",              text: "Defeat 1,000 enemies in total." },
+  { id: "grandArmy",    name: "Grand Army",           text: "Field all five kinds of knight at once." },
+  { id: "veterans",     name: "Battle-Hardened",      text: "Raise any knight type to level 5." },
 ];
 
 // Player settings and their defaults (saved with the game).
@@ -812,11 +874,13 @@ function notify(message) {
 
 // Is a single research requirement met? (a research id or a building id)
 function isRequirementMet(req) {
+  if (req === "barracks") return state.military.barracksLevel > 0;
   if (BUILDING_TYPES[req]) return state.buildings[req].count > 0;
   return state.research[req] === true;
 }
 
 function getRequirementLabel(req) {
+  if (req === "barracks") return "Build the Knight Barracks";
   if (BUILDING_TYPES[req]) return `Build a${/^[AEIOU]/.test(BUILDING_TYPES[req].name) ? "n" : ""} ${BUILDING_TYPES[req].name}`;
   const tech = RESEARCH.find(t => t.id === req);
   return tech ? tech.name : req;
@@ -990,6 +1054,9 @@ function createMilitaryState() {
     battlesWon: 0,
     battlesLost: 0,
     totalTrained: 0,
+    knightXp: Object.fromEntries(Object.keys(KNIGHT_TYPES).map(id => [id, 0])),   // experience per knight type
+    honors: {},                               // military achievements earned
+    stats: { enemiesDefeated: 0, winStreak: 0, bossesDefeated: {} },
     log: [],                                  // recent battle summaries
   };
 }
@@ -1055,6 +1122,77 @@ function upgradeBarracks() {
   return true;
 }
 
+// ---------- Knight progression ----------
+
+function getKnightLevel(typeId) {
+  const xp = state.military.knightXp[typeId] || 0;
+  let level = 1;
+  while (level < KNIGHT_MAX_LEVEL && xp >= getKnightXpForLevel(level + 1)) level++;
+  return level;
+}
+
+// Adds up a numeric effect from all researched Warfare technologies.
+function getWarfareBonus(effect) {
+  let total = 0;
+  for (const tech of RESEARCH) if (state.research[tech.id] && tech[effect]) total += tech[effect];
+  return total;
+}
+
+function getHonorCount() {
+  return Object.keys(state.military.honors).length;
+}
+
+// A knight's real battle stats: base stats raised by its level,
+// Warfare research and the Glory of military honors.
+function getKnightStats(typeId) {
+  const base = KNIGHT_TYPES[typeId];
+  const levelBonus = 1 + KNIGHT_LEVEL_BONUS * (getKnightLevel(typeId) - 1);
+  const glory = 1 + GLORY_PER_HONOR * getHonorCount();
+  const stats = {
+    ...base,
+    hp: Math.round(base.hp * levelBonus * glory),
+    attack: Math.round(base.attack * levelBonus * glory * (1 + getWarfareBonus("knightAttack")) * 10) / 10,
+    defense: base.defense + getWarfareBonus("knightDefense"),
+    armorPierce: getWarfareBonus("armorPierce"),
+  };
+  if (base.heal) stats.heal = { ...base.heal, amount: Math.round(base.heal.amount * (1 + getWarfareBonus("healBonus"))) };
+  return stats;
+}
+
+function getTrainSeconds(typeId) {
+  return Math.round(KNIGHT_TYPES[typeId].trainSeconds * (1 - getWarfareBonus("trainSpeed")));
+}
+
+function getWoundedHealSeconds() {
+  return INVASION.woundedHealSeconds / Math.max(1, getWarfareBonus("woundedHealSpeed"));
+}
+
+// Awards an honor once; returns its name if it is new.
+function awardHonor(id) {
+  const m = state.military;
+  if (m.honors[id]) return null;
+  m.honors[id] = true;
+  const honor = MILITARY_HONORS.find(h => h.id === id);
+  if (uiReady) announce("Military honor", honor.name, `${honor.text} All knights gain +${Math.round(GLORY_PER_HONOR * 100)}% attack and health.`, createPixelIcon("medal"));
+  return honor.name;
+}
+
+// Checks every honor that depends on the army or its totals.
+function checkHonors() {
+  const m = state.military, earned = [];
+  const give = id => { const name = awardHonor(id); if (name) earned.push(name); };
+  if (m.battlesWon >= 1) give("firstBlood");
+  if (m.stats.bossesDefeated.chieftain) give("chieftain");
+  if (m.stats.bossesDefeated.forestGuardian) give("guardian");
+  if (m.stats.bossesDefeated.mountainKing) give("mountainKing");
+  if (m.stats.winStreak >= 5) give("streak");
+  if (m.stats.enemiesDefeated >= 100) give("centurion");
+  if (m.stats.enemiesDefeated >= 1000) give("warlord");
+  if (Object.keys(KNIGHT_TYPES).every(id => m.army[id] > 0)) give("grandArmy");
+  if (Object.keys(KNIGHT_TYPES).some(id => getKnightLevel(id) >= 5)) give("veterans");
+  return earned;
+}
+
 // Pays for a knight and adds it to the training queue.
 function recruitKnight(typeId) {
   updateGame();
@@ -1078,12 +1216,13 @@ function advanceMilitary(seconds) {
   // Knights are trained one at a time, in order.
   let time = seconds;
   while (time > 0 && m.training.queue.length > 0) {
-    const needed = KNIGHT_TYPES[m.training.queue[0]].trainSeconds - m.training.progress;
+    const needed = getTrainSeconds(m.training.queue[0]) - m.training.progress;
     if (time >= needed) {
       time -= needed;
       m.training.progress = 0;
       m.army[m.training.queue.shift()] += 1;
       m.totalTrained += 1;
+      checkHonors();
     } else {
       m.training.progress += time;
       time = 0;
@@ -1091,7 +1230,7 @@ function advanceMilitary(seconds) {
   }
 
   // Wounded knights recover one by one.
-  let heal = m.healProgress + seconds / INVASION.woundedHealSeconds;
+  let heal = m.healProgress + seconds / getWoundedHealSeconds();
   while (heal >= 1 && countKnights(m.wounded) > 0) {
     const typeId = Object.keys(m.wounded).find(id => m.wounded[id] > 0);
     m.wounded[typeId] -= 1;
@@ -1159,6 +1298,7 @@ function makeUnit(side, typeId, stats, x, y) {
     aura: stats.aura, protect: stats.protect, heal: stats.heal, ranged: stats.ranged,
     chargeMultiplier: stats.chargeMultiplier, bonusVs: stats.bonusVs, support: stats.support, boss: stats.boss,
     magic: stats.magic, regen: stats.regen, cleave: stats.cleave, projectile: stats.projectile,
+    armorPierce: stats.armorPierce || 0,
     hasCharged: false, healTimer: stats.heal ? stats.heal.interval : 0,
     attackBoost: 0, protection: 0,
     cooldown: 0.4, target: null, alive: true, facing: side === "knight" ? 1 : -1,
@@ -1179,10 +1319,12 @@ function createBattle() {
   const wave = getRaidWave();
   const units = [];
   let i = 0;
+  const knightStats = {};
+  for (const typeId in KNIGHT_TYPES) knightStats[typeId] = getKnightStats(typeId);
   for (const typeId of KNIGHT_FORMATION_ORDER) {
     for (let k = 0; k < m.army[typeId]; k++) {
       const [x, y] = formationPosition(i++, 60, 1);
-      units.push(makeUnit("knight", typeId, KNIGHT_TYPES[typeId], x, y));
+      units.push(makeUnit("knight", typeId, knightStats[typeId], x, y));
     }
   }
   let j = 0;
@@ -1221,7 +1363,8 @@ function strike(battle, attacker, target) {
     for (const trait of target.traits) if (attacker.bonusVs[trait]) power *= attacker.bonusVs[trait];
   }
   const variance = 0.85 + battle.rng() * 0.3;
-  const armor = attacker.magic ? 0 : target.defense;          // magic ignores armor
+  // magic ignores armor; armor-piercing weapons ignore part of it
+  const armor = attacker.magic ? 0 : Math.max(0, target.defense - attacker.armorPierce);
   const damage = Math.max(1, Math.round((power - armor) * variance * (1 - target.protection)));
   target.hp -= damage;
   target.flash = 0.12;
@@ -1412,6 +1555,30 @@ function applyBattleResult(battle) {
   }
   summary.experience = Math.round(enemiesDefeated * 10 * (1 + 0.1 * (battle.wave - 1)) * (battle.victory ? 1 : 0.5));
   m.experience += summary.experience;
+
+  // Each knight type that fought earns experience: a base share plus
+  // more for having more knights in the battle. Level-ups are promotions.
+  const fought = {};
+  for (const u of battle.units) if (u.side === "knight") fought[u.typeId] = (fought[u.typeId] || 0) + 1;
+  summary.promotions = [];
+  for (const typeId in fought) {
+    const before = getKnightLevel(typeId);
+    m.knightXp[typeId] += Math.round(summary.experience * (0.4 + 0.6 * fought[typeId] / knightsStart));
+    const after = getKnightLevel(typeId);
+    if (after > before) summary.promotions.push({ typeId, level: after });
+  }
+
+  // Records for honors
+  m.stats.enemiesDefeated += enemiesDefeated;
+  m.stats.winStreak = battle.victory ? m.stats.winStreak + 1 : 0;
+  for (const u of battle.units) {
+    if (u.side === "enemy" && u.boss && !u.alive) m.stats.bossesDefeated[u.typeId] = (m.stats.bossesDefeated[u.typeId] || 0) + 1;
+  }
+  summary.honors = checkHonors();
+  if (battle.victory && enemiesTotal >= 10 && knightsSurviving === knightsStart) {
+    const name = awardHonor("flawless");
+    if (name) summary.honors.push(name);
+  }
   m.invasion.nextAt = Date.now() + INVASION.intervalSeconds * 1000;
   m.log.unshift(summary);
   m.log = m.log.slice(0, 8);
@@ -1635,6 +1802,19 @@ function cleanMilitaryData(m, clean, isGoodNumber) {
     }
     if (isGoodNumber(m.invasion.nextAt)) clean.invasion.nextAt = m.invasion.nextAt;
   }
+  for (const typeId in KNIGHT_TYPES) {
+    if (m.knightXp && isGoodNumber(m.knightXp[typeId])) clean.knightXp[typeId] = m.knightXp[typeId];
+  }
+  if (m.honors && typeof m.honors === "object") {
+    for (const h of MILITARY_HONORS) if (m.honors[h.id] === true) clean.honors[h.id] = true;
+  }
+  if (m.stats && typeof m.stats === "object") {
+    if (isGoodNumber(m.stats.enemiesDefeated)) clean.stats.enemiesDefeated = m.stats.enemiesDefeated;
+    if (isGoodNumber(m.stats.winStreak)) clean.stats.winStreak = m.stats.winStreak;
+    if (m.stats.bossesDefeated && typeof m.stats.bossesDefeated === "object") {
+      for (const k in m.stats.bossesDefeated) if (isGoodNumber(m.stats.bossesDefeated[k])) clean.stats.bossesDefeated[k] = m.stats.bossesDefeated[k];
+    }
+  }
   for (const key of ["experience", "battlesWon", "battlesLost", "totalTrained"]) {
     if (isGoodNumber(m[key])) clean[key] = m[key];
   }
@@ -1857,6 +2037,77 @@ const ICON_PIXELS = {
     "obyrgdyrbo",
     "obbbbbbbbo",
     "oooooooooo",
+  ],
+  medal: [
+    "..nuun..",
+    "..nuun..",
+    "...nu...",
+    "..oooo..",
+    ".oyhyyo.",
+    "oyhyyYyo",
+    "oyyYyyYo",
+    ".oyyyYo.",
+    "..oooo..",
+  ],
+  forgedSteel: [
+    ".........o",
+    "........ol",
+    ".......olo",
+    "......olo.",
+    ".....olo..",
+    "..o.olo...",
+    "..oyoo....",
+    "ooooo.....",
+    "oSSSSo....",
+    ".oSSo.....",
+  ],
+  drillSergeants: [
+    "..oooooo..",
+    ".onnnnnno.",
+    "onyyyyyyno",
+    "onnnnnnnno",
+    "onyyyyyyno",
+    "onnnnnnnno",
+    "onyyyyyyno",
+    ".onnnnnno.",
+    "..oooooo..",
+    ".o......o.",
+  ],
+  temperedArmor: [
+    "oooooooooo",
+    "ollllllsSo",
+    "olsssssSSo",
+    "olsyyssSSo",
+    "olsyyssSSo",
+    "olsssssSSo",
+    ".olsssSSo.",
+    ".olssSSSo.",
+    "..olSSSo..",
+    "...oooo...",
+  ],
+  armorPiercing: [
+    "......oo..",
+    ".....osSo.",
+    "....osSo..",
+    "...obo....",
+    "..obo.....",
+    ".obo......",
+    "obo.......",
+    "oo...oooo.",
+    "....oSSSSo",
+    "....oooooo",
+  ],
+  fieldMedicine: [
+    "..........",
+    "...oooo...",
+    "...orro...",
+    "oooorroooo",
+    "orrrrrrrro",
+    "orrrrrrrro",
+    "oooorroooo",
+    "...orro...",
+    "...oooo...",
+    "..........",
   ],
   crest: [ // the royal crest
     "oooooooooooo",
@@ -2661,7 +2912,7 @@ function updateBuildingPanel() {
 const researchCardElements = {};
 
 // Small emblem shown at the top of each research branch.
-const BRANCH_EMBLEMS = { agriculture: "food", industry: "blacksmith", commerce: "gold" };
+const BRANCH_EMBLEMS = { agriculture: "food", industry: "blacksmith", commerce: "gold", warfare: "sword" };
 
 function buildResearchPanel() {
   const container = document.getElementById("research-branches");
@@ -3088,7 +3339,8 @@ function buildArmyPanel() {
           `<div class="knight-desc">${t.description}</div>` +
           `<div class="knight-ability">${t.abilityText}</div>` +
           `<div class="knight-stats">${statLine(t)}</div>` +
-          `<div class="knight-train">Training time: ${t.trainSeconds}s · Requires Barracks Lv ${t.barracksLevel}</div>` +
+          `<div class="knight-vet"><span class="vet-label"></span><div class="progress vet-bar"><div class="progress-fill"></div></div></div>` +
+          `<div class="knight-train"></div>` +
         `</div>` +
       `</div>` +
       `<button class="btn btn-build recruit-btn" type="button">` +
@@ -3099,7 +3351,12 @@ function buildArmyPanel() {
     const button = card.querySelector(".recruit-btn");
     button.addEventListener("click", () => recruitKnight(typeId));
     list.appendChild(card);
-    armyElements[typeId] = { card, button, label: button.querySelector(".btn-label"), cost: button.querySelector(".btn-cost"), count: card.querySelector(".knight-count") };
+    armyElements[typeId] = {
+      card, button, label: button.querySelector(".btn-label"), cost: button.querySelector(".btn-cost"),
+      count: card.querySelector(".knight-count"),
+      vetLabel: card.querySelector(".vet-label"), vetFill: card.querySelector(".vet-bar .progress-fill"),
+      train: card.querySelector(".knight-train"), statsKey: "",
+    };
   }
 
   document.getElementById("barracks-build").addEventListener("click", buildBarracks);
@@ -3148,6 +3405,32 @@ function updateKnownEnemies() {
   }
 }
 
+// Medals on the War Table: earned ones shine, the rest wait in grey.
+function updateHonorsPanel() {
+  const list = document.getElementById("honor-list");
+  const key = Object.keys(state.military.honors).join();
+  if (list.dataset.key === key) return;
+  list.dataset.key = key;
+  list.innerHTML = "";
+  for (const h of MILITARY_HONORS) {
+    const li = document.createElement("li");
+    li.className = "honor" + (state.military.honors[h.id] ? " earned" : "");
+    li.title = h.text;
+    li.appendChild(createPixelIcon("medal"));
+    const text = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = h.name;
+    const desc = document.createElement("span");
+    desc.textContent = h.text;
+    text.append(name, desc);
+    li.appendChild(text);
+    list.appendChild(li);
+  }
+  const count = getHonorCount();
+  document.getElementById("glory-text").textContent =
+    `${count} of ${MILITARY_HONORS.length} honors · Glory: +${Math.round(count * GLORY_PER_HONOR * 100)}% knight attack and health`;
+}
+
 function updateArmyPanel() {
   const m = state.military;
   const built = m.barracksLevel > 0;
@@ -3184,17 +3467,17 @@ function updateArmyPanel() {
     document.getElementById("army-size").textContent = armySize;
     document.getElementById("army-capacity").textContent = getArmyCapacity();
     document.getElementById("army-wounded").textContent = wounded > 0
-      ? `${wounded} wounded (next recovers in ${Math.ceil((1 - m.healProgress) * INVASION.woundedHealSeconds)}s)`
+      ? `${wounded} wounded (next recovers in ${Math.ceil((1 - m.healProgress) * getWoundedHealSeconds())}s)`
       : "No wounded";
 
     // Training queue
     const queue = m.training.queue;
     const current = queue[0];
     document.getElementById("training-current").textContent = current
-      ? `Training ${KNIGHT_TYPES[current].name}: ${Math.ceil(KNIGHT_TYPES[current].trainSeconds - m.training.progress)}s left`
+      ? `Training ${KNIGHT_TYPES[current].name}: ${Math.ceil(getTrainSeconds(current) - m.training.progress)}s left`
       : "No knights in training";
     document.getElementById("training-fill").style.width = current
-      ? (m.training.progress / KNIGHT_TYPES[current].trainSeconds) * 100 + "%" : "0%";
+      ? (m.training.progress / getTrainSeconds(current)) * 100 + "%" : "0%";
     document.getElementById("training-slots").textContent = `Queue ${queue.length}/${getQueueSize()}`;
 
     // Recruit buttons
@@ -3203,6 +3486,23 @@ function updateArmyPanel() {
       const t = KNIGHT_TYPES[typeId], el = armyElements[typeId];
       el.count.textContent = `×${m.army[typeId]}`;
       el.card.classList.toggle("locked", !isKnightTypeUnlocked(typeId));
+      // Veterancy and the knight's current (boosted) stats
+      const level = getKnightLevel(typeId), xp = m.knightXp[typeId];
+      if (level >= KNIGHT_MAX_LEVEL) {
+        el.vetLabel.textContent = `Veteran Lv ${level} · max level`;
+        el.vetFill.style.width = "100%";
+      } else {
+        const from = getKnightXpForLevel(level), to = getKnightXpForLevel(level + 1);
+        el.vetLabel.textContent = `Veteran Lv ${level} · ${formatNumber(xp - from)} / ${formatNumber(to - from)} XP`;
+        el.vetFill.style.width = Math.min(100, ((xp - from) / (to - from)) * 100) + "%";
+      }
+      el.train.textContent = `Training time: ${getTrainSeconds(typeId)}s · Requires Barracks Lv ${t.barracksLevel}`;
+      const stats = getKnightStats(typeId);
+      const statsKey = [stats.hp, stats.attack, stats.defense].join();
+      if (el.statsKey !== statsKey) {
+        el.statsKey = statsKey;
+        el.card.querySelector(".stat-bars").replaceWith(createStatBars(stats));
+      }
       showCost(el.cost, t.cost);
       const typeOpen = isKnightTypeUnlocked(typeId);
       el.label.textContent = !typeOpen ? `Needs Barracks Lv ${t.barracksLevel}`
@@ -3234,6 +3534,7 @@ function updateArmyPanel() {
     const civ = m.invasion.civ, wave = getRaidWave();
     document.getElementById("invasion-wave").textContent = `${ENEMY_CIVILIZATIONS[civ].name} · Wave ${wave}${isBossWave(wave) ? " (BOSS)" : ""}`;
     updateKnownEnemies();
+    updateHonorsPanel();
     const previewKey = civ + wave;
     const preview = document.getElementById("enemy-preview");
     if (preview.dataset.key !== previewKey) {
@@ -3333,7 +3634,8 @@ function fillPrepList(id, units) {
     const li = document.createElement("li");
     li.title = (KNIGHT_TYPES[typeId] || ENEMY_TYPES[typeId]).name;
     li.appendChild(createUnitIcon(typeId));
-    li.appendChild(document.createTextNode("×" + counts[typeId]));
+    const level = KNIGHT_TYPES[typeId] ? getKnightLevel(typeId) : 0;
+    li.appendChild(document.createTextNode("×" + counts[typeId] + (level > 1 ? ` Lv${level}` : "")));
     list.appendChild(li);
   }
 }
@@ -3411,6 +3713,33 @@ function showBattleSummary(s) {
   };
   addChips("Spoils of war:", s.rewards, false);
   addChips("Repairs:", s.repairs, true);
+  // Promotions and new honors
+  if (s.promotions && s.promotions.length) {
+    const row = document.createElement("div");
+    row.className = "loot-row";
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: "Promotions:" }));
+    for (const p of s.promotions) {
+      const chip = document.createElement("span");
+      chip.className = "loot-chip promotion";
+      chip.appendChild(createUnitIcon(p.typeId));
+      chip.appendChild(document.createTextNode(`${KNIGHT_TYPES[p.typeId].name} Lv ${p.level}`));
+      row.appendChild(chip);
+    }
+    box.appendChild(row);
+  }
+  if (s.honors && s.honors.length) {
+    const row = document.createElement("div");
+    row.className = "loot-row";
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: "Honors:" }));
+    for (const name of s.honors) {
+      const chip = document.createElement("span");
+      chip.className = "loot-chip honor-chip";
+      chip.appendChild(createPixelIcon("medal"));
+      chip.appendChild(document.createTextNode(name));
+      row.appendChild(chip);
+    }
+    box.appendChild(row);
+  }
   if (loot.childNodes.length) box.appendChild(loot);
 
   if (s.wounded > 0) {
