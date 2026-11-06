@@ -1333,6 +1333,16 @@ strong {
   background: #e3ecd8;
 }
 
+.log-entry[data-civ="dwarves"] {
+  background: #e4e2dc;
+}
+
+.enemy-row[data-civ="dwarves"] .knight-ability { color: #ffd08a; }
+
+.battle-modal[data-civ="dwarves"] .modal-title {
+  color: #3a3a48;
+}
+
 /* The battle window wears the colors of the attackers */
 .battle-modal[data-civ="elves"] .modal-title {
   color: #245a3a;

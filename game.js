@@ -271,6 +271,10 @@ const AWAY_THRESHOLD_SECONDS = 60;
 //   boss: true                      a boss (bigger, worth double rewards)
 //   magic: true                     attacks ignore the target's defense (magic bolts)
 //   regen: 0.02                     heals 2% of its health every second
+//   cleave: 0.5                     each hit also strikes foes beside the target for 50%
+//   heal.targets: ["machine"]       a healer that only mends units with these traits
+//   projectile: "axe"               what a ranged unit throws ("arrow", "axe", "bolt")
+//   machine: true                   a war machine: never moves
 // =============================================================
 
 const BARRACKS = {
@@ -327,9 +331,9 @@ const KNIGHT_TYPES = {
   paladin: {
     name: "Paladin",
     description: "An elite holy knight in shining armor.",
-    abilityText: "Blessing: heals the most wounded nearby knight for 10 health every 1.5 seconds.",
+    abilityText: "Blessing: heals the most wounded nearby knight for 10 health every 1.5 seconds. Its warhammer deals +40% damage to armored foes.",
     hp: 230, attack: 20, defense: 6, attackSpeed: 0.9, moveSpeed: 15, range: 9,
-    heal: { amount: 10, interval: 1.5, radius: 40 },
+    heal: { amount: 10, interval: 1.5, radius: 40 }, bonusVs: { armored: 1.4 },
     cost: { food: 220, wood: 100, stone: 80, gold: 160 },
     trainSeconds: 90,
     barracksLevel: 5,
@@ -359,11 +363,25 @@ const ENEMY_CIVILIZATIONS = {
     unlockAfter: { civ: "barbarians", wave: 5 },
     rewardBonus: { wood: 70 },
     colors: { back: "#1f3d2e", stripe: "#2f5a44", ground: "#2f5a2a", groundLight: "#5fa04a" },
+    rumor: "Strange lights drift between the silver birches...",
+  },
+  dwarves: {
+    name: "Dwarves", adjective: "Dwarven",
+    description: "Stout warriors from the halls under the mountains. Heavily armored, patient and armed with war machines.",
+    bossName: "Mountain King",
+    raidTitle: "The Dwarves March!", bossTitle: "The Mountain King Descends!",
+    unlockAfter: { civ: "elves", wave: 5 },
+    rewardBonus: { stone: 60 },
+    colors: { back: "#3a3a40", stripe: "#55555e", ground: "#4a4640", groundLight: "#6b665c" },
+    rumor: "Rumors speak of a people under the mountains...",
   },
 };
 
 // The order civilizations are introduced in.
-const CIV_ORDER = ["barbarians", "elves"];
+const CIV_ORDER = ["barbarians", "elves", "dwarves"];
+
+// The unit shown on a civilization's announcement card.
+const CIV_EMBLEM_UNIT = { barbarians: "raider", elves: "bladedancer", dwarves: "ironclad" };
 
 const ENEMY_TYPES = {
   raider: {
@@ -442,6 +460,57 @@ const ENEMY_TYPES = {
     regen: 0.02, boss: true,
     traits: ["armored"],
   },
+  // ----- Dwarves of the mountain halls -----
+  miner: {
+    name: "Dwarven Miner", civilization: "dwarves",
+    description: "Sturdy armored infantry with a lamp helmet and a pickaxe.",
+    hp: 95, attack: 10, defense: 3, attackSpeed: 0.9, moveSpeed: 13, range: 9,
+    traits: ["armored"],
+  },
+  shieldbearer: {
+    name: "Shieldbearer", civilization: "dwarves",
+    description: "Hides behind a riveted iron shield as big as he is.",
+    abilityText: "Iron Wall: nearby dwarves take 15% less damage.",
+    hp: 150, attack: 6, defense: 8, attackSpeed: 0.8, moveSpeed: 11, range: 9,
+    protect: { reduction: 0.15, radius: 24 },
+    traits: ["armored"],
+  },
+  axethrower: {
+    name: "Axethrower", civilization: "dwarves",
+    description: "Hurls spinning throwing axes over the shield line.",
+    abilityText: "Throwing Axes: attacks from a distance.",
+    hp: 75, attack: 11, defense: 2, attackSpeed: 0.8, moveSpeed: 13, range: 55,
+    ranged: true, projectile: "axe", traits: ["armored"],
+  },
+  engineer: {
+    name: "Engineer", civilization: "dwarves",
+    description: "A tinkerer in goggles with a belt full of tools.",
+    abilityText: "Siegecraft: brings a Bolt Thrower to battle and repairs machines and armored dwarves (8 every 2 seconds).",
+    hp: 85, attack: 6, defense: 4, attackSpeed: 0.8, moveSpeed: 12, range: 9,
+    heal: { amount: 8, interval: 2, radius: 55, targets: ["machine", "armored"] }, support: true,
+    traits: ["armored"],
+  },
+  ironclad: {
+    name: "Ironclad", civilization: "dwarves",
+    description: "Encased in black iron plate, swinging a huge hammer.",
+    hp: 210, attack: 15, defense: 6, attackSpeed: 0.7, moveSpeed: 10, range: 10,
+    traits: ["armored"],
+  },
+  boltThrower: {
+    name: "Bolt Thrower", civilization: "dwarves",
+    description: "A dwarven war machine on iron wheels. Built by Engineers.",
+    abilityText: "Siege Bolt: shoots heavy bolts across the whole battlefield. Never moves.",
+    hp: 140, attack: 18, defense: 5, attackSpeed: 0.4, moveSpeed: 0, range: 120,
+    ranged: true, projectile: "bolt", machine: true, traits: ["machine", "armored"],
+  },
+  mountainKing: {
+    name: "Mountain King", civilization: "dwarves",
+    description: "The crowned lord of the deep halls. A boss!",
+    abilityText: "Thunder Hammer: every blow also strikes knights beside the target. Nearby dwarves deal 20% more damage. Appears every 5th dwarven wave.",
+    hp: 1100, attack: 28, defense: 8, attackSpeed: 0.75, moveSpeed: 11, range: 11,
+    aura: { attack: 0.2, radius: 50 }, cleave: 0.5, boss: true,
+    traits: ["armored"],
+  },
   chieftain: {
     name: "Chieftain", civilization: "barbarians",
     description: "The horned warlord of the northern clans. A boss!",
@@ -466,6 +535,18 @@ const INVASION = {
 // types join as the waves grow, and every 5th wave the boss leads.
 // (Listed front line first: this is also their battle formation.)
 function getWaveEnemies(civ, wave) {
+  if (civ === "dwarves") {
+    const engineers = wave >= 4 ? 1 + Math.floor((wave - 4) / 3) : 0;
+    return [
+      { type: "shieldbearer", count: wave >= 2 ? Math.floor(wave / 2) : 0 },
+      { type: "miner",        count: 2 + Math.ceil(wave * 0.5) },
+      { type: "ironclad",     count: wave >= 3 ? Math.floor((wave - 1) / 2) : 0 },
+      { type: "mountainKing", count: isBossWave(wave) ? 1 : 0 },
+      { type: "axethrower",   count: 1 + Math.floor(wave / 2) },
+      { type: "engineer",     count: engineers },
+      { type: "boltThrower",  count: engineers },        // one war machine per engineer, at the back
+    ].filter(group => group.count > 0);
+  }
   if (civ === "elves") {
     return [
       { type: "bladedancer",    count: wave >= 2 ? Math.floor(wave / 2) : 0 },
@@ -495,7 +576,7 @@ function isBossWave(wave) {
 function getWaveRewards(civ, wave) {
   const c = ENEMY_CIVILIZATIONS[civ];
   const boss = isBossWave(wave) ? 2 : 1;      // boss raids pay double
-  const goldFactor = civ === "elves" ? 1.3 : 1;
+  const goldFactor = civ === "dwarves" ? 1.5 : civ === "elves" ? 1.3 : 1;
   const rewards = { gold: Math.round(30 * Math.pow(wave, 1.2) * goldFactor) * boss };
   for (const id in c.rewardBonus) rewards[id] = c.rewardBonus[id] * wave * boss;
   return rewards;
@@ -902,7 +983,7 @@ function createMilitaryState() {
     invasion: {
       nextAt: 0,                              // real time (ms) of the next raid
       civ: "barbarians",                      // who attacks next
-      waves: { barbarians: 1, elves: 1 },     // each civilization has its own wave count
+      waves: { barbarians: 1, elves: 1, dwarves: 1 },   // each civilization has its own wave count
       unlocked: ["barbarians"],               // civilizations that have found your kingdom
     },
     experience: 0,
@@ -1051,7 +1132,7 @@ function checkCivUnlocks() {
     if ((inv.waves[rule.civ] || 1) > rule.wave) {
       inv.unlocked.push(civ);
       unlockedNow = true;
-      if (uiReady) announce("A new enemy", `The ${ENEMY_CIVILIZATIONS[civ].name}`, ENEMY_CIVILIZATIONS[civ].description, createPortrait(civ === "elves" ? "bladedancer" : "raider"));
+      if (uiReady) announce("A new enemy", `The ${ENEMY_CIVILIZATIONS[civ].name}`, ENEMY_CIVILIZATIONS[civ].description, createPortrait(CIV_EMBLEM_UNIT[civ]));
     }
   }
   return unlockedNow;
@@ -1077,7 +1158,7 @@ function makeUnit(side, typeId, stats, x, y) {
     // special abilities (undefined when the unit has none)
     aura: stats.aura, protect: stats.protect, heal: stats.heal, ranged: stats.ranged,
     chargeMultiplier: stats.chargeMultiplier, bonusVs: stats.bonusVs, support: stats.support, boss: stats.boss,
-    magic: stats.magic, regen: stats.regen,
+    magic: stats.magic, regen: stats.regen, cleave: stats.cleave, projectile: stats.projectile,
     hasCharged: false, healTimer: stats.heal ? stats.heal.interval : 0,
     attackBoost: 0, protection: 0,
     cooldown: 0.4, target: null, alive: true, facing: side === "knight" ? 1 : -1,
@@ -1148,7 +1229,19 @@ function strike(battle, attacker, target) {
   attacker.cooldown = 1 / attacker.attackSpeed;
   battle.hits += 1;
   if (attacker.ranged) {
-    battle.effects.push({ arrow: true, magic: !!attacker.magic, x1: attacker.x, y1: attacker.y - 8, x2: target.x, y2: target.y - 7, age: 0 });
+    battle.effects.push({ arrow: true, magic: !!attacker.magic, projectile: attacker.projectile || "arrow", x1: attacker.x, y1: attacker.y - 8, x2: target.x, y2: target.y - 7, age: 0 });
+  }
+  // Thunder Hammer: the blow also strikes foes standing beside the target
+  if (attacker.cleave) {
+    for (const other of battle.units) {
+      if (!other.alive || other === target || other.side !== target.side) continue;
+      if ((other.x - target.x) ** 2 + (other.y - target.y) ** 2 > 14 * 14) continue;
+      const splash = Math.max(1, Math.round((power * attacker.cleave - other.defense) * (1 - other.protection)));
+      other.hp -= splash;
+      other.flash = 0.12;
+      battle.effects.push({ x: other.x, y: other.y - 15, value: splash, age: 0, side: other.side });
+      if (other.hp <= 0) { other.hp = 0; other.alive = false; other.deathTime = battle.time; }
+    }
   }
   battle.effects.push({ x: target.x, y: target.y - 15, value: damage, age: 0, side: target.side });
   if (battle.effects.length > 80) battle.effects.shift();
@@ -1185,6 +1278,7 @@ function tryHeal(battle, healer, alive, dt) {
   let best = null, bestRatio = 1;
   for (const u of alive) {
     if (u.side !== healer.side || u.hp >= u.maxHp) continue;
+    if (healer.heal.targets && !healer.heal.targets.some(t => u.traits.includes(t))) continue;
     if ((u.x - healer.x) ** 2 + (u.y - healer.y) ** 2 > healer.heal.radius ** 2) continue;
     const ratio = u.hp / u.maxHp;
     if (ratio < bestRatio) { bestRatio = ratio; best = u; }
@@ -2807,7 +2901,16 @@ function setupHud() {
 function updateHudBadge() {
   const attention = [...document.querySelectorAll(".nav-btn.has-badge")].length > 0;
   document.getElementById("hud-toggle").classList.toggle("has-badge", attention && !state.settings.hud);
+  // The top bar grows when the raid banner appears: move the panels (and island) with it
+  if (state.settings.hud) {
+    const height = document.querySelector(".top-bar").offsetHeight;
+    if (height !== lastTopBarHeight) {
+      lastTopBarHeight = height;
+      resizeVillageCanvas();
+    }
+  }
 }
+let lastTopBarHeight = 0;
 
 // Totals shown in the welcome-back window. If the player leaves again
 // before closing it, the new earnings are added on top.
@@ -3018,7 +3121,7 @@ function formatClock(seconds) {
 function updateKnownEnemies() {
   const list = document.getElementById("known-enemies");
   const inv = state.military.invasion;
-  const key = CIV_ORDER.map(c => c + inv.waves[c] + inv.unlocked.includes(c) + (inv.civ === c)).join() + "dwarves";
+  const key = CIV_ORDER.map(c => c + inv.waves[c] + inv.unlocked.includes(c) + (inv.civ === c)).join();
   if (list.dataset.key === key) return;
   list.dataset.key = key;
   list.innerHTML = "";
@@ -3027,12 +3130,11 @@ function updateKnownEnemies() {
     const known = inv.unlocked.includes(civ);
     const rule = c.unlockAfter;
     return {
-      civ, name: c.name, known,
+      civ, name: known ? c.name : "???", known,
       text: known ? `Next wave ${inv.waves[civ]}${inv.civ === civ ? " · attacking next" : ""}`
-        : `Unknown · appear after ${ENEMY_CIVILIZATIONS[rule.civ].name.toLowerCase()} wave ${rule.wave} is beaten`,
+        : `${c.rumor} (after ${ENEMY_CIVILIZATIONS[rule.civ].name.toLowerCase()} wave ${rule.wave})`,
     };
   });
-  rows.push({ civ: "dwarves", name: "???", known: false, text: "Rumors speak of a people under the mountains..." });
   for (const r of rows) {
     const li = document.createElement("li");
     li.className = "known-enemy" + (r.known ? "" : " unknown");
@@ -6198,10 +6300,18 @@ const UNIT_COLORS = {
   druid:          { body: "#7a6a3e", bodyDark: "#4f4428", metal: "#8ad86a", accent: "#e8e0c8" },
   spellweaver:    { body: "#5a3a8a", bodyDark: "#3a2460", metal: "#c890f0", accent: "#e8e8f0" },
   forestGuardian: { body: "#6b4a2a", bodyDark: "#4a321c", metal: "#d8ff80", accent: "#4f9a4a" },
+  miner:          { body: "#7a776c", bodyDark: "#55534c", metal: "#c8ccd4", accent: "#8a5a32" },
+  shieldbearer:   { body: "#5e626c", bodyDark: "#41444c", metal: "#a8acb4", accent: "#c8442f" },
+  axethrower:     { body: "#8a5a32", bodyDark: "#5f3d22", metal: "#c8ccd4", accent: "#d86a2a" },
+  engineer:       { body: "#6b5a3e", bodyDark: "#4a3e2a", metal: "#f2c14e", accent: "#a87443" },
+  ironclad:       { body: "#3e4048", bodyDark: "#2a2c32", metal: "#6a6e78", accent: "#ff8a3a" },
+  boltThrower:    { body: "#8a5a32", bodyDark: "#5f3d22", metal: "#8a8f9a", accent: "#e8e4d8" },
+  mountainKing:   { body: "#4a6a9a", bodyDark: "#344c74", metal: "#f2c14e", accent: "#f4f0e6" },
 };
 
 // How tall each sprite is (so health bars sit just above its head).
-const UNIT_HEIGHTS = { cavalier: 20, brute: 16, chieftain: 21, berserker: 13, guardian: 13, druid: 15, forestGuardian: 26 };
+const UNIT_HEIGHTS = { cavalier: 20, brute: 16, chieftain: 21, berserker: 13, guardian: 13, druid: 15, forestGuardian: 26,
+  miner: 10, shieldbearer: 11, axethrower: 10, engineer: 10, ironclad: 12, boltThrower: 11, mountainKing: 19 };
 
 // Draws one unit standing at (x, y) = the spot between its feet.
 // facing: 1 = looking right, -1 = looking left.
@@ -6216,7 +6326,8 @@ function drawUnitSprite(ctx, typeId, x, y, facing, o = {}) {
     ctx.fillStyle = o.flash ? "#ffffff" : color;
     ctx.fillRect(Math.round(rx), Math.round(y + dy), w, h);
   };
-  const shadowWidth = typeId === "forestGuardian" ? 17 : typeId === "cavalier" || typeId === "chieftain" || typeId === "brute" ? 13 : 9;
+  const shadowWidth = typeId === "forestGuardian" ? 17
+    : ["cavalier", "chieftain", "brute", "boltThrower", "mountainKing"].includes(typeId) ? 13 : 9;
   if (!o.noShadow) {
     ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
     ctx.fillRect(Math.round(x - shadowWidth / 2), Math.round(y), shadowWidth, 1);
@@ -6380,6 +6491,70 @@ function drawUnitSprite(ctx, typeId, x, y, facing, o = {}) {
       fillEllipse(ctx, x - 2 + lunge, y - 22, 5, 3, o.flash ? "#ffffff" : "#6fc05a");
       px(-3, -24, 2, 1, "#c8f0a0"); px(3, -21, 1, 1, "#f0a8d8");       // a blossom
       break;
+    case "miner":
+      px(-2, -2, 2, step ? 1 : 2, "#3a3030"); px(1, -2, 2, step ? 2 : 1, "#3a3030");     // stubby legs
+      px(-3, -6, 6, 4, c.body); px(-3, -3, 6, 1, c.accent);              // mail shirt, belt
+      px(-2, -9, 4, 3, "#e8b796"); px(-3, -7, 6, 2, "#8a5a32");          // face and big brown beard
+      px(-3, -10, 6, 2, c.bodyDark); px(1, -10, 2, 1, "#ffe080");        // helmet with lamp
+      px(1, -8, 1, 1, "#2b1d14");
+      if (o.lunge) { px(3, -6, 4, 1, c.accent); px(6, -8, 1, 3, c.metal); }      // pickaxe
+      else { px(3, -9, 1, 5, c.accent); px(2, -10, 3, 1, c.metal); }
+      break;
+    case "shieldbearer":
+      px(-2, -2, 2, 2, "#2e3036"); px(1, -2, 2, 2, "#2e3036");
+      px(-3, -7, 6, 5, c.body);
+      px(-2, -10, 4, 3, "#e8b796"); px(-3, -8, 6, 2, c.accent);          // red beard
+      px(-3, -11, 6, 2, c.metal); px(1, -9, 1, 1, "#2b1d14");
+      px(2, -9, 3, 8, c.metal); px(2, -9, 3, 1, "#d8dce4");             // big round iron shield
+      px(3, -6, 1, 2, c.bodyDark); px(2, -2, 3, 1, c.bodyDark);
+      break;
+    case "axethrower":
+      px(-2, -2, 2, step ? 1 : 2, "#3a2a1a"); px(1, -2, 2, step ? 2 : 1, "#3a2a1a");
+      px(-3, -6, 6, 4, c.body); px(-3, -3, 6, 1, c.bodyDark);
+      px(-2, -9, 4, 3, "#e8b796"); px(-3, -7, 6, 2, c.accent);           // ginger beard
+      px(-3, -10, 6, 1, "#4a3020"); px(1, -8, 1, 1, "#2b1d14");
+      px(-4, -6, 1, 3, c.metal); px(-4, -7, 2, 1, c.metal);              // spare axe on the belt
+      if (o.lunge) px(3, -9, 2, 2, c.metal); else { px(3, -7, 1, 3, "#7a4a24"); px(3, -8, 2, 1, c.metal); }
+      break;
+    case "engineer":
+      px(-2, -2, 2, 2, "#3a2a1a"); px(1, -2, 2, 2, "#3a2a1a");
+      px(-3, -6, 6, 4, c.body); px(-2, -6, 4, 4, c.accent);              // leather apron
+      px(-3, -3, 6, 1, "#3a2a1a"); px(-2, -3, 1, 1, c.metal); px(1, -3, 1, 1, "#c8ccd4");   // tool belt
+      px(-2, -9, 4, 3, "#e8b796"); px(-3, -7, 6, 2, "#c8c0b0");          // grey beard
+      px(-2, -9, 4, 1, c.metal); px(0, -9, 1, 1, "#4a3020");             // brass goggles
+      px(-3, -10, 6, 1, "#4a3020");
+      px(3, -7, 1, 3, "#8a8f9a"); px(3, -8, 2, 1, "#8a8f9a");            // wrench
+      break;
+    case "ironclad":
+      px(-3, -2, 2, 2, c.bodyDark); px(1, -2, 2, 2, c.bodyDark);
+      px(-4, -8, 8, 6, c.body); px(-4, -8, 8, 1, c.metal);               // black plate
+      px(-3, -5, 6, 1, c.bodyDark);
+      px(-3, -12, 6, 4, c.body); px(-3, -12, 6, 1, c.metal);             // great helm
+      px(-1, -10, 4, 1, c.accent);                                       // glowing visor slit
+      if (o.lunge) { px(4, -7, 5, 1, "#5a3a24"); px(8, -9, 3, 4, c.metal); }      // hammer swing
+      else { px(4, -12, 1, 7, "#5a3a24"); px(3, -14, 3, 3, c.metal); }
+      break;
+    case "boltThrower":
+      px(-6, -3, 12, 2, c.body); px(-6, -3, 12, 1, "#a87443");           // wooden carriage
+      fillEllipse(ctx, x - 4, y - 1, 2, 2, o.flash ? "#ffffff" : c.metal);       // iron wheels
+      fillEllipse(ctx, x + 4, y - 1, 2, 2, o.flash ? "#ffffff" : c.metal);
+      px(-1, -8, 2, 5, c.bodyDark);                                      // mount
+      px(-4, -9, 9, 1, c.body);                                          // stock
+      px(3, -12, 1, 7, "#5a3a24"); px(4, -12, 1, 1, "#5a3a24"); px(4, -6, 1, 1, "#5a3a24");   // bow arms
+      px(o.lunge ? 2 : 1, -11, 1, 5, c.accent);                          // string
+      if (!o.lunge) px(-3, -10, 8, 1, "#e8e4d8");                        // loaded bolt
+      break;
+    case "mountainKing":
+      px(-3, -3, 2, 3, c.bodyDark); px(2, -3, 2, 3, c.bodyDark);
+      px(-5, -12, 2, 10, "#8e2a20");                                     // royal red cape
+      px(-3, -12, 7, 9, c.body); px(-3, -12, 7, 1, "#8fa8d0");           // blue-steel armor
+      px(0, -10, 1, 6, c.metal);                                         // gold trim
+      px(-2, -16, 5, 4, "#e8b796"); px(-3, -14, 7, 5, c.accent);         // face and long white beard
+      px(1, -15, 1, 1, "#2b1d14");
+      px(-2, -17, 5, 1, c.metal); px(-2, -18, 1, 1, c.metal); px(0, -18, 1, 1, c.metal); px(2, -18, 1, 1, c.metal);   // crown
+      if (o.lunge) { px(5, -10, 7, 1, "#5a3a24"); px(10, -13, 4, 6, "#a8acb4"); }  // thunder hammer smash
+      else { px(5, -18, 1, 13, "#5a3a24"); px(4, -20, 4, 4, "#a8acb4"); px(5, -19, 2, 2, c.metal); }
+      break;
     case "chieftain":
       legs("#3a2a1a", true);
       px(-5, -13, 2, 11, c.accent);                                      // red fur cape
@@ -6472,7 +6647,19 @@ function paintBattleBackground(civ = "barbarians") {
   rect(g, 6, 92, 8, 22, PAL.door);
   rect(g, 2, 48, 6, 12, PAL.banner);
   rect(g, 4, 52, 2, 3, PAL.gold);
-  if (civ === "elves") {
+  if (civ === "dwarves") {
+    // The mountain pass: grey cliffs, a timbered mine entrance and rails
+    fillPoly(g, [[250, 160], [262, 70], [286, 46], [320, 40], [320, 160]], "#7a766c");
+    fillPoly(g, [[262, 70], [286, 46], [320, 40], [320, 60], [292, 64]], "#a19d92");
+    for (let i = 0; i < 26; i++) rect(g, 262 + Math.floor(random() * 58), 60 + Math.floor(random() * 96), 2 + Math.floor(random() * 4), 1, "#5a574f");
+    rect(g, 282, 92, 22, 26, "#1b1612");                              // mine opening
+    rect(g, 280, 90, 26, 3, "#6b4528"); rect(g, 280, 90, 3, 30, "#6b4528"); rect(g, 303, 90, 3, 30, "#6b4528");
+    rect(g, 286, 96, 2, 2, "#ffd860"); rect(g, 297, 98, 2, 2, "#ffd860");   // lanterns inside
+    for (let x = 230; x < 300; x += 4) rect(g, x, 120 + Math.round((x - 230) * -0.02), 2, 1, "#5a3a24");   // rail sleepers
+    rect(g, 230, 119, 70, 1, "#8a8f9a"); rect(g, 230, 122, 70, 1, "#8a8f9a");
+    rect(g, 252, 112, 10, 6, "#5a5e66"); rect(g, 253, 110, 8, 2, "#a8acb4");   // a mine cart
+    rect(g, 253, 118, 2, 2, "#2a2c32"); rect(g, 259, 118, 2, 2, "#2a2c32");
+  } else if (civ === "elves") {
     // The Silverwood: pale birches, glowing mushrooms and drifting motes
     for (let i = 0; i < 14; i++) {
       const tx = 282 + (i % 4) * 10 + Math.floor(random() * 5), ty = 60 + i * 7;
@@ -6536,7 +6723,15 @@ function drawBattle(battle, time) {
       const t = e.age / 0.25;
       const ax = lerp(e.x1, e.x2, t), ay = lerp(e.y1, e.y2, t) - Math.sin(t * Math.PI) * 8;
       const dir = e.x2 >= e.x1 ? 1 : -1;
-      if (e.magic) {                                   // a glowing violet bolt with a trail
+      if (e.projectile === "axe") {                    // a spinning throwing axe
+        const spin = Math.floor(e.age * 40) % 2;
+        rect(ctx, ax - 1, ay - 1, spin ? 3 : 1, spin ? 1 : 3, "#7a4a24");
+        rect(ctx, ax + (spin ? 1 : 0), ay - (spin ? 2 : 1), 2, 2, "#c8ccd4");
+      } else if (e.projectile === "bolt") {            // a heavy ballista bolt
+        rect(ctx, ax - 4 * dir, ay, 7, 1, "#5a3a24");
+        rect(ctx, ax + 3 * dir, ay, 2, 1, "#c8ccd4");
+        rect(ctx, ax - 4 * dir, ay - 1, 1, 3, "#e8e4d8");
+      } else if (e.magic) {                            // a glowing violet bolt with a trail
         rect(ctx, ax - 4 * dir, ay, 2, 1, "rgba(200, 140, 255, 0.5)");
         rect(ctx, ax - 2 * dir, ay - 1, 3, 3, "#b070f0");
         rect(ctx, ax - 1 * dir, ay, 1, 1, "#f4e0ff");

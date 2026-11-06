@@ -27,5 +27,5 @@ Double-click `index.html` to open it in any modern browser. No install or build 
   - [x] 6. Remaining four barbarian enemies (Marauder, Brute, War Drummer, Chieftain boss)
   - [x] 7. Guardian, Cavalier, Ranger, Paladin (with special abilities)
   - [x] 8. Elven civilization (Scout, Archer, Bladedancer, Druid, Spellweaver, Forest Guardian boss)
-  - [ ] 9. Dwarven civilization
+  - [x] 9. Dwarven civilization (Miner, Shieldbearer, Axethrower, Engineer + Bolt Thrower, Ironclad, Mountain King boss)
   - [ ] 10. Military research, progression and polish
