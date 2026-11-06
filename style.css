@@ -1997,3 +1997,160 @@ strong {
     font-size: 18px;
   }
 }
+
+/* =============================================================
+   FULL-WINDOW KINGDOM AND THE HIDDEN HUD
+   -------------------------------------------------------------
+   The kingdom fills the whole window. Menus (top bar, bottom bar
+   and panels) only appear after pressing the crown button in the
+   top-right corner; the body then gets the class "hud-open".
+   ============================================================= */
+#game {
+  max-width: none;
+  padding: 0;
+}
+
+/* The scene sits behind everything, edge to edge */
+.village-frame {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  padding: 0;
+  border: none;
+  border-image: none;
+  box-shadow: none;
+  background: #5eaae8;
+}
+
+#village-canvas {
+  max-width: none;
+}
+
+/* The crown button */
+.hud-toggle {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  background: var(--wood) var(--tex-wood) 0 0 / 128px 64px;
+  border: 10px solid var(--wood-dark);
+  border-image: var(--frame-gold) 8 round;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4);
+  opacity: 0.85;
+  transition: opacity 0.2s, transform 0.08s steps(2);
+}
+
+.hud-toggle .pixel-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.hud-toggle:hover {
+  opacity: 1;
+  filter: brightness(1.12);
+}
+
+.hud-toggle:active {
+  transform: translateY(2px);
+}
+
+.hud-toggle[aria-pressed="true"] {
+  opacity: 1;
+  background: var(--parch-light) var(--tex-parchment) 0 0 / 128px 128px;
+}
+
+.hud-toggle.has-badge::after {
+  content: "";
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 14px;
+  height: 14px;
+  background: var(--crimson-light);
+  border: 3px solid var(--ink);
+  animation: badge-blink 1.2s steps(2) infinite;
+}
+
+/* Menus hidden: only the kingdom (and the crown) */
+body:not(.hud-open) .top-bar,
+body:not(.hud-open) .bottom-nav,
+body:not(.hud-open) .main-area {
+  display: none;
+}
+
+body:not(.hud-open) .toast {
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+body:not(.hud-open) .announcement {
+  top: calc(16px + env(safe-area-inset-top, 0px));
+}
+
+@media (max-width: 600px) {
+  body:not(.hud-open) .announcement {
+    top: calc(74px + env(safe-area-inset-top, 0px));   /* below the crown button */
+  }
+}
+
+/* Menus shown: the top bar floats over the sky... */
+body.hud-open .top-bar {
+  position: fixed;
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  left: max(8px, env(safe-area-inset-left, 0px));
+  right: calc(76px + env(safe-area-inset-right, 0px));
+  z-index: 20;
+}
+
+/* ...and the panels open in a scrolling drawer on the right */
+body.hud-open .main-area {
+  position: fixed;
+  z-index: 15;
+  top: var(--hud-top, 150px);
+  bottom: calc(var(--nav-height) + 14px + env(safe-area-inset-bottom, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  width: min(640px, 48vw);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--gold-dark) var(--wood-deep);
+}
+
+body.hud-open .announcement {
+  top: var(--hud-top, 150px);
+}
+
+/* Panels inside the drawer use one column */
+body.hud-open .army-layout,
+body.hud-open .research-branches {
+  grid-template-columns: 1fr;
+}
+
+body.hud-open .building-list {
+  grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
+}
+
+/* Phones and narrow windows: the drawer becomes a bottom sheet */
+@media (max-width: 860px) {
+  body.hud-open .top-bar {
+    position: fixed;
+    right: calc(70px + env(safe-area-inset-right, 0px));
+  }
+
+  body.hud-open .main-area {
+    left: max(6px, env(safe-area-inset-left, 0px));
+    right: max(6px, env(safe-area-inset-right, 0px));
+    width: auto;
+    top: max(46vh, var(--hud-top, 150px));
+  }
+
+  .hud-toggle {
+    width: 46px;
+    height: 46px;
+    border-width: 8px;
+  }
+}

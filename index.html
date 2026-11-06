@@ -18,6 +18,17 @@
        dropped into another website as one block. -->
   <div id="game">
 
+    <!-- ===================== THE KINGDOM (fills the whole window) ===================== -->
+    <div class="village-frame" id="village-frame">
+      <!-- The village is drawn in pixel art and scaled up with crisp pixels -->
+      <canvas id="village-canvas" width="480" height="270"></canvas>
+    </div>
+
+    <!-- The only control on screen while the menus are hidden -->
+    <button class="hud-toggle" id="hud-toggle" type="button" aria-pressed="false" aria-label="Show menus" title="Show menus">
+      <span class="icon-slot" data-icon="crown"></span>
+    </button>
+
     <!-- ===================== TOP BAR: crest, resources, settings ===================== -->
     <header class="top-bar">
       <div class="crest-block">
@@ -53,11 +64,6 @@
 
       <!-- VILLAGE TAB: the kingdom view and the architect's catalog -->
       <section class="screen screen-village active" id="screen-village">
-        <div class="village-frame" id="village-frame">
-          <!-- The village is drawn at 480x270 and scaled up with crisp pixels -->
-          <canvas id="village-canvas" width="480" height="270"></canvas>
-        </div>
-
         <section class="panel building-panel">
           <div class="panel-head">
             <h2 class="panel-title">Royal Architect&rsquo;s Catalog</h2>
