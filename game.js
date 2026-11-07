@@ -350,6 +350,28 @@ const QUEST_BOARD_SIZE = 3;                 // requests on the board at once
 const HERALD_ARRIVAL_SECONDS = 10 * 60;     // a new herald arrives 10 min after one leaves
 const HERALD_REWARD_MINUTES = 5;            // rewards are worth ~5 min of production
 
+// ---- Trade caravans ----
+// Each Market owns a wagon (up to 3). Send a wagon on a trade route with
+// a load of goods; it comes back later with more valuable goods.
+// How much a wagon carries grows with your population and Market level.
+//   sell: what the wagon takes away   buy: what it brings back
+//   profit: value brought back / value taken   population: needed to unlock
+const TRADE_VALUES = { food: 1, wood: 1, stone: 2, gold: 4 };   // what goods are worth to merchants
+const CARAVAN = {
+  maxWagons: 3,
+  baseCapacity: 150,            // value one wagon carries...
+  capacityPerCitizen: 4,        // ...plus this much per citizen...
+  capacityPerMarketLevel: 0.25, // ...and +25% per Market level above 1
+};
+const TRADE_ROUTES = [
+  { id: "millbrook",   name: "Millbrook Farms",  text: "Farmers trade sacks of grain for timber.",          sell: "wood",  buy: "food",  minutes: 3,   profit: 1.3, population: 0 },
+  { id: "greywater",   name: "Greywater Harbor", text: "Shipwrights pay in planks for salted provisions.", sell: "food",  buy: "wood",  minutes: 8,   profit: 1.5, population: 0 },
+  { id: "ironcrag",    name: "Ironcrag Hills",   text: "Hill folk cut stone for anyone who feeds them.",   sell: "food",  buy: "stone", minutes: 15,  profit: 1.6, population: 50 },
+  { id: "amberfield",  name: "Amberfield Fair",  text: "A great fair where timber sells for silver.",      sell: "wood",  buy: "gold",  minutes: 30,  profit: 1.8, population: 100 },
+  { id: "goldenCoast", name: "The Golden Coast", text: "Rich cities build their palaces with your stone.", sell: "stone", buy: "gold",  minutes: 60,  profit: 2.1, population: 250 },
+  { id: "spiceRoad",   name: "The Spice Road",   text: "A long road east. Grain becomes a fortune.",       sell: "food",  buy: "gold",  minutes: 180, profit: 2.6, population: 400 },
+];
+
 // ---- Achievements ----
 // Kingdom-wide feats. Each one earned adds RENOWN_PER_ACHIEVEMENT to
 // all production and taxes, for good.
@@ -383,6 +405,8 @@ const ACHIEVEMENTS = [
   { id: "wood10k",    group: "wealth",  icon: "wood",       name: "Timber Baron",       text: "Gather 10,000 wood.",              stat: "wood",       target: 10000 },
   { id: "stone10k",   group: "wealth",  icon: "stone",      name: "Quarry Lord",        text: "Gather 10,000 stone.",             stat: "stone",      target: 10000 },
   { id: "gold10k",    group: "wealth",  icon: "gold",       name: "Full Coffers",       text: "Collect 10,000 gold.",             stat: "gold",       target: 10000 },
+  { id: "trips10",    group: "wealth",  icon: "wagon",      name: "Open Roads",         text: "Complete 10 caravan journeys.",    stat: "trips",      target: 10 },
+  { id: "trips50",    group: "wealth",  icon: "wagon",      name: "Merchant Prince",    text: "Complete 50 caravan journeys.",    stat: "trips",      target: 50 },
   { id: "gold100k",   group: "wealth",  icon: "gold",       name: "Dragon's Hoard",     text: "Collect 100,000 gold.",            stat: "gold",       target: 100000 },
 
   { id: "research1",  group: "wisdom",  icon: "book",       name: "Curious Mind",       text: "Complete your first research.",    stat: "research",   target: 1 },
@@ -783,6 +807,7 @@ function createNewGameState() {
     castleLevel: 1,           // 2 after the Castle Upgrade
     military: createMilitaryState(),
     quests: createQuestState(),
+    trade: createTradeState(),
     achievements: {},         // id -> time (ms) it was earned
     // One entry per building type, e.g. farm: { count: 1, level: 1 }
     //   count = how many of this building you own
@@ -1957,6 +1982,7 @@ const ACHIEVEMENT_STATS = {
   requests:      () => state.quests.completed,
   trained:       () => state.military.totalTrained,
   wins:          () => state.military.battlesWon,
+  trips:         () => state.trade.trips,
   honors:        () => MILITARY_HONORS.filter(h => state.military.honors[h.id]).length,
 };
 
@@ -1990,6 +2016,86 @@ function checkAchievements() {
 
 
 /* =============================================================
+   3f. TRADE CARAVANS
+   -------------------------------------------------------------
+   state.trade = {
+     wagons: [ { route, departedAt, returnsAt, cargo, reward } or null, ... ]
+     trips:  journeys completed
+   }
+   A wagon on the road stores the exact time it comes back, so a
+   caravan finishes on time even while the game is closed.
+   ============================================================= */
+
+function createTradeState() {
+  return { wagons: new Array(CARAVAN.maxWagons).fill(null), trips: 0 };
+}
+
+// One wagon per Market owned (up to 3).
+function getWagonCount() {
+  return Math.min(CARAVAN.maxWagons, state.buildings.market.count);
+}
+
+// How much value one wagon carries.
+function getCaravanCapacity() {
+  const level = state.buildings.market.level;
+  return (CARAVAN.baseCapacity + state.population * CARAVAN.capacityPerCitizen) *
+    (1 + CARAVAN.capacityPerMarketLevel * (level - 1));
+}
+
+// What a journey on this route takes away and brings back right now.
+function getRouteDeal(route) {
+  const capacity = getCaravanCapacity();
+  return {
+    cargo:  { [route.sell]: Math.ceil(capacity / TRADE_VALUES[route.sell]) },
+    reward: { [route.buy]:  Math.floor(capacity * route.profit / TRADE_VALUES[route.buy]) },
+  };
+}
+
+function isRouteUnlocked(route) {
+  return state.population >= route.population;
+}
+
+// The first wagon standing at the market, or -1.
+function getFreeWagon() {
+  for (let i = 0; i < getWagonCount(); i++) if (!state.trade.wagons[i]) return i;
+  return -1;
+}
+
+// Called by a route's "Send" button.
+function sendCaravan(routeId) {
+  updateGame();
+  const route = TRADE_ROUTES.find(r => r.id === routeId);
+  const slot = getFreeWagon();
+  if (!route || slot < 0 || !isRouteUnlocked(route)) return false;
+  const deal = getRouteDeal(route);
+  if (!canAfford(deal.cargo)) return false;
+  spendResources(deal.cargo);
+  const now = Date.now();
+  state.trade.wagons[slot] = { route: route.id, departedAt: now, returnsAt: now + route.minutes * 60000, cargo: deal.cargo, reward: deal.reward };
+  playSound("caravan");
+  refreshUI();
+  return true;
+}
+
+// Wagons whose return time has passed unload their goods.
+function checkCaravans() {
+  const now = Date.now();
+  state.trade.wagons.forEach((wagon, i) => {
+    if (!wagon || now < wagon.returnsAt) return;
+    giveResources(wagon.reward);
+    state.trade.wagons[i] = null;
+    state.trade.trips += 1;
+    if (uiReady) {
+      const route = TRADE_ROUTES.find(r => r.id === wagon.route);
+      const goods = Object.keys(wagon.reward).map(id => `+${formatNumber(wagon.reward[id])} ${id}`).join(", ");
+      notify(`Caravan back from ${route.name}: ${goods}`);
+      playSound("coins");
+    }
+  });
+}
+
+
+/* =============================================================
    4. GAME LOOP
    -------------------------------------------------------------
    KEY IDEA: we never assume a timer fires on time.
@@ -2011,6 +2117,7 @@ function updateGame() {
     // The player was away (page closed, tab hidden or computer asleep).
     handleTimeAway(elapsedSeconds);
     state.lastUpdate = now;
+    checkCaravans();
     checkQuests();
     checkAchievements();
     saveGame(); // save at once, so this time can never be paid out twice
@@ -2018,6 +2125,7 @@ function updateGame() {
     applyProduction(elapsedSeconds);
     state.lastUpdate = now;
     processInvasions(false);   // a raid may start on screen
+    checkCaravans();
     checkQuests();
     checkAchievements();
   }
@@ -2031,6 +2139,7 @@ function handleTimeAway(secondsAway) {
 
   applyProduction(secondsPaid);
   const battles = processInvasions(true);   // raids that happened while you were away
+  checkCaravans();                           // caravans that came home meanwhile
 
   // Report the real change (new citizens may have eaten some food).
   const earned = { citizens: state.population - before.citizens, knights: state.military.totalTrained - before.knights };
@@ -2046,6 +2155,7 @@ function refreshUI() {
   updateKingdomPanel();
   updateArmyPanel();
   updateQuestPanel();
+  updateTradePanel();
   updateAchievementPanel();
   updateSaveStatus();
   updateHudBadge();
@@ -2150,6 +2260,7 @@ function cleanSaveData(data) {
   if (isGoodNumber(data.lastSaved)) clean.lastSaved = data.lastSaved;
   if (data.military && typeof data.military === "object") cleanMilitaryData(data.military, clean.military, isGoodNumber);
   if (data.quests && typeof data.quests === "object") cleanQuestData(data.quests, clean.quests, isGoodNumber);
+  if (data.trade && typeof data.trade === "object") cleanTradeData(data.trade, clean.trade, isGoodNumber);
   if (data.achievements && typeof data.achievements === "object") {
     for (const a of ACHIEVEMENTS) if (isGoodNumber(data.achievements[a.id])) clean.achievements[a.id] = data.achievements[a.id];
   }
@@ -2158,6 +2269,28 @@ function cleanSaveData(data) {
     clean.lastUpdate = data.lastUpdate;
   }
   return clean;
+}
+
+// Copies valid caravan data from a save. A wagon with broken data is
+// sent home empty rather than risk a crash.
+function cleanTradeData(t, clean, isGoodNumber) {
+  if (isGoodNumber(t.trips)) clean.trips = Math.floor(t.trips);
+  if (!Array.isArray(t.wagons)) return;
+  for (let i = 0; i < CARAVAN.maxWagons; i++) {
+    const w = t.wagons[i];
+    if (!w || typeof w !== "object" || !TRADE_ROUTES.some(r => r.id === w.route)) continue;
+    if (!isGoodNumber(w.departedAt) || !isGoodNumber(w.returnsAt) || !w.reward || typeof w.reward !== "object") continue;
+    const reward = {}, cargo = {};
+    for (const res of RESOURCES) {
+      if (isGoodNumber(w.reward[res.id])) reward[res.id] = w.reward[res.id];
+      if (w.cargo && isGoodNumber(w.cargo[res.id])) cargo[res.id] = w.cargo[res.id];
+    }
+    if (Object.keys(reward).length === 0) continue;
+    // A journey can't last longer than its route (clock changed): cap it
+    const route = TRADE_ROUTES.find(r => r.id === w.route);
+    const returnsAt = Math.min(w.returnsAt, Date.now() + route.minutes * 60000);
+    clean.wagons[i] = { route: w.route, departedAt: Math.min(w.departedAt, returnsAt), returnsAt, cargo, reward };
+  }
 }
 
 // Copies valid quest data from a save. A request that doesn't make
@@ -2389,6 +2522,18 @@ const ICON_PIXELS = {
     "osssssSSSo",
     ".oSSSSSSo.",
     "..oooooo..",
+  ],
+  wagon: [ // a covered merchant wagon
+    "...oooooo...",
+    "..oeeeeeeo..",
+    ".oeeTeeTeeo.",
+    ".oeeTeeTeeo.",
+    "oBbbbbbbbbBo",
+    "oBbbtbbtbbBo",
+    ".oooooooooo.",
+    ".oSo....oSo.",
+    "oSlSo..oSlSo",
+    ".oSo....oSo.",
   ],
   gold: [ // a gold coin
     "..oooooo..",
@@ -3454,6 +3599,110 @@ function updateKingdomPanel() {
   }
 }
 
+// ---------- Trade screen: wagons and routes ----------
+let wagonElements = [];
+const routeElements = {};
+
+function buildTradePanel() {
+  const wagonList = document.getElementById("wagon-list");
+  wagonList.innerHTML = "";
+  wagonElements = [];
+  for (let i = 0; i < CARAVAN.maxWagons; i++) {
+    const card = document.createElement("li");
+    card.className = "wagon-card";
+    card.innerHTML =
+      `<span class="wagon-icon icon-slot" data-icon="wagon"></span>` +
+      `<div class="wagon-body"><span class="wagon-name">Wagon ${toRoman(i + 1)}</span>` +
+      `<span class="wagon-status"></span>` +
+      `<div class="progress"><div class="progress-fill"></div></div>` +
+      `<div class="wagon-cargo"></div></div>`;
+    wagonList.appendChild(card);
+    wagonElements.push({
+      card,
+      status: card.querySelector(".wagon-status"),
+      progress: card.querySelector(".progress"),
+      fill: card.querySelector(".progress-fill"),
+      cargo: card.querySelector(".wagon-cargo"),
+    });
+  }
+  fillIconSlots(wagonList);
+
+  const routeList = document.getElementById("route-list");
+  routeList.innerHTML = "";
+  for (const route of TRADE_ROUTES) {
+    const card = document.createElement("li");
+    card.className = "route-card";
+    card.innerHTML =
+      `<div class="route-head"><span class="route-name">${route.name}</span>` +
+      `<span class="route-time">${route.minutes < 60 ? route.minutes + " min" : route.minutes / 60 + " h"} journey</span></div>` +
+      `<p class="route-text">${route.text}</p>` +
+      `<div class="route-deal"><span class="route-label">Send</span><span class="btn-cost route-cargo"></span>` +
+      `<span class="route-arrow">&rarr;</span><span class="route-label">Bring back</span><span class="route-reward"></span></div>` +
+      `<p class="route-lock"></p>` +
+      `<button class="btn btn-primary" type="button"><span class="btn-label">Send Caravan</span></button>`;
+    routeList.appendChild(card);
+    const el = {
+      card,
+      cargo: card.querySelector(".route-cargo"),
+      reward: card.querySelector(".route-reward"),
+      lock: card.querySelector(".route-lock"),
+      button: card.querySelector(".btn"),
+    };
+    el.button.addEventListener("click", () => sendCaravan(route.id));
+    routeElements[route.id] = el;
+  }
+}
+
+function updateTradePanel() {
+  const wagons = getWagonCount();
+  const hasMarket = wagons > 0;
+  document.getElementById("trade-locked").hidden = hasMarket;
+  document.getElementById("trade-summary").hidden = !hasMarket;
+  document.getElementById("trade-capacity").textContent = formatNumber(Math.floor(getCaravanCapacity()));
+  document.getElementById("trade-trips").textContent = state.trade.trips > 0 ? `Journeys completed: ${formatNumber(state.trade.trips)}` : "";
+
+  const now = Date.now();
+  for (let i = 0; i < CARAVAN.maxWagons; i++) {
+    const el = wagonElements[i], wagon = state.trade.wagons[i];
+    const owned = i < wagons;
+    el.card.classList.toggle("locked", !owned && !wagon);
+    el.card.classList.toggle("travelling", !!wagon);
+    el.progress.hidden = !wagon;
+    el.cargo.hidden = !wagon;
+    if (wagon) {
+      const route = TRADE_ROUTES.find(r => r.id === wagon.route);
+      const total = wagon.returnsAt - wagon.departedAt;
+      const left = Math.max(0, wagon.returnsAt - now);
+      el.status.textContent = `On the road to ${route.name}. Back in ${formatDuration(Math.max(1, left / 1000))}.`;
+      el.fill.style.width = (total > 0 ? Math.min(100, (1 - left / total) * 100) : 100) + "%";
+      showReward(el.cargo, wagon.reward);
+    } else {
+      el.status.textContent = owned
+        ? "Waiting at the market, ready to leave."
+        : i === 0 ? "Build a Market to hire this wagon." : "Build another Market to hire this wagon.";
+    }
+  }
+
+  const free = getFreeWagon() >= 0;
+  let canSendSomething = false;
+  for (const route of TRADE_ROUTES) {
+    const el = routeElements[route.id];
+    const unlocked = isRouteUnlocked(route);
+    const deal = getRouteDeal(route);
+    el.card.classList.toggle("locked", !unlocked);
+    showCost(el.cargo, deal.cargo);
+    showReward(el.reward, deal.reward);
+    el.lock.hidden = unlocked && hasMarket && free;
+    el.lock.textContent = !unlocked ? `Opens at ${route.population} citizens.`
+      : !hasMarket ? "Needs a Market."
+      : "All wagons are on the road.";
+    const ok = unlocked && free && canAfford(deal.cargo);
+    el.button.disabled = !ok;
+    canSendSomething = canSendSomething || ok;
+  }
+  setNavBadge("trade", canSendSomething);
+}
+
 // ---------- Quests screen: the decree and the notice board ----------
 let questSlotElements = [];
 
@@ -4428,6 +4677,10 @@ const SOUNDS = {
   defeat()    { [[64, 0], [60, 0.25], [57, 0.5]].forEach(([n, t]) => tone(midiToFreq(n), t, 0.6, "triangle", 0.12)); },
   click()     { tone(880, 0, 0.05, "square", 0.05); },
   coins()     { tone(988, 0, 0.08, "square", 0.08); tone(1319, 0.07, 0.25, "square", 0.08); },
+  caravan()   {                                                  // hooves clip-clop, then a little bell
+    [0, 0.16, 0.34, 0.5].forEach((t, i) => noise(t, 0.04, 0.35, i % 2 ? 1500 : 1000));
+    tone(1319, 0.66, 0.4, "triangle", 0.08); tone(1760, 0.7, 0.35, "sine", 0.04);
+  },
   build() {
     noise(0, 0.12, 0.5, 900); noise(0.14, 0.1, 0.4, 700);         // two hammer knocks
     tone(392, 0.22, 0.12, "triangle", 0.2); tone(523, 0.3, 0.25, "triangle", 0.2);
@@ -5078,9 +5331,19 @@ function drawRoof(ctx, box, wallH, rh, style, axis, gable, between) {
 }
 
 // Small stone chimney that also releases smoke.
-function drawChimney(ctx, tx, ty, z, h) {
+// Warm red brick for cottage chimneys: [left wall, right wall, top, mortar]
+const BRICK_CHIMNEY = ["#b0593c", "#83402c", "#4a2418", "#d98a6a"];
+
+function drawChimney(ctx, tx, ty, z, h, bricks = null) {
   const box = { x: tx, y: ty, w: 0.28, d: 0.28, z };
-  drawIsoBox(ctx, box, h, PAL.stone, PAL.stoneDark, PAL.stoneDeep);
+  if (bricks) {
+    drawIsoBox(ctx, box, h, bricks[0], bricks[1], bricks[2]);
+    for (let v = z + 3; v < z + h; v += 3) {                    // mortar lines
+      lineL(ctx, { ...box, z: 0 }, v, bricks[3]);
+    }
+  } else {
+    drawIsoBox(ctx, box, h, PAL.stone, PAL.stoneDark, PAL.stoneDeep);
+  }
   const [cx, cy] = iso(tx + 0.14, ty + 0.14, z + h);
   fx.chimneys.push({ x: cx, y: cy - 1 });
 }
@@ -5491,28 +5754,94 @@ function drawCastle(ctx) {
   drawTower(ctx, 9.6, 9.6, Z, 6, 30 + extra, 16, flag);          // front tower
 }
 
-// Timber-framed cottage. `variant` picks the roof.
+// Each cottage gets its own warm wall color and painted shutters.
+const COTTAGE_STYLES = [
+  { wall: "#f4dcae", shade: "#d3ae7c", shutter: "#4f7a3a", shutterDark: "#365a28" },   // honey cream, green
+  { wall: "#f1cfa4", shade: "#cc9f74", shutter: "#3d5f8f", shutterDark: "#2a4468" },   // warm peach, blue
+  { wall: "#f3e1b9", shade: "#cdb184", shutter: "#8e3a2a", shutterDark: "#64281d" },   // butter, red
+];
+const COTTAGE_TIMBER = "#5a3620";
+const WARM_GLASS = "#ffcf6e", WARM_GLOW = "#fff2bf", CURTAIN = "#c8553d";
+
+// A warmly lit cottage window: shutters, curtains and a flower box.
+function cottageWindow(ctx, box, side, u, v, style) {
+  const face = side === "L" ? faceL : faceR;
+  const uw = 0.32, vh = 5;
+  face(ctx, box, u - 0.16, v, 0.1, vh, style.shutter);                  // open shutters
+  face(ctx, box, u + uw + 0.06, v, 0.1, vh, side === "L" ? style.shutter : style.shutterDark);
+  face(ctx, box, u - 0.06, v - 1, uw + 0.12, vh + 2, COTTAGE_TIMBER);    // frame
+  face(ctx, box, u, v, uw, vh, WARM_GLASS);                              // lamplight inside
+  face(ctx, box, u + 0.08, v + 1, uw - 0.16, vh - 3, WARM_GLOW);
+  face(ctx, box, u, v + vh - 1, 0.07, 1, CURTAIN);                       // curtains tied back
+  face(ctx, box, u + uw - 0.07, v + vh - 1, 0.07, 1, CURTAIN);
+  face(ctx, box, u - 0.04, v - 2, uw + 0.08, 1, PAL.woodDark);           // flower box...
+  const flowers = [PAL.flowerR, PAL.flowerY, PAL.flowerP];
+  for (let k = 0; k < 3; k++) face(ctx, box, u + k * 0.11, v - 1, 0.06, 1, flowers[k]);   // ...in bloom
+  const [mx, my] = side === "L"
+    ? iso(box.x + u + uw / 2, box.y + box.d, box.z + v)
+    : iso(box.x + box.w, box.y + u + uw / 2, box.z + v);
+  addLight(mx, my - vh / 2, 7);
+}
+
+// Timber-framed cottage with warm walls, glowing windows, a lantern by
+// the door and firewood stacked for winter. `variant` picks the roof and colors.
 function drawHouse(ctx, tx, ty, variant, tier = getBuildingTier("house")) {
   const box = { x: tx + 0.25, y: ty + 0.25, w: 1.5, d: 1.5, z: 0 };
-  const h = tier >= 2 ? 17 : 13;                       // grander houses are taller
+  const h = tier >= 2 ? 17 : 14;                       // grander houses are taller
+  const style = COTTAGE_STYLES[variant % COTTAGE_STYLES.length];
   fx.shadows.push({ box, h: h + 8 });
-  drawIsoBox(ctx, box, h, PAL.plaster, PAL.plasterShade);
-  if (tier >= 2) drawFoundation(ctx, box, 4);
-  // Timber frame
-  lineL(ctx, box, 6, PAL.timber); lineL(ctx, box, h - 1, PAL.timber); lineL(ctx, box, 0, PAL.timber);
-  lineR(ctx, box, 6, PAL.timber); lineR(ctx, box, h - 1, PAL.timber); lineR(ctx, box, 0, PAL.timber);
-  for (const u of [0, 0.75, 1.49]) { postL(ctx, box, u, h, PAL.timber); postR(ctx, box, u, h, PAL.timber); }
-  doorL(ctx, box, 0.95, 0.32, 8);
-  windowL(ctx, box, 0.25, 7, 0.3, 4);
-  windowR(ctx, box, 0.55, 7, 0.32, 4);
-  faceL(ctx, box, 0.2, 5, 0.4, 1, PAL.flowerR);                  // flower box
+  drawIsoBox(ctx, box, h, style.wall, style.shade);
+  drawFoundation(ctx, box, tier >= 2 ? 4 : 2);         // a low stone footing
+
+  // Timber frame, with a little diagonal brace on each wall
+  lineL(ctx, box, 7, COTTAGE_TIMBER); lineL(ctx, box, h - 1, COTTAGE_TIMBER);
+  lineR(ctx, box, 7, COTTAGE_TIMBER); lineR(ctx, box, h - 1, COTTAGE_TIMBER);
+  for (const u of [0, 0.75, 1.49]) { postL(ctx, box, u, h, COTTAGE_TIMBER); postR(ctx, box, u, h, COTTAGE_TIMBER); }
+  drawLine(ctx, ...iso(box.x + 0.75, box.y + box.d, 7), ...iso(box.x + 1.12, box.y + box.d, h - 1), COTTAGE_TIMBER);
+  drawLine(ctx, ...iso(box.x + box.w, box.y + 0.75, 7), ...iso(box.x + box.w, box.y + 1.12, h - 1), COTTAGE_TIMBER);
+
+  // Round-topped wooden door with a stone step and a welcome wreath
+  const door = { u: 0.86, w: 0.4, h: 8 };
+  faceL(ctx, box, door.u - 0.06, 0, door.w + 0.12, door.h, COTTAGE_TIMBER);
+  faceL(ctx, box, door.u, 0, door.w, door.h - 1, "#8a5530");
+  faceL(ctx, box, door.u + 0.06, door.h - 1, door.w - 0.12, 1, "#8a5530");   // rounded top
+  faceL(ctx, box, door.u + door.w / 2 - 0.02, 0, 0.04, door.h - 1, "#6a3f22");   // plank line
+  faceL(ctx, box, door.u + 0.12, 4, 0.16, 2, PAL.leafDark);                       // wreath
+  faceL(ctx, box, door.u + 0.17, 5, 0.06, 1, PAL.flowerR);
+  const [kx, ky] = iso(box.x + door.u + door.w - 0.1, box.y + box.d, 3);
+  rect(ctx, kx, ky, 1, 1, PAL.gold);
+  const [sx, sy] = iso(box.x + door.u + door.w / 2, box.y + box.d + 0.12, 0);
+  rect(ctx, sx - 3, sy - 1, 6, 2, PAL.stoneLight);                                 // doorstep
+  rect(ctx, sx - 3, sy + 1, 6, 1, PAL.stoneDark);
+
+  // A lantern hanging beside the door, its flame flickering
+  const [lx, ly] = iso(box.x + door.u + door.w + 0.18, box.y + box.d, 8);
+  rect(ctx, lx - 1, ly - 1, 3, 1, PAL.outline);                                    // bracket
+  rect(ctx, lx - 1, ly, 3, 3, PAL.metalDark);
+  rect(ctx, lx, ly + 1, 1, 1, WARM_GLOW);
+  fx.fires.push({ x: lx, y: ly + 2, small: true });
+  addLight(lx, ly + 1, 9);
+
+  cottageWindow(ctx, box, "L", 0.22, 8, style);
+  cottageWindow(ctx, box, "R", 0.5, 8, style);
+  if (tier >= 2) cottageWindow(ctx, box, "R", 1.0, 8, style);
+
+  // Firewood stacked against the right wall
+  for (let row = 0; row < 3; row++) {
+    for (let k = 0; k < 3 - (row === 2 ? 1 : 0); k++) {
+      const [wx, wy] = iso(box.x + box.w + 0.08, box.y + 0.2 + k * 0.16 + row * 0.08, box.z + row * 2);
+      rect(ctx, wx, wy - 2, 2, 2, PAL.woodDark);
+      rect(ctx, wx, wy - 2, 1, 1, "#d9a86a");                                       // cut log ends
+    }
+  }
+
   const roofs = [
     [ROOF_THATCH, "x"], [ROOF_RED, "y"], [ROOF_BLUE, "x"],
   ];
-  const [style, axis] = roofs[variant % roofs.length];
-  const gable = axis === "x" ? PAL.plasterShade : PAL.plaster;
-  const chimney = () => drawChimney(ctx, box.x + 1.0, box.y + 0.3, h, 13);
-  drawRoof(ctx, box, h, 10, style, axis, gable, chimney);
+  const [roof, axis] = roofs[variant % roofs.length];
+  const gable = axis === "x" ? style.shade : style.wall;
+  const chimney = () => drawChimney(ctx, box.x + 1.0, box.y + 0.3, h, 13, BRICK_CHIMNEY);
+  drawRoof(ctx, box, h, 10, roof, axis, gable, chimney);
   if (tier >= 1) drawGarden(ctx, tx, ty);
   if (tier >= 3) {
     const [fx1, fy1] = iso(box.x + 0.4, box.y + box.d / 2, h + 10);
@@ -6578,6 +6907,10 @@ function buildSceneObjects() {
 }
 
 // Waterfalls where the river spills over a cliff or the island's edge.
+// Falls off the island's edge drop this far (art pixels) before they
+// have turned completely into mist.
+const WATERFALL_DROP = 120;
+const WATER_MID = "#5fb2ea";   // between water and light water
 function findWaterfalls() {
   for (let ty = MAP_MIN; ty <= MAP_MAX; ty++) {
     for (let tx = MAP_MIN; tx <= MAP_MAX; tx++) {
@@ -6585,15 +6918,15 @@ function findWaterfalls() {
       if (!tile || tile.kind !== "water") continue;
       // River pouring off the island's edge (toward us, on the left or right)
       if (tileZ(tx, ty + 1) === null) {
-        fx.falls.push({ a: iso(tx, ty + 1, tile.z), b: iso(tx + 1, ty + 1, tile.z), length: VIEW_HEIGHT });
+        fx.falls.push({ a: iso(tx, ty + 1, tile.z), b: iso(tx + 1, ty + 1, tile.z), length: WATERFALL_DROP, edge: true, seed: tx * 7 + ty });
       }
       if (tileZ(tx + 1, ty) === null) {
-        fx.falls.push({ a: iso(tx + 1, ty, tile.z), b: iso(tx + 1, ty + 1, tile.z), length: VIEW_HEIGHT });
+        fx.falls.push({ a: iso(tx + 1, ty, tile.z), b: iso(tx + 1, ty + 1, tile.z), length: WATERFALL_DROP, edge: true, seed: tx * 7 + ty + 3 });
       }
       // Spring pouring out of the rocks into the river
       if (tileZ(tx, ty - 1) > tile.z + 6) {
         const top = tileZ(tx, ty - 1);
-        fx.falls.push({ a: iso(tx + 0.2, ty, top), b: iso(tx + 0.8, ty, top), length: top - tile.z });
+        fx.falls.push({ a: iso(tx + 0.2, ty, top), b: iso(tx + 0.8, ty, top), length: top - tile.z, edge: false, seed: tx * 5 + ty });
       }
     }
   }
@@ -6795,26 +7128,122 @@ function drawWater(ctx, time) {
     const drift = ((time * 3 + s.phase * 4) % 6) - 3;
     if (Math.sin(time * 2.2 + s.phase) > 0.35) rect(ctx, s.x + drift, s.y + drift * 0.5, 2, 1, PAL.waterLight);
   }
-  for (const f of fx.falls) {
-    const width = Math.round(Math.abs(f.b[0] - f.a[0]));
-    const dir = f.b[0] > f.a[0] ? 1 : -1;
-    for (let i = 0; i <= width; i++) {
-      const x = Math.round(f.a[0] + i * dir);
-      const top = Math.round(lerp(f.a[1], f.b[1], width ? i / width : 0));
-      const bottom = Math.min(VIEW_HEIGHT, top + f.length);
-      rect(ctx, x, top, 1, bottom - top, PAL.water);
-      for (let y = top; y < bottom; y += 6) {
-        const offset = Math.floor(time * 30 + i * 3) % 6;
-        rect(ctx, x, y + offset, 1, 2, i % 3 === 0 ? PAL.foam : PAL.waterLight);
-      }
-    }
-    if (f.length < VIEW_HEIGHT) {                                 // splash at the bottom
-      const bx = Math.round((f.a[0] + f.b[0]) / 2);
-      const by = Math.round(Math.max(f.a[1], f.b[1]) + f.length);
-      const puff = Math.floor(time * 6) % 2;
-      rect(ctx, bx - 4 - puff, by - 1, 9 + puff * 2, 2, PAL.foam);
+  for (const f of fx.falls) drawWaterfall(ctx, f, time);
+}
+
+// A steady pseudo-random number 0..1 for a whole number (same every frame).
+function hash01(n) {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+// One waterfall, drawn in layers:
+//   1. the body: a column of water, darker at the sides, widening as it falls
+//   2. streaks of white water, each sliding down at its own speed
+//   3. the lip: foam where the water curls over the edge
+//   4. the end: falls off the island's edge thin out into spray and mist;
+//      the spring in the rocks lands in a churning, foamy pool
+function drawWaterfall(ctx, f, time) {
+  const width = Math.max(1, Math.round(Math.abs(f.b[0] - f.a[0])));
+  const dir = f.b[0] > f.a[0] ? 1 : -1;
+  const left = Math.min(f.a[0], f.b[0]);
+  const length = f.length;
+  const topAt = i => Math.round(lerp(f.a[1], f.b[1], i / width));   // the lip follows the slanted edge
+  const fadeStart = f.edge ? length * 0.4 : length;                // where the water starts to break up
+  const spreadAt = d => (f.edge ? Math.floor(d * 0.1) : 0);         // the stream widens as it falls
+  const alphaAt = d => (d < fadeStart ? 1 - (d / fadeStart) * 0.15
+    : Math.max(0, 0.85 * (1 - (d - fadeStart) / (length - fadeStart))));
+
+  // 1. Body, in bands of 3 pixels (so the fade and spread look smooth)
+  for (let d = 0; d < length; d += 3) {
+    const alpha = alphaAt(d) * (f.edge ? 0.92 : 1);
+    if (alpha <= 0.02) break;
+    ctx.globalAlpha = alpha;
+    const spread = spreadAt(d);
+    for (let i = -spread; i <= width + spread; i++) {
+      // Sunlit on the left, in shade on the right, with "ropes" of water
+      // in between that slowly wander as they fall
+      const u = (i + spread) / (width + spread * 2 || 1);
+      const rope = hash01(f.seed * 3 + i + Math.floor((d - time * 50) / 18) * 0.001 + Math.floor(d / 14) * 0.37);
+      const color = u < 0.12 ? PAL.waterLight
+        : u > 0.88 ? PAL.waterDark
+        : rope < 0.25 ? PAL.waterDark : rope > 0.8 ? WATER_MID : PAL.water;
+      const top = topAt(Math.max(0, Math.min(width, i)));
+      rect(ctx, Math.round(left) + (dir > 0 ? i : width - i), top + d, 1, Math.min(3, length - d), color);
     }
   }
+
+  // 2. Streaks: each column has its own speed, so the water looks alive
+  for (let i = 0; i <= width; i++) {
+    const speed = 38 + hash01(f.seed * 31 + i) * 34;
+    const top = topAt(i);
+    for (let k = 0; k < 4; k++) {
+      const phase = hash01(f.seed * 17 + i * 3 + k) * length;
+      const d = (time * speed + phase) % length;
+      const a = alphaAt(d);
+      if (a <= 0.05) continue;
+      const streak = 3 + Math.floor(hash01(i * 13 + k) * 6) + Math.floor(d / 25);   // streaks stretch as they speed up
+      ctx.globalAlpha = a;
+      const sx = Math.round(left) + (dir > 0 ? i : width - i) + (f.edge ? Math.round((i - width / 2) * d * 0.004) : 0);
+      // smooth near the lip, more and more white water lower down
+      const white = k === 0 || hash01(i * 11 + k * 7 + f.seed) < d / length;
+      rect(ctx, sx, top + d, 1, streak, white ? PAL.foam : PAL.waterLight);
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // 3. The lip: water bulges and foams as it tips over the edge
+  for (let i = 0; i <= width; i++) {
+    const x = Math.round(left) + (dir > 0 ? i : width - i);
+    const top = topAt(i);
+    const churn = Math.floor(time * 8 + i * 1.7) % 3;
+    rect(ctx, x, top - 1, 1, 1, PAL.waterLight);
+    rect(ctx, x, top, 1, churn === 0 ? 1 : 2, PAL.foam);
+  }
+
+  // 4. The end
+  const cx = left + width / 2;
+  if (f.edge) {
+    // Spray: droplets break away and drift outward as they fall
+    for (let k = 0; k < 18; k++) {
+      const life = (time * (0.35 + hash01(f.seed + k) * 0.3) + hash01(k * 9 + f.seed)) % 1;
+      const d = fadeStart * 0.8 + life * (length - fadeStart * 0.8);
+      const side = hash01(k * 5 + f.seed * 3) - 0.5;
+      const x = cx + side * (width + 6 + life * 28);
+      ctx.globalAlpha = (1 - life) * 0.9;
+      rect(ctx, Math.round(x), Math.round(topAt(width / 2) + d), 1, 1 + (k % 3 === 0 ? 1 : 0), k % 2 ? PAL.foam : PAL.waterLight);
+    }
+    // Mist: soft clouds billow up where the water finally vanishes
+    for (let k = 0; k < 6; k++) {
+      const life = (time * 0.12 + k / 6) % 1;                      // each puff rises and fades
+      const drift = Math.sin(time * 0.5 + k * 1.9) * 4 + (hash01(k + f.seed) - 0.5) * 16;
+      const y = topAt(width / 2) + length * 0.82 - life * length * 0.3;
+      ctx.globalAlpha = Math.sin(life * Math.PI) * 0.28;
+      fillEllipse(ctx, Math.round(cx + drift), Math.round(y), width / 2 + 6 + life * 10, 3 + life * 4, PAL.foam);
+    }
+  } else {
+    // Splash pool: foam boils at the bottom, rings spread and mist rises
+    const by = Math.round(Math.max(f.a[1], f.b[1]) + length);
+    const bx = Math.round(cx);
+    ctx.globalAlpha = 0.85;
+    fillEllipse(ctx, bx, by, width / 2 + 3, 2, PAL.foam);
+    for (let k = 0; k < 2; k++) {                                    // ripples moving outward
+      const r = ((time * 0.9 + k * 0.5) % 1);
+      ctx.globalAlpha = (1 - r) * 0.7;
+      const rx = Math.round(width / 2 + 3 + r * 7), ry = Math.round(2 + r * 3);
+      rect(ctx, bx - rx, by, 1, 1, PAL.waterLight); rect(ctx, bx + rx, by, 1, 1, PAL.waterLight);
+      rect(ctx, bx - 1, by + ry, 3, 1, PAL.waterLight);
+    }
+    for (let k = 0; k < 6; k++) {                                    // bubbles and spray hopping up
+      const life = (time * 1.6 + hash01(k + f.seed)) % 1;
+      const x = bx + Math.round((hash01(k * 3 + f.seed) - 0.5) * (width + 6));
+      ctx.globalAlpha = 1 - life;
+      rect(ctx, x, by - 1 - Math.round(Math.sin(life * Math.PI) * 4), 1, 1, PAL.foam);
+    }
+    ctx.globalAlpha = 0.14;                                          // a breath of mist
+    fillEllipse(ctx, bx + Math.round(Math.sin(time * 0.7) * 2), by - 4, width / 2 + 4, 3, PAL.foam);
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawFlags(ctx, time) {
@@ -7108,23 +7537,18 @@ function drawNightLights(ctx, light, time) {
   ctx.globalCompositeOperation = "source-over";
 }
 
-// Scales the 480x270 canvas to fill its frame, while leaving room for
-// the top bar and bottom navigation on short screens.
+// Scales the village canvas to fill the window, leaving room for the
+// menus when they are open. (The game is made for computer screens.)
 function resizeVillageCanvas() {
   const vw = window.innerWidth, vh = window.innerHeight;
   // The island is drawn inside the part of the window the menus leave
-  // free: the whole window when they are hidden, left of the side panel
-  // on wide screens, or above the bottom sheet on phones.
+  // free: the whole window when they are hidden, or left of the side panel.
   const area = { left: 0, top: 0, right: vw, bottom: vh };
   if (document.body.classList.contains("hud-open")) {
     const topBar = document.querySelector(".top-bar").getBoundingClientRect();
     area.top = topBar.bottom + 4;
-    if (vw > 860) {
-      area.right = vw - Math.min(640, vw * 0.48) - 24;
-      area.bottom = vh - document.getElementById("bottom-nav").offsetHeight;
-    } else {
-      area.bottom = Math.max(vh * 0.46, topBar.bottom + 10);
-    }
+    area.right = vw - Math.min(640, vw * 0.48) - 24;
+    area.bottom = vh - document.getElementById("bottom-nav").offsetHeight;
   }
   // Pick a pixel size so the whole island (about 350 x 290 art pixels) fits
   const scale = Math.max(0.35, Math.min((area.right - area.left) / 350, (area.bottom - area.top) / 290));
@@ -7767,6 +8191,7 @@ function initGame() {
   buildResearchPanel();
   buildKingdomPanel();
   buildQuestPanel();
+  buildTradePanel();
   buildAchievementPanel();
   buildArmyPanel();
   setupBattleView();

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=1280">
   <title>Kingdom Idle</title>
 
   <!-- Pixel fonts: a pixel blackletter for titles, a pixel sans for text.
@@ -156,6 +156,30 @@
         </div>
       </section>
 
+      <!-- TRADE TAB: caravans and trade routes -->
+      <section class="screen" id="screen-trade">
+        <div class="panel trade-panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Trading Post</h2>
+            <p class="panel-note">Each Market keeps one wagon (up to 3). Load a wagon with goods and it returns with something worth more.</p>
+          </div>
+          <p class="trade-locked" id="trade-locked">Build a Market (needs 25 citizens) to hire your first caravan.</p>
+          <div class="trade-summary" id="trade-summary">
+            <span>Each wagon carries goods worth <strong id="trade-capacity"></strong></span>
+            <span id="trade-trips"></span>
+          </div>
+          <ul class="wagon-list" id="wagon-list"></ul>
+        </div>
+
+        <div class="panel trade-panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Trade Routes</h2>
+            <p class="panel-note">Longer journeys bring bigger profits. Bigger towns and better Markets fill the wagons fuller.</p>
+          </div>
+          <ul class="route-list" id="route-list"></ul>
+        </div>
+      </section>
+
       <section class="screen" id="screen-quests">
         <div class="panel quest-panel">
           <div class="panel-head">
@@ -247,6 +271,7 @@
     <!-- ===================== BOTTOM NAVIGATION ===================== -->
     <nav class="bottom-nav" id="bottom-nav">
       <button class="nav-btn active" data-screen="village" type="button"><span class="icon-slot" data-icon="house"></span><span>Village</span></button>
+      <button class="nav-btn" data-screen="trade" type="button"><span class="icon-slot" data-icon="wagon"></span><span>Trade</span></button>
       <button class="nav-btn" data-screen="army" type="button"><span class="icon-slot" data-icon="sword"></span><span>Army</span></button>
       <button class="nav-btn" data-screen="research" type="button"><span class="icon-slot" data-icon="book"></span><span>Library</span></button>
       <button class="nav-btn" data-screen="quests" type="button"><span class="icon-slot" data-icon="scroll"></span><span>Quests</span></button>

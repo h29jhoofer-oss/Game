@@ -31,3 +31,5 @@ Double-click `index.html` to open it in any modern browser. No install or build 
   - [x] 10. Knight veterancy, Warfare research, military honors and balance
 - [x] Quests: Royal Decrees (a 17-step story chain) and the Herald's Notice Board (3 repeatable requests that scale with your kingdom)
 - [x] Achievements: 28 feats in the Hall of Achievements (Kingdom tab); each adds +1% renown to all production
+- [x] Trade caravans: one wagon per Market (up to 3), six trade routes, journeys finish while away
+- [x] Desktop only: phone layouts removed; realistic waterfalls; warm, cozy cottages
