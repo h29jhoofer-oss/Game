@@ -157,10 +157,38 @@
       </section>
 
       <section class="screen" id="screen-quests">
-        <div class="panel placeholder">
-          <div class="panel-head"><h2 class="panel-title">Quests</h2></div>
-          <p>No heralds have arrived with requests yet.</p>
-          <p class="panel-note">Coming in a later stage.</p>
+        <div class="panel quest-panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Royal Decree</h2>
+            <p class="panel-note">The royal steward brings one decree at a time. Fulfil it to receive the next.</p>
+          </div>
+          <div class="quest-card decree-card" id="decree-card">
+            <div class="quest-head">
+              <span class="quest-seal icon-slot" data-icon="scroll"></span>
+              <div class="quest-names">
+                <span class="quest-kicker" id="decree-number"></span>
+                <span class="quest-title" id="decree-title"></span>
+              </div>
+            </div>
+            <p class="quest-text" id="decree-text"></p>
+            <div class="quest-progress" id="decree-progress-row">
+              <div class="progress"><div class="progress-fill" id="decree-fill"></div></div>
+              <span class="quest-count" id="decree-count"></span>
+            </div>
+            <div class="quest-foot" id="decree-foot">
+              <div class="quest-reward" id="decree-reward"></div>
+              <button class="btn btn-primary" id="decree-claim" type="button"><span class="btn-label">Claim</span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel quest-panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Herald&rsquo;s Notice Board</h2>
+            <p class="panel-note">Heralds bring requests from across the land. A new one arrives 10 minutes after you finish one.</p>
+          </div>
+          <ul class="quest-board" id="quest-board"></ul>
+          <p class="panel-note" id="quest-completed"></p>
         </div>
       </section>
 

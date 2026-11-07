@@ -286,6 +286,70 @@ const MILITARY_HONORS = [
   { id: "veterans",     name: "Battle-Hardened",      text: "Raise any knight type to level 5." },
 ];
 
+// ---- Quests ----
+// Royal Decrees: a story chain. Only one decree is open at a time; claim
+// its reward to receive the next. A goal is read straight from the game
+// state, so it can be completed while you're away.
+//   goal types: build (own N of a building), level (upgrade a building),
+//   population, research (N techs learned), barracks, army (N knights),
+//   wins (battles won), castle, boss (a boss defeated)
+const ROYAL_DECREES = [
+  { id: "secondField", title: "A Second Field",      text: "Our people are hungry. Build a second Farm.",
+    goal: { type: "build", building: "farm", count: 2 },            reward: { wood: 40, gold: 10 } },
+  { id: "firstHouse",  title: "Shelter for All",     text: "Newcomers need roofs. Build a House.",
+    goal: { type: "build", building: "house", count: 1 },           reward: { food: 50, wood: 30 } },
+  { id: "sharpSaws",   title: "Sharpen the Saws",    text: "Upgrade the Lumber Mill to level 2.",
+    goal: { type: "level", building: "lumberMill", level: 2 },      reward: { wood: 60, gold: 15 } },
+  { id: "firstQuarry", title: "Stone from the Hills", text: "Reach 10 citizens and build a Quarry.",
+    goal: { type: "build", building: "quarry", count: 1 },          reward: { wood: 80, gold: 25 } },
+  { id: "firstStudy",  title: "The First Discovery", text: "Complete any research.",
+    goal: { type: "research", count: 1 },                           reward: { stone: 60, gold: 40 } },
+  { id: "marketDay",   title: "Market Day",          text: "Reach 25 citizens and build a Market.",
+    goal: { type: "build", building: "market", count: 1 },          reward: { food: 200, stone: 100 } },
+  { id: "forge",       title: "Forge of the Realm",  text: "Reach 50 citizens and build a Blacksmith.",
+    goal: { type: "build", building: "blacksmith", count: 1 },      reward: { wood: 300, gold: 120 } },
+  { id: "academy",     title: "Hall of Learning",    text: "Reach 100 citizens and build an Academy.",
+    goal: { type: "build", building: "academy", count: 1 },         reward: { stone: 400, gold: 250 } },
+  { id: "banners",     title: "Raise the Banners",   text: "Build the Knight Barracks.",
+    goal: { type: "barracks" },                                     reward: { food: 400, gold: 200 } },
+  { id: "loyalGuard",  title: "A Loyal Guard",       text: "Command an army of 5 knights.",
+    goal: { type: "army", count: 5 },                               reward: { wood: 400, stone: 300 } },
+  { id: "baptism",     title: "Baptism of Fire",     text: "Win your first battle.",
+    goal: { type: "wins", count: 1 },                               reward: { gold: 400 } },
+  { id: "wisdom",      title: "Wisdom of the Ages",  text: "Complete 8 research projects.",
+    goal: { type: "research", count: 8 },                           reward: { stone: 800, gold: 500 } },
+  { id: "proudCity",   title: "A Proud City",        text: "Grow your kingdom to 250 citizens.",
+    goal: { type: "population", amount: 250 },                      reward: { wood: 1500, stone: 1000 } },
+  { id: "castle",      title: "The Mighty Castle",   text: "Complete the Castle Upgrade.",
+    goal: { type: "castle" },                                       reward: { gold: 1500 } },
+  { id: "clans",       title: "Bane of the Clans",   text: "Defeat the Barbarian Chieftain.",
+    goal: { type: "boss", boss: "chieftain" },                      reward: { food: 2000, gold: 1500 } },
+  { id: "silverwood",  title: "Peace in the Silverwood", text: "Defeat the Forest Guardian.",
+    goal: { type: "boss", boss: "forestGuardian" },                 reward: { wood: 3000, gold: 2500 } },
+  { id: "mountain",    title: "King under the Mountain", text: "Defeat the Mountain King.",
+    goal: { type: "boss", boss: "mountainKing" },                   reward: { stone: 4000, gold: 4000 } },
+];
+
+// Herald's Requests: small repeatable jobs on a notice board.
+// Their targets and rewards are worked out from your current production
+// when a herald arrives, so they stay worthwhile all game long.
+//   tally: which running total counts towards it (see state.quests.tally)
+//   minutes: how many minutes of production the target is worth
+const HERALD_REQUESTS = [
+  { id: "food",     title: "Fill the Granary",       verb: "Gather",   tally: "food",     minutes: 6 },
+  { id: "wood",     title: "Timber for the Docks",   verb: "Gather",   tally: "wood",     minutes: 6 },
+  { id: "stone",    title: "Mend the Old Bridge",    verb: "Quarry",   tally: "stone",    minutes: 6, needs: "quarry" },
+  { id: "gold",     title: "The Royal Treasury",     verb: "Collect",  tally: "gold",     minutes: 6 },
+  { id: "builds",   title: "New Roofs",              verb: "Build",    tally: "builds",   amount: 2,  unit: "buildings" },
+  { id: "upgrades", title: "Improve the Workshops",  verb: "Complete", tally: "upgrades", amount: 3,  unit: "upgrades" },
+  { id: "citizens", title: "Welcome Newcomers",      verb: "Welcome",  tally: "citizens", amount: 5,  unit: "new citizens" },
+  { id: "recruits", title: "Fresh Recruits",         verb: "Train",    tally: "trained",  amount: 4,  unit: "knights", needs: "barracks" },
+  { id: "bounty",   title: "Bounty Hunt",            verb: "Defeat",   tally: "enemies",  amount: 15, unit: "enemies", needs: "battle" },
+];
+const QUEST_BOARD_SIZE = 3;                 // requests on the board at once
+const HERALD_ARRIVAL_SECONDS = 10 * 60;     // a new herald arrives 10 min after one leaves
+const HERALD_REWARD_MINUTES = 5;            // rewards are worth ~5 min of production
+
 // Player settings and their defaults (saved with the game).
 const DEFAULT_SETTINGS = { sound: true, music: false, hud: false };
 
@@ -664,6 +728,7 @@ function createNewGameState() {
     populationProgress: 0,    // 0..1, how close the next citizen is to arriving
     castleLevel: 1,           // 2 after the Castle Upgrade
     military: createMilitaryState(),
+    quests: createQuestState(),
     // One entry per building type, e.g. farm: { count: 1, level: 1 }
     //   count = how many of this building you own
     //   level = upgrade level (shared by all buildings of that type,
@@ -793,6 +858,7 @@ function applyProduction(seconds) {
   const rates = getProductionPerSecond();
   for (const res of RESOURCES) {
     state.resources[res.id] += rates[res.id] * seconds;
+    addQuestTally(res.id, rates[res.id] * seconds);
   }
   growPopulation(seconds);
   advanceMilitary(seconds);
@@ -833,6 +899,7 @@ function growPopulation(seconds) {
     if (state.resources.food < cost) break;
     state.resources.food -= cost;
     state.population += 1;
+    addQuestTally("citizens", 1);
     progress -= 1;
   }
   state.populationProgress = Math.min(progress, 1);
@@ -993,6 +1060,7 @@ function buildBuilding(typeId) {
 
   spendResources(cost);
   state.buildings[typeId].count += 1;
+  addQuestTally("builds", 1);
   markVillageDirty();   // a new building appears in the village
   bumpCard(typeId);
   requestVillageBurst(typeId, "build");
@@ -1010,6 +1078,7 @@ function upgradeBuilding(typeId) {
 
   spendResources(cost);
   owned.level += 1;
+  addQuestTally("upgrades", 1);
   markVillageDirty();   // the building may now look grander
   bumpCard(typeId);
   requestVillageBurst(typeId, "upgrade");
@@ -1610,6 +1679,204 @@ function processInvasions(isAway) {
 
 
 /* =============================================================
+   3d. QUESTS: ROYAL DECREES AND HERALD'S REQUESTS
+   -------------------------------------------------------------
+   state.quests = {
+     decree:   index of the current Royal Decree (= decrees claimed)
+     board:    the herald's requests, one per slot (null = empty slot)
+     arrivals: per slot, the time (ms) the next herald arrives
+     tally:    running totals that requests count from
+     completed: how many requests have been claimed
+   }
+   A request remembers the tally when it arrived ("start"), so its
+   progress is simply   tally now - start.
+   ============================================================= */
+
+function createQuestState() {
+  return {
+    decree: 0,
+    decreeAnnounced: false,
+    board: new Array(QUEST_BOARD_SIZE).fill(null),
+    arrivals: new Array(QUEST_BOARD_SIZE).fill(0),   // 0 = arrive right away
+    tally: { food: 0, wood: 0, stone: 0, gold: 0, builds: 0, upgrades: 0, citizens: 0 },
+    completed: 0,
+  };
+}
+
+// Adds to a running total (called when something happens in the game).
+function addQuestTally(key, amount) {
+  if (amount > 0) state.quests.tally[key] += amount;
+}
+
+// The current value of a running total. Knights trained and enemies
+// defeated are already counted by the army, so we read those directly.
+function getQuestTally(key) {
+  if (key === "trained") return state.military.totalTrained;
+  if (key === "enemies") return state.military.stats.enemiesDefeated;
+  return state.quests.tally[key] || 0;
+}
+
+function getArmySize() {
+  let total = 0;
+  for (const typeId in KNIGHT_TYPES) total += state.military.army[typeId] + state.military.wounded[typeId];
+  return total;
+}
+
+function getResearchCount() {
+  return RESEARCH.filter(t => state.research[t.id] === true).length;
+}
+
+// How far a decree's goal is: { current, target }.
+function getDecreeProgress(goal) {
+  const m = state.military;
+  switch (goal.type) {
+    case "build":      return { current: state.buildings[goal.building].count, target: goal.count };
+    case "level":      return { current: state.buildings[goal.building].level, target: goal.level };
+    case "population": return { current: state.population, target: goal.amount };
+    case "research":   return { current: getResearchCount(), target: goal.count };
+    case "barracks":   return { current: m.barracksLevel > 0 ? 1 : 0, target: 1 };
+    case "army":       return { current: getArmySize(), target: goal.count };
+    case "wins":       return { current: m.battlesWon, target: goal.count };
+    case "castle":     return { current: state.castleLevel >= 2 ? 1 : 0, target: 1 };
+    case "boss":       return { current: m.stats.bossesDefeated[goal.boss] ? 1 : 0, target: 1 };
+  }
+  return { current: 0, target: 1 };
+}
+
+function getCurrentDecree() {
+  return ROYAL_DECREES[state.quests.decree] || null;   // null = all fulfilled
+}
+
+function isDecreeComplete() {
+  const decree = getCurrentDecree();
+  if (!decree) return false;
+  const p = getDecreeProgress(decree.goal);
+  return p.current >= p.target;
+}
+
+function getRequestProgress(request) {
+  const current = Math.max(0, getQuestTally(HERALD_REQUESTS.find(t => t.id === request.type).tally) - request.start);
+  return { current: Math.min(current, request.target), target: request.target };
+}
+
+function isRequestComplete(request) {
+  const p = getRequestProgress(request);
+  return p.current >= p.target;
+}
+
+// Rounds to a tidy number: 437 -> 440, 12,345 -> 12,000.
+function roundNicely(n) {
+  if (n < 100) return Math.max(5, Math.round(n / 5) * 5);
+  const step = Math.pow(10, Math.floor(Math.log10(n)) - 1);
+  return Math.round(n / step) * step;
+}
+
+// Can this kind of request be offered right now?
+function isRequestTemplateAvailable(template, rates) {
+  if (state.quests.board.some(r => r && r.type === template.id)) return false;   // no doubles
+  if (template.needs === "quarry" && state.buildings.quarry.count < 1) return false;
+  if (template.needs === "barracks" && state.military.barracksLevel < 1) return false;
+  if (template.needs === "battle" && state.military.battlesWon + state.military.battlesLost < 1) return false;
+  if (template.minutes && !(rates[template.tally] > 0)) return false;
+  return true;
+}
+
+// A herald arrives with a new request, sized to the kingdom's production.
+function createHeraldRequest() {
+  const rates = getProductionPerSecond();
+  const options = HERALD_REQUESTS.filter(t => isRequestTemplateAvailable(t, rates));
+  if (options.length === 0) return null;
+  const template = options[Math.floor(Math.random() * options.length)];
+
+  const target = template.minutes
+    ? roundNicely(Math.max(50, rates[template.tally] * 60 * template.minutes))
+    : template.amount;
+
+  // Reward: two resources the kingdom produces (not the one being gathered)
+  const produced = RESOURCES.map(r => r.id).filter(id => rates[id] > 0 && id !== template.tally);
+  const picks = produced.sort(() => Math.random() - 0.5).slice(0, 2);
+  if (picks.length === 0) picks.push("gold");
+  const reward = {};
+  for (const id of picks) reward[id] = roundNicely(Math.max(20, (rates[id] || 0) * 60 * HERALD_REWARD_MINUTES));
+
+  return { type: template.id, target, start: getQuestTally(template.tally), reward, announced: false };
+}
+
+// Fills empty slots whose herald has arrived and announces finished quests.
+// Called after every update, so it also works for time spent away.
+function checkQuests() {
+  const q = state.quests, now = Date.now();
+
+  if (isDecreeComplete() && !q.decreeAnnounced) {
+    q.decreeAnnounced = true;
+    if (uiReady) {
+      announce("Royal decree fulfilled", getCurrentDecree().title, "Visit the Quests tab to receive your reward.", createPixelIcon("scroll"));
+      playSound("milestone");
+    }
+  }
+
+  for (let i = 0; i < QUEST_BOARD_SIZE; i++) {
+    if (!q.board[i] && now >= q.arrivals[i]) q.board[i] = createHeraldRequest();
+    const request = q.board[i];
+    if (request && !request.announced && isRequestComplete(request)) {
+      request.announced = true;
+      if (uiReady) notify(`Request complete: ${getRequestTemplate(request).title}`);
+    }
+  }
+}
+
+function getRequestTemplate(request) {
+  return HERALD_REQUESTS.find(t => t.id === request.type);
+}
+
+function giveResources(reward) {
+  for (const id in reward) state.resources[id] += reward[id];
+}
+
+// Called by the decree's "Claim" button.
+function claimDecree() {
+  updateGame();
+  if (!isDecreeComplete()) return false;
+  const decree = getCurrentDecree();
+  giveResources(decree.reward);
+  state.quests.decree += 1;
+  state.quests.decreeAnnounced = false;
+  playSound("coins");
+  notify(`${decree.title}: reward received!`);
+  checkQuests();     // the next decree may already be done
+  refreshUI();
+  return true;
+}
+
+// Called by a request's "Claim" button.
+function claimRequest(slot) {
+  updateGame();
+  const q = state.quests, request = q.board[slot];
+  if (!request || !isRequestComplete(request)) return false;
+  giveResources(request.reward);
+  q.board[slot] = null;
+  q.arrivals[slot] = Date.now() + HERALD_ARRIVAL_SECONDS * 1000;
+  q.completed += 1;
+  playSound("coins");
+  notify(`${getRequestTemplate(request).title}: reward received!`);
+  refreshUI();
+  return true;
+}
+
+// Sends a herald away; another one arrives after half the usual wait.
+function declineRequest(slot) {
+  updateGame();
+  const q = state.quests;
+  if (!q.board[slot]) return false;
+  q.board[slot] = null;
+  q.arrivals[slot] = Date.now() + HERALD_ARRIVAL_SECONDS * 500;
+  playSound("click");
+  refreshUI();
+  return true;
+}
+
+
+/* =============================================================
    4. GAME LOOP
    -------------------------------------------------------------
    KEY IDEA: we never assume a timer fires on time.
@@ -1631,11 +1898,13 @@ function updateGame() {
     // The player was away (page closed, tab hidden or computer asleep).
     handleTimeAway(elapsedSeconds);
     state.lastUpdate = now;
+    checkQuests();
     saveGame(); // save at once, so this time can never be paid out twice
   } else {
     applyProduction(elapsedSeconds);
     state.lastUpdate = now;
     processInvasions(false);   // a raid may start on screen
+    checkQuests();
   }
 }
 
@@ -1661,6 +1930,7 @@ function refreshUI() {
   updateResearchPanel();
   updateKingdomPanel();
   updateArmyPanel();
+  updateQuestPanel();
   updateSaveStatus();
   updateHudBadge();
 }
@@ -1763,11 +2033,34 @@ function cleanSaveData(data) {
   }
   if (isGoodNumber(data.lastSaved)) clean.lastSaved = data.lastSaved;
   if (data.military && typeof data.military === "object") cleanMilitaryData(data.military, clean.military, isGoodNumber);
+  if (data.quests && typeof data.quests === "object") cleanQuestData(data.quests, clean.quests, isGoodNumber);
   // A timestamp in the future (clock changed) is treated as "now".
   if (isGoodNumber(data.lastUpdate) && data.lastUpdate <= Date.now()) {
     clean.lastUpdate = data.lastUpdate;
   }
   return clean;
+}
+
+// Copies valid quest data from a save. A request that doesn't make
+// sense any more (unknown type, broken numbers) is simply dropped.
+function cleanQuestData(q, clean, isGoodNumber) {
+  if (isGoodNumber(q.decree)) clean.decree = Math.min(ROYAL_DECREES.length, Math.floor(q.decree));
+  if (typeof q.decreeAnnounced === "boolean") clean.decreeAnnounced = q.decreeAnnounced;
+  if (isGoodNumber(q.completed)) clean.completed = Math.floor(q.completed);
+  if (q.tally && typeof q.tally === "object") {
+    for (const key in clean.tally) if (isGoodNumber(q.tally[key])) clean.tally[key] = q.tally[key];
+  }
+  for (let i = 0; i < QUEST_BOARD_SIZE; i++) {
+    const arrival = Array.isArray(q.arrivals) ? q.arrivals[i] : 0;
+    if (isGoodNumber(arrival)) clean.arrivals[i] = Math.min(arrival, Date.now() + HERALD_ARRIVAL_SECONDS * 1000);
+    const r = Array.isArray(q.board) ? q.board[i] : null;
+    if (!r || typeof r !== "object" || !HERALD_REQUESTS.some(t => t.id === r.type)) continue;
+    if (!isGoodNumber(r.target) || r.target < 1 || !isGoodNumber(r.start) || !r.reward || typeof r.reward !== "object") continue;
+    const reward = {};
+    for (const res of RESOURCES) if (isGoodNumber(r.reward[res.id])) reward[res.id] = r.reward[res.id];
+    if (Object.keys(reward).length === 0) continue;
+    clean.board[i] = { type: r.type, target: r.target, start: r.start, reward, announced: r.announced === true };
+  }
 }
 
 // Copies valid military data from a save (unknown knight types are ignored).
@@ -3040,6 +3333,129 @@ function updateKingdomPanel() {
     showCost(costEl, CASTLE_UPGRADE.cost);
     button.disabled = !ready || !canAfford(CASTLE_UPGRADE.cost);
   }
+}
+
+// ---------- Quests screen: the decree and the notice board ----------
+let questSlotElements = [];
+
+// Shows a reward as small resource chips. Rebuilds only when it changes.
+function showReward(element, reward) {
+  const key = JSON.stringify(reward);
+  if (element.dataset.key === key) return;
+  element.dataset.key = key;
+  element.innerHTML = "";
+  for (const id in reward) {
+    const chip = document.createElement("span");
+    chip.className = "loot-chip";
+    chip.appendChild(createPixelIcon(id));
+    chip.appendChild(document.createTextNode("+" + formatNumber(reward[id])));
+    element.appendChild(chip);
+  }
+}
+
+// What a request asks for, e.g. "Gather 1,200 food".
+function describeRequest(request) {
+  const t = getRequestTemplate(request);
+  const unit = t.unit || RESOURCES.find(r => r.id === t.tally).name.toLowerCase();
+  return `${t.verb} ${formatNumber(request.target)} ${unit}.`;
+}
+
+function buildQuestPanel() {
+  document.getElementById("decree-claim").addEventListener("click", claimDecree);
+  const board = document.getElementById("quest-board");
+  board.innerHTML = "";
+  questSlotElements = [];
+  for (let i = 0; i < QUEST_BOARD_SIZE; i++) {
+    const card = document.createElement("li");
+    card.className = "quest-card request-card";
+    card.innerHTML =
+      `<div class="quest-head"><span class="quest-seal icon-slot" data-icon="quill"></span>` +
+      `<div class="quest-names"><span class="quest-kicker">Request</span><span class="quest-title"></span></div>` +
+      `<button class="quest-decline" type="button" aria-label="Turn down this request" title="Turn down this request">&times;</button></div>` +
+      `<p class="quest-text"></p>` +
+      `<div class="quest-progress"><div class="progress"><div class="progress-fill"></div></div><span class="quest-count"></span></div>` +
+      `<div class="quest-foot"><div class="quest-reward"></div>` +
+      `<button class="btn btn-primary" type="button"><span class="btn-label">Claim</span></button></div>` +
+      `<p class="quest-waiting"></p>`;
+    board.appendChild(card);
+    const el = {
+      card,
+      title: card.querySelector(".quest-title"),
+      text: card.querySelector(".quest-text"),
+      fill: card.querySelector(".progress-fill"),
+      count: card.querySelector(".quest-count"),
+      reward: card.querySelector(".quest-reward"),
+      claim: card.querySelector(".btn"),
+      decline: card.querySelector(".quest-decline"),
+      waiting: card.querySelector(".quest-waiting"),
+    };
+    el.claim.addEventListener("click", () => claimRequest(i));
+    el.decline.addEventListener("click", () => declineRequest(i));
+    questSlotElements.push(el);
+  }
+  fillIconSlots(board);
+}
+
+function updateQuestPanel() {
+  const q = state.quests;
+  let anyReady = false;
+
+  // ---- The Royal Decree ----
+  const decree = getCurrentDecree();
+  const card = document.getElementById("decree-card");
+  if (decree) {
+    const p = getDecreeProgress(decree.goal);
+    const done = p.current >= p.target;
+    anyReady = anyReady || done;
+    card.classList.toggle("ready", done);
+    card.classList.remove("finished");
+    document.getElementById("decree-number").textContent = `Decree ${toRoman(q.decree + 1)} of ${toRoman(ROYAL_DECREES.length)}`;
+    document.getElementById("decree-title").textContent = decree.title;
+    document.getElementById("decree-text").textContent = decree.text;
+    document.getElementById("decree-progress-row").hidden = false;
+    document.getElementById("decree-foot").hidden = false;
+    document.getElementById("decree-fill").style.width = Math.min(100, (p.current / p.target) * 100) + "%";
+    document.getElementById("decree-count").textContent = `${formatNumber(Math.min(p.current, p.target))} / ${formatNumber(p.target)}`;
+    showReward(document.getElementById("decree-reward"), decree.reward);
+    document.getElementById("decree-claim").disabled = !done;
+  } else {
+    card.classList.remove("ready");
+    card.classList.add("finished");
+    document.getElementById("decree-number").textContent = "All decrees fulfilled";
+    document.getElementById("decree-title").textContent = "Long Live the Crown";
+    document.getElementById("decree-text").textContent = "Every royal decree has been carried out. The whole realm sings your name.";
+    document.getElementById("decree-progress-row").hidden = true;
+    document.getElementById("decree-foot").hidden = true;
+  }
+
+  // ---- The notice board ----
+  for (let i = 0; i < QUEST_BOARD_SIZE; i++) {
+    const el = questSlotElements[i], request = q.board[i];
+    el.card.classList.toggle("empty", !request);
+    if (!request) {
+      el.card.classList.remove("ready");
+      el.title.textContent = "An empty spot";
+      const wait = (q.arrivals[i] - Date.now()) / 1000;
+      el.waiting.textContent = wait > 0
+        ? `A herald is on the road. Arrives in ${formatDuration(Math.max(1, wait))}.`
+        : "No herald has a task for you yet.";
+      continue;
+    }
+    const p = getRequestProgress(request);
+    const done = p.current >= p.target;
+    anyReady = anyReady || done;
+    el.card.classList.toggle("ready", done);
+    el.title.textContent = getRequestTemplate(request).title;
+    el.text.textContent = describeRequest(request);
+    el.fill.style.width = Math.min(100, (p.current / p.target) * 100) + "%";
+    el.count.textContent = `${formatNumber(Math.floor(p.current))} / ${formatNumber(p.target)}`;
+    showReward(el.reward, request.reward);
+    el.claim.disabled = !done;
+  }
+  document.getElementById("quest-completed").textContent =
+    q.completed > 0 ? `Requests completed: ${formatNumber(q.completed)}` : "";
+
+  setNavBadge("quests", anyReady);
 }
 
 // Bottom navigation: show one screen, hide the others.
@@ -7183,6 +7599,7 @@ function initGame() {
   buildBuildingPanel();
   buildResearchPanel();
   buildKingdomPanel();
+  buildQuestPanel();
   buildArmyPanel();
   setupBattleView();
   setupNavigation();
