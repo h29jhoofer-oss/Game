@@ -350,6 +350,60 @@ const QUEST_BOARD_SIZE = 3;                 // requests on the board at once
 const HERALD_ARRIVAL_SECONDS = 10 * 60;     // a new herald arrives 10 min after one leaves
 const HERALD_REWARD_MINUTES = 5;            // rewards are worth ~5 min of production
 
+// ---- Achievements ----
+// Kingdom-wide feats. Each one earned adds RENOWN_PER_ACHIEVEMENT to
+// all production and taxes, for good.
+//   stat: which number is measured (see ACHIEVEMENT_STATS in 3e)
+//   target: the number it must reach
+const RENOWN_PER_ACHIEVEMENT = 0.01;   // +1% per achievement
+const ACHIEVEMENT_GROUPS = [
+  { id: "growth",  name: "Growth" },
+  { id: "builder", name: "Builder" },
+  { id: "wealth",  name: "Wealth" },
+  { id: "wisdom",  name: "Wisdom" },
+  { id: "service", name: "Service" },
+  { id: "war",     name: "War" },
+];
+const ACHIEVEMENTS = [
+  { id: "pop10",      group: "growth",  icon: "population", name: "A Little Village",   text: "Reach 10 citizens.",               stat: "population", target: 10 },
+  { id: "pop50",      group: "growth",  icon: "population", name: "Market Town",        text: "Reach 50 citizens.",               stat: "population", target: 50 },
+  { id: "pop100",     group: "growth",  icon: "population", name: "Hundred Hearths",    text: "Reach 100 citizens.",              stat: "population", target: 100 },
+  { id: "pop250",     group: "growth",  icon: "population", name: "City of Banners",    text: "Reach 250 citizens.",              stat: "population", target: 250 },
+  { id: "pop500",     group: "growth",  icon: "population", name: "Teeming Capital",    text: "Reach 500 citizens.",              stat: "population", target: 500 },
+  { id: "castle",     group: "growth",  icon: "crest",      name: "Stone Crown",        text: "Complete the Castle Upgrade.",     stat: "castle",     target: 1 },
+
+  { id: "build10",    group: "builder", icon: "house",      name: "Master Mason",       text: "Own 10 buildings.",                stat: "buildings",  target: 10 },
+  { id: "build25",    group: "builder", icon: "house",      name: "Town Planner",       text: "Own 25 buildings.",                stat: "buildings",  target: 25 },
+  { id: "build50",    group: "builder", icon: "house",      name: "Royal Architect",    text: "Own 50 buildings.",                stat: "buildings",  target: 50 },
+  { id: "level5",     group: "builder", icon: "lumberMill", name: "Fine Craft",         text: "Upgrade any building to level 5.", stat: "bestLevel",  target: 5 },
+  { id: "level10",    group: "builder", icon: "lumberMill", name: "Masterwork",         text: "Upgrade any building to level 10.", stat: "bestLevel", target: 10 },
+  { id: "allTypes",   group: "builder", icon: "market",     name: "A Bit of Everything", text: "Own every kind of building.",     stat: "buildingTypes", target: 7 },
+
+  { id: "food10k",    group: "wealth",  icon: "food",       name: "Overflowing Granary", text: "Gather 10,000 food.",             stat: "food",       target: 10000 },
+  { id: "wood10k",    group: "wealth",  icon: "wood",       name: "Timber Baron",       text: "Gather 10,000 wood.",              stat: "wood",       target: 10000 },
+  { id: "stone10k",   group: "wealth",  icon: "stone",      name: "Quarry Lord",        text: "Gather 10,000 stone.",             stat: "stone",      target: 10000 },
+  { id: "gold10k",    group: "wealth",  icon: "gold",       name: "Full Coffers",       text: "Collect 10,000 gold.",             stat: "gold",       target: 10000 },
+  { id: "gold100k",   group: "wealth",  icon: "gold",       name: "Dragon's Hoard",     text: "Collect 100,000 gold.",            stat: "gold",       target: 100000 },
+
+  { id: "research1",  group: "wisdom",  icon: "book",       name: "Curious Mind",       text: "Complete your first research.",    stat: "research",   target: 1 },
+  { id: "research10", group: "wisdom",  icon: "book",       name: "Learned Court",      text: "Complete 10 research projects.",   stat: "research",   target: 10 },
+  { id: "researchAll", group: "wisdom", icon: "academy",    name: "Font of Knowledge",  text: "Complete every research project.", stat: "research",   target: 0 },
+
+  { id: "decree5",    group: "service", icon: "scroll",     name: "Faithful Steward",   text: "Fulfil 5 Royal Decrees.",          stat: "decrees",    target: 5 },
+  { id: "decreeAll",  group: "service", icon: "scroll",     name: "Voice of the Crown", text: "Fulfil every Royal Decree.",       stat: "decrees",    target: 0 },
+  { id: "request10",  group: "service", icon: "quill",      name: "Friend of Heralds",  text: "Complete 10 herald requests.",     stat: "requests",   target: 10 },
+  { id: "request50",  group: "service", icon: "quill",      name: "Beloved Ruler",      text: "Complete 50 herald requests.",     stat: "requests",   target: 50 },
+
+  { id: "knights10",  group: "war",     icon: "shield",     name: "Call to Arms",       text: "Train 10 knights.",                stat: "trained",    target: 10 },
+  { id: "wins10",     group: "war",     icon: "sword",      name: "Defender",           text: "Win 10 battles.",                  stat: "wins",       target: 10 },
+  { id: "wins50",     group: "war",     icon: "sword",      name: "Shield of the Realm", text: "Win 50 battles.",                 stat: "wins",       target: 50 },
+  { id: "honors5",    group: "war",     icon: "medal",      name: "Decorated",          text: "Earn 5 military honors.",          stat: "honors",     target: 5 },
+];
+// "Every research" and "every decree" use the real totals.
+ACHIEVEMENTS.find(a => a.id === "researchAll").target = RESEARCH.length;
+ACHIEVEMENTS.find(a => a.id === "decreeAll").target = ROYAL_DECREES.length;
+ACHIEVEMENTS.find(a => a.id === "allTypes").target = Object.keys(BUILDING_TYPES).length;
+
 // Player settings and their defaults (saved with the game).
 const DEFAULT_SETTINGS = { sound: true, music: false, hud: false };
 
@@ -729,6 +783,7 @@ function createNewGameState() {
     castleLevel: 1,           // 2 after the Castle Upgrade
     military: createMilitaryState(),
     quests: createQuestState(),
+    achievements: {},         // id -> time (ms) it was earned
     // One entry per building type, e.g. farm: { count: 1, level: 1 }
     //   count = how many of this building you own
     //   level = upgrade level (shared by all buildings of that type,
@@ -801,6 +856,7 @@ function getProductionMultiplier(typeId) {
     }
   }
   if (state.castleLevel >= 2) bonus += CASTLE_UPGRADE.productionBonus;
+  bonus += getRenownBonus();
   return 1 + bonus;
 }
 
@@ -811,6 +867,7 @@ function getTaxMultiplier() {
     if (state.research[tech.id] && tech.taxBonus) bonus += tech.taxBonus;
   }
   if (state.castleLevel >= 2) bonus += CASTLE_UPGRADE.productionBonus;
+  bonus += getRenownBonus();
   return 1 + bonus;
 }
 
@@ -1877,6 +1934,62 @@ function declineRequest(slot) {
 
 
 /* =============================================================
+   3e. ACHIEVEMENTS
+   -------------------------------------------------------------
+   state.achievements = { pop10: 1700000000000, ... }
+   (achievement id -> the time it was earned). Each achievement
+   measures one number from ACHIEVEMENT_STATS; once that number
+   reaches the target, it is earned for good.
+   ============================================================= */
+
+const ACHIEVEMENT_STATS = {
+  population:    () => state.population,
+  castle:        () => (state.castleLevel >= 2 ? 1 : 0),
+  buildings:     () => Object.values(state.buildings).reduce((sum, b) => sum + b.count, 0),
+  bestLevel:     () => Math.max(...Object.values(state.buildings).filter(b => b.count > 0).map(b => b.level), 1),
+  buildingTypes: () => Object.values(state.buildings).filter(b => b.count > 0).length,
+  food:          () => state.quests.tally.food,
+  wood:          () => state.quests.tally.wood,
+  stone:         () => state.quests.tally.stone,
+  gold:          () => state.quests.tally.gold,
+  research:      () => getResearchCount(),
+  decrees:       () => state.quests.decree,
+  requests:      () => state.quests.completed,
+  trained:       () => state.military.totalTrained,
+  wins:          () => state.military.battlesWon,
+  honors:        () => MILITARY_HONORS.filter(h => state.military.honors[h.id]).length,
+};
+
+function getAchievementProgress(a) {
+  return { current: Math.min(ACHIEVEMENT_STATS[a.stat](), a.target), target: a.target };
+}
+
+function getAchievementCount() {
+  return ACHIEVEMENTS.filter(a => state.achievements[a.id]).length;
+}
+
+// Extra production from achievements, e.g. 0.12 for 12 earned.
+function getRenownBonus() {
+  return getAchievementCount() * RENOWN_PER_ACHIEVEMENT;
+}
+
+// Awards every achievement whose number has reached its target.
+// Called after every update, so feats done while away count too.
+function checkAchievements() {
+  for (const a of ACHIEVEMENTS) {
+    if (state.achievements[a.id] || ACHIEVEMENT_STATS[a.stat]() < a.target) continue;
+    state.achievements[a.id] = Date.now();
+    if (uiReady) {
+      announce("Achievement unlocked", a.name, `${a.text} Renown: +${Math.round(RENOWN_PER_ACHIEVEMENT * 100)}% to all production.`, createPixelIcon(a.icon));
+      playSound("milestone");
+      const el = achievementElements[a.id];
+      if (el) bumpElement(el.card, "just-done");
+    }
+  }
+}
+
+
+/* =============================================================
    4. GAME LOOP
    -------------------------------------------------------------
    KEY IDEA: we never assume a timer fires on time.
@@ -1899,12 +2012,14 @@ function updateGame() {
     handleTimeAway(elapsedSeconds);
     state.lastUpdate = now;
     checkQuests();
+    checkAchievements();
     saveGame(); // save at once, so this time can never be paid out twice
   } else {
     applyProduction(elapsedSeconds);
     state.lastUpdate = now;
     processInvasions(false);   // a raid may start on screen
     checkQuests();
+    checkAchievements();
   }
 }
 
@@ -1931,6 +2046,7 @@ function refreshUI() {
   updateKingdomPanel();
   updateArmyPanel();
   updateQuestPanel();
+  updateAchievementPanel();
   updateSaveStatus();
   updateHudBadge();
 }
@@ -2034,6 +2150,9 @@ function cleanSaveData(data) {
   if (isGoodNumber(data.lastSaved)) clean.lastSaved = data.lastSaved;
   if (data.military && typeof data.military === "object") cleanMilitaryData(data.military, clean.military, isGoodNumber);
   if (data.quests && typeof data.quests === "object") cleanQuestData(data.quests, clean.quests, isGoodNumber);
+  if (data.achievements && typeof data.achievements === "object") {
+    for (const a of ACHIEVEMENTS) if (isGoodNumber(data.achievements[a.id])) clean.achievements[a.id] = data.achievements[a.id];
+  }
   // A timestamp in the future (clock changed) is treated as "now".
   if (isGoodNumber(data.lastUpdate) && data.lastUpdate <= Date.now()) {
     clean.lastUpdate = data.lastUpdate;
@@ -3456,6 +3575,54 @@ function updateQuestPanel() {
     q.completed > 0 ? `Requests completed: ${formatNumber(q.completed)}` : "";
 
   setNavBadge("quests", anyReady);
+}
+
+// ---------- Kingdom screen: the Hall of Achievements ----------
+const achievementElements = {};
+
+function buildAchievementPanel() {
+  const container = document.getElementById("achievement-groups");
+  container.innerHTML = "";
+  for (const group of ACHIEVEMENT_GROUPS) {
+    const heading = document.createElement("h3");
+    heading.className = "achievement-group-title";
+    heading.textContent = group.name;
+    const grid = document.createElement("ul");
+    grid.className = "achievement-grid";
+    for (const a of ACHIEVEMENTS.filter(x => x.group === group.id)) {
+      const card = document.createElement("li");
+      card.className = "achievement";
+      card.innerHTML =
+        `<span class="achievement-icon"></span>` +
+        `<div class="achievement-body"><span class="achievement-name"></span>` +
+        `<span class="achievement-text"></span>` +
+        `<div class="progress"><div class="progress-fill"></div></div></div>`;
+      card.querySelector(".achievement-icon").appendChild(createPixelIcon(a.icon));
+      card.querySelector(".achievement-name").textContent = a.name;
+      card.querySelector(".achievement-text").textContent = a.text;
+      grid.appendChild(card);
+      achievementElements[a.id] = { card, fill: card.querySelector(".progress-fill"), progress: card.querySelector(".progress") };
+    }
+    container.append(heading, grid);
+  }
+}
+
+function updateAchievementPanel() {
+  for (const a of ACHIEVEMENTS) {
+    const el = achievementElements[a.id];
+    const earned = !!state.achievements[a.id];
+    el.card.classList.toggle("earned", earned);
+    el.progress.hidden = earned;
+    if (!earned) {
+      const p = getAchievementProgress(a);
+      el.fill.style.width = (p.current / p.target) * 100 + "%";
+      el.card.title = `${formatNumber(Math.floor(p.current))} / ${formatNumber(p.target)}`;
+    } else {
+      el.card.title = "Earned";
+    }
+  }
+  document.getElementById("achievement-count").textContent = `${getAchievementCount()} / ${ACHIEVEMENTS.length} earned`;
+  document.getElementById("achievement-renown").textContent = `Renown +${Math.round(getRenownBonus() * 100)}% production`;
 }
 
 // Bottom navigation: show one screen, hide the others.
@@ -7600,6 +7767,7 @@ function initGame() {
   buildResearchPanel();
   buildKingdomPanel();
   buildQuestPanel();
+  buildAchievementPanel();
   buildArmyPanel();
   setupBattleView();
   setupNavigation();
