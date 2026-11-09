@@ -557,10 +557,24 @@
 
   /* ===== TRUMP MODE ===== */
   body.trump {
-    --night: #0b1230; --night-2: #5c1030;
-    --blue: #c8203f; --blue-2: #8c0f2b; --blue-soft: #f3d6dc; --sky: #ffc9d3;
+    --night: #6e0c1c; --night-2: #d0283f;
+    --blue: #c8203f; --blue-2: #8c0f2b; --blue-soft: #f3d6dc; --sky: #ffe1e6;
     --hover: #fff4e0;
-    --stage-1: #ef4a69; --stage-2: #a3122f; --stage-3: #2c0716;
+    /* the arena turns flag-blue so the Face stands out against the red */
+    --stage-1: #4f7bff; --stage-2: #1f3fae; --stage-3: #0a1a4f;
+    background-image:
+      radial-gradient(ellipse 90% 60% at 50% 0%, var(--night-2) 0%, transparent 70%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cpath d='M45 31l3.4 7.9 8.6.8-6.5 5.7 1.9 8.4L45 49.4l-7.4 4.4 1.9-8.4-6.5-5.7 8.6-.8z' fill='none' stroke='%23ffffff' stroke-opacity='.09' stroke-width='1.6'/%3E%3Ccircle cx='10' cy='12' r='1.2' fill='%23ffffff' fill-opacity='.2'/%3E%3Ccircle cx='76' cy='70' r='1' fill='%23ffffff' fill-opacity='.16'/%3E%3C/svg%3E");
+  }
+  body.trump .chip { background: rgba(0,0,0,.22); color: #ffe1e6; }
+  body.trump .plaque { background: linear-gradient(rgba(40,0,8,.75), rgba(40,0,8,.55)); border-color: rgba(255,225,230,.25); }
+  body.trump .band { background: linear-gradient(90deg, transparent, #fff, transparent); }
+  body.trump #lore, body.trump #mini { background: rgba(40, 0, 10, .7); }
+  /* Trump-mode mini-games */
+  .mg-canvas {
+    display: block; width: min(360px, 100%); max-width: 100%; aspect-ratio: 3 / 4; max-height: 56vh;
+    border-radius: 18px; border: 3px solid var(--line); box-shadow: 0 5px 0 var(--line);
+    touch-action: none; cursor: pointer;
   }
   body.trump .icon { background: linear-gradient(#e0405e, #a3122f); }
   body.trump .logo .l2 { color: var(--gold); }
@@ -1594,6 +1608,7 @@
     .replace('__TAXED__', short(state.taxed || 0)).replace('__TAXLORE__', fmt(state.taxedLore || 0))
     .replace('__REDS__', fmt(state.zaps || 0)).replace('__EAGLES__', fmt(state.droneZaps || 0))
     .replace('__TOWERS__', fmt(owned('tower')))
+    .replace('__GOLF__', fmt(state.mini.golf || 0)).replace('__TOWER__', fmt(state.mini.tower || 0))
     .replace('__CRITS__', fmt(state.crits)).replace('__RESETS__', fmt(state.resets));
   const unlocked = () => [
     ...chronicle.filter(c => state.total >= c.at).map(c => 'c' + c.at),
@@ -1730,13 +1745,13 @@
     const best = Math.max(state.mini[key] || 0, hits);
     const isBest = hits > 0 && hits >= best && hits !== (state.mini[key] || 0);
     state.mini[key] = best;
-    const prize = hits * rewardPer();
-    if (prize) earn(prize);
+    const prize = hits * rewardPer() * (key === 'golf' ? 2 : key === 'tower' ? .5 : 1);
+    if (prize) earn(Math.ceil(prize));
     sfx[hits ? 'fanfare' : 'bad']();
     miniPages.innerHTML = `
       <p>${label}</p>
       <div class="mg-big">${fmt(hits)}</div>
-      <p>${hits ? `You earned <b>${fmt(prize)}</b> points.` : 'No points this time.'} ${isBest ? 'New record!' : `Record: ${fmt(best)}.`}</p>
+      <p>${hits ? `You earned <b>${fmt(Math.ceil(prize))}</b> points.` : 'No points this time.'} ${isBest ? 'New record!' : `Record: ${fmt(best)}.`}</p>
       ${first ? '<p class="note">A new Codex entry has been written about this place.</p>' : ''}
       <div class="mg-btns">
         <button class="mg-btn" id="mgagain" type="button">Play again</button>
@@ -1797,7 +1812,12 @@
   }
 
   // trigger: click the whisper while it talks about the Bot Lounge
-  whisperEl.onclick = () => (!window.__trump && /Bot Lounge/.test(whisperEl.textContent) ? openLounge() : openLore());
+  whisperEl.onclick = () => {
+    const t = whisperEl.textContent;
+    if (!window.__trump && /Bot Lounge/.test(t)) openLounge();
+    else if (window.__trump && /Golf Cart/.test(t)) openGolf();
+    else openLore();
+  };
   whisperEl.addEventListener('keydown', e => {
     if ((e.key === 'Enter' || e.key === ' ') && /Bot Lounge/.test(whisperEl.textContent)) { e.stopImmediatePropagation(); e.preventDefault(); openLounge(); }
   }, true);
@@ -1887,17 +1907,192 @@
     requestAnimationFrame(frame);
   }
 
+
+  // =====================================================================
+  //  TRUMP-MODE HIDDEN MINI-GAMES
+  //  3. Hole in One: click the whisper while it mentions the Golf Cart
+  //  4. The Very Tall Tower: tap the flags beside the Face three times
+  // =====================================================================
+
+  // ---------- 3. HOLE IN ONE: stop the power bar in the right place ----------
+  function openGolf() {
+    openMini('Hole in One', 'The Golf Cart is finally out of the garage.');
+    intro(`<p>Eight shots. A power bar swings back and forth. Stop it on the <b>gold notch</b> to sink a hole in one.</p>
+           <p>Click, tap or press Space to swing. It gets faster every shot.</p>
+           <p class="note">Each hole in one is worth ${fmt(rewardPer() * 2)} points when you finish.</p>`, startGolf);
+  }
+
+  function startGolf() {
+    stopGame();
+    miniPages.innerHTML = `<div class="mg-hud"><span>Holes in one: <b id="mghits">0</b></span><span>Shot: <b id="mgtime">1</b>/8</span></div>
+      <canvas class="mg-canvas" id="golfcv" width="360" height="480" aria-label="Golf: stop the power bar on the gold notch"></canvas>`;
+    const cv = $('golfcv'), cx = cv.getContext('2d'), W = 360, H = 480;
+    const TEE = 50, GROUND = 330;
+    let shot = 0, hits = 0, alive = true, phase = 'aim', pw = 0, dir = 1, speed = .9, ball = null, msg = '', msgT = 0, holeX = 250, last = performance.now();
+    const target = () => (holeX - TEE) / (W - TEE - 20);
+    const newHole = () => { holeX = 150 + Math.random() * 170; };
+    newHole();
+
+    function swing() {
+      if (phase !== 'aim') return;
+      phase = 'fly';
+      const landX = TEE + pw * (W - TEE - 20);
+      ball = { t: 0, from: TEE, to: landX };
+      tone(220, 0, .08, 'square', .12); if (ac && !muted) noise(ac.currentTime, .06, .2, 3000, sfxBus);
+    }
+    const onKey = e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); swing(); } };
+    cv.addEventListener('pointerdown', swing);
+    addEventListener('keydown', onKey);
+
+    function draw(now) {
+      if (!alive) return;
+      const dt = Math.min(.05, (now - last) / 1000); last = now;
+      // sky and hills
+      const g = cx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#7fb7ff'); g.addColorStop(.6, '#cfe4ff'); g.addColorStop(.61, '#4caf50'); g.addColorStop(1, '#2e7d32');
+      cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+      cx.fillStyle = '#5cc063'; cx.beginPath(); cx.ellipse(holeX, GROUND + 6, 46, 10, 0, 0, Math.PI * 2); cx.fill();
+      // hole and flag
+      cx.fillStyle = '#0a1a4f'; cx.beginPath(); cx.ellipse(holeX, GROUND + 4, 9, 3.5, 0, 0, Math.PI * 2); cx.fill();
+      cx.strokeStyle = '#0a1a4f'; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(holeX, GROUND + 3); cx.lineTo(holeX, GROUND - 70); cx.stroke();
+      cx.fillStyle = '#c8203f'; cx.beginPath(); cx.moveTo(holeX, GROUND - 70); cx.lineTo(holeX + 30, GROUND - 60); cx.lineTo(holeX, GROUND - 50); cx.closePath(); cx.fill(); cx.stroke();
+      // tee
+      cx.fillStyle = '#fff'; cx.fillRect(TEE - 2, GROUND - 2, 4, 10);
+      // ball
+      let bx = TEE, by = GROUND - 6;
+      if (phase === 'fly' && ball) {
+        ball.t += dt / .9;
+        const k = Math.min(1, ball.t);
+        bx = ball.from + (ball.to - ball.from) * k;
+        by = GROUND - 6 - Math.sin(k * Math.PI) * (60 + (ball.to - ball.from) * .5);
+        if (k >= 1) {
+          const off = Math.abs(ball.to - holeX);
+          if (off < 11) { hits++; msg = 'HOLE IN ONE!'; sfx.fanfare(); }
+          else if (off < 30) { msg = 'So close.'; sfx.bad(); }
+          else { msg = ball.to < holeX ? 'Too short.' : 'Too long.'; sfx.bad(); }
+          msgT = 1.2; phase = 'wait'; ball.done = true;
+          $('mghits').textContent = hits;
+        }
+      } else if (ball && ball.done) { bx = ball.to; by = GROUND - 6; }
+      cx.fillStyle = '#fff'; cx.strokeStyle = '#0a1a4f'; cx.lineWidth = 2;
+      cx.beginPath(); cx.arc(bx, by, 6, 0, Math.PI * 2); cx.fill(); cx.stroke();
+      // power bar with the gold notch
+      const BX = 30, BY = 400, BW = W - 60, BH = 24;
+      cx.fillStyle = '#0a1a4f'; cx.fillRect(BX - 3, BY - 3, BW + 6, BH + 6);
+      cx.fillStyle = '#fff'; cx.fillRect(BX, BY, BW, BH);
+      const tx = BX + target() * BW;
+      cx.fillStyle = '#ffc531'; cx.fillRect(tx - 7, BY, 14, BH);
+      if (phase === 'aim') {
+        pw += dir * speed * dt;
+        if (pw > 1) { pw = 1; dir = -1; } if (pw < 0) { pw = 0; dir = 1; }
+      }
+      cx.fillStyle = '#c8203f'; cx.fillRect(BX + pw * BW - 3, BY - 8, 6, BH + 16);
+      cx.fillStyle = '#0a1a4f'; cx.font = 'bold 14px Nunito, sans-serif'; cx.textAlign = 'center';
+      cx.fillText(phase === 'aim' ? 'Tap to swing' : '', W / 2, BY + 52);
+      if (msgT > 0) {
+        msgT -= dt;
+        cx.font = '30px "Lilita One", sans-serif'; cx.lineWidth = 6; cx.strokeStyle = '#0a1a4f';
+        cx.strokeText(msg, W / 2, 120); cx.fillStyle = msg === 'HOLE IN ONE!' ? '#ffc531' : '#fff'; cx.fillText(msg, W / 2, 120);
+        if (msgT <= 0 && phase === 'wait') {
+          shot++;
+          if (shot >= 8) { results('golf', hits, 'Holes in one', startGolf); return; }
+          $('mgtime').textContent = shot + 1;
+          phase = 'aim'; pw = 0; dir = 1; speed += .18; ball = null; newHole();
+        }
+      }
+      requestAnimationFrame(draw);
+    }
+    mg = { stop() { alive = false; removeEventListener('keydown', onKey); } };
+    requestAnimationFrame(draw);
+  }
+
+  // ---------- 4. THE VERY TALL TOWER: stack the floors ----------
+  function openTower() {
+    openMini('The Very Tall Tower', 'Build it yourself. One floor at a time.');
+    intro(`<p>A floor slides back and forth. Click, tap or press Space to drop it on the one below. Anything hanging over the edge falls off, so the floors get narrower.</p>
+           <p>Miss completely and construction stops. How tall can you build it?</p>
+           <p class="note">Each floor is worth ${fmt(Math.ceil(rewardPer() / 2))} points when you finish.</p>`, startTower);
+  }
+
+  function startTower() {
+    stopGame();
+    miniPages.innerHTML = `<div class="mg-hud"><span>Floors: <b id="mghits">0</b></span></div>
+      <canvas class="mg-canvas" id="towercv" width="360" height="480" aria-label="Tower: drop each floor onto the one below"></canvas>`;
+    const cv = $('towercv'), cx = cv.getContext('2d'), W = 360, H = 480, FH = 26;
+    const floors = [{ x: 90, w: 180 }];               // the lobby
+    let cur = { x: 0, w: 180, dir: 1 }, speed = 150, alive = true, cam = 0, falling = [], over = false, last = performance.now();
+
+    function drop() {
+      if (over) return;
+      const below = floors[floors.length - 1];
+      const l = Math.max(cur.x, below.x), r = Math.min(cur.x + cur.w, below.x + below.w);
+      if (r - l <= 2) {
+        over = true;
+        falling.push({ x: cur.x, w: cur.w, y: floors.length, vy: 0 });
+        sfx.bad();
+        setTimeout(() => results('tower', floors.length - 1, 'Floors on the Very Tall Tower', startTower), 900);
+        return;
+      }
+      // trim the overhang, which falls away
+      if (cur.x < l) falling.push({ x: cur.x, w: l - cur.x, y: floors.length, vy: 0 });
+      if (cur.x + cur.w > r) falling.push({ x: r, w: cur.x + cur.w - r, y: floors.length, vy: 0 });
+      const perfect = Math.abs(cur.x - below.x) < 4;
+      floors.push(perfect ? { x: below.x, w: below.w } : { x: l, w: r - l });
+      tone(perfect ? 880 : 440 + floors.length * 12, 0, .1, 'triangle', .18);
+      if (perfect) tone(1320, .08, .12, 'triangle', .14);
+      $('mghits').textContent = floors.length - 1;
+      const top = floors[floors.length - 1];
+      cur = { x: Math.random() < .5 ? -top.w : W, w: top.w, dir: Math.random() < .5 ? 1 : -1 };
+      cur.x = cur.dir > 0 ? -top.w * .3 : W - top.w * .7;
+      speed = Math.min(420, speed + 9);
+    }
+    const onKey = e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); drop(); } };
+    cv.addEventListener('pointerdown', drop);
+    addEventListener('keydown', onKey);
+
+    const yOf = i => H - 40 - (i + 1) * FH + cam;
+    function floor(x, y, w, k) {
+      cx.fillStyle = k % 2 ? '#e9eefb' : '#ffffff';
+      cx.strokeStyle = '#0a1a4f'; cx.lineWidth = 2.5;
+      cx.fillRect(x, y, w, FH); cx.strokeRect(x, y, w, FH);
+      cx.fillStyle = '#ffc531';
+      for (let wx = x + 8; wx < x + w - 8; wx += 16) cx.fillRect(wx, y + 8, 7, 10);
+    }
+    function draw(now) {
+      if (!alive) return;
+      const dt = Math.min(.05, (now - last) / 1000); last = now;
+      const want = Math.max(0, (floors.length - 10) * FH);
+      cam += (want - cam) * Math.min(1, dt * 5);
+      const g = cx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#0a1a4f'); g.addColorStop(1, '#4f7bff');
+      cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+      cx.fillStyle = '#2e7d32'; cx.fillRect(0, H - 40 + cam, W, 40);
+      floors.forEach((f, i) => floor(f.x, yOf(i), f.w, i));
+      for (const f of falling) { f.vy += 900 * dt; f.dy = (f.dy || 0) + f.vy * dt; floor(f.x, yOf(f.y) + f.dy, f.w, f.y); }
+      falling = falling.filter(f => yOf(f.y) + f.dy < H + 40);
+      if (!over) {
+        cur.x += cur.dir * speed * dt;
+        if (cur.x + cur.w > W + 20) cur.dir = -1;
+        if (cur.x < -20) cur.dir = 1;
+        floor(cur.x, yOf(floors.length), cur.w, floors.length);
+      }
+      requestAnimationFrame(draw);
+    }
+    mg = { stop() { alive = false; removeEventListener('keydown', onKey); } };
+    requestAnimationFrame(draw);
+  }
+  window.openGolf = openGolf; window.openTower = openTower; // for testing
+
   // trigger: tap the waving flags beside the Face three times in a row
   let flagTaps = 0, flagTimer;
   stage.querySelectorAll('.corner').forEach(c => c.addEventListener('pointerdown', e => {
     e.stopPropagation();
-    if (window.__trump) return;
     flagTaps++;
     c.animate([{ scale: 1 }, { scale: 1.35 }, { scale: 1 }], { duration: 250 });
     tone(700 + flagTaps * 200, 0, .1, 'triangle', .15);
     clearTimeout(flagTimer);
     flagTimer = setTimeout(() => { flagTaps = 0; }, 2500);
-    if (flagTaps >= 3) { flagTaps = 0; openMigration(); }
+    if (flagTaps >= 3) { flagTaps = 0; window.__trump ? openTower() : openMigration(); }
   }));
 
 
@@ -2486,6 +2681,12 @@
     { id: 'eagle', title: 'The Bald Eagle', when: () => (state.droneZaps || 0) > 0, how: 'Click something that screeches.', text: [
       'Flies across the top of the screen at speeds the scribes describe as "showing off." Worth 50% more than a redneck. Says SCREEEEE (see Chronicle III).',
       'You have spotted __EAGLES__ of them.' ] },
+    { id: 'golfgame', title: 'Hole in One', when: () => 'golf' in state.mini, how: 'Somebody should take the Golf Cart out. Listen to the whispers.', text: [
+      'A course with one hole, one tee and one golf ball that has been hit many, many times. Every hole in one is announced to the press, and some of the near misses are too.',
+      'Best round: __GOLF__ holes in one out of 8.' ] },
+    { id: 'towergame', title: 'The Very Tall Tower (Playable)', when: () => 'tower' in state.mini, how: 'The flags beside the Face know about a building project.', text: [
+      'It turns out the Very Tall Tower is built by hand, one floor at a time, by you, by tapping at exactly the right moment. This explains Chronicle VII completely.',
+      'Tallest tower: __TOWER__ floors. It has been described as taller.' ] },
     { id: 'tcrit', title: 'The Golden Click, Again', when: () => (state.crits || 0) > 0, how: 'Land a critical click.', text: [
       'One click in twenty is still worth ten. The new management tried to tax it, but it was already gold. You have landed __CRITS__ since the takeover.' ] },
   ];
@@ -2505,6 +2706,8 @@
     'The Golden Escalator only goes down.',
     'Somebody should check whether there is another face under this one.',
     'The guns have orange tips. Nobody has asked why.',
+    'The Golf Cart is parked by the green. Nobody has played a round yet.',
+    'The flags beside the Face say the tower needs more floors. Ask them three times.',
     'Somewhere, a Yahu-Bot is filing an appeal.',
     'The eagles do not pay taxes.',
     'Bibi is fine. Probably.',
