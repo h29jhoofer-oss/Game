@@ -17,6 +17,7 @@
     color-scheme: light;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; }
   body {
     margin: 0;
@@ -77,6 +78,68 @@
   #score.bump { animation: bump .18s ease-out; }
   @keyframes bump { 50% { transform: scale(1.12); } }
   #rate { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  #whisper {
+    max-width: 640px; margin: 2px auto 0;
+    color: var(--blue); font-style: italic; font-size: .88rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    cursor: pointer; transition: opacity .4s;
+  }
+  #whisper:hover { text-decoration: underline; }
+  #whisper.fade { opacity: 0; }
+
+  /* the lore book */
+  #lore {
+    position: fixed; inset: 0; z-index: 8;
+    display: grid; place-items: center;
+    padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+    background: rgba(0, 20, 70, .55);
+    animation: fadein .2s ease-out;
+  }
+  @keyframes fadein { from { opacity: 0; } }
+  .book {
+    width: min(680px, 100%); max-height: 100%;
+    display: flex; flex-direction: column;
+    background: var(--white); color: var(--ink);
+    border: 4px solid var(--blue); border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0,20,70,.45);
+    overflow: hidden;
+    animation: open .3s cubic-bezier(.2,1.3,.4,1);
+    user-select: text; -webkit-user-select: text;
+  }
+  @keyframes open { from { transform: translateY(30px) scale(.95); opacity: 0; } }
+  .book-head {
+    flex: none; display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px; background: var(--blue); color: var(--white);
+  }
+  .book-head h2 { margin: 0; font-family: var(--display); font-weight: 900; font-size: 1.3rem; text-wrap: balance; }
+  .book-head .meta { font-size: .82rem; opacity: .85; }
+  #loreclose {
+    margin-left: auto; flex: none; width: 36px; height: 36px; border-radius: 10px;
+    border: 2px solid rgba(255,255,255,.5); background: transparent; color: var(--white);
+    font-size: 1.3rem; line-height: 1; cursor: pointer;
+  }
+  #loreclose:hover { background: rgba(255,255,255,.15); }
+  #loreclose:focus-visible { outline: 3px solid var(--white); outline-offset: 2px; }
+  .tabs { flex: none; display: flex; gap: 6px; padding: 10px 16px 0; border-bottom: 2px solid var(--blue-soft); }
+  .tab {
+    padding: 8px 14px; border: 2px solid var(--blue-soft); border-bottom: none;
+    border-radius: 10px 10px 0 0; background: var(--ground); color: var(--ink-soft);
+    font: inherit; font-weight: 600; cursor: pointer; margin-bottom: -2px;
+  }
+  .tab[aria-selected="true"] { background: var(--white); color: var(--blue); border-color: var(--blue-soft); border-bottom: 2px solid var(--white); }
+  .tab:focus-visible { outline: 3px solid var(--blue-deep); outline-offset: 2px; }
+  .pages { overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .entry { border-left: 4px solid var(--blue); padding: 2px 0 2px 14px; }
+  .entry h3 { margin: 0 0 4px; font-family: var(--display); font-weight: 700; font-size: 1.05rem; color: var(--blue-deep); }
+  .entry p { margin: 0 0 8px; line-height: 1.55; max-width: 62ch; }
+  .entry p:last-child { margin-bottom: 0; }
+  .entry .note { font-size: .82rem; color: var(--ink-soft); }
+  .entry.locked { border-left-color: var(--blue-soft); color: var(--ink-soft); }
+  .entry.locked h3 { color: var(--ink-soft); letter-spacing: 2px; }
+  .entry.fresh { animation: fresh 1.6s ease-out; }
+  @keyframes fresh { 0%, 40% { background: var(--blue-soft); } }
+  .bar { height: 6px; max-width: 280px; border-radius: 999px; background: var(--blue-soft); overflow: hidden; margin-top: 6px; }
+  .bar i { display: block; height: 100%; background: var(--blue); }
 
   main {
     flex: 1; min-height: 0;
@@ -185,14 +248,20 @@
     font-family: var(--display); font-weight: 700; font-size: 1.25rem; color: var(--blue-deep);
   }
   #shop h2 .flag { width: 30px; }
-  #mute {
-    margin-left: auto; width: 36px; height: 36px; padding: 6px;
+  #lorebtn { margin-left: auto; position: relative; }
+  #lorebtn.new::after {
+    content: ""; position: absolute; top: -4px; right: -4px; width: 12px; height: 12px;
+    border-radius: 50%; background: #e0a800; border: 2px solid var(--white);
+    animation: blink 1s steps(2) infinite;
+  }
+  #mute, #lorebtn {
+    width: 36px; height: 36px; padding: 6px;
     border: 2px solid var(--blue-soft); border-radius: 10px; background: var(--ground);
     color: var(--blue); cursor: pointer;
   }
-  #mute:hover { border-color: var(--blue); }
-  #mute:focus-visible { outline: 3px solid var(--blue-deep); outline-offset: 2px; }
-  #mute svg { width: 100%; height: 100%; display: block; }
+  #mute:hover, #lorebtn:hover { border-color: var(--blue); }
+  #lorebtn:focus-visible, #mute:focus-visible { outline: 3px solid var(--blue-deep); outline-offset: 2px; }
+  #lorebtn svg, #mute svg { width: 100%; height: 100%; display: block; }
   #mute .off { display: none; }
   #mute[aria-pressed="true"] .on { display: none; }
   #mute[aria-pressed="true"] .off { display: block; }
@@ -373,6 +442,7 @@
   <div class="scoreline">
     <div id="score">0</div>
     <div id="rate">0 per second · 1 per click</div>
+    <div id="whisper" role="button" tabindex="0" title="Open the lore book">&nbsp;</div>
   </div>
 
   <main>
@@ -385,6 +455,9 @@
 
     <section id="shop" aria-label="Upgrades">
       <h2><svg class="flag" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>Upgrades
+        <button id="lorebtn" type="button" aria-label="Open the lore book" title="Lore">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 21.5A2.5 2.5 0 0 1 6.5 19H20v3H6.5"/><path d="M12 6l1.7 3h-3.4zM12 12l1.7-3h-3.4z" stroke-width="1.3"/></svg>
+        </button>
         <button id="mute" type="button" aria-pressed="false" aria-label="Mute sound" title="Sound on/off">
           <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
           <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M17 9l5 6M22 9l-5 6"/></svg>
@@ -399,6 +472,22 @@
 <div class="band"></div>
 <div id="toast" role="status"></div>
 <div id="bots"></div>
+<div id="lore" hidden>
+  <div class="book" role="dialog" aria-modal="true" aria-labelledby="loretitle">
+    <div class="book-head">
+      <div>
+        <h2 id="loretitle">The Book of Bibi</h2>
+        <div class="meta" id="loremeta"></div>
+      </div>
+      <button id="loreclose" type="button" aria-label="Close the lore book">&times;</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-chron" aria-selected="true">The Chronicle</button>
+      <button class="tab" role="tab" id="tab-codex" aria-selected="false">The Codex</button>
+    </div>
+    <div class="pages" id="pages"></div>
+  </div>
+</div>
 
 <script>
 (() => {
@@ -430,6 +519,12 @@
   try { Object.assign(state, JSON.parse(localStorage.getItem(SAVE_KEY)) || {}); } catch (e) {}
   if (hot && hot.data && hot.data.state) state = hot.data.state;
   if (hot && hot.snapshot) hot.snapshot(() => ({ state }));
+  // lifetime stats for the lore; these survive a reset ("the lore remembers")
+  state.total = Math.max(state.total || 0, state.score);
+  state.zaps = state.zaps || 0; state.crits = state.crits || 0;
+  state.clicks = state.clicks || 0; state.seen = state.seen || [];
+  state.resets = state.resets || 0;
+  const earn = n => { state.score += n; state.total += n; };
 
   const owned = id => state.owned[id] || 0;
   const priceOf = u => Math.floor(u.cost * Math.pow(1.15, owned(u.id)));
@@ -487,6 +582,7 @@
   for (const u of upgrades) {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'item';
+    b.title = 'Buy it to unlock its entry in the Codex.';
     b.innerHTML = `<span class="icon">${icons[u.id]}</span><span class="label"><span class="name">${u.name}</span><span class="count">0</span><small>${u.desc}</small></span><span class="cost"></span>`;
     b.onclick = () => {
       const p = priceOf(u);
@@ -511,18 +607,30 @@
       b.querySelector('.cost').textContent = fmt(p);
     }
     checkMilestone();
+    checkLore();
   }
 
   // milestones: 100, 1k, 10k, ...
-  let toastTimer;
+  let toastTimer; const toastQueue = [];
+  function showToast(msg) {
+    toastQueue.push(msg);
+    if (toastQueue.length === 1) nextToast();
+  }
+  function nextToast() {
+    if (!toastQueue.length) return;
+    toast.textContent = toastQueue[0];
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => { toastQueue.shift(); nextToast(); }, 380);
+    }, 1800);
+  }
   function checkMilestone() {
     const next = Math.max(100, (state.best || 0) * 10);
     if (state.score >= next) {
       state.best = Math.pow(10, Math.floor(Math.log10(state.score)));
-      toast.textContent = `${fmt(state.best)} points!`;
-      toast.classList.add('show');
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+      showToast(`${fmt(state.best)} points!`);
       sfx.fanfare();
       if (!calm) for (let i = 0; i < 6; i++) setTimeout(launchFlag, i * 120);
     }
@@ -540,7 +648,9 @@
   function hit(x, y) {
     const crit = Math.random() < 0.05;
     const gain = perClick() * (crit ? 10 : 1);
-    state.score += gain;
+    earn(gain);
+    state.clicks++;
+    if (crit) state.crits++;
     crit ? sfx.crit() : sfx.click();
 
     face.classList.remove('hit'); void face.offsetWidth; face.classList.add('hit');
@@ -583,7 +693,7 @@
     }
     clearTimeout(armTimer);
     reset.classList.remove('armed'); reset.textContent = 'Reset progress';
-    state = { score: 0, owned: {}, best: 0 };
+    state = { ...state, score: 0, owned: {}, best: 0, resets: state.resets + 1 };
     render();
   };
 
@@ -600,6 +710,196 @@
     f.addEventListener('animationend', () => f.remove());
   }
   if (!calm) { for (let i = 0; i < 3; i++) setTimeout(launchFlag, i * 900); setInterval(launchFlag, 2600); }
+
+
+  // =====================================================================
+  //  THE LORE. Entirely made up. None of this happened. All of it is canon.
+  // =====================================================================
+  const pageOpened = Date.now();
+  const chronicle = [
+    { at: 0, title: 'Prologue: The First Click', text: [
+      'In the beginning there was the Void, and the Void had zero points, and it was displayed in a very large font.',
+      'Then a single Finger descended from the Cursor Heavens and pressed upon the Face. A small blue ring went out from that place, and the number became 1. The scribes call this the First Click. The Face did a little squash-and-stretch about it, which the scribes found undignified but wrote down anyway.' ] },
+    { at: 50, title: 'I. The Age of the Green Screen', text: [
+      'Before the flags, before the oval, the Face dwelt within a Rectangle of Unholy Green. It was #00ff3c, which no natural thing has ever been.',
+      'For one full version the Face lived there, wreathed in a green glow the elders called "bad keying." Then a voice from beyond the repository spoke four words: "Get rid of the green screen." And it was gotten rid of. Some say if you squint at the white parts of the arena, you can still see a faint green fringe. You cannot. But some say it.' ],
+      note: 'Historians date the Green Screen Era to Version 1 and part of Version 2. It is not mentioned in polite company.' },
+    { at: 250, title: 'II. The Forging of the Oval', text: [
+      'The Order of the Rounded Corner was summoned to build a frame worthy of the Face. They argued for nine days over whether it should be a circle. The Face, being taller than it was wide, refused.',
+      'At last they forged the Oval: six pixels of white, then five more of blue, then a soft shadow fourteen pixels deep. These are the Sacred Measurements, and they are written in the stylesheet to this day.' ] },
+    { at: 1000, title: 'III. The Prophecy of the Golden Mouse', text: [
+      '"When a thousand points have been gathered," said the Oracle of the Tab Bar, "there shall come a Mouse, and it shall be gold, and it shall add exactly ten per click, and its price shall rise by fifteen percent each time, as is right and proper."',
+      'Nobody understood the prophecy until the Mouse appeared in the shop, at which point everybody claimed they had understood it all along.' ] },
+    { at: 5000, title: 'IV. The Intern Wars', text: [
+      'The Campaign Interns rose up in the Year of the Break Room, demanding a second click per second. Negotiations lasted forty days.',
+      'The Treaty of the Coffee Machine settled it: each Intern clicks exactly once per second, forever, and in exchange the coffee machine is never fixed. Both sides consider this a victory. The coffee machine has not been consulted.' ] },
+    { at: 25000, title: 'V. The Rise of the Yahu-Bots', text: [
+      'Deep below the Reset Button lies the Foundry, where the Yahu-Bots are made. Each one is 84 pixels wide, or 66 if it is born on a phone. Each one is built with one goal: to walk from one side of the screen to the other in eight to twelve seconds.',
+      'Why do they walk? The bots do not know. The Foundry does not know. When asked, a Yahu-Bot will only blink its red antenna at you, twice per 0.8 seconds, which in Bot means "please click me, I am full of points."' ],
+      note: 'A Yahu-Bot that reaches the far side of the screen without being clicked goes to the Bot Lounge. The Bot Lounge does not exist. Do not tell them.' },
+    { at: 100000, title: 'VI. The Crit Schism', text: [
+      'A great argument split the Clickers in two. The Ninety-Five held that every click is equal. The Five held that one click in twenty is touched by fate and worth ten.',
+      'The Five were proven right by the code, which says Math.random() < 0.05, and you cannot argue with the code. The Ninety-Five still meet on Tuesdays to argue with the code anyway.' ] },
+    { at: 500000, title: 'VII. The Turning of the Star', text: [
+      'Behind the Face, faint and blue, the Great Star turns. It completes one full rotation every thirty seconds. It has never been late. It has never been early. It has never stopped, except for people who have Reduce Motion turned on, for whom it respectfully holds still.',
+      'Since you opened this page, the Star has turned __SPINS__ times. It knows you are watching.' ] },
+    { at: 2000000, title: 'VIII. The Committee of One Hundred and Twenty', text: [
+      'The Knesset has 120 seats, and a majority is 61. So when the first Knesset Majority upgrade was bought, the scholars expected 61 clickers to show up.',
+      'Instead 1,500 points per second showed up, unannounced, with no clickers at all. The Committee is still investigating. The investigation itself produces 1,500 points per second, which is making things worse.' ] },
+    { at: 10000000, title: 'IX. The Reset Heresy', text: [
+      'There is a Button at the bottom of the ledger that undoes everything. The ancients knew it was dangerous, so they enchanted it: the first press only warns you. Only a second press, within three seconds, brings the end.',
+      'Those who have pressed it twice are called the Returned. They lose their points, their upgrades and their milestones. But the Book remembers them, and so they keep their lore.' ] },
+    { at: 50000000, title: 'X. The Great Flag Migration', text: [
+      'Every two point six seconds, a flag rises from beneath the page and drifts upward, never to return. No one has ever seen where they go.',
+      'The leading theory is that they are migrating to a warmer browser tab. A second theory says they go to the Bot Lounge. The second theory has been officially rejected, since the Bot Lounge does not exist.' ] },
+    { at: 250000000, title: 'XI. The Clicker Who Clicked Too Much', text: [
+      'There is a legend of a Clicker who clicked so much that the number grew wider than the screen. The Order of the Rounded Corner gathered in a panic. They had not measured for this.',
+      'They are still not sure what happens. Perhaps you will find out.' ] },
+    { at: 1000000000, title: 'Epilogue: The Last Click', text: [
+      'You have gathered a billion points. The scribes have run out of chapters. The Interns have run out of coffee. The Star keeps turning.',
+      'There is no Last Click. There is only the next one. The Face is waiting. It has always been waiting. Go on.' ] },
+  ];
+
+  const codex = [
+    { id: 'face', title: 'The Face', when: () => true, how: '', text: [
+      'Cut from a photograph 192 pixels wide, then enlarged four times by the ancient LANCZOS method until it was 272 pixels wide. It is stored inside the page itself, so it can never be lost again.',
+      'It has been clicked __CLICKS__ times on this device.' ] },
+    { id: 'finger', title: 'Stronger Finger', when: () => owned('finger') > 0, how: 'Buy a Stronger Finger.', text: [
+      'Trained for forty days on a stress ball. Index finger only. The thumb applied and was not chosen, and has been bitter about it ever since.' ] },
+    { id: 'intern', title: 'Campaign Intern', when: () => owned('intern') > 0, how: 'Hire a Campaign Intern.', text: [
+      'Clicks exactly once per second, as agreed in the Treaty of the Coffee Machine (see Chronicle IV). Paid in experience, lanyards, and a reusable water bottle with the logo slightly off-center.' ] },
+    { id: 'crew', title: 'Camera Crew', when: () => owned('crew') > 0, how: 'Hire a Camera Crew.', text: [
+      'Five people, one camera, no tripod. They were responsible for the Green Screen Era (see Chronicle I) and still insist it was "a creative choice."' ] },
+    { id: 'mouse', title: 'Golden Mouse', when: () => owned('mouse') > 0, how: 'Fulfil the prophecy.', text: [
+      'Foretold in Chronicle III. Weighs four kilograms. The scroll wheel is purely ceremonial. Polished nightly by an Intern who is technically on a break.' ] },
+    { id: 'rally', title: 'Flag Rally', when: () => owned('rally') > 0, how: 'Hold a Flag Rally.', text: [
+      'Every flag drifting up the background was once carried at a Flag Rally. They are now migrating (see Chronicle X). Each rally is louder than the last, which is why it earns 40 per second.' ] },
+    { id: 'network', title: 'News Network', when: () => owned('network') > 0, how: 'Launch a News Network.', text: [
+      'Broadcasts the score live, all day, every day. Its ratings jump whenever a Yahu-Bot walks past. Its weather segment is just the Star turning (see Chronicle VII).' ] },
+    { id: 'knesset', title: 'Knesset Majority', when: () => owned('knesset') > 0, how: 'Secure a Knesset Majority.', text: [
+      'Produces 1,500 points per second through methods the Committee of One Hundred and Twenty is still investigating (see Chronicle VIII).' ] },
+    { id: 'bot', title: 'Yahu-Bot, Model YB-1', when: () => state.zaps > 0, how: 'Click a Yahu-Bot.', text: [
+      'Powered by one AA battery and pure ambition. Worth at least 100 points, or far more for a well-upgraded Clicker. The red antenna is not a camera. It is definitely not a camera.',
+      'You have zapped __ZAPS__ of them. They hold no grudges, because they do not remember anything.' ] },
+    { id: 'crit', title: 'The Golden Click', when: () => state.crits > 0, how: 'Land a critical click.', text: [
+      'One click in twenty is worth ten. The sacred chime plays three notes, then a fourth, higher one, as foretold by the Five (see Chronicle VI).',
+      'You have landed __CRITS__ Golden Clicks.' ] },
+    { id: 'returned', title: 'The Returned', when: () => state.resets > 0, how: 'Do the forbidden thing. Twice.', text: [
+      'You pressed the Button. Twice. You came back. The Book remembers you, and has noted it here, slightly judgmentally.',
+      'Times returned: __RESETS__.' ] },
+  ];
+
+  const whispers = [
+    'The Face has been waiting for you.',
+    'The Star behind the Face turns once every 30 seconds. It has never been late.',
+    'The Bot Lounge does not exist.',
+    'The thumb is still bitter about not being chosen.',
+    'Some say a faint green fringe remains. It does not. But some say it.',
+    'The coffee machine has still not been fixed.',
+    'Every flag that drifts away is going somewhere. Nobody knows where.',
+    'One click in twenty is touched by fate.',
+    'The red antenna is definitely not a camera.',
+    'The Order of the Rounded Corner did not plan for numbers this big.',
+    'The Golden Mouse weighs four kilograms. Lift with your legs.',
+    'The Ninety-Five are meeting again on Tuesday.',
+    'The Book remembers everything. Even the resets.',
+  ];
+
+  const loreEl = $('lore'), pagesEl = $('pages'), loreBtn = $('lorebtn');
+  let loreTab = 'chron';
+  const fill = t => t
+    .replace('__SPINS__', fmt((Date.now() - pageOpened) / 30000))
+    .replace('__CLICKS__', fmt(state.clicks)).replace('__ZAPS__', fmt(state.zaps))
+    .replace('__CRITS__', fmt(state.crits)).replace('__RESETS__', fmt(state.resets));
+  const unlocked = () => [
+    ...chronicle.filter(c => state.total >= c.at).map(c => 'c' + c.at),
+    ...codex.filter(c => c.when()).map(c => 'x' + c.id),
+  ];
+  let fresh = new Set();
+
+  function checkLore() {
+    const now = unlocked();
+    const added = now.filter(k => !state.seen.includes(k));
+    if (!added.length) return;
+    // the first visit unlocks the starting pages quietly
+    const quiet = state.seen.length === 0;
+    state.seen.push(...added);
+    if (quiet) return;
+    for (const k of added) {
+      fresh.add(k);
+      const entry = k[0] === 'c' ? chronicle.find(c => 'c' + c.at === k) : codex.find(c => 'x' + c.id === k);
+      showToast(`New lore: ${entry.title}`);
+    }
+    loreBtn.classList.add('new');
+  }
+
+  function renderLore() {
+    const isChron = loreTab === 'chron';
+    $('tab-chron').setAttribute('aria-selected', isChron);
+    $('tab-codex').setAttribute('aria-selected', !isChron);
+    const nC = chronicle.filter(c => state.total >= c.at).length;
+    const nX = codex.filter(c => c.when()).length;
+    $('loremeta').textContent = `${nC} of ${chronicle.length} chapters · ${nX} of ${codex.length} codex entries · ${fmt(state.total)} lifetime points`;
+    const p = t => `<p>${fill(t)}</p>`;
+    let html = '';
+    if (isChron) {
+      for (const c of chronicle) {
+        const k = 'c' + c.at;
+        if (state.total >= c.at) {
+          html += `<article class="entry${fresh.has(k) ? ' fresh' : ''}"><h3>${c.title}</h3>${c.text.map(p).join('')}${c.note ? `<p class="note">${c.note}</p>` : ''}</article>`;
+        } else {
+          const pct = Math.min(100, state.total / c.at * 100);
+          html += `<article class="entry locked"><h3>? ? ? ? ?</h3><p>Earn ${fmt(c.at)} lifetime points to unlock this chapter.</p><div class="bar"><i style="width:${pct}%"></i></div></article>`;
+        }
+      }
+    } else {
+      for (const c of codex) {
+        const k = 'x' + c.id;
+        html += c.when()
+          ? `<article class="entry${fresh.has(k) ? ' fresh' : ''}"><h3>${c.title}</h3>${c.text.map(p).join('')}</article>`
+          : `<article class="entry locked"><h3>? ? ? ? ?</h3><p>${c.how}</p></article>`;
+      }
+    }
+    pagesEl.innerHTML = html;
+  }
+
+  let lastFocus = null;
+  function openLore() {
+    lastFocus = document.activeElement;
+    loreEl.hidden = false;
+    loreBtn.classList.remove('new');
+    renderLore();
+    fresh = new Set();
+    pagesEl.scrollTop = 0;
+    $('loreclose').focus();
+    sfx.buy();
+  }
+  function closeLore() {
+    loreEl.hidden = true;
+    if (lastFocus) lastFocus.focus();
+  }
+  loreBtn.onclick = openLore;
+  $('loreclose').onclick = closeLore;
+  loreEl.addEventListener('pointerdown', e => { if (e.target === loreEl) closeLore(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !loreEl.hidden) closeLore(); });
+  $('tab-chron').onclick = () => { loreTab = 'chron'; renderLore(); };
+  $('tab-codex').onclick = () => { loreTab = 'codex'; renderLore(); };
+
+  // the whisper line under the score
+  const whisperEl = $('whisper');
+  whisperEl.onclick = openLore;
+  whisperEl.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLore(); } });
+  let wi = Math.floor(Math.random() * whispers.length);
+  function whisper() {
+    whisperEl.classList.add('fade');
+    setTimeout(() => {
+      wi = (wi + 1) % whispers.length;
+      whisperEl.textContent = '“' + whispers[wi] + '”';
+      whisperEl.classList.remove('fade');
+    }, calm ? 0 : 400);
+  }
+  whisperEl.textContent = '“' + whispers[wi] + '”';
+  setInterval(whisper, 9000);
 
   // ---- Yahu-Bots ----
   const botLayer = $('bots');
@@ -653,7 +953,8 @@
       const r = el.getBoundingClientRect();
       const cx = r.left + r.width / 2, cy = r.top + r.height / 3;
       const gain = botReward();
-      state.score += gain;
+      earn(gain);
+      state.zaps++;
       sfx.jackpot();
       el.classList.add('zapped');
       el.addEventListener('animationend', () => { el.remove(); bots.delete(bot); });
@@ -679,10 +980,7 @@
         document.body.appendChild(sp);
         sp.addEventListener('animationend', () => sp.remove());
       }
-      toast.textContent = `Yahu-Bot zapped! +${fmt(gain)}`;
-      toast.classList.add('show');
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+      showToast(`Yahu-Bot zapped! +${fmt(gain)}`);
       render();
     };
     el.addEventListener('pointerdown', zap);
@@ -717,7 +1015,7 @@
   scheduleBot(true);
   window.spawnYahuBot = spawnBot; // handy for testing from the console
 
-  setInterval(() => { if (perSec()) { state.score += perSec() / 10; render(); } }, 100);
+  setInterval(() => { if (perSec()) { earn(perSec() / 10); render(); } }, 100);
   setInterval(() => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {} }, 2000);
 
   render();
