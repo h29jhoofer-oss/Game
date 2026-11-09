@@ -385,7 +385,7 @@
     touch-action: manipulation;
   }
   .bot:focus-visible { outline: 3px solid var(--gold); outline-offset: 4px; border-radius: 12px; }
-  .bot .rig { animation: bob .44s ease-in-out infinite; }
+  .bot .rig { position: relative; animation: bob .44s ease-in-out infinite; }
   @keyframes bob { 50% { translate: 0 -5px; } }
   .bot .head {
     position: relative; z-index: 1; display: block;
@@ -412,6 +412,40 @@
     background: var(--gold); color: var(--line); border: 2px solid var(--line);
     font-family: var(--display); font-weight: 400; font-size: .78rem; white-space: nowrap;
   }
+  /* Benji-Drones */
+  .bot.drone { width: 130px; }
+  .bot.drone .rig { position: relative; animation: none; }
+  /* the face is the cockpit: rotor bar above, landing skids below */
+  .bot.drone .head { position: absolute; z-index: 1; left: 50%; top: 22%; width: 38%; margin: 0; translate: -50% 0; }
+  .bot.drone .tag { top: -30px; }
+  .rotor { transform-box: fill-box; transform-origin: center; animation: rotor .09s linear infinite alternate; }
+  .rotor.b { animation-direction: alternate-reverse; }
+  @keyframes rotor { from { transform: scaleX(1); } to { transform: scaleX(.25); } }
+  .led { animation: blink .6s steps(2) infinite; }
+  .led.g { animation-delay: -.3s; }
+
+  /* speech bubbles with real quotes */
+  .speech {
+    position: absolute; left: 50%; bottom: calc(100% + 50px); translate: -50% 0;
+    width: max-content; max-width: 230px;
+    padding: 8px 12px; border-radius: 14px;
+    background: #fff; color: var(--line); border: 3px solid var(--line);
+    box-shadow: 0 4px 0 var(--line);
+    font-family: var(--body); text-align: center; line-height: 1.25;
+    pointer-events: none;
+    animation: say .3s cubic-bezier(.2,1.5,.4,1);
+    transition: opacity .3s;
+  }
+  .speech::after {
+    content: ""; position: absolute; left: 50%; top: 100%; margin-left: -9px;
+    border: 9px solid transparent; border-top-color: var(--line);
+  }
+  .speech .q { display: block; font-weight: 900; font-size: .88rem; }
+  .speech .src { display: block; margin-top: 3px; font-weight: 700; font-size: .68rem; color: var(--ink-soft); }
+  .speech.bye { opacity: 0; }
+  @keyframes say { from { scale: .4; opacity: 0; } }
+  body.overclick .speech { background: #fff; color: #0a1a4f; }
+
   .bot.zapped { pointer-events: none; animation: zap .45s ease-in forwards; }
   @keyframes zap { 30% { scale: 1.25; } 100% { scale: 0; rotate: 200deg; opacity: 0; } }
   .bigpop { position: fixed; z-index: 6; font-size: 2.8rem; color: var(--gold); animation: rise 1.3s ease-out forwards; }
@@ -560,6 +594,10 @@
   }
 
   @media (max-width: 700px) {
+    .bot.drone { width: 104px; }
+
+    .speech { max-width: 180px; }
+    .speech .q { font-size: .8rem; }
     .bot { width: 66px; }
     .bot .head { width: 48px; }
     main { flex-direction: column; align-items: center; gap: 12px; }
@@ -1260,6 +1298,9 @@
     { id: 'bot', title: 'Yahu-Bot, Model YB-1', when: () => state.zaps > 0, how: 'Click a Yahu-Bot.', text: [
       'Powered by one AA battery and pure ambition. Worth at least 100 points, or far more for a well-upgraded Clicker. The red antenna is not a camera. It is definitely not a camera.',
       'You have zapped __ZAPS__ of them. They hold no grudges, because they do not remember anything.' ] },
+    { id: 'drone', title: 'Benji-Drone, Model BD-2', when: () => (state.droneZaps || 0) > 0, how: 'Click something that flies.', text: [
+      'The Foundry ran out of legs, so it made the next model fly. Benji-Drones cross the top of the screen faster than Yahu-Bots, wobble constantly, and are worth half as much again.',
+      'Every bot and drone is fitted with one of five different faces, and each one has a few real quotes loaded in for conversation. You have zapped __DRONES__ drones.' ] },
     { id: 'crit', title: 'The Golden Click', when: () => state.crits > 0, how: 'Land a critical click.', text: [
       'One click in twenty is worth ten. The sacred chime plays three notes, then a fourth, higher one, as foretold by the Five (see Chronicle VI).',
       'You have landed __CRITS__ Golden Clicks.' ] },
@@ -1289,6 +1330,7 @@
     'Every flag that drifts away is going somewhere. Nobody knows where.',
     'One click in twenty is touched by fate.',
     'The red antenna is definitely not a camera.',
+    'Benji-Drones fly faster than they should. Watch the top of the screen.',
     'The Order of the Rounded Corner did not plan for numbers this big.',
     'The Golden Mouse weighs four kilograms. Lift with your legs.',
     'The Ninety-Five are meeting again on Tuesday.',
@@ -1306,6 +1348,7 @@
     .replace('__LOUNGE__', fmt(state.mini.lounge || 0)).replace('__FLAGS__', fmt(state.mini.flags || 0))
     .replace('__CRIT__', Math.round(critChance() * 100) + '%').replace('__PERCLICK__', fmt(perClick()))
     .replace('__OCW__', fmt(state.ocWins || 0)).replace('__OC__', fmt(state.overclicks || 0))
+    .replace('__DRONES__', fmt(state.droneZaps || 0))
     .replace('__CRITS__', fmt(state.crits)).replace('__RESETS__', fmt(state.resets));
   const unlocked = () => [
     ...chronicle.filter(c => state.total >= c.at).map(c => 'c' + c.at),
@@ -1748,60 +1791,103 @@
   introEl.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startGame(); } });
   $('playbtn').focus();
 
-  // ---- Yahu-Bots ----
+  // ---- Yahu-Bots (walk) and Benji-Drones (fly) ----
   const botLayer = $('bots');
+  // five different faces, cut from five different photos
+  const BOT_FACES = ['__BOT1__', '__BOT2__', '__BOT3__', '__BOT4__', '__BOT5__'].map(b => 'data:image/webp;base64,' + b);
+  // real things he has said in public, with where he said them
+  const QUOTES = [
+    { q: 'A red line should be drawn right here.', src: 'UN General Assembly, 2012' },
+    { q: "This is a bad deal. It's a very bad deal.", src: 'Address to the US Congress, 2015' },
+    { q: 'Peace through strength.', src: 'A favourite line of his' },
+  ];
+  let faceBag = [], quoteBag = [];
+  const draw = (bag, src) => { if (!bag.length) bag.push(...src.map((_, i) => i).sort(() => Math.random() - .5)); return src[bag.pop()]; };
+
   const botBody = `<svg class="body" viewBox="0 0 84 74" aria-hidden="true">
-      <g class="arm a"><rect x="4" y="6" width="9" height="28" rx="4.5" fill="#00267d"/><circle cx="8.5" cy="36" r="5.5" fill="#dfe8ff" stroke="#00267d" stroke-width="2"/></g>
-      <g class="arm b"><rect x="71" y="6" width="9" height="28" rx="4.5" fill="#00267d"/><circle cx="75.5" cy="36" r="5.5" fill="#dfe8ff" stroke="#00267d" stroke-width="2"/></g>
-      <g class="leg a"><rect x="24" y="42" width="11" height="24" rx="4" fill="#00267d"/><rect x="20" y="62" width="19" height="9" rx="4" fill="#0038b8"/></g>
-      <g class="leg b"><rect x="49" y="42" width="11" height="24" rx="4" fill="#00267d"/><rect x="45" y="62" width="19" height="9" rx="4" fill="#0038b8"/></g>
-      <rect x="14" y="0" width="56" height="48" rx="10" fill="#fff" stroke="#0038b8" stroke-width="4"/>
-      <rect x="14" y="7" width="56" height="6" fill="#0038b8"/>
-      <rect x="14" y="35" width="56" height="6" fill="#0038b8"/>
-      <g fill="none" stroke="#0038b8" stroke-width="2.2" stroke-linejoin="round" transform="translate(32 14) scale(.34)">
+      <g class="arm a"><rect x="4" y="6" width="9" height="28" rx="4.5" fill="#0a1a4f"/><circle cx="8.5" cy="36" r="5.5" fill="#ffc531" stroke="#0a1a4f" stroke-width="2"/></g>
+      <g class="arm b"><rect x="71" y="6" width="9" height="28" rx="4.5" fill="#0a1a4f"/><circle cx="75.5" cy="36" r="5.5" fill="#ffc531" stroke="#0a1a4f" stroke-width="2"/></g>
+      <g class="leg a"><rect x="24" y="42" width="11" height="24" rx="4" fill="#0a1a4f"/><rect x="20" y="62" width="19" height="9" rx="4" fill="#2457e6" stroke="#0a1a4f" stroke-width="2"/></g>
+      <g class="leg b"><rect x="49" y="42" width="11" height="24" rx="4" fill="#0a1a4f"/><rect x="45" y="62" width="19" height="9" rx="4" fill="#2457e6" stroke="#0a1a4f" stroke-width="2"/></g>
+      <rect x="14" y="0" width="56" height="48" rx="10" fill="#fff" stroke="#0a1a4f" stroke-width="4"/>
+      <rect x="16" y="7" width="52" height="6" fill="#2457e6"/>
+      <rect x="16" y="35" width="52" height="6" fill="#2457e6"/>
+      <g fill="none" stroke="#2457e6" stroke-width="2.2" stroke-linejoin="round" transform="translate(32 14) scale(.34)">
         <polygon points="30,4 53,44 7,44"/><polygon points="30,56 53,16 7,16"/>
       </g>
     </svg>`;
-  const bots = new Set();
+  const droneBody = `<svg class="body" viewBox="0 0 140 112" aria-hidden="true">
+      <path d="M70 18v14" stroke="#0a1a4f" stroke-width="7"/>
+      <path d="M22 18h96" stroke="#0a1a4f" stroke-width="8" stroke-linecap="round"/>
+      <path d="M22 18h96" stroke="#d3dffb" stroke-width="3.5" stroke-linecap="round"/>
+      <rect x="17" y="11" width="10" height="13" rx="3" fill="#ffc531" stroke="#0a1a4f" stroke-width="2.5"/><rect x="113" y="11" width="10" height="13" rx="3" fill="#ffc531" stroke="#0a1a4f" stroke-width="2.5"/>
+      <ellipse class="rotor" cx="22" cy="9" rx="22" ry="4.5" fill="rgba(235,242,255,.9)" stroke="#0a1a4f" stroke-width="2.5"/>
+      <ellipse class="rotor b" cx="118" cy="9" rx="22" ry="4.5" fill="rgba(235,242,255,.9)" stroke="#0a1a4f" stroke-width="2.5"/>
+      <circle class="led" cx="30" cy="18" r="3.5" fill="#ff3b3b" stroke="#0a1a4f" stroke-width="1.5"/><circle class="led g" cx="110" cy="18" r="3.5" fill="#3bff7a" stroke="#0a1a4f" stroke-width="1.5"/>
+      <path d="M50 92l-8 12M90 92l8 12M34 105h20M86 105h20" stroke="#0a1a4f" stroke-width="7" stroke-linecap="round"/>
+      <path d="M50 92l-8 12M90 92l8 12M34 105h20M86 105h20" stroke="#d3dffb" stroke-width="3" stroke-linecap="round"/>
+    </svg>`;
 
-  function botReward() {
-    const base = Math.max(100, perSec() * 25 + perClick() * 30) * (1 + .25 * owned('foundry'));
+  const bots = new Set();
+  const countKind = k => [...bots].filter(b => b.kind === k).length;
+
+  function botReward(kind) {
+    const base = Math.max(100, perSec() * 25 + perClick() * 30) * (1 + .25 * owned('foundry')) * (kind === 'drone' ? 1.5 : 1);
     return Math.round(base * (1 + Math.random() * .5));
   }
 
-  function spawnBot() {
-    if (document.hidden || bots.size >= 2 || miniOpen() || oc.active || introOn) return;
-    const W = innerWidth, H = innerHeight;
+  function spawnBot(kind = 'bot') {
+    if (document.hidden || miniOpen() || oc.active || introOn) return;
+    if (countKind(kind) >= (kind === 'drone' ? 1 : 2)) return;
+    const W = innerWidth, H = innerHeight, isDrone = kind === 'drone';
     const goLeft = Math.random() < .5;
+    const name = isDrone ? 'Benji-Drone' : 'Yahu-Bot';
     const el = document.createElement('div');
-    el.className = 'bot' + (goLeft ? ' left' : '');
+    el.className = (isDrone ? 'bot drone' : 'bot') + (goLeft ? ' left' : '');
     el.tabIndex = 0;
     el.setAttribute('role', 'button');
-    el.setAttribute('aria-label', 'Yahu-Bot: click for bonus points');
-    el.innerHTML = `<div class="rig"><span class="tag">Yahu-Bot</span><div style="position:relative"><span class="antenna"></span><img class="head" alt="" src="${face.src}"></div>${botBody}</div>`;
+    el.setAttribute('aria-label', `${name}: click for bonus points`);
+    const head = `<img class="head" alt="" src="${draw(faceBag, BOT_FACES)}">`;
+    el.innerHTML = isDrone
+      ? `<div class="rig"><span class="tag">${name}</span>${droneBody}${head}</div>`
+      : `<div class="rig"><span class="tag">${name}</span><div style="position:relative"><span class="antenna"></span>${head}</div>${botBody}</div>`;
     botLayer.appendChild(el);
 
     const w = el.offsetWidth;
     const bot = {
-      el,
+      el, kind,
       x: goLeft ? W + 10 : -w - 10,
-      y: H * (.22 + Math.random() * .58),
-      vx: (goLeft ? -1 : 1) * W / (8 + Math.random() * 4), // crosses in 8-12s
+      y: isDrone ? H * (.12 + Math.random() * .3) : H * (.22 + Math.random() * .58),
+      vx: (goLeft ? -1 : 1) * W / (isDrone ? 6 + Math.random() * 3 : 8 + Math.random() * 4),
       t: Math.random() * 6,
       done: false,
     };
+    bot.baseY = bot.y;
     bots.add(bot);
     place(bot);
+
+    // after a moment, it says something he has actually said
+    const sayT = setTimeout(() => {
+      if (bot.done || !el.isConnected) return;
+      const { q, src } = draw(quoteBag, QUOTES);
+      const b = document.createElement('div');
+      b.className = 'speech';
+      b.innerHTML = `<span class="q">“${q}”</span><span class="src">${src}</span>`;
+      el.querySelector('.rig').appendChild(b);
+      tone(880, 0, .05, 'square', .04); tone(1175, .06, .06, 'square', .04);
+      setTimeout(() => b.classList.add('bye'), 3600);
+    }, 900 + Math.random() * 800);
 
     const zap = e => {
       if (bot.done) return;
       e.preventDefault();
       bot.done = true;
+      clearTimeout(sayT);
       const r = el.getBoundingClientRect();
       const cx = r.left + r.width / 2, cy = r.top + r.height / 3;
-      const gain = botReward();
+      const gain = botReward(kind);
       earn(gain);
-      state.zaps++;
+      if (isDrone) state.droneZaps = (state.droneZaps || 0) + 1; else state.zaps++;
       sfx.jackpot();
       el.classList.add('zapped');
       el.addEventListener('animationend', () => { el.remove(); bots.delete(bot); });
@@ -1827,7 +1913,7 @@
         document.body.appendChild(sp);
         sp.addEventListener('animationend', () => sp.remove());
       }
-      showToast(`Yahu-Bot zapped! +${fmt(gain)}`);
+      showToast(`${name} zapped! +${fmt(gain)}`);
       render();
     };
     el.addEventListener('pointerdown', zap);
@@ -1835,8 +1921,13 @@
   }
 
   function place(b) {
-    const hop = Math.abs(Math.sin(b.t * 7)) * 4;
-    b.el.style.transform = `translate(${b.x}px, ${b.y - hop}px)`;
+    if (b.kind === 'drone') {
+      const tilt = (b.vx > 0 ? 1 : -1) * 7;
+      b.el.style.transform = `translate(${b.x}px, ${b.y}px) rotate(${tilt + Math.sin(b.t * 3) * 3}deg)`;
+    } else {
+      const hop = Math.abs(Math.sin(b.t * 7)) * 4;
+      b.el.style.transform = `translate(${b.x}px, ${b.y - hop}px)`;
+    }
   }
 
   let last = performance.now();
@@ -1845,10 +1936,21 @@
     for (const b of bots) {
       if (b.done) continue;
       b.x += b.vx * dt; b.t += dt;
-      // gentle wander up and down, kept on screen
-      b.y = Math.min(innerHeight - 140, Math.max(60, b.y + Math.sin(b.t * 1.3) * 12 * dt));
+      if (b.kind === 'drone') {
+        b.y = Math.max(50, b.baseY + Math.sin(b.t * 1.8) * 26);
+      } else {
+        // gentle wander up and down, kept on screen
+        b.y = Math.min(innerHeight - 140, Math.max(60, b.y + Math.sin(b.t * 1.3) * 12 * dt));
+      }
       place(b);
-      if ((b.vx < 0 && b.x < -140) || (b.vx > 0 && b.x > innerWidth + 40)) {
+      const sp = b.el.querySelector('.speech');
+      if (sp) {
+        const r = b.el.getBoundingClientRect(), bw = sp.offsetWidth;
+        const want = r.left + r.width / 2 - bw / 2;
+        const ok = Math.min(Math.max(want, 8), innerWidth - bw - 8);
+        sp.style.marginLeft = (ok - want) + 'px';
+      }
+      if ((b.vx < 0 && b.x < -180) || (b.vx > 0 && b.x > innerWidth + 40)) {
         b.el.remove(); bots.delete(b);
       }
     }
@@ -1856,11 +1958,17 @@
   }
   requestAnimationFrame(walk);
 
+  const foundryMul = () => Math.max(.25, Math.pow(.85, owned('foundry')));
   function scheduleBot(first) {
-    setTimeout(() => { spawnBot(); scheduleBot(); }, first ? 6000 : (15000 + Math.random() * 20000) * Math.max(.25, Math.pow(.85, owned('foundry'))));
+    setTimeout(() => { spawnBot('bot'); scheduleBot(); }, first ? 6000 : (15000 + Math.random() * 20000) * foundryMul());
+  }
+  function scheduleDrone(first) {
+    setTimeout(() => { spawnBot('drone'); scheduleDrone(); }, first ? 16000 : (25000 + Math.random() * 25000) * foundryMul());
   }
   scheduleBot(true);
-  window.spawnYahuBot = spawnBot; // handy for testing from the console
+  scheduleDrone(true);
+  window.spawnYahuBot = () => spawnBot('bot');     // handy for testing from the console
+  window.spawnBenjiDrone = () => spawnBot('drone');
 
   setInterval(() => { if (perSec()) { earn(perSec() / 10); render(); } }, 100);
   setInterval(() => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {} }, 2000);
