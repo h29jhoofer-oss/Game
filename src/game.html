@@ -1,0 +1,434 @@
+<title>Bibi Clicker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;900&family=Heebo:wght@400;600&display=swap">
+<style>
+  /* Layout: flag-striped arena on the left, upgrade ledger on the right; stacks on phones. */
+  :root {
+    --blue: #0038b8;
+    --blue-deep: #00267d;
+    --blue-soft: #dfe8ff;
+    --white: #ffffff;
+    --ground: #f3f6fd;
+    --ink: #0b1d52;
+    --ink-soft: #52618f;
+    --display: "Rubik", "Arial Black", system-ui, sans-serif;
+    --body: "Heebo", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 15px;
+    user-select: none;
+    -webkit-user-select: none;
+    overflow-x: hidden;
+  }
+
+  /* drifting flags in the background */
+  #sky { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .drift {
+    position: absolute; bottom: -80px; width: 54px; opacity: .22;
+    animation: drift linear forwards;
+  }
+  @keyframes drift {
+    to { transform: translateY(calc(-100vh - 160px)) rotate(var(--spin, 20deg)); }
+  }
+
+  .band { position: relative; z-index: 1; height: 14px; background: var(--blue); }
+  .wrap {
+    position: relative; z-index: 1;
+    max-width: 1000px; margin: 0 auto;
+    padding-block: 20px 36px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  header { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  header h1 {
+    margin: 0;
+    font-family: var(--display); font-weight: 900;
+    font-size: clamp(1.8rem, 6vw, 3rem);
+    letter-spacing: -.5px; text-wrap: balance;
+    color: var(--blue-deep);
+  }
+  .flag { display: block; width: clamp(46px, 10vw, 78px); height: auto; filter: drop-shadow(0 3px 5px rgba(0,38,125,.25)); }
+  header .flag { transform-origin: left center; animation: wave 2.6s ease-in-out infinite; }
+  header .flag.r { transform-origin: right center; animation-delay: -1.3s; }
+  @keyframes wave {
+    0%,100% { transform: perspective(200px) rotateY(0) skewY(0); }
+    50% { transform: perspective(200px) rotateY(-18deg) skewY(-3deg); }
+  }
+
+  .scoreline { text-align: center; margin: 10px 0 18px; }
+  #score {
+    display: inline-block;
+    font-family: var(--display); font-weight: 900;
+    font-size: clamp(2.4rem, 10vw, 3.8rem);
+    color: var(--blue); font-variant-numeric: tabular-nums;
+  }
+  #score.bump { animation: bump .18s ease-out; }
+  @keyframes bump { 50% { transform: scale(1.12); } }
+  #rate { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+  main { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; align-items: flex-start; }
+
+  /* arena: white field with the flag's two stripes */
+  #stage {
+    position: relative;
+    width: min(420px, 100%); max-width: 100%;
+    aspect-ratio: 3 / 4;
+    border: 5px solid var(--blue); border-radius: 20px;
+    background:
+      linear-gradient(transparent 7%, var(--blue) 7%, var(--blue) 13%, transparent 13%,
+                      transparent 87%, var(--blue) 87%, var(--blue) 93%, transparent 93%),
+      var(--white);
+    box-shadow: 0 12px 34px rgba(0,56,184,.22);
+    overflow: hidden;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  #stage:focus-visible { outline: 4px solid var(--blue-deep); outline-offset: 4px; }
+
+  /* slow rotating star of david behind the face */
+  #halo {
+    position: absolute; left: 50%; top: 50%;
+    width: 86%; translate: -50% -50%;
+    opacity: .12; pointer-events: none;
+    animation: spin 30s linear infinite;
+  }
+  @keyframes spin { to { rotate: 360deg; } }
+
+  #face-wrap {
+    position: absolute; left: 50%; top: 50%;
+    width: 58%; translate: -50% -50%;
+    animation: float 3.2s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes float { 50% { transform: translateY(-10px) rotate(1.5deg); } }
+  #face {
+    display: block; width: 100%; height: auto;
+    border-radius: 50%;
+    box-shadow: 0 0 0 6px var(--white), 0 0 0 11px var(--blue), 0 14px 26px rgba(0,38,125,.35);
+    transition: transform .08s;
+  }
+  #face.hit { animation: squash .22s ease-out; }
+  @keyframes squash {
+    0% { transform: scale(1, 1); }
+    30% { transform: scale(1.12, .86); }
+    60% { transform: scale(.94, 1.08); }
+    100% { transform: scale(1, 1); }
+  }
+
+  .ring {
+    position: absolute; width: 20px; height: 20px; margin: -10px 0 0 -10px;
+    border: 3px solid var(--blue); border-radius: 50%;
+    pointer-events: none; animation: ring .5s ease-out forwards;
+  }
+  @keyframes ring { to { transform: scale(7); opacity: 0; } }
+
+  .pop {
+    position: absolute; pointer-events: none;
+    font-family: var(--display); font-weight: 900; font-size: 1.6rem;
+    color: var(--blue);
+    text-shadow: 0 0 3px var(--white), 0 0 6px var(--white), 0 0 10px var(--white);
+    animation: rise .9s ease-out forwards;
+  }
+  .pop.crit { font-size: 2.3rem; color: var(--blue-deep); }
+  @keyframes rise {
+    0% { opacity: 1; transform: translate(-50%, 0) scale(.6); }
+    20% { transform: translate(-50%, -14px) scale(1.15); }
+    100% { opacity: 0; transform: translate(-50%, -90px) scale(1); }
+  }
+
+  .spark {
+    position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+    pointer-events: none;
+    animation: burst .7s cubic-bezier(.2,.7,.4,1) forwards;
+  }
+  @keyframes burst {
+    to { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; }
+  }
+
+  #stage .corner { position: absolute; top: 17%; width: 52px; pointer-events: none; animation: wave 2.6s ease-in-out infinite; }
+  #stage .corner.l { left: 10px; rotate: -12deg; }
+  #stage .corner.r { right: 10px; rotate: 12deg; animation-delay: -1.3s; }
+
+  /* ledger */
+  #shop {
+    width: min(360px, 100%);
+    background: var(--white);
+    border: 3px solid var(--blue); border-radius: 20px;
+    padding: 16px;
+    box-shadow: 0 12px 34px rgba(0,56,184,.14);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  #shop h2 {
+    margin: 0 0 2px; display: flex; align-items: center; gap: 10px;
+    font-family: var(--display); font-weight: 700; font-size: 1.25rem; color: var(--blue-deep);
+  }
+  #shop h2 .flag { width: 34px; }
+  .item {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    width: 100%; padding: 12px 14px;
+    border: 2px solid var(--blue-soft); border-radius: 12px;
+    background: var(--ground); color: var(--ink);
+    font: inherit; text-align: left; cursor: pointer;
+    position: relative; overflow: hidden;
+    transition: transform .12s, border-color .12s, background .12s;
+  }
+  .item .name { font-weight: 600; }
+  .item small { display: block; color: var(--ink-soft); }
+  .item .cost { font-family: var(--display); font-weight: 700; color: var(--blue); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .item:hover:not(:disabled) { border-color: var(--blue); background: var(--blue-soft); transform: translateY(-2px); }
+  .item:focus-visible { outline: 3px solid var(--blue-deep); outline-offset: 2px; }
+  .item:disabled { opacity: .5; cursor: not-allowed; }
+  /* shimmer across upgrades you can afford */
+  .item:not(:disabled)::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.75) 50%, transparent 65%);
+    transform: translateX(-100%);
+    animation: shimmer 2.8s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes shimmer { 60%,100% { transform: translateX(100%); } }
+  .item.bought { animation: bought .4s ease-out; }
+  @keyframes bought { 40% { background: var(--blue); color: var(--white); transform: scale(1.03); } }
+  .count {
+    display: inline-block; min-width: 1.6em; padding: 0 6px; margin-left: 6px;
+    border-radius: 999px; background: var(--blue); color: var(--white);
+    font-size: .8rem; text-align: center;
+  }
+
+  #reset {
+    align-self: flex-start;
+    background: none; border: none; padding: 4px 0;
+    color: var(--ink-soft); text-decoration: underline; cursor: pointer; font: inherit;
+  }
+  #reset.armed { color: #b00020; font-weight: 600; }
+
+  /* milestone banner */
+  #toast {
+    position: fixed; left: 50%; top: calc(24px + env(safe-area-inset-top, 0px)); z-index: 5;
+    translate: -50% -160%;
+    padding: 12px 22px; border-radius: 999px;
+    background: var(--blue); color: var(--white);
+    font-family: var(--display); font-weight: 700; font-size: 1.1rem;
+    box-shadow: 0 10px 24px rgba(0,38,125,.35);
+    transition: translate .35s cubic-bezier(.2,1.4,.4,1);
+    pointer-events: none; white-space: nowrap;
+  }
+  #toast.show { translate: -50% 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    #sky { display: none; }
+  }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="il" viewBox="0 0 220 160">
+    <rect width="220" height="160" fill="#fff"/>
+    <rect y="15" width="220" height="25" fill="#0038b8"/>
+    <rect y="120" width="220" height="25" fill="#0038b8"/>
+    <g fill="none" stroke="#0038b8" stroke-width="5.5">
+      <polygon points="110,52 137,98 83,98"/>
+      <polygon points="110,108 137,62 83,62"/>
+    </g>
+  </symbol>
+  <symbol id="star" viewBox="0 0 60 60">
+    <g fill="none" stroke="#0038b8" stroke-width="5" stroke-linejoin="round">
+      <polygon points="30,4 53,44 7,44"/>
+      <polygon points="30,56 53,16 7,16"/>
+    </g>
+  </symbol>
+</svg>
+
+<div id="sky" aria-hidden="true"></div>
+<div class="band"></div>
+
+<div class="wrap">
+  <header>
+    <svg class="flag" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>
+    <h1>Bibi Clicker</h1>
+    <svg class="flag r" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>
+  </header>
+
+  <div class="scoreline">
+    <div id="score">0</div>
+    <div id="rate">0 per second · 1 per click</div>
+  </div>
+
+  <main>
+    <div id="stage" role="button" tabindex="0" aria-label="Click Bibi to earn points">
+      <svg id="halo" viewBox="0 0 60 60" aria-hidden="true"><use href="#star"/></svg>
+      <svg class="corner l" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>
+      <svg class="corner r" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>
+      <div id="face-wrap"><img id="face" alt="Benjamin Netanyahu" src="data:image/webp;base64,__FACE__"></div>
+    </div>
+
+    <section id="shop" aria-label="Upgrades">
+      <h2><svg class="flag" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>Upgrades</h2>
+      <div id="items" style="display:flex;flex-direction:column;gap:10px"></div>
+      <button id="reset" type="button">Reset progress</button>
+    </section>
+  </main>
+</div>
+
+<div class="band"></div>
+<div id="toast" role="status"></div>
+
+<script>
+(() => {
+  const upgrades = [
+    { id: 'finger',  name: 'Stronger Finger',  desc: '+1 per click',     cost: 15,     click: 1 },
+    { id: 'intern',  name: 'Campaign Intern',  desc: '+1 per second',    cost: 50,     auto: 1 },
+    { id: 'crew',    name: 'Camera Crew',      desc: '+5 per second',    cost: 300,    auto: 5 },
+    { id: 'mouse',   name: 'Golden Mouse',     desc: '+10 per click',    cost: 1000,   click: 10 },
+    { id: 'rally',   name: 'Flag Rally',       desc: '+40 per second',   cost: 5000,   auto: 40 },
+    { id: 'network', name: 'News Network',     desc: '+250 per second',  cost: 40000,  auto: 250 },
+    { id: 'knesset', name: 'Knesset Majority', desc: '+1,500 per second', cost: 300000, auto: 1500 },
+  ];
+
+  const SAVE_KEY = 'bibi-clicker-save';
+  let state = { score: 0, owned: {}, best: 0 };
+  const hot = window.claude && window.claude.hot;
+  try { Object.assign(state, JSON.parse(localStorage.getItem(SAVE_KEY)) || {}); } catch (e) {}
+  if (hot && hot.data && hot.data.state) state = hot.data.state;
+  if (hot && hot.snapshot) hot.snapshot(() => ({ state }));
+
+  const owned = id => state.owned[id] || 0;
+  const priceOf = u => Math.floor(u.cost * Math.pow(1.15, owned(u.id)));
+  const perClick = () => 1 + upgrades.reduce((s, u) => s + (u.click || 0) * owned(u.id), 0);
+  const perSec = () => upgrades.reduce((s, u) => s + (u.auto || 0) * owned(u.id), 0);
+  const fmt = n => Math.floor(n).toLocaleString();
+
+  const $ = id => document.getElementById(id);
+  const scoreEl = $('score'), rateEl = $('rate'), stage = $('stage'), face = $('face'), toast = $('toast');
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const buttons = {};
+  for (const u of upgrades) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'item';
+    b.innerHTML = `<span><span class="name">${u.name}</span><span class="count">0</span><small>${u.desc}</small></span><span class="cost"></span>`;
+    b.onclick = () => {
+      const p = priceOf(u);
+      if (state.score < p) return;
+      state.score -= p;
+      state.owned[u.id] = owned(u.id) + 1;
+      b.classList.remove('bought'); void b.offsetWidth; b.classList.add('bought');
+      render();
+    };
+    $('items').appendChild(b);
+    buttons[u.id] = b;
+  }
+
+  function render() {
+    scoreEl.textContent = fmt(state.score);
+    rateEl.textContent = `${fmt(perSec())} per second · ${fmt(perClick())} per click`;
+    for (const u of upgrades) {
+      const b = buttons[u.id], p = priceOf(u);
+      b.disabled = state.score < p;
+      b.querySelector('.count').textContent = owned(u.id);
+      b.querySelector('.cost').textContent = fmt(p);
+    }
+    checkMilestone();
+  }
+
+  // milestones: 100, 1k, 10k, ...
+  let toastTimer;
+  function checkMilestone() {
+    const next = Math.max(100, (state.best || 0) * 10);
+    if (state.score >= next) {
+      state.best = Math.pow(10, Math.floor(Math.log10(state.score)));
+      toast.textContent = `${fmt(state.best)} points!`;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+      if (!calm) for (let i = 0; i < 6; i++) setTimeout(launchFlag, i * 120);
+    }
+  }
+
+  function spawn(cls, x, y, html) {
+    const el = document.createElement('div');
+    el.className = cls; el.style.left = x + 'px'; el.style.top = y + 'px';
+    if (html) el.innerHTML = html;
+    stage.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+    return el;
+  }
+
+  function hit(x, y) {
+    const crit = Math.random() < 0.05;
+    const gain = perClick() * (crit ? 10 : 1);
+    state.score += gain;
+
+    face.classList.remove('hit'); void face.offsetWidth; face.classList.add('hit');
+    scoreEl.classList.remove('bump'); void scoreEl.offsetWidth; scoreEl.classList.add('bump');
+
+    if (!calm) {
+      spawn('ring', x, y);
+      const n = crit ? 12 : 5;
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, d = 50 + Math.random() * (crit ? 110 : 60);
+        const s = spawn('spark', x, y, '<svg viewBox="0 0 60 60" width="18" height="18"><use href="#star"/></svg>');
+        s.style.setProperty('--dx', Math.cos(a) * d + 'px');
+        s.style.setProperty('--dy', Math.sin(a) * d + 'px');
+        s.style.setProperty('--rot', (Math.random() * 360 - 180) + 'deg');
+      }
+    }
+    const pop = spawn('pop' + (crit ? ' crit' : ''), x, y - 20);
+    pop.textContent = (crit ? 'CRIT +' : '+') + fmt(gain);
+    render();
+  }
+
+  stage.addEventListener('pointerdown', e => {
+    const r = stage.getBoundingClientRect();
+    hit(e.clientX - r.left, e.clientY - r.top);
+  });
+  stage.addEventListener('keydown', e => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      hit(stage.clientWidth / 2, stage.clientHeight / 2);
+    }
+  });
+
+  // reset needs a second click to confirm
+  const reset = $('reset'); let armTimer;
+  reset.onclick = () => {
+    if (!reset.classList.contains('armed')) {
+      reset.classList.add('armed'); reset.textContent = 'Click again to reset';
+      armTimer = setTimeout(() => { reset.classList.remove('armed'); reset.textContent = 'Reset progress'; }, 3000);
+      return;
+    }
+    clearTimeout(armTimer);
+    reset.classList.remove('armed'); reset.textContent = 'Reset progress';
+    state = { score: 0, owned: {}, best: 0 };
+    render();
+  };
+
+  // background flags drifting upward
+  const sky = $('sky');
+  function launchFlag() {
+    const f = document.createElement('div');
+    f.className = 'drift';
+    f.innerHTML = '<svg class="flag" style="width:100%" viewBox="0 0 220 160"><use href="#il"/></svg>';
+    f.style.left = Math.random() * 100 + 'vw';
+    f.style.animationDuration = 9 + Math.random() * 8 + 's';
+    f.style.setProperty('--spin', (Math.random() * 60 - 30) + 'deg');
+    sky.appendChild(f);
+    f.addEventListener('animationend', () => f.remove());
+  }
+  if (!calm) { for (let i = 0; i < 3; i++) setTimeout(launchFlag, i * 900); setInterval(launchFlag, 2600); }
+
+  setInterval(() => { if (perSec()) { state.score += perSec() / 10; render(); } }, 100);
+  setInterval(() => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {} }, 2000);
+
+  render();
+})();
+</script>

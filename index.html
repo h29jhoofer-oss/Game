@@ -2,172 +2,240 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bibi Clicker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;900&family=Heebo:wght@400;600&display=swap">
 <style>
+  /* Layout: flag-striped arena on the left, upgrade ledger on the right; stacks on phones. */
   :root {
-    --chroma: #00ff3c;
     --blue: #0038b8;
-    --blue-dark: #002a8a;
-    --bg: #f4f7ff;
-    --panel: #ffffff;
-    --text: #0b1f5c;
-    --muted: #5a6a96;
-    --accent: #0038b8;
+    --blue-deep: #00267d;
+    --blue-soft: #dfe8ff;
+    --white: #ffffff;
+    --ground: #f3f6fd;
+    --ink: #0b1d52;
+    --ink-soft: #52618f;
+    --display: "Rubik", "Arial Black", system-ui, sans-serif;
+    --body: "Heebo", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
   body {
     margin: 0;
-    min-height: 100vh;
-    background: var(--bg);
-    border-top: 18px solid var(--blue);
-    border-bottom: 18px solid var(--blue);
-    color: var(--text);
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 15px;
     user-select: none;
-  }
-  header { display: flex; align-items: center; gap: 16px; margin-top: 16px; padding: 0 16px; }
-  .flag { width: clamp(48px, 12vw, 90px); height: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,.25)); }
-  header .flag:first-child { animation: wave 2.4s ease-in-out infinite; }
-  header .flag:last-child { animation: wave 2.4s ease-in-out infinite reverse; }
-  @keyframes wave { 50% { transform: rotate(-4deg) skewY(3deg); } }
-  h1 { margin: 0; font-size: clamp(1.6rem, 5vw, 2.4rem); letter-spacing: 1px; }
-  #score { font-size: clamp(2rem, 8vw, 3.2rem); font-weight: 800; color: var(--accent); }
-  #rate { color: var(--muted); margin-bottom: 12px; }
-
-  main {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 24px;
-    justify-content: center;
-    padding: 0 16px 32px;
-    width: 100%;
-    max-width: 1000px;
+    -webkit-user-select: none;
+    overflow-x: hidden;
   }
 
-  /* The green screen */
+  /* drifting flags in the background */
+  #sky { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .drift {
+    position: absolute; bottom: -80px; width: 54px; opacity: .22;
+    animation: drift linear forwards;
+  }
+  @keyframes drift {
+    to { transform: translateY(calc(-100vh - 160px)) rotate(var(--spin, 20deg)); }
+  }
+
+  .band { position: relative; z-index: 1; height: 14px; background: var(--blue); }
+  .wrap {
+    position: relative; z-index: 1;
+    max-width: 1000px; margin: 0 auto;
+    padding-block: 20px 36px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  header { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  header h1 {
+    margin: 0;
+    font-family: var(--display); font-weight: 900;
+    font-size: clamp(1.8rem, 6vw, 3rem);
+    letter-spacing: -.5px; text-wrap: balance;
+    color: var(--blue-deep);
+  }
+  .flag { display: block; width: clamp(46px, 10vw, 78px); height: auto; filter: drop-shadow(0 3px 5px rgba(0,38,125,.25)); }
+  header .flag { transform-origin: left center; animation: wave 2.6s ease-in-out infinite; }
+  header .flag.r { transform-origin: right center; animation-delay: -1.3s; }
+  @keyframes wave {
+    0%,100% { transform: perspective(200px) rotateY(0) skewY(0); }
+    50% { transform: perspective(200px) rotateY(-18deg) skewY(-3deg); }
+  }
+
+  .scoreline { text-align: center; margin: 10px 0 18px; }
+  #score {
+    display: inline-block;
+    font-family: var(--display); font-weight: 900;
+    font-size: clamp(2.4rem, 10vw, 3.8rem);
+    color: var(--blue); font-variant-numeric: tabular-nums;
+  }
+  #score.bump { animation: bump .18s ease-out; }
+  @keyframes bump { 50% { transform: scale(1.12); } }
+  #rate { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+  main { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; align-items: flex-start; }
+
+  /* arena: white field with the flag's two stripes */
   #stage {
     position: relative;
-    width: min(420px, 100%);
+    width: min(420px, 100%); max-width: 100%;
     aspect-ratio: 3 / 4;
-    background: var(--panel);
-    border: 6px solid var(--blue);
-    border-radius: 16px;
+    border: 5px solid var(--blue); border-radius: 20px;
+    background:
+      linear-gradient(transparent 7%, var(--blue) 7%, var(--blue) 13%, transparent 13%,
+                      transparent 87%, var(--blue) 87%, var(--blue) 93%, transparent 93%),
+      var(--white);
+    box-shadow: 0 12px 34px rgba(0,56,184,.22);
     overflow: hidden;
     cursor: pointer;
-    box-shadow: 0 8px 30px rgba(0, 56, 184, .25);
-    background-image:
-      linear-gradient(transparent 8%, var(--blue) 8%, var(--blue) 14%, transparent 14%,
-                      transparent 86%, var(--blue) 86%, var(--blue) 92%, transparent 92%);
+    touch-action: manipulation;
   }
-  /* small green-screen patch behind the face, with patchy lighting */
-  #screen {
-    position: absolute;
-    left: 50%; top: 50%;
-    width: 72%; height: 64%;
-    transform: translate(-50%, -50%);
+  #stage:focus-visible { outline: 4px solid var(--blue-deep); outline-offset: 4px; }
+
+  /* slow rotating star of david behind the face */
+  #halo {
+    position: absolute; left: 50%; top: 50%;
+    width: 86%; translate: -50% -50%;
+    opacity: .12; pointer-events: none;
+    animation: spin 30s linear infinite;
+  }
+  @keyframes spin { to { rotate: 360deg; } }
+
+  #face-wrap {
+    position: absolute; left: 50%; top: 50%;
+    width: 58%; translate: -50% -50%;
+    animation: float 3.2s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes float { 50% { transform: translateY(-10px) rotate(1.5deg); } }
+  #face {
+    display: block; width: 100%; height: auto;
     border-radius: 50%;
-    background:
-      radial-gradient(ellipse at 30% 25%, rgba(255,255,255,.35), transparent 55%),
-      radial-gradient(ellipse at 75% 85%, rgba(0,0,0,.2), transparent 60%),
-      var(--chroma);
-    box-shadow: 0 0 30px 10px rgba(0, 255, 60, .55);
-    pointer-events: none;
+    box-shadow: 0 0 0 6px var(--white), 0 0 0 11px var(--blue), 0 14px 26px rgba(0,38,125,.35);
+    transition: transform .08s;
   }
-  #stage img {
-    position: absolute;
-    left: 50%; top: 50%;
-    height: 56%;
-    transform: translate(-50%, -50%);
-    transition: transform .06s;
-    /* green spill / bad-keying fringe around the cutout */
-    filter: drop-shadow(0 0 3px var(--chroma)) drop-shadow(0 0 12px rgba(0,255,60,.9));
-    pointer-events: none;
+  #face.hit { animation: squash .22s ease-out; }
+  @keyframes squash {
+    0% { transform: scale(1, 1); }
+    30% { transform: scale(1.12, .86); }
+    60% { transform: scale(.94, 1.08); }
+    100% { transform: scale(1, 1); }
   }
-  #stage.pressed img { transform: translate(-50%, -50%) scale(.93); }
-  #stage .corner { position: absolute; width: 56px; top: 22%; pointer-events: none; }
-  #stage .corner.l { left: 10px; transform: rotate(-12deg); }
-  #stage .corner.r { right: 10px; transform: rotate(12deg); }
+
+  .ring {
+    position: absolute; width: 20px; height: 20px; margin: -10px 0 0 -10px;
+    border: 3px solid var(--blue); border-radius: 50%;
+    pointer-events: none; animation: ring .5s ease-out forwards;
+  }
+  @keyframes ring { to { transform: scale(7); opacity: 0; } }
 
   .pop {
-    position: absolute;
-    font-weight: 800;
-    font-size: 1.4rem;
+    position: absolute; pointer-events: none;
+    font-family: var(--display); font-weight: 900; font-size: 1.6rem;
     color: var(--blue);
-    text-shadow: 0 0 4px #fff, 0 0 8px #fff;
-    pointer-events: none;
-    animation: rise .8s ease-out forwards;
+    text-shadow: 0 0 3px var(--white), 0 0 6px var(--white), 0 0 10px var(--white);
+    animation: rise .9s ease-out forwards;
   }
+  .pop.crit { font-size: 2.3rem; color: var(--blue-deep); }
   @keyframes rise {
-    from { opacity: 1; transform: translate(-50%, 0); }
-    to   { opacity: 0; transform: translate(-50%, -80px); }
+    0% { opacity: 1; transform: translate(-50%, 0) scale(.6); }
+    20% { transform: translate(-50%, -14px) scale(1.15); }
+    100% { opacity: 0; transform: translate(-50%, -90px) scale(1); }
   }
 
+  .spark {
+    position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+    pointer-events: none;
+    animation: burst .7s cubic-bezier(.2,.7,.4,1) forwards;
+  }
+  @keyframes burst {
+    to { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; }
+  }
+
+  #stage .corner { position: absolute; top: 17%; width: 52px; pointer-events: none; animation: wave 2.6s ease-in-out infinite; }
+  #stage .corner.l { left: 10px; rotate: -12deg; }
+  #stage .corner.r { right: 10px; rotate: 12deg; animation-delay: -1.3s; }
+
+  /* ledger */
   #shop {
     width: min(360px, 100%);
-    background: var(--panel);
-    border: 3px solid var(--blue);
-    border-radius: 16px;
+    background: var(--white);
+    border: 3px solid var(--blue); border-radius: 20px;
     padding: 16px;
-    box-shadow: 0 8px 30px rgba(0, 56, 184, .15);
+    box-shadow: 0 12px 34px rgba(0,56,184,.14);
+    display: flex; flex-direction: column; gap: 10px;
   }
-  #shop h2 { margin: 0 0 12px; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; }
-  #shop h2 .flag { width: 36px; }
+  #shop h2 {
+    margin: 0 0 2px; display: flex; align-items: center; gap: 10px;
+    font-family: var(--display); font-weight: 700; font-size: 1.25rem; color: var(--blue-deep);
+  }
+  #shop h2 .flag { width: 34px; }
   .item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    padding: 12px;
-    margin-bottom: 10px;
-    border: 2px solid #d5def5;
-    border-radius: 8px;
-    background: #f7f9ff;
-    color: var(--text);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    width: 100%; padding: 12px 14px;
+    border: 2px solid var(--blue-soft); border-radius: 12px;
+    background: var(--ground); color: var(--ink);
+    font: inherit; text-align: left; cursor: pointer;
+    position: relative; overflow: hidden;
+    transition: transform .12s, border-color .12s, background .12s;
   }
-  .item:hover:not(:disabled) { border-color: var(--blue); background: #e9efff; }
-  .item:disabled { opacity: .45; cursor: not-allowed; }
-  .item small { display: block; color: var(--muted); }
-  .item .cost { color: var(--accent); font-weight: 700; white-space: nowrap; }
+  .item .name { font-weight: 600; }
+  .item small { display: block; color: var(--ink-soft); }
+  .item .cost { font-family: var(--display); font-weight: 700; color: var(--blue); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .item:hover:not(:disabled) { border-color: var(--blue); background: var(--blue-soft); transform: translateY(-2px); }
+  .item:focus-visible { outline: 3px solid var(--blue-deep); outline-offset: 2px; }
+  .item:disabled { opacity: .5; cursor: not-allowed; }
+  /* shimmer across upgrades you can afford */
+  .item:not(:disabled)::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.75) 50%, transparent 65%);
+    transform: translateX(-100%);
+    animation: shimmer 2.8s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes shimmer { 60%,100% { transform: translateX(100%); } }
+  .item.bought { animation: bought .4s ease-out; }
+  @keyframes bought { 40% { background: var(--blue); color: var(--white); transform: scale(1.03); } }
+  .count {
+    display: inline-block; min-width: 1.6em; padding: 0 6px; margin-left: 6px;
+    border-radius: 999px; background: var(--blue); color: var(--white);
+    font-size: .8rem; text-align: center;
+  }
+
   #reset {
-    margin-top: 6px;
-    background: none; border: none; color: var(--muted);
-    text-decoration: underline; cursor: pointer; font: inherit;
+    align-self: flex-start;
+    background: none; border: none; padding: 4px 0;
+    color: var(--ink-soft); text-decoration: underline; cursor: pointer; font: inherit;
+  }
+  #reset.armed { color: #b00020; font-weight: 600; }
+
+  /* milestone banner */
+  #toast {
+    position: fixed; left: 50%; top: calc(24px + env(safe-area-inset-top, 0px)); z-index: 5;
+    translate: -50% -160%;
+    padding: 12px 22px; border-radius: 999px;
+    background: var(--blue); color: var(--white);
+    font-family: var(--display); font-weight: 700; font-size: 1.1rem;
+    box-shadow: 0 10px 24px rgba(0,38,125,.35);
+    transition: translate .35s cubic-bezier(.2,1.4,.4,1);
+    pointer-events: none; white-space: nowrap;
+  }
+  #toast.show { translate: -50% 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    #sky { display: none; }
   }
 </style>
-</head>
-<body>
-  <header>
-    <svg class="flag" viewBox="0 0 220 160"><use href="#il"/></svg>
-    <h1>Bibi Clicker</h1>
-    <svg class="flag" viewBox="0 0 220 160"><use href="#il"/></svg>
-  </header>
-  <div id="score">0</div>
-  <div id="rate">0 per second</div>
 
-  <main>
-    <div id="stage" title="Click me!">
-      <div id="screen"></div>
-      <svg class="corner l flag" viewBox="0 0 220 160"><use href="#il"/></svg>
-      <svg class="corner r flag" viewBox="0 0 220 160"><use href="#il"/></svg>
-      <img id="bibi" src="images/netanyahu.png" alt="Benjamin Netanyahu on a green screen">
-    </div>
-
-    <section id="shop">
-      <h2><svg class="flag" viewBox="0 0 220 160"><use href="#il"/></svg>Upgrades</h2>
-      <div id="items"></div>
-      <button id="reset">Reset progress</button>
-    </section>
-  </main>
-
-<svg width="0" height="0" style="position:absolute">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="il" viewBox="0 0 220 160">
     <rect width="220" height="160" fill="#fff"/>
     <rect y="15" width="220" height="25" fill="#0038b8"/>
@@ -177,33 +245,66 @@
       <polygon points="110,108 137,62 83,62"/>
     </g>
   </symbol>
+  <symbol id="star" viewBox="0 0 60 60">
+    <g fill="none" stroke="#0038b8" stroke-width="5" stroke-linejoin="round">
+      <polygon points="30,4 53,44 7,44"/>
+      <polygon points="30,56 53,16 7,16"/>
+    </g>
+  </symbol>
 </svg>
-<script>
-  // Fallback if images/netanyahu.png hasn't been added yet: a simple silhouette.
-  const img = document.getElementById('bibi');
-  img.onerror = () => {
-    img.onerror = null;
-    img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400">
-         <circle cx="150" cy="120" r="70" fill="#0038b8"/>
-         <path d="M30 400 C30 260 90 210 150 210 C210 210 270 260 270 400 Z" fill="#0038b8"/>
-         <text x="150" y="130" font-size="22" text-anchor="middle" fill="#00ff3c"
-               font-family="sans-serif">add image</text>
-       </svg>`);
-  };
 
+<div id="sky" aria-hidden="true"></div>
+<div class="band"></div>
+
+<div class="wrap">
+  <header>
+    <svg class="flag" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>
+    <h1>Bibi Clicker</h1>
+    <svg class="flag r" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>
+  </header>
+
+  <div class="scoreline">
+    <div id="score">0</div>
+    <div id="rate">0 per second · 1 per click</div>
+  </div>
+
+  <main>
+    <div id="stage" role="button" tabindex="0" aria-label="Click Bibi to earn points">
+      <svg id="halo" viewBox="0 0 60 60" aria-hidden="true"><use href="#star"/></svg>
+      <svg class="corner l" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>
+      <svg class="corner r" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>
+      <div id="face-wrap"><img id="face" alt="Benjamin Netanyahu" src="data:image/webp;base64,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"></div>
+    </div>
+
+    <section id="shop" aria-label="Upgrades">
+      <h2><svg class="flag" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>Upgrades</h2>
+      <div id="items" style="display:flex;flex-direction:column;gap:10px"></div>
+      <button id="reset" type="button">Reset progress</button>
+    </section>
+  </main>
+</div>
+
+<div class="band"></div>
+<div id="toast" role="status"></div>
+
+<script>
+(() => {
   const upgrades = [
-    { id: 'finger',  name: 'Stronger Finger',  desc: '+1 per click',      cost: 15,    click: 1 },
-    { id: 'intern',  name: 'Campaign Intern',  desc: '+1 per second',     cost: 50,    auto: 1 },
-    { id: 'crew',    name: 'Camera Crew',      desc: '+5 per second',     cost: 300,   auto: 5 },
-    { id: 'mouse',   name: 'Golden Mouse',     desc: '+10 per click',     cost: 1000,  click: 10 },
-    { id: 'studio',  name: 'Green Screen Studio', desc: '+40 per second', cost: 5000,  auto: 40 },
-    { id: 'network', name: 'News Network',     desc: '+250 per second',   cost: 40000, auto: 250 },
+    { id: 'finger',  name: 'Stronger Finger',  desc: '+1 per click',     cost: 15,     click: 1 },
+    { id: 'intern',  name: 'Campaign Intern',  desc: '+1 per second',    cost: 50,     auto: 1 },
+    { id: 'crew',    name: 'Camera Crew',      desc: '+5 per second',    cost: 300,    auto: 5 },
+    { id: 'mouse',   name: 'Golden Mouse',     desc: '+10 per click',    cost: 1000,   click: 10 },
+    { id: 'rally',   name: 'Flag Rally',       desc: '+40 per second',   cost: 5000,   auto: 40 },
+    { id: 'network', name: 'News Network',     desc: '+250 per second',  cost: 40000,  auto: 250 },
+    { id: 'knesset', name: 'Knesset Majority', desc: '+1,500 per second', cost: 300000, auto: 1500 },
   ];
 
   const SAVE_KEY = 'bibi-clicker-save';
-  let state = { score: 0, owned: {} };
-  try { Object.assign(state, JSON.parse(localStorage.getItem(SAVE_KEY)) || {}); } catch {}
+  let state = { score: 0, owned: {}, best: 0 };
+  const hot = window.claude && window.claude.hot;
+  try { Object.assign(state, JSON.parse(localStorage.getItem(SAVE_KEY)) || {}); } catch (e) {}
+  if (hot && hot.data && hot.data.state) state = hot.data.state;
+  if (hot && hot.snapshot) hot.snapshot(() => ({ state }));
 
   const owned = id => state.owned[id] || 0;
   const priceOf = u => Math.floor(u.cost * Math.pow(1.15, owned(u.id)));
@@ -211,24 +312,24 @@
   const perSec = () => upgrades.reduce((s, u) => s + (u.auto || 0) * owned(u.id), 0);
   const fmt = n => Math.floor(n).toLocaleString();
 
-  const scoreEl = document.getElementById('score');
-  const rateEl = document.getElementById('rate');
-  const itemsEl = document.getElementById('items');
-  const stage = document.getElementById('stage');
+  const $ = id => document.getElementById(id);
+  const scoreEl = $('score'), rateEl = $('rate'), stage = $('stage'), face = $('face'), toast = $('toast');
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Build shop buttons
   const buttons = {};
   for (const u of upgrades) {
     const b = document.createElement('button');
-    b.className = 'item';
+    b.type = 'button'; b.className = 'item';
+    b.innerHTML = `<span><span class="name">${u.name}</span><span class="count">0</span><small>${u.desc}</small></span><span class="cost"></span>`;
     b.onclick = () => {
       const p = priceOf(u);
       if (state.score < p) return;
       state.score -= p;
       state.owned[u.id] = owned(u.id) + 1;
+      b.classList.remove('bought'); void b.offsetWidth; b.classList.add('bought');
       render();
     };
-    itemsEl.appendChild(b);
+    $('items').appendChild(b);
     buttons[u.id] = b;
   }
 
@@ -236,42 +337,105 @@
     scoreEl.textContent = fmt(state.score);
     rateEl.textContent = `${fmt(perSec())} per second · ${fmt(perClick())} per click`;
     for (const u of upgrades) {
-      const p = priceOf(u);
-      const b = buttons[u.id];
+      const b = buttons[u.id], p = priceOf(u);
       b.disabled = state.score < p;
-      b.innerHTML = `<span>${u.name} (${owned(u.id)})<small>${u.desc}</small></span>
-                     <span class="cost">${fmt(p)}</span>`;
+      b.querySelector('.count').textContent = owned(u.id);
+      b.querySelector('.cost').textContent = fmt(p);
+    }
+    checkMilestone();
+  }
+
+  // milestones: 100, 1k, 10k, ...
+  let toastTimer;
+  function checkMilestone() {
+    const next = Math.max(100, (state.best || 0) * 10);
+    if (state.score >= next) {
+      state.best = Math.pow(10, Math.floor(Math.log10(state.score)));
+      toast.textContent = `${fmt(state.best)} points!`;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+      if (!calm) for (let i = 0; i < 6; i++) setTimeout(launchFlag, i * 120);
     }
   }
 
-  stage.addEventListener('pointerdown', e => {
-    const gain = perClick();
+  function spawn(cls, x, y, html) {
+    const el = document.createElement('div');
+    el.className = cls; el.style.left = x + 'px'; el.style.top = y + 'px';
+    if (html) el.innerHTML = html;
+    stage.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+    return el;
+  }
+
+  function hit(x, y) {
+    const crit = Math.random() < 0.05;
+    const gain = perClick() * (crit ? 10 : 1);
     state.score += gain;
-    stage.classList.add('pressed');
 
-    const r = stage.getBoundingClientRect();
-    const pop = document.createElement('div');
-    pop.className = 'pop';
-    pop.textContent = '+' + fmt(gain);
-    pop.style.left = (e.clientX - r.left) + 'px';
-    pop.style.top = (e.clientY - r.top - 20) + 'px';
-    stage.appendChild(pop);
-    setTimeout(() => pop.remove(), 800);
+    face.classList.remove('hit'); void face.offsetWidth; face.classList.add('hit');
+    scoreEl.classList.remove('bump'); void scoreEl.offsetWidth; scoreEl.classList.add('bump');
+
+    if (!calm) {
+      spawn('ring', x, y);
+      const n = crit ? 12 : 5;
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, d = 50 + Math.random() * (crit ? 110 : 60);
+        const s = spawn('spark', x, y, '<svg viewBox="0 0 60 60" width="18" height="18"><use href="#star"/></svg>');
+        s.style.setProperty('--dx', Math.cos(a) * d + 'px');
+        s.style.setProperty('--dy', Math.sin(a) * d + 'px');
+        s.style.setProperty('--rot', (Math.random() * 360 - 180) + 'deg');
+      }
+    }
+    const pop = spawn('pop' + (crit ? ' crit' : ''), x, y - 20);
+    pop.textContent = (crit ? 'CRIT +' : '+') + fmt(gain);
     render();
-  });
-  addEventListener('pointerup', () => stage.classList.remove('pressed'));
+  }
 
-  document.getElementById('reset').onclick = () => {
-    if (!confirm('Reset all progress?')) return;
-    state = { score: 0, owned: {} };
+  stage.addEventListener('pointerdown', e => {
+    const r = stage.getBoundingClientRect();
+    hit(e.clientX - r.left, e.clientY - r.top);
+  });
+  stage.addEventListener('keydown', e => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      hit(stage.clientWidth / 2, stage.clientHeight / 2);
+    }
+  });
+
+  // reset needs a second click to confirm
+  const reset = $('reset'); let armTimer;
+  reset.onclick = () => {
+    if (!reset.classList.contains('armed')) {
+      reset.classList.add('armed'); reset.textContent = 'Click again to reset';
+      armTimer = setTimeout(() => { reset.classList.remove('armed'); reset.textContent = 'Reset progress'; }, 3000);
+      return;
+    }
+    clearTimeout(armTimer);
+    reset.classList.remove('armed'); reset.textContent = 'Reset progress';
+    state = { score: 0, owned: {}, best: 0 };
     render();
   };
 
-  // Passive income, 10 ticks per second
-  setInterval(() => { state.score += perSec() / 10; render(); }, 100);
-  setInterval(() => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch {} }, 2000);
+  // background flags drifting upward
+  const sky = $('sky');
+  function launchFlag() {
+    const f = document.createElement('div');
+    f.className = 'drift';
+    f.innerHTML = '<svg class="flag" style="width:100%" viewBox="0 0 220 160"><use href="#il"/></svg>';
+    f.style.left = Math.random() * 100 + 'vw';
+    f.style.animationDuration = 9 + Math.random() * 8 + 's';
+    f.style.setProperty('--spin', (Math.random() * 60 - 30) + 'deg');
+    sky.appendChild(f);
+    f.addEventListener('animationend', () => f.remove());
+  }
+  if (!calm) { for (let i = 0; i < 3; i++) setTimeout(launchFlag, i * 900); setInterval(launchFlag, 2600); }
+
+  setInterval(() => { if (perSec()) { state.score += perSec() / 10; render(); } }, 100);
+  setInterval(() => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {} }, 2000);
 
   render();
+})();
 </script>
-</body>
+
 </html>
