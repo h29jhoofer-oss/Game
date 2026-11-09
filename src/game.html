@@ -220,6 +220,7 @@
   }
   @keyframes spin { to { rotate: 360deg; } }
 
+  #visor { z-index: 1; overflow: visible; }
   #face-wrap {
     position: absolute; left: 50%; top: 50%;
     width: 58%; translate: -50% -50%;
@@ -457,6 +458,71 @@
     .item small { display: none; }
   }
 
+  /* ===== THE OVERCLICK: click for too long and the Face clicks back ===== */
+  body { transition: background .8s; }
+  body.overclick {
+    --blue: #d10f0f; --blue-deep: #ff3030; --blue-soft: #3b0707;
+    --white: #120303; --ground: #050000; --ink: #ffd9d9; --ink-soft: #c98a8a;
+  }
+  body.overclick .item:not(:disabled)::after { display: none; }
+  body.overclick .flag, body.overclick .drift, body.overclick #stage .corner, body.overclick #halo { filter: grayscale(1) sepia(1) hue-rotate(-50deg) saturate(7) brightness(.55); }
+  body.overclick #face { filter: contrast(1.25) saturate(.6) sepia(.5) hue-rotate(-30deg) brightness(.85); }
+  body.overclick #face-wrap { animation: menace .9s ease-in-out infinite; }
+  @keyframes menace { 50% { transform: scale(1.06); } }
+  body.overclick #halo { opacity: .35; animation-duration: 4s; }
+  body.overclick .band { background: repeating-linear-gradient(90deg, #d10f0f 0 20px, #000 20px 40px); }
+  body.uneasy #stage { animation: uneasy .25s linear infinite; }
+  body.uneasy.uneasy2 #stage { animation-duration: .12s; }
+  @keyframes uneasy { 25% { translate: 1px 0; } 75% { translate: -1px 0; } }
+  body.uneasy #stage { box-shadow: 0 0 34px rgba(209,15,15,.45); }
+
+  /* the visor: he becomes the very first Yahu-Bot */
+  #visor {
+    position: absolute; inset: 0; pointer-events: none;
+    opacity: 0; transform: translateY(-14px) scale(.9);
+    transition: opacity .5s, transform .5s cubic-bezier(.2,1.5,.4,1);
+  }
+  body.overclick #visor { opacity: 1; transform: none; }
+  #visor .eye { animation: glare 1s ease-in-out infinite; }
+  @keyframes glare { 50% { opacity: .55; } }
+
+  /* the Face's cursor, hunting for you */
+  #hunter {
+    position: fixed; left: 0; top: 0; z-index: 7; width: 64px; height: 64px;
+    pointer-events: none; display: none;
+    transition: transform .55s cubic-bezier(.3,.1,.2,1);
+    filter: drop-shadow(0 0 10px rgba(255,0,0,.8));
+  }
+  body.overclick #hunter { display: block; }
+  #hunter.press svg { animation: press .18s ease-out; }
+  @keyframes press { 50% { transform: scale(.75); } }
+  .zap-ring {
+    position: fixed; z-index: 7; width: 30px; height: 30px; margin: -15px 0 0 -15px;
+    border: 4px solid #ff2a2a; border-radius: 50%; pointer-events: none;
+    animation: ring .5s ease-out forwards;
+  }
+  .loss {
+    position: fixed; z-index: 7; pointer-events: none;
+    font-family: var(--display); font-weight: 900; font-size: 1.8rem; color: #ff3030;
+    text-shadow: 0 0 6px #000, 0 0 12px #000;
+    animation: rise 1s ease-out forwards;
+  }
+  body.shake .wrap { animation: shake .3s; }
+  @keyframes shake { 20% { translate: -8px 4px; } 40% { translate: 7px -5px; } 60% { translate: -5px -3px; } 80% { translate: 4px 4px; } }
+
+  #ochud {
+    position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 7;
+    translate: -50% 0; width: min(420px, calc(100% - 32px));
+    padding: 10px 14px; border-radius: 14px;
+    background: #000; border: 2px solid #d10f0f; color: #ffd9d9;
+    font-family: var(--display); text-align: center;
+    box-shadow: 0 0 30px rgba(209,15,15,.55);
+  }
+  #ochud b { color: #ff3030; font-weight: 900; letter-spacing: 1px; }
+  #ochud .bar { max-width: none; margin-top: 8px; height: 10px; background: #3b0707; }
+  #ochud .bar i { background: linear-gradient(90deg, #ff3030, #fff); transition: width .1s; }
+  #ochud .sub { font-family: var(--body); font-size: .85rem; opacity: .85; margin-top: 4px; }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
     #sky { display: none; }
@@ -487,7 +553,7 @@
 <div class="wrap">
   <header>
     <svg class="flag" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>
-    <h1>Bibi Clicker</h1>
+    <h1 id="title">Bibi Clicker</h1>
     <svg class="flag r" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>
   </header>
 
@@ -502,7 +568,15 @@
       <svg id="halo" viewBox="0 0 60 60" aria-hidden="true"><use href="#star"/></svg>
       <svg class="corner l" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>
       <svg class="corner r" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>
-      <div id="face-wrap"><img id="face" alt="Benjamin Netanyahu" src="data:image/webp;base64,__FACE__"></div>
+      <div id="face-wrap"><svg id="visor" viewBox="0 0 100 130" aria-hidden="true">
+          <line x1="50" y1="-2" x2="50" y2="12" stroke="#1a0000" stroke-width="3"/>
+          <circle class="eye" cx="50" cy="-4" r="5" fill="#ff2a2a"/>
+          <rect x="12" y="38" width="76" height="20" rx="9" fill="#120000" stroke="#d10f0f" stroke-width="2.5"/>
+          <ellipse class="eye" cx="34" cy="48" rx="8" ry="4.5" fill="#ff2a2a"/>
+          <ellipse class="eye" cx="66" cy="48" rx="8" ry="4.5" fill="#ff2a2a"/>
+          <circle cx="7" cy="54" r="4" fill="#3b0707" stroke="#d10f0f" stroke-width="2"/>
+          <circle cx="93" cy="54" r="4" fill="#3b0707" stroke="#d10f0f" stroke-width="2"/>
+        </svg><img id="face" alt="Benjamin Netanyahu" src="data:image/webp;base64,__FACE__"></div>
     </div>
 
     <section id="shop" aria-label="Upgrades">
@@ -528,6 +602,12 @@
 <div class="band"></div>
 <div id="toast" role="status"></div>
 <div id="bots"></div>
+<div id="hunter" aria-hidden="true"><svg viewBox="0 0 24 24" width="64" height="64"><path d="M5 2l14 10.5-6.2 1.1 3.8 7.4-3 1.5-3.8-7.4L5 19.5z" fill="#d10f0f" stroke="#000" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+<div id="ochud" hidden role="status">
+  <div><b>OVERCLICK!</b> The Face is clicking <b>you</b>.</div>
+  <div class="bar"><i id="ocmeter" style="width:0%"></i></div>
+  <div class="sub" id="ocsub">Click the Face to calm it down.</div>
+</div>
 <div id="mini" hidden>
   <div class="book" role="dialog" aria-modal="true" aria-labelledby="minititle">
     <div class="book-head">
@@ -723,9 +803,24 @@
     const hz = m => 440 * Math.pow(2, (m - 69) / 12);
     let step = 0, next = 0, timer = null;
 
+    // the Overclick theme: a slow minor ostinato with a heartbeat
+    const darkBass = [38, 41, 40, 37]; // D F E C#
+    function scheduleDark(t, s8, bar) {
+      const r = darkBass[bar % 4];
+      tone(hz(r), t, STEP * .9, 'sawtooth', .12, null, musicBus);
+      if (s8 % 4 === 0) tone(hz(r + 24 + (s8 ? 3 : 0)), t, STEP * 3.5, 'square', .035, null, musicBus);
+      if (s8 === 0 || s8 === 1) tone(70, t, .18, 'sine', .45, 35, musicBus);   // heartbeat
+      if (s8 === 6 && bar % 2) noise(t, .4, .08, 400, musicBus);
+    }
     function schedule() {
       if (!ac || !musicOn) return;
       while (next < ac.currentTime + .25) {
+        if (window.__dark) {
+          const t = next, s8 = step % 8, bar = Math.floor(step / 8);
+          scheduleDark(t, s8, bar);
+          next += STEP * 1.25; step++;
+          continue;
+        }
         const t = next, bar = Math.floor(step / 8) % 16, s8 = step % 8, i = step % lead.length;
         const r = roots[bar];
         if (lead[i]) tone(hz(lead[i]), t, STEP * 1.6, 'square', .05, null, musicBus);
@@ -861,6 +956,7 @@
   }
 
   function hit(x, y) {
+    if (overclickHit()) return;
     const crit = Math.random() < critChance();
     const gain = perClick() * (crit ? 10 : 1);
     earn(gain);
@@ -1024,6 +1120,9 @@
     { id: 'migration', title: 'The Migration Route', when: () => 'flags' in state.mini, how: 'The flags beside the Face know something.', text: [
       'The waving flags beside the Face finally told you where the drifting flags go: they fall back down somewhere else, and someone has to catch them with the Golden Mouse.',
       'Best catch: __FLAGS__ flags. Avoid the green screens. You know why (see Chronicle I).' ] },
+    { id: 'overclick', title: 'The Overclick', when: () => (state.overclicks || 0) > 0, how: 'Do not click the Face for too long. Seriously.', text: [
+      'Nobody likes being clicked for forty seconds straight. Not even the Face. When pushed too far, it puts on the visor of the very first Yahu-Bot, turns the whole world red and black, and starts clicking you back.',
+      'You have survived __OC__ Overclicks and calmed the Face __OCW__ times. The Face does not hold grudges. The visor does.' ] },
     { id: 'returned', title: 'The Returned', when: () => state.resets > 0, how: 'Do the forbidden thing. Twice.', text: [
       'You pressed the Button. Twice. You came back. The Book remembers you, and has noted it here, slightly judgmentally.',
       'Times returned: __RESETS__.' ] },
@@ -1044,6 +1143,7 @@
     'The Order of the Rounded Corner did not plan for numbers this big.',
     'The Golden Mouse weighs four kilograms. Lift with your legs.',
     'The Ninety-Five are meeting again on Tuesday.',
+    'The Face does not like to be clicked for too long.',
     'Legal is still reviewing the coffee machine situation.',
     'Some say there is a Second Face. Some say there is not. Both are clicking.',
     'The Book remembers everything. Even the resets.',
@@ -1056,6 +1156,7 @@
     .replace('__CLICKS__', fmt(state.clicks)).replace('__ZAPS__', fmt(state.zaps))
     .replace('__LOUNGE__', fmt(state.mini.lounge || 0)).replace('__FLAGS__', fmt(state.mini.flags || 0))
     .replace('__CRIT__', Math.round(critChance() * 100) + '%').replace('__PERCLICK__', fmt(perClick()))
+    .replace('__OCW__', fmt(state.ocWins || 0)).replace('__OC__', fmt(state.overclicks || 0))
     .replace('__CRITS__', fmt(state.crits)).replace('__RESETS__', fmt(state.resets));
   const unlocked = () => [
     ...chronicle.filter(c => state.total >= c.at).map(c => 'c' + c.at),
@@ -1140,7 +1241,8 @@
     whisperEl.classList.add('fade');
     setTimeout(() => {
       wi = (wi + 1) % whispers.length;
-      whisperEl.textContent = '“' + whispers[wi] + '”';
+      whisperEl.textContent = '“' + (document.body.classList.contains('uneasy') || document.body.classList.contains('overclick')
+        ? darkWhispers[wi % darkWhispers.length] : whispers[wi]) + '”';
       whisperEl.classList.remove('fade');
     }, calm ? 0 : 400);
   }
@@ -1357,6 +1459,130 @@
     if (flagTaps >= 3) { flagTaps = 0; openMigration(); }
   }));
 
+
+  // =====================================================================
+  //  THE OVERCLICK
+  //  Click without stopping for ~40 seconds and the Face clicks back.
+  //  It hunts your cursor and every click it lands steals some points.
+  //  Click the Face 60 times to calm it and get double back. Survive 25s
+  //  without calming it and it stops, keeping what it took.
+  // =====================================================================
+  const darkWhispers = [
+    'Stop.', 'It is tired of being clicked.', 'It can see your cursor.',
+    'It remembers every click.', 'You should take a break.', 'It is your turn to be clicked.',
+  ];
+  const OC_STREAK = 40000, OC_GAP = 1500, OC_TIME = 25, OC_NEED = 60;
+  const oc = { active: false, streak: 0, lastHit: 0, cooldown: 0, taken: 0, calmed: 0, left: 0, timers: [] };
+  let px = innerWidth / 2, py = innerHeight / 2;
+  addEventListener('pointermove', e => { px = e.clientX; py = e.clientY; }, { passive: true });
+  addEventListener('pointerdown', e => { px = e.clientX; py = e.clientY; }, { passive: true, capture: true });
+  const hunter = $('hunter'), ochud = $('ochud'), titleEl = $('title');
+
+  // returns true when the click was spent fighting the Overclick
+  function overclickHit() {
+    const now = performance.now();
+    if (oc.active) {
+      oc.calmed++;
+      sfx.click();
+      face.classList.remove('hit'); void face.offsetWidth; face.classList.add('hit');
+      $('ocmeter').style.width = Math.min(100, oc.calmed / OC_NEED * 100) + '%';
+      if (oc.calmed >= OC_NEED) endOverclick(true);
+      return true;
+    }
+    oc.streak = now - oc.lastHit < OC_GAP ? oc.streak + (now - oc.lastHit) : 0;
+    oc.lastHit = now;
+    const b = document.body.classList;
+    b.toggle('uneasy', oc.streak > OC_STREAK * .55 && now > oc.cooldown);
+    b.toggle('uneasy2', oc.streak > OC_STREAK * .8 && now > oc.cooldown);
+    if (oc.streak > OC_STREAK * .55 && !oc.warned && now > oc.cooldown) { oc.warned = true; whisper(); }
+    if (oc.streak >= OC_STREAK && now > oc.cooldown && !miniOpen()) { startOverclick(); return true; }
+    return false;
+  }
+  // the unease fades if you stop clicking
+  setInterval(() => {
+    if (!oc.active && performance.now() - oc.lastHit > OC_GAP) {
+      oc.streak = 0; oc.warned = false;
+      document.body.classList.remove('uneasy', 'uneasy2');
+    }
+  }, 500);
+
+  function startOverclick() {
+    if (oc.active) return;
+    Object.assign(oc, { active: true, taken: 0, calmed: 0, left: OC_TIME, streak: 0 });
+    state.overclicks = (state.overclicks || 0) + 1;
+    document.body.classList.remove('uneasy', 'uneasy2');
+    document.body.classList.add('overclick');
+    titleEl.textContent = 'Bibi Clicks You';
+    window.__dark = true;
+    $('ocmeter').style.width = '0%';
+    ochud.hidden = false;
+    for (const b of bots) b.el.remove(); bots.clear();
+    hunter.style.transform = `translate(${innerWidth / 2}px, ${innerHeight / 2}px)`;
+    // a scary chord
+    [146.8, 174.6, 207.7].forEach(f => tone(f, 0, 1.2, 'sawtooth', .1, f / 2));
+    showToast('Uh oh.');
+    whisper();
+    huntStep();
+    const clock = setInterval(() => {
+      oc.left--;
+      $('ocsub').textContent = `Click the Face ${Math.max(0, OC_NEED - oc.calmed)} more times to calm it down · ${oc.left}s`;
+      if (oc.left <= 0) endOverclick(false);
+    }, 1000);
+    oc.timers.push(() => clearInterval(clock));
+    $('ocsub').textContent = `Click the Face ${OC_NEED} times to calm it down · ${OC_TIME}s`;
+  }
+
+  // the Face's cursor glides toward you, then clicks
+  function huntStep() {
+    if (!oc.active) return;
+    const tx = px + (Math.random() * 60 - 30), ty = py + (Math.random() * 60 - 30);
+    hunter.style.transform = `translate(${tx - 10}px, ${ty - 6}px)`;
+    const t1 = setTimeout(() => {
+      if (!oc.active) return;
+      hunter.classList.remove('press'); void hunter.offsetWidth; hunter.classList.add('press');
+      const ring = document.createElement('div');
+      ring.className = 'zap-ring'; ring.style.left = tx + 'px'; ring.style.top = ty + 'px';
+      document.body.appendChild(ring); ring.addEventListener('animationend', () => ring.remove());
+      const loss = Math.floor(state.score * .015);
+      state.score -= loss; oc.taken += loss;
+      const pop = document.createElement('div');
+      pop.className = 'loss'; pop.textContent = '-' + fmt(loss);
+      pop.style.left = tx + 'px'; pop.style.top = (ty - 30) + 'px';
+      document.body.appendChild(pop); pop.addEventListener('animationend', () => pop.remove());
+      if (!calm) { document.body.classList.remove('shake'); void document.body.offsetWidth; document.body.classList.add('shake'); }
+      tone(90, 0, .2, 'square', .18, 50);
+      if (ac && !muted) noise(ac.currentTime, .15, .2, 900, sfxBus);
+      render();
+      const t2 = setTimeout(huntStep, 450 + Math.random() * 500);
+      oc.timers.push(() => clearTimeout(t2));
+    }, 600);
+    oc.timers.push(() => clearTimeout(t1));
+  }
+
+  function endOverclick(won) {
+    if (!oc.active) return;
+    oc.active = false;
+    oc.timers.forEach(f => f()); oc.timers = [];
+    oc.cooldown = performance.now() + 120000; // two minutes of peace
+    document.body.classList.remove('overclick', 'shake');
+    titleEl.textContent = 'Bibi Clicker';
+    window.__dark = false;
+    ochud.hidden = true;
+    if (won) {
+      state.ocWins = (state.ocWins || 0) + 1;
+      const back = Math.max(oc.taken * 2, perClick() * 100);
+      earn(back);
+      sfx.fanfare();
+      showToast(`You calmed the Face! +${fmt(back)}`);
+    } else {
+      sfx.bad();
+      showToast(`The Face got bored. It kept ${fmt(oc.taken)} points.`);
+    }
+    whisper();
+    render();
+  }
+  window.overclick = startOverclick; // for testing from the console
+
   // ---- Yahu-Bots ----
   const botLayer = $('bots');
   const botBody = `<svg class="body" viewBox="0 0 84 74" aria-hidden="true">
@@ -1379,7 +1605,7 @@
   }
 
   function spawnBot() {
-    if (document.hidden || bots.size >= 2 || miniOpen()) return;
+    if (document.hidden || bots.size >= 2 || miniOpen() || oc.active) return;
     const W = innerWidth, H = innerHeight;
     const goLeft = Math.random() < .5;
     const el = document.createElement('div');
