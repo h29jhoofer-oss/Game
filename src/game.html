@@ -234,6 +234,8 @@
     transition: transform .08s;
   }
   #face.hit { animation: squash .22s ease-out; }
+  /* the Restored Green Screen brings back the bad keying, as a treat */
+  #face.cursed { box-shadow: 0 0 0 6px var(--white), 0 0 0 11px var(--blue), 0 0 26px 14px rgba(0,255,60,.75); }
   @keyframes squash {
     0% { transform: scale(1, 1); }
     30% { transform: scale(1.12, .86); }
@@ -287,7 +289,8 @@
   }
   #items {
     flex: 1; min-height: 0;
-    display: grid; grid-auto-rows: 1fr; gap: clamp(4px, .9vh, 8px);
+    display: grid; grid-auto-rows: minmax(clamp(44px, 7.4vh, 56px), 1fr); gap: clamp(4px, .9vh, 8px);
+    padding-right: 2px; scrollbar-width: thin;
     overflow-y: auto;
   }
   #shop h2 {
@@ -560,6 +563,14 @@
     rally:   I('<path d="M5 21V3"/><path d="M5 4h14v9H5" fill="#fff"/><path d="M5 6h14M5 11h14"/><path d="M12 6.8l1.6 2.7h-3.2zM12 10.2l1.6-2.7h-3.2z" stroke-width="1"/>'),
     network: I('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 3l4 4 4-4"/><path d="M7 11h6M7 14.5h4"/><circle cx="17" cy="13" r="1.4" fill="currentColor"/>'),
     knesset: I('<path d="M3 21h18M4 18h16M5 18V9M9.5 18V9M14.5 18V9M19 18V9M3 9h18l-9-5.5z"/>'),
+    foundry: I('<path d="M3 21V11l5 3V11l5 3V7h3l1-4h2l1 4v14z"/><path d="M7 18h2M12 18h2"/>'),
+    coffee:  I('<path d="M5 9h11v6a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8 3c0 2 2 2 2 4M12 3c0 2 2 2 2 4"/><path d="M8 14l2 2 3-4" stroke-width="1.8"/>'),
+    polish:  I('<path d="M12 3l2.6 4.5h-5.2zM12 21l-2.6-4.5h5.2zM4.2 7.5h5.2L6.8 12zM19.8 16.5h-5.2l2.6-4.5zM4.2 16.5l2.6-4.5 2.6 4.5zM19.8 7.5l-2.6 4.5-2.6-4.5z" stroke-width="1.6"/><path d="M20 2l.7 1.6L22 4l-1.3.6L20 6l-.7-1.4L18 4l1.3-.4z" fill="currentColor" stroke="none"/>'),
+    library: I('<path d="M4 20V5h3v15M8 20V4h3v16M12.5 20l-1-14.6 2.9-.4 2 14.5"/><path d="M3 20h18"/>'),
+    green:   I('<rect x="3" y="4" width="18" height="13" rx="2" fill="#00ff3c" stroke="#00a828"/><circle cx="12" cy="9.5" r="2.6" fill="#0038b8" stroke="none"/><path d="M8 17c.6-2.5 2.2-3.6 4-3.6s3.4 1.1 4 3.6" fill="#0038b8" stroke="none"/><path d="M9 21h6M12 17v4" stroke="#00a828"/>'),
+    member:  I('<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/><circle cx="7.5" cy="14" r="2"/><path d="M12 13h6M12 16h4"/>'),
+    second:  I('<ellipse cx="9" cy="12" rx="5" ry="6.5"/><ellipse cx="15" cy="12" rx="5" ry="6.5" stroke-dasharray="2.5 2"/><path d="M7.2 11h.01M10.8 11h.01M7.5 14.5c1 .8 2 .8 3 0" stroke-width="2.4"/>'),
+    mystery: I('<path d="M9 9a3 3 0 1 1 4.5 2.6c-1 .6-1.5 1.2-1.5 2.4"/><path d="M12 18h.01" stroke-width="3"/><circle cx="12" cy="12" r="10" stroke-dasharray="3 3"/>'),
   };
 
   const upgrades = [
@@ -570,6 +581,13 @@
     { id: 'rally',   name: 'Flag Rally',       desc: '+40 per second',   cost: 5000,   auto: 40 },
     { id: 'network', name: 'News Network',     desc: '+250 per second',  cost: 40000,  auto: 250 },
     { id: 'knesset', name: 'Knesset Majority', desc: '+1,500 per second', cost: 300000, auto: 1500 },
+    { id: 'foundry', name: 'Yahu-Bot Foundry',   desc: '+8,000 per second, more Yahu-Bots', cost: 2e6, auto: 8000 },
+    { id: 'coffee',  name: 'Fixed Coffee Machine', desc: '+40,000 per second, Interns x2',  cost: 1e7, auto: 40000 },
+    { id: 'polish',  name: 'Star Polisher',      desc: '+180,000 per second, +1% crit',     cost: 5e7, auto: 180000 },
+    { id: 'library', name: 'Lore Library',       desc: '+900,000 per second',               cost: 2.5e8, auto: 900000 },
+    { id: 'green',   name: 'Restored Green Screen', desc: '+5M per second. Cursed.',        cost: 1.5e9, auto: 5e6 },
+    { id: 'member',  name: 'Bot Lounge Membership', desc: '+25M per second, mini-game prizes up', cost: 8e9, auto: 2.5e7 },
+    { id: 'second',  name: 'The Second Face',    desc: 'Doubles points per click',          cost: 5e10 },
   ];
 
   const SAVE_KEY = 'bibi-clicker-save';
@@ -588,8 +606,12 @@
 
   const owned = id => state.owned[id] || 0;
   const priceOf = u => Math.floor(u.cost * Math.pow(1.15, owned(u.id)));
-  const perClick = () => 1 + upgrades.reduce((s, u) => s + (u.click || 0) * owned(u.id), 0);
-  const perSec = () => upgrades.reduce((s, u) => s + (u.auto || 0) * owned(u.id), 0);
+  const perClick = () => (1 + upgrades.reduce((s, u) => s + (u.click || 0) * owned(u.id), 0)) * Math.pow(2, owned('second'));
+  // the Fixed Coffee Machine multiplies what the Interns produce
+  const perSec = () => upgrades.reduce((s, u) => s + (u.auto || 0) * owned(u.id) * (u.id === 'intern' ? Math.pow(2, owned('coffee')) : 1), 0);
+  const critChance = () => 0.05 + 0.01 * Math.min(20, owned('polish'));
+  const short = n => n < 1e6 ? Math.floor(n).toLocaleString()
+    : (n / Math.pow(1000, Math.floor(Math.log10(n) / 3))).toFixed(n < 1e15 ? 1 : 0).replace(/\.0$/, '') + ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi'][Math.floor(Math.log10(n) / 3)];
   const fmt = n => Math.floor(n).toLocaleString();
 
   const $ = id => document.getElementById(id);
@@ -644,7 +666,7 @@
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'item';
     b.title = 'Buy it to unlock its entry in the Codex.';
-    b.innerHTML = `<span class="icon">${icons[u.id]}</span><span class="label"><span class="name">${u.name}</span><span class="count">0</span><small>${u.desc}</small></span><span class="cost"></span>`;
+    b.innerHTML = `<span class="icon"></span><span class="label"><span class="name"></span><span class="count">0</span><small></small></span><span class="cost"></span>`;
     b.onclick = () => {
       const p = priceOf(u);
       if (state.score < p) return;
@@ -663,10 +685,19 @@
     rateEl.textContent = `${fmt(perSec())} per second · ${fmt(perClick())} per click`;
     for (const u of upgrades) {
       const b = buttons[u.id], p = priceOf(u);
+      // the late-game upgrades stay a mystery until you have earned a quarter of their price
+      const known = owned(u.id) > 0 || (state.total || 0) >= u.cost / 4 || u.cost <= 300000;
+      if (b.dataset.known !== String(known)) {
+        b.dataset.known = known;
+        b.querySelector('.icon').innerHTML = icons[known ? u.id : 'mystery'];
+        b.querySelector('.name').textContent = known ? u.name : '? ? ?';
+        b.querySelector('small').textContent = known ? u.desc : 'Keep clicking to reveal';
+      }
       b.disabled = state.score < p;
       b.querySelector('.count').textContent = owned(u.id);
-      b.querySelector('.cost').textContent = fmt(p);
+      b.querySelector('.cost').textContent = short(p);
     }
+    face.classList.toggle('cursed', owned('green') > 0);
     checkMilestone();
     checkLore();
   }
@@ -707,7 +738,7 @@
   }
 
   function hit(x, y) {
-    const crit = Math.random() < 0.05;
+    const crit = Math.random() < critChance();
     const gain = perClick() * (crit ? 10 : 1);
     earn(gain);
     state.clicks++;
@@ -839,6 +870,25 @@
       'Broadcasts the score live, all day, every day. Its ratings jump whenever a Yahu-Bot walks past. Its weather segment is just the Star turning (see Chronicle VII).' ] },
     { id: 'knesset', title: 'Knesset Majority', when: () => owned('knesset') > 0, how: 'Secure a Knesset Majority.', text: [
       'Produces 1,500 points per second through methods the Committee of One Hundred and Twenty is still investigating (see Chronicle VIII).' ] },
+    { id: 'foundry', title: 'Yahu-Bot Foundry', when: () => owned('foundry') > 0, how: 'Buy the Foundry.', text: [
+      'The Foundry beneath the Reset Button (see Chronicle V), now under your management. Each one makes Yahu-Bots walk by more often and carry 25% more points.',
+      'Every bot that rolls off the line is inspected by one Intern, who checks that the antenna blinks and then says "yep."' ] },
+    { id: 'coffee', title: 'The Fixed Coffee Machine', when: () => owned('coffee') > 0, how: 'Do the unthinkable.', text: [
+      'You fixed it. This breaks the Treaty of the Coffee Machine (see Chronicle IV), which said it would never be fixed. The Interns are thrilled. Their output doubles with every machine. Legal is reviewing the situation.',
+      'The coffee in the Bot Lounge is still broken. That one cannot be fixed. It does not exist.' ] },
+    { id: 'polish', title: 'Star Polisher', when: () => owned('polish') > 0, how: 'Hire someone to polish the Star.', text: [
+      'A small person with a very long ladder who polishes the Great Star while it turns. Each polisher adds 1% to your crit chance, up to 20 polishers. After that the Star is as shiny as stars legally get.',
+      'Your crit chance is now __CRIT__.' ] },
+    { id: 'library', title: 'Lore Library', when: () => owned('library') > 0, how: 'Build somewhere to keep all this lore.', text: [
+      'There was too much lore to keep in one book, so you built a library. It mostly contains copies of this Codex. One shelf is labelled "The Bot Lounge" and is empty, for obvious reasons.' ] },
+    { id: 'green', title: 'The Restored Green Screen', when: () => owned('green') > 0, how: 'Undo the past.', text: [
+      'Against the advice of every scribe, you brought back the green screen (see Chronicle I). The Face now glows faintly green again. The points are incredible. The vibes are cursed.',
+      'Somewhere, a voice from beyond the repository sighs.' ] },
+    { id: 'member', title: 'Bot Lounge Membership', when: () => owned('member') > 0, how: 'Join a club that does not exist.', text: [
+      'A laminated card granting access to the Bot Lounge, which does not exist. Each membership multiplies mini-game prizes. Members get a free coffee, which is broken.' ] },
+    { id: 'second', title: 'The Second Face', when: () => owned('second') > 0, how: 'There can only be one. Or can there?', text: [
+      'Nobody has seen the Second Face. It is believed to be standing directly behind the first one, clicking along. Each one doubles your points per click.',
+      'You now earn __PERCLICK__ per click.' ] },
     { id: 'bot', title: 'Yahu-Bot, Model YB-1', when: () => state.zaps > 0, how: 'Click a Yahu-Bot.', text: [
       'Powered by one AA battery and pure ambition. Worth at least 100 points, or far more for a well-upgraded Clicker. The red antenna is not a camera. It is definitely not a camera.',
       'You have zapped __ZAPS__ of them. They hold no grudges, because they do not remember anything.' ] },
@@ -871,6 +921,8 @@
     'The Order of the Rounded Corner did not plan for numbers this big.',
     'The Golden Mouse weighs four kilograms. Lift with your legs.',
     'The Ninety-Five are meeting again on Tuesday.',
+    'Legal is still reviewing the coffee machine situation.',
+    'Some say there is a Second Face. Some say there is not. Both are clicking.',
     'The Book remembers everything. Even the resets.',
   ];
 
@@ -880,6 +932,7 @@
     .replace('__SPINS__', fmt((Date.now() - pageOpened) / 30000))
     .replace('__CLICKS__', fmt(state.clicks)).replace('__ZAPS__', fmt(state.zaps))
     .replace('__LOUNGE__', fmt(state.mini.lounge || 0)).replace('__FLAGS__', fmt(state.mini.flags || 0))
+    .replace('__CRIT__', Math.round(critChance() * 100) + '%').replace('__PERCLICK__', fmt(perClick()))
     .replace('__CRITS__', fmt(state.crits)).replace('__RESETS__', fmt(state.resets));
   const unlocked = () => [
     ...chronicle.filter(c => state.total >= c.at).map(c => 'c' + c.at),
@@ -980,7 +1033,7 @@
   const miniEl = $('mini'), miniPages = $('minipages');
   let mg = null; // the running game, if any
   const miniOpen = () => !miniEl.hidden;
-  const rewardPer = () => Math.max(25, perClick() * 15 + Math.round(perSec() * 2));
+  const rewardPer = () => Math.max(25, perClick() * 15 + Math.round(perSec() * 2)) * (1 + owned('member'));
 
   function openMini(title, meta) {
     if (!loreEl.hidden) closeLore();
@@ -1198,7 +1251,7 @@
   const bots = new Set();
 
   function botReward() {
-    const base = Math.max(100, perSec() * 25 + perClick() * 30);
+    const base = Math.max(100, perSec() * 25 + perClick() * 30) * (1 + .25 * owned('foundry'));
     return Math.round(base * (1 + Math.random() * .5));
   }
 
@@ -1290,7 +1343,7 @@
   requestAnimationFrame(walk);
 
   function scheduleBot(first) {
-    setTimeout(() => { spawnBot(); scheduleBot(); }, first ? 6000 : 15000 + Math.random() * 20000);
+    setTimeout(() => { spawnBot(); scheduleBot(); }, first ? 6000 : (15000 + Math.random() * 20000) * Math.max(.25, Math.pow(.85, owned('foundry'))));
   }
   scheduleBot(true);
   window.spawnYahuBot = spawnBot; // handy for testing from the console
