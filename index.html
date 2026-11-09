@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bibi Clicker</title>
+<style>
+  :root {
+    --chroma: #00ff3c;
+    --bg: #111;
+    --panel: #1d1d1d;
+    --text: #f2f2f2;
+    --muted: #9a9a9a;
+    --accent: #ffd400;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    user-select: none;
+  }
+  h1 { margin: 20px 16px 4px; font-size: clamp(1.6rem, 5vw, 2.4rem); letter-spacing: 1px; }
+  #score { font-size: clamp(2rem, 8vw, 3.2rem); font-weight: 800; color: var(--accent); }
+  #rate { color: var(--muted); margin-bottom: 12px; }
+
+  main {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    justify-content: center;
+    padding: 0 16px 32px;
+    width: 100%;
+    max-width: 1000px;
+  }
+
+  /* The green screen */
+  #stage {
+    position: relative;
+    width: min(420px, 100%);
+    aspect-ratio: 3 / 4;
+    background: var(--chroma);
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: 0 0 40px rgba(0, 255, 60, .45), inset 0 0 60px rgba(0, 0, 0, .25);
+  }
+  /* uneven-lighting look of a cheap green screen */
+  #stage::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(255,255,255,.25), transparent 55%),
+      radial-gradient(ellipse at 80% 90%, rgba(0,0,0,.25), transparent 60%);
+    pointer-events: none;
+  }
+  #stage img {
+    position: absolute;
+    left: 50%; bottom: 0;
+    height: 92%;
+    max-width: 100%;
+    object-fit: contain;
+    transform: translateX(-50%);
+    transition: transform .06s;
+    /* green spill / bad-keying fringe around the cutout */
+    filter: drop-shadow(0 0 3px var(--chroma)) drop-shadow(0 0 10px rgba(0,255,60,.8));
+    pointer-events: none;
+  }
+  #stage.pressed img { transform: translateX(-50%) scale(.94); }
+
+  .pop {
+    position: absolute;
+    font-weight: 800;
+    font-size: 1.4rem;
+    color: #fff;
+    text-shadow: 0 2px 0 #000, 0 0 6px #000;
+    pointer-events: none;
+    animation: rise .8s ease-out forwards;
+  }
+  @keyframes rise {
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to   { opacity: 0; transform: translate(-50%, -80px); }
+  }
+
+  #shop {
+    width: min(360px, 100%);
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  #shop h2 { margin: 0 0 12px; font-size: 1.2rem; }
+  .item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid #333;
+    border-radius: 8px;
+    background: #262626;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .item:hover:not(:disabled) { border-color: var(--chroma); }
+  .item:disabled { opacity: .45; cursor: not-allowed; }
+  .item small { display: block; color: var(--muted); }
+  .item .cost { color: var(--accent); font-weight: 700; white-space: nowrap; }
+  #reset {
+    margin-top: 6px;
+    background: none; border: none; color: var(--muted);
+    text-decoration: underline; cursor: pointer; font: inherit;
+  }
+</style>
+</head>
+<body>
+  <h1>Bibi Clicker</h1>
+  <div id="score">0</div>
+  <div id="rate">0 per second</div>
+
+  <main>
+    <div id="stage" title="Click me!">
+      <img id="bibi" src="images/netanyahu.png" alt="Benjamin Netanyahu on a green screen">
+    </div>
+
+    <section id="shop">
+      <h2>Upgrades</h2>
+      <div id="items"></div>
+      <button id="reset">Reset progress</button>
+    </section>
+  </main>
+
+<script>
+  // Fallback if images/netanyahu.png hasn't been added yet: a simple silhouette.
+  const img = document.getElementById('bibi');
+  img.onerror = () => {
+    img.onerror = null;
+    img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400">
+         <circle cx="150" cy="120" r="70" fill="#222"/>
+         <path d="M30 400 C30 260 90 210 150 210 C210 210 270 260 270 400 Z" fill="#222"/>
+         <text x="150" y="130" font-size="22" text-anchor="middle" fill="#00ff3c"
+               font-family="sans-serif">add image</text>
+       </svg>`);
+  };
+
+  const upgrades = [
+    { id: 'finger',  name: 'Stronger Finger',  desc: '+1 per click',      cost: 15,    click: 1 },
+    { id: 'intern',  name: 'Campaign Intern',  desc: '+1 per second',     cost: 50,    auto: 1 },
+    { id: 'crew',    name: 'Camera Crew',      desc: '+5 per second',     cost: 300,   auto: 5 },
+    { id: 'mouse',   name: 'Golden Mouse',     desc: '+10 per click',     cost: 1000,  click: 10 },
+    { id: 'studio',  name: 'Green Screen Studio', desc: '+40 per second', cost: 5000,  auto: 40 },
+    { id: 'network', name: 'News Network',     desc: '+250 per second',   cost: 40000, auto: 250 },
+  ];
+
+  const SAVE_KEY = 'bibi-clicker-save';
+  let state = { score: 0, owned: {} };
+  try { Object.assign(state, JSON.parse(localStorage.getItem(SAVE_KEY)) || {}); } catch {}
+
+  const owned = id => state.owned[id] || 0;
+  const priceOf = u => Math.floor(u.cost * Math.pow(1.15, owned(u.id)));
+  const perClick = () => 1 + upgrades.reduce((s, u) => s + (u.click || 0) * owned(u.id), 0);
+  const perSec = () => upgrades.reduce((s, u) => s + (u.auto || 0) * owned(u.id), 0);
+  const fmt = n => Math.floor(n).toLocaleString();
+
+  const scoreEl = document.getElementById('score');
+  const rateEl = document.getElementById('rate');
+  const itemsEl = document.getElementById('items');
+  const stage = document.getElementById('stage');
+
+  // Build shop buttons
+  const buttons = {};
+  for (const u of upgrades) {
+    const b = document.createElement('button');
+    b.className = 'item';
+    b.onclick = () => {
+      const p = priceOf(u);
+      if (state.score < p) return;
+      state.score -= p;
+      state.owned[u.id] = owned(u.id) + 1;
+      render();
+    };
+    itemsEl.appendChild(b);
+    buttons[u.id] = b;
+  }
+
+  function render() {
+    scoreEl.textContent = fmt(state.score);
+    rateEl.textContent = `${fmt(perSec())} per second · ${fmt(perClick())} per click`;
+    for (const u of upgrades) {
+      const p = priceOf(u);
+      const b = buttons[u.id];
+      b.disabled = state.score < p;
+      b.innerHTML = `<span>${u.name} (${owned(u.id)})<small>${u.desc}</small></span>
+                     <span class="cost">${fmt(p)}</span>`;
+    }
+  }
+
+  stage.addEventListener('pointerdown', e => {
+    const gain = perClick();
+    state.score += gain;
+    stage.classList.add('pressed');
+
+    const r = stage.getBoundingClientRect();
+    const pop = document.createElement('div');
+    pop.className = 'pop';
+    pop.textContent = '+' + fmt(gain);
+    pop.style.left = (e.clientX - r.left) + 'px';
+    pop.style.top = (e.clientY - r.top - 20) + 'px';
+    stage.appendChild(pop);
+    setTimeout(() => pop.remove(), 800);
+    render();
+  });
+  addEventListener('pointerup', () => stage.classList.remove('pressed'));
+
+  document.getElementById('reset').onclick = () => {
+    if (!confirm('Reset all progress?')) return;
+    state = { score: 0, owned: {} };
+    render();
+  };
+
+  // Passive income, 10 ticks per second
+  setInterval(() => { state.score += perSec() / 10; render(); }, 100);
+  setInterval(() => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch {} }, 2000);
+
+  render();
+</script>
+</body>
+</html>
