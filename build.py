@@ -1,6 +1,6 @@
 """Builds the playable pages from src/, embedding each face image so it always shows.
 
-  src/game.html  + images/netanyahu.png + images/bot1-5.png -> index.html  (Bibi Clicker)
+  src/game.html  + images/netanyahu.png + images/bot1-5.png + images/trump.png -> index.html  (Bibi Clicker)
   src/trump.html + images/trump.png     -> trump.html  (Trump Clicker)
 
 Also writes artifact*.html (same page without the <html>/<head> wrapper) for publishing.
@@ -23,6 +23,10 @@ for src, img, out, art in GAMES:
             b = io.BytesIO()
             Image.open(f'images/bot{i}.png').save(b, 'WEBP', quality=85)
             body = body.replace(f'__BOT{i}__', base64.b64encode(b.getvalue()).decode())
+    if '__TRUMPFACE__' in body:  # Bibi Clicker's Takeover reveals Trump
+        b = io.BytesIO()
+        Image.open('images/trump.png').save(b, 'WEBP', quality=85)
+        body = body.replace('__TRUMPFACE__', base64.b64encode(b.getvalue()).decode())
     open(art, 'w').write(body)
     open(out, 'w').write(
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'

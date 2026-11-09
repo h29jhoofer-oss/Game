@@ -497,6 +497,86 @@
   .cp-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
   .anthem { margin: 0; white-space: pre-line; font-style: italic; font-weight: 700; line-height: 1.7; text-align: center; }
 
+  /* ===== THE TAKEOVER: when the score runs off the screen, Bibi splits and Trump takes over ===== */
+  #takeover {
+    position: fixed; inset: 0; z-index: 8; overflow: hidden;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+    transition: background .5s;
+  }
+  #takeover.dim { background: rgba(3,8,30,.55); }
+  .flash { position: fixed; inset: 0; z-index: 9; background: #fff; pointer-events: none; animation: flash .7s ease-out forwards; }
+  @keyframes flash { to { opacity: 0; } }
+  #face-wrap.worried { animation: nervous .12s linear infinite; }
+  @keyframes nervous { 25% { translate: calc(-50% - 2px) -50%; } 75% { translate: calc(-50% + 2px) -50%; } }
+  .sweat {
+    position: absolute; z-index: 3; width: 13%; aspect-ratio: 3 / 4;
+    background: radial-gradient(circle at 35% 60%, #fff 0 12%, #6fc3ff 14%); border: 2px solid var(--line);
+    border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%; clip-path: none;
+    animation: drip 1.1s ease-in infinite;
+  }
+  .sweat.s1 { left: 6%; top: 18%; }
+  .sweat.s2 { right: 4%; top: 26%; animation-delay: -.5s; }
+  @keyframes drip { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(70px); opacity: 0; } }
+  .crack { position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%; overflow: visible; }
+  .crack polyline { stroke-dasharray: 160; stroke-dashoffset: 160; animation: crack .5s ease-out forwards; }
+  @keyframes crack { to { stroke-dashoffset: 0; } }
+  .half { position: absolute; left: 0; top: 0; z-index: 2; width: 100%; height: auto; border-radius: 50%; }
+  .half.l { clip-path: polygon(0 0, 52% 0, 46% 30%, 54% 55%, 47% 100%, 0 100%); animation: splitL 1.1s cubic-bezier(.5,0,.8,.4) forwards; }
+  .half.r { clip-path: polygon(52% 0, 100% 0, 100% 100%, 47% 100%, 54% 55%, 46% 30%); animation: splitR 1.1s cubic-bezier(.5,0,.8,.4) forwards; }
+  @keyframes splitL { 15% { transform: translateX(-6%) rotate(-4deg); } 100% { transform: translate(-160%, 60%) rotate(-50deg); opacity: 0; } }
+  @keyframes splitR { 15% { transform: translateX(6%) rotate(4deg); } 100% { transform: translate(160%, 60%) rotate(50deg); opacity: 0; } }
+  .reveal {
+    position: absolute; left: 0; top: 0; z-index: 1; width: 100%; height: auto; border-radius: 50%;
+    box-shadow: 0 0 0 6px #fff, 0 0 0 10px var(--line), 0 10px 0 4px var(--line), 0 0 60px 20px rgba(255,197,49,.6);
+    animation: reveal 1.2s cubic-bezier(.2,1.4,.4,1) forwards;
+  }
+  @keyframes reveal { from { transform: scale(.7); filter: brightness(2); } }
+  .bill {
+    position: relative; width: min(500px, 100%);
+    background: #fffdf5; border: 4px solid var(--line); border-radius: 18px;
+    box-shadow: 0 7px 0 var(--line), 0 30px 60px rgba(0,0,0,.5);
+    padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;
+    color: #0a1a4f; animation: open .35s cubic-bezier(.2,1.3,.4,1);
+  }
+  .bill h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 1.5rem; letter-spacing: 1px; text-align: center; color: #b31942; }
+  .bill .who { margin: 0; text-align: center; font-weight: 800; font-size: .9rem; color: #5b6b9b; }
+  .bill .say { margin: 0; text-align: center; font-family: var(--display); font-size: 1.2rem; }
+  .bill table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: .9rem; table-layout: fixed; }
+  .bill td:first-child { width: 68%; }
+  .bill td { padding: 5px 2px; border-bottom: 1.5px dashed #c9cfe3; font-weight: 700; }
+  .bill td:last-child { text-align: right; font-weight: 900; white-space: nowrap; }
+  .bill tr.total td { border-bottom: none; border-top: 3px solid #0a1a4f; font-size: 1.05rem; color: #b31942; }
+  .bill .paid {
+    position: absolute; right: 18px; top: 42%; rotate: -14deg;
+    padding: 4px 14px; border: 4px solid #b31942; border-radius: 10px; color: #b31942;
+    font-family: var(--display); font-size: 2rem; letter-spacing: 3px; background: rgba(255,253,245,.85);
+    animation: stamp .35s cubic-bezier(.2,1.6,.4,1);
+  }
+  .bill .shake { animation: oops .3s; }
+
+  /* ===== TRUMP MODE ===== */
+  body.trump {
+    --night: #0b1230; --night-2: #5c1030;
+    --blue: #c8203f; --blue-2: #8c0f2b; --blue-soft: #f3d6dc; --sky: #ffc9d3;
+    --hover: #fff4e0;
+    --stage-1: #ef4a69; --stage-2: #a3122f; --stage-3: #2c0716;
+  }
+  body.trump .icon { background: linear-gradient(#e0405e, #a3122f); }
+  body.trump .logo .l2 { color: var(--gold); }
+
+  /* rednecks with comically large (toy) guns */
+  .bot.redneck { width: 150px; }
+  .bot.redneck .rig { animation: bob .4s ease-in-out infinite; }
+  .bot.left.redneck svg.body, .bot.left.eagle svg.body { transform: scaleX(-1); }
+  .bot.redneck .tag, .bot.eagle .tag { top: -26px; }
+  /* bald eagles */
+  .bot.eagle { width: 130px; }
+  .bot.eagle .rig { animation: none; }
+  .wing { transform-box: fill-box; transform-origin: 50% 100%; animation: flap .28s ease-in-out infinite alternate; }
+  .wing.far { animation-delay: -.08s; }
+  @keyframes flap { from { transform: scaleY(1); } to { transform: scaleY(-.55); } }
+
   /* speech bubbles with real quotes */
   .speech {
     position: absolute; left: 50%; bottom: calc(100% + 50px); translate: -50% 0;
@@ -667,6 +747,8 @@
   }
 
   @media (max-width: 700px) {
+    .bot.redneck { width: 112px; }
+    .bot.eagle { width: 100px; }
     .bot.drone { width: 104px; }
 
     .speech { max-width: 180px; }
@@ -788,6 +870,22 @@
       <polygon points="30,56 53,16 7,16"/>
     </g>
   </symbol>
+  <symbol id="us" viewBox="0 0 220 160">
+    <rect width="220" height="160" fill="#fff"/>
+    <rect y="0.00" width="220" height="12.31" fill="#b31942"/><rect y="24.62" width="220" height="12.31" fill="#b31942"/><rect y="49.23" width="220" height="12.31" fill="#b31942"/><rect y="73.85" width="220" height="12.31" fill="#b31942"/><rect y="98.46" width="220" height="12.31" fill="#b31942"/><rect y="123.08" width="220" height="12.31" fill="#b31942"/><rect y="147.69" width="220" height="12.31" fill="#b31942"/>
+    <rect width="96" height="86.15" fill="#0a3161"/>
+    <circle cx="9" cy="9" r="3.2" fill="#fff"/><circle cx="24" cy="9" r="3.2" fill="#fff"/><circle cx="39" cy="9" r="3.2" fill="#fff"/><circle cx="54" cy="9" r="3.2" fill="#fff"/><circle cx="69" cy="9" r="3.2" fill="#fff"/><circle cx="84" cy="9" r="3.2" fill="#fff"/><circle cx="16" cy="24" r="3.2" fill="#fff"/><circle cx="31" cy="24" r="3.2" fill="#fff"/><circle cx="46" cy="24" r="3.2" fill="#fff"/><circle cx="61" cy="24" r="3.2" fill="#fff"/><circle cx="76" cy="24" r="3.2" fill="#fff"/><circle cx="9" cy="39" r="3.2" fill="#fff"/><circle cx="24" cy="39" r="3.2" fill="#fff"/><circle cx="39" cy="39" r="3.2" fill="#fff"/><circle cx="54" cy="39" r="3.2" fill="#fff"/><circle cx="69" cy="39" r="3.2" fill="#fff"/><circle cx="84" cy="39" r="3.2" fill="#fff"/><circle cx="16" cy="54" r="3.2" fill="#fff"/><circle cx="31" cy="54" r="3.2" fill="#fff"/><circle cx="46" cy="54" r="3.2" fill="#fff"/><circle cx="61" cy="54" r="3.2" fill="#fff"/><circle cx="76" cy="54" r="3.2" fill="#fff"/><circle cx="9" cy="69" r="3.2" fill="#fff"/><circle cx="24" cy="69" r="3.2" fill="#fff"/><circle cx="39" cy="69" r="3.2" fill="#fff"/><circle cx="54" cy="69" r="3.2" fill="#fff"/><circle cx="69" cy="69" r="3.2" fill="#fff"/><circle cx="84" cy="69" r="3.2" fill="#fff"/><circle cx="16" cy="84" r="3.2" fill="#fff"/><circle cx="31" cy="84" r="3.2" fill="#fff"/><circle cx="46" cy="84" r="3.2" fill="#fff"/><circle cx="61" cy="84" r="3.2" fill="#fff"/><circle cx="76" cy="84" r="3.2" fill="#fff"/>
+  </symbol>
+  <symbol id="star5" viewBox="0 0 60 60">
+    <polygon points="30,4 37.6,21.6 56.6,23.3 42.3,35.9 46.4,54.4 30,44.7 13.6,54.4 17.7,35.9 3.4,23.3 22.4,21.6" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="coin5" viewBox="0 0 40 40">
+    <circle cx="20" cy="21.5" r="17" fill="#b27800" stroke="#0a1a4f" stroke-width="2.5"/>
+    <circle cx="20" cy="19" r="17" fill="#ffc531" stroke="#0a1a4f" stroke-width="2.5"/>
+    <circle cx="20" cy="19" r="12.5" fill="none" stroke="#e0a000" stroke-width="2"/>
+    <polygon points="20,10.5 22.3,16.4 28.6,16.7 23.7,20.6 25.3,26.7 20,23.2 14.7,26.7 16.3,20.6 11.4,16.7 17.7,16.4" fill="#b27800"/>
+    <path d="M10 13a12 12 0 0 1 8-6" stroke="#fff6d0" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </symbol>
   <symbol id="coin" viewBox="0 0 40 40">
     <circle cx="20" cy="21.5" r="17" fill="#b27800" stroke="#0a1a4f" stroke-width="2.5"/>
     <circle cx="20" cy="19" r="17" fill="#ffc531" stroke="#0a1a4f" stroke-width="2.5"/>
@@ -851,6 +949,7 @@
 
 <div class="band"></div>
 <div id="toast" role="status"></div>
+<div id="takeover" hidden role="dialog" aria-modal="true" aria-label="Takeover"></div>
 <div id="checkpoint" hidden role="dialog" aria-modal="true" aria-labelledby="cpsay">
   <div class="stamp">CHECKPOINT</div>
   <div class="cp-bot" id="cpbot"></div>
@@ -924,10 +1023,23 @@
     green:   I('<rect x="3" y="4" width="18" height="13" rx="2" fill="#00ff3c" stroke="#00a828"/><circle cx="12" cy="9.5" r="2.6" fill="#0038b8" stroke="none"/><path d="M8 17c.6-2.5 2.2-3.6 4-3.6s3.4 1.1 4 3.6" fill="#0038b8" stroke="none"/><path d="M9 21h6M12 17v4" stroke="#00a828"/>'),
     member:  I('<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/><circle cx="7.5" cy="14" r="2"/><path d="M12 13h6M12 16h4"/>'),
     second:  I('<ellipse cx="9" cy="12" rx="5" ry="6.5"/><ellipse cx="15" cy="12" rx="5" ry="6.5" stroke-dasharray="2.5 2"/><path d="M7.2 11h.01M10.8 11h.01M7.5 14.5c1 .8 2 .8 3 0" stroke-width="2.4"/>'),
+    pen:     I('<path d="M4 20l4-1 11-11-3-3L5 16z" fill="#ffc531" stroke="currentColor"/><path d="M14 6l3 3"/>'),
+    hat:     I('<path d="M5 15a7 7 0 0 1 14 0z" fill="currentColor"/><path d="M2 15h20"/>'),
+    crowd:   I('<circle cx="6.5" cy="9" r="2.3"/><circle cx="17.5" cy="9" r="2.3"/><circle cx="12" cy="7" r="2.8"/><path d="M2 20c0-3 2-5 4.5-5M22 20c0-3-2-5-4.5-5M7 20c0-4 2-6 5-6s5 2 5 6"/>'),
+    golf:    I('<path d="M8 21V3l9 4-9 4"/><ellipse cx="8" cy="21" rx="5" ry="1.4"/>'),
+    post:    I('<rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M10 18h4M9 7h6M9 10h6M9 13h4"/>'),
+    escal:   I('<path d="M3 20h4l10-12h4" stroke="#ffc531" stroke-width="2.6"/><path d="M3 20h4l10-12h4"/><path d="M6 16l8-9"/>'),
+    tower:   I('<path d="M8 21V3h8v18M5 21h14"/><path d="M10.5 6h.01M13.5 6h.01M10.5 10h.01M13.5 10h.01M10.5 14h.01M13.5 14h.01" stroke-width="2.4"/>'),
+    steak:   I('<path d="M5 13c0-5 4-9 9-9 4 0 6 3 6 6 0 6-6 10-11 10-2.5 0-4-2-4-7z"/><circle cx="13" cy="10" r="2.3"/>'),
+    tariff:  I('<rect x="3" y="8" width="18" height="12" rx="1.5"/><path d="M3 12h18"/><path d="M8 8l2-4h4l2 4"/><path d="M13.6 14.4c0-.6-.7-1-1.6-1s-1.6.4-1.6 1 .7.9 1.6 1 1.6.4 1.6 1-.7 1-1.6 1-1.6-.4-1.6-1M12 12.6v6"/>'),
+    space:   I('<path d="M12 2c3 3 4 7 3 12h-6C8 9 9 5 12 2z"/><path d="M9 14l-3 3v3l3-2M15 14l3 3v3l-3-2M10 18h4"/><circle cx="12" cy="8.5" r="1.4"/>'),
+    sanct:   I('<path d="M20 4C10 4 5 10 4 20c3-6 7-8 12-8-4 0-6-1-7-2 5 0 9-2 11-6z"/>'),
+    goldall: I('<path d="M4 18l3-8h10l3 8z" fill="#ffc531" stroke="#9a7a00"/><path d="M8 14h8" stroke="#9a7a00"/><path d="M7 7l1-3M12 6V3M17 7l-1-3" stroke="#ffc531"/>'),
+    pen2:    I('<path d="M3 18l3-1 8-8-2-2-8 8zM10 21l3-1 8-8-2-2-8 8z"/>'),
     mystery: I('<path d="M9 9a3 3 0 1 1 4.5 2.6c-1 .6-1.5 1.2-1.5 2.4"/><path d="M12 18h.01" stroke-width="3"/><circle cx="12" cy="12" r="10" stroke-dasharray="3 3"/>'),
   };
 
-  const upgrades = [
+  let upgrades = [
     { id: 'finger',  name: 'Stronger Finger',  desc: '+1 per click',     cost: 15,     click: 1 },
     { id: 'intern',  name: 'Campaign Intern',  desc: '+1 per second',    cost: 50,     auto: 1 },
     { id: 'crew',    name: 'Camera Crew',      desc: '+5 per second',    cost: 300,    auto: 5 },
@@ -942,6 +1054,23 @@
     { id: 'green',   name: 'Restored Green Screen', desc: '+5M per second. Cursed.',        cost: 1.5e9, auto: 5e6 },
     { id: 'member',  name: 'Bot Lounge Membership', desc: '+25M per second, mini-game prizes up', cost: 8e9, auto: 2.5e7 },
     { id: 'second',  name: 'The Second Face',    desc: 'Doubles points per click',          cost: 5e10 },
+  ];
+  const bibiUpgrades = upgrades;
+  // after the Takeover the shop is completely different
+  const trumpUpgrades = [
+    { id: 'pen',     name: 'Golden Pen',         desc: '+1 per click',      cost: 15,     click: 1 },
+    { id: 'hat',     name: 'Red Hat Stand',      desc: '+1 per second',     cost: 50,     auto: 1 },
+    { id: 'crowd',   name: 'Rally Crowd',        desc: '+5 per second',     cost: 300,    auto: 5 },
+    { id: 'golf',    name: 'Golf Cart',          desc: '+10 per click',     cost: 1000,   click: 10 },
+    { id: 'post',    name: 'Late-Night Post',    desc: '+40 per second',    cost: 5000,   auto: 40 },
+    { id: 'escal',   name: 'Golden Escalator',   desc: '+250 per second',   cost: 40000,  auto: 250 },
+    { id: 'tower',   name: 'Very Tall Tower',    desc: '+1,500 per second', cost: 300000, auto: 1500 },
+    { id: 'steak',   name: 'Steak Empire',       desc: '+8,000 per second', cost: 2e6,    auto: 8000 },
+    { id: 'tariff',  name: 'Tariff Machine',     desc: '+40,000 per second', cost: 1e7,   auto: 40000 },
+    { id: 'space',   name: 'Space Force',        desc: '+180,000 per second', cost: 5e7,  auto: 180000 },
+    { id: 'sanct',   name: 'Eagle Sanctuary',    desc: '+900,000 per second, more eagles', cost: 2.5e8, auto: 900000 },
+    { id: 'goldall', name: 'Gold Everything',    desc: '+5M per second',    cost: 1.5e9,  auto: 5e6 },
+    { id: 'pen2',    name: 'A Second Golden Pen', desc: 'Doubles points per click', cost: 5e10 },
   ];
 
   const SAVE_KEY = 'bibi-clicker-save';
@@ -960,12 +1089,17 @@
 
   const owned = id => state.owned[id] || 0;
   const priceOf = u => Math.floor(u.cost * Math.pow(1.15, owned(u.id)));
-  const perClick = () => (1 + upgrades.reduce((s, u) => s + (u.click || 0) * owned(u.id), 0)) * Math.pow(2, owned('second'));
+  const perClick = () => (1 + upgrades.reduce((s, u) => s + (u.click || 0) * owned(u.id), 0)) * Math.pow(2, owned('second') + owned('pen2'));
   // the Fixed Coffee Machine multiplies what the Interns produce
   const perSec = () => upgrades.reduce((s, u) => s + (u.auto || 0) * owned(u.id) * (u.id === 'intern' ? Math.pow(2, owned('coffee')) : 1), 0);
   const critChance = () => 0.05 + 0.01 * Math.min(20, owned('polish'));
-  const short = n => n < 1e6 ? Math.floor(n).toLocaleString()
-    : (n / Math.pow(1000, Math.floor(Math.log10(n) / 3))).toFixed(n < 1e15 ? 1 : 0).replace(/\.0$/, '') + ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi'][Math.floor(Math.log10(n) / 3)];
+  const SUFFIX = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
+  const short = n => {
+    if (n < 1e6) return Math.floor(n).toLocaleString();
+    const k = Math.floor(Math.log10(n) / 3);
+    if (k >= SUFFIX.length) return n.toExponential(2).replace('e+', 'e');
+    return (n / Math.pow(1000, k)).toFixed(1).replace(/\.0$/, '') + SUFFIX[k];
+  };
   const fmt = n => Math.floor(n).toLocaleString();
 
   const $ = id => document.getElementById(id);
@@ -1066,6 +1200,13 @@
       78,_,78,79, 81,_,_,78,    83,_,81,_, 78,_,74,_,    79,_,79,81, 83,_,79,_,    81,_,_,_, 76,_,78,_,
       78,_,78,79, 81,_,_,78,    83,_,81,_, 78,_,74,_,    79,_,83,_, 86,_,85,_,     86,_,_,_, _,_,_,_,
     ];
+    // Trump mode: a brassy original march, same chords
+    const leadT = [
+      74,_,74,_, 78,78,81,_,    83,_,81,_, 78,_,74,_,    79,_,79,_, 83,83,86,_,    85,_,_,_, 81,_,_,_,
+      74,_,74,_, 78,78,81,_,    83,_,86,_, 83,_,78,_,    79,_,83,_, 81,_,79,_,     78,_,76,_, 74,_,_,_,
+      86,_,_,86, 85,_,83,_,     81,_,78,_, 74,_,_,_,     79,_,_,79, 81,_,83,_,     85,_,_,_, 81,_,_,_,
+      86,_,_,86, 85,_,83,_,     81,_,78,_, 74,_,78,_,    79,_,81,_, 83,_,85,_,     86,_,_,_, _,_,_,_,
+    ];
     const roots = [50, 47, 43, 45, 50, 47, 43, 45, 50, 47, 43, 45, 50, 47, 45, 50]; // D Bm G A ...
     const chordOf = r => r === 47 ? [59, 62, 66] : r === 43 ? [55, 59, 62] : r === 45 ? [57, 61, 64] : [57, 62, 66];
     const hz = m => 440 * Math.pow(2, (m - 69) / 12);
@@ -1089,9 +1230,10 @@
           next += STEP * 1.25; step++;
           continue;
         }
-        const t = next, bar = Math.floor(step / 8) % 16, s8 = step % 8, i = step % lead.length;
+        const L = window.__trump ? leadT : lead;
+        const t = next, bar = Math.floor(step / 8) % 16, s8 = step % 8, i = step % L.length;
         const r = roots[bar];
-        if (lead[i]) tone(hz(lead[i]), t, STEP * 1.6, 'square', .05, null, musicBus);
+        if (L[i]) tone(hz(L[i]), t, STEP * 1.6, window.__trump ? 'sawtooth' : 'square', window.__trump ? .04 : .05, null, musicBus);
         if (s8 % 2 === 0) tone(hz(r + (s8 % 4 ? 12 : 0) - 12), t, STEP * 1.8, 'triangle', .22, null, musicBus);
         if (s8 === 0) chordOf(r).forEach(m => tone(hz(m), t, STEP * 7, 'sine', .035, null, musicBus));
         if (s8 === 0 || s8 === 4) tone(140, t, .14, 'sine', .35, 45, musicBus);   // kick
@@ -1147,11 +1289,14 @@
     fanfare() { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * .11, i === 3 ? .5 : .14, 'triangle', .2)); },
   };
 
-  const buttons = {};
+  let buttons = {};
+  function buildShop() {
+  $('items').innerHTML = '';
+  buttons = {};
   for (const u of upgrades) {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'item';
-    b.title = 'Buy it to unlock its entry in the Codex.';
+    if (!window.__trump) b.title = 'Buy it to unlock its entry in the Codex.';
     b.innerHTML = `<span class="icon"></span><span class="label"><span class="name"></span><span class="count">0</span><small></small></span><span class="cost"></span>`;
     b.onclick = () => {
       const p = priceOf(u);
@@ -1165,6 +1310,8 @@
     $('items').appendChild(b);
     buttons[u.id] = b;
   }
+  }
+  buildShop();
 
   function render() {
     scoreEl.textContent = fmt(state.score);
@@ -1186,6 +1333,7 @@
     face.classList.toggle('cursed', owned('green') > 0);
     checkMilestone();
     checkLore();
+    checkOverflow();
   }
 
   // milestones: 100, 1k, 10k, ...
@@ -1241,7 +1389,7 @@
       const n = crit ? 12 : 5;
       for (let i = 0; i < n; i++) {
         const a = Math.random() * Math.PI * 2, d = 50 + Math.random() * (crit ? 110 : 60);
-        const s = spawn('spark', x, y, '<svg viewBox="0 0 60 60" width="18" height="18"><use href="#star"/></svg>');
+        const s = spawn('spark', x, y, `<svg viewBox="0 0 60 60" width="18" height="18"><use href="${window.__trump ? '#star5' : '#star'}"/></svg>`);
         s.style.setProperty('--dx', Math.cos(a) * d + 'px');
         s.style.setProperty('--dy', Math.sin(a) * d + 'px');
         s.style.setProperty('--rot', (Math.random() * 360 - 180) + 'deg');
@@ -1273,6 +1421,11 @@
     }
     clearTimeout(armTimer);
     reset.classList.remove('armed'); reset.textContent = 'Reset progress';
+    if (window.__trump) {
+      try { localStorage.setItem(SAVE_KEY, JSON.stringify({ score: 0, owned: {}, best: 0 })); } catch (e) {}
+      location.reload();
+      return;
+    }
     state = { ...state, score: 0, owned: {}, best: 0, resets: state.resets + 1 };
     render();
   };
@@ -1282,7 +1435,7 @@
   function launchFlag() {
     const f = document.createElement('div');
     f.className = 'drift';
-    f.innerHTML = '<svg class="flag" style="width:100%" viewBox="0 0 220 160"><use href="#il"/></svg>';
+    f.innerHTML = `<svg class="flag" style="width:100%" viewBox="0 0 220 160"><use href="${window.__trump ? '#us' : '#il'}"/></svg>`;
     f.style.left = Math.random() * 100 + 'vw';
     f.style.animationDuration = 9 + Math.random() * 8 + 's';
     f.style.setProperty('--spin', (Math.random() * 60 - 30) + 'deg');
@@ -1446,6 +1599,7 @@
   let fresh = new Set();
 
   function checkLore() {
+    if (window.__trump) return;
     const now = unlocked();
     const added = now.filter(k => !state.seen.includes(k));
     if (!added.length) return;
@@ -1462,6 +1616,14 @@
   }
 
   function renderLore() {
+    if (window.__trump) {
+      $('loremeta').textContent = '0 of 0 chapters · 0 of 0 codex entries · taxed at 100%';
+      pagesEl.innerHTML = `<article class="entry"><h3>This book has been taxed.</h3>
+        <p>Every chapter, every Codex entry, the Benji Anthem, the Bot Lounge (which does not exist) and the coffee machine were seized at a rate of 100%.</p>
+        <p>The pages are blank now. Somewhere, a Yahu-Bot is filing an appeal.</p>
+        <p class="note">To get the lore back, reset your progress. Bibi will be waiting.</p></article>`;
+      return;
+    }
     const isChron = loreTab === 'chron';
     $('tab-chron').setAttribute('aria-selected', isChron);
     $('tab-codex').setAttribute('aria-selected', !isChron);
@@ -1524,7 +1686,8 @@
     whisperEl.classList.add('fade');
     setTimeout(() => {
       wi = (wi + 1) % whispers.length;
-      whisperEl.textContent = '“' + (document.body.classList.contains('uneasy') || document.body.classList.contains('overclick')
+      whisperEl.textContent = window.__trump ? trumpWhispers[wi % trumpWhispers.length]
+        : '“' + (document.body.classList.contains('uneasy') || document.body.classList.contains('overclick')
         ? darkWhispers[wi % darkWhispers.length] : whispers[wi]) + '”';
       whisperEl.classList.remove('fade');
     }, calm ? 0 : 400);
@@ -1640,7 +1803,7 @@
   }
 
   // trigger: click the whisper while it talks about the Bot Lounge
-  whisperEl.onclick = () => (/Bot Lounge/.test(whisperEl.textContent) ? openLounge() : openLore());
+  whisperEl.onclick = () => (!window.__trump && /Bot Lounge/.test(whisperEl.textContent) ? openLounge() : openLore());
   whisperEl.addEventListener('keydown', e => {
     if ((e.key === 'Enter' || e.key === ' ') && /Bot Lounge/.test(whisperEl.textContent)) { e.stopImmediatePropagation(); e.preventDefault(); openLounge(); }
   }, true);
@@ -1734,6 +1897,7 @@
   let flagTaps = 0, flagTimer;
   stage.querySelectorAll('.corner').forEach(c => c.addEventListener('pointerdown', e => {
     e.stopPropagation();
+    if (window.__trump) return;
     flagTaps++;
     c.animate([{ scale: 1 }, { scale: 1.35 }, { scale: 1 }], { duration: 250 });
     tone(700 + flagTaps * 200, 0, .1, 'triangle', .15);
@@ -1763,6 +1927,7 @@
 
   // returns true when the click was spent fighting the Overclick
   function overclickHit() {
+    if (window.__trump || takeoverOn) return false;
     const now = performance.now();
     if (oc.active) {
       oc.calmed++;
@@ -1932,14 +2097,17 @@
     if (countKind(kind) >= (kind === 'drone' ? 1 : 2)) return;
     const W = innerWidth, H = innerHeight, isDrone = kind === 'drone';
     const goLeft = Math.random() < .5;
-    const name = isDrone ? 'Benji-Drone' : 'Yahu-Bot';
+    const trumpMode = window.__trump;
+    const name = trumpMode ? (isDrone ? 'Bald Eagle' : 'Redneck') : (isDrone ? 'Benji-Drone' : 'Yahu-Bot');
     const el = document.createElement('div');
-    el.className = (isDrone ? 'bot drone' : 'bot') + (goLeft ? ' left' : '');
+    el.className = (trumpMode ? (isDrone ? 'bot eagle' : 'bot redneck') : (isDrone ? 'bot drone' : 'bot')) + (goLeft ? ' left' : '');
     el.tabIndex = 0;
     el.setAttribute('role', 'button');
     el.setAttribute('aria-label', `${name}: click for bonus points`);
     const head = `<img class="head" alt="" src="${draw(faceBag, BOT_FACES)}">`;
-    el.innerHTML = isDrone
+    el.innerHTML = trumpMode
+      ? `<div class="rig"><span class="tag">${name}</span>${isDrone ? eagleBody : redneckBody}</div>`
+      : isDrone
       ? `<div class="rig"><span class="tag">${name}</span>${droneBody}${head}</div>`
       : `<div class="rig"><span class="tag">${name}</span><div style="position:relative"><span class="antenna"></span>${head}</div>${botBody}</div>`;
     botLayer.appendChild(el);
@@ -1960,10 +2128,15 @@
     // after a moment, it says something he has actually said
     const sayT = setTimeout(() => {
       if (bot.done || !el.isConnected) return;
-      const { q, src } = draw(quoteBag, QUOTES);
       const b = document.createElement('div');
       b.className = 'speech';
-      b.innerHTML = `<span class="q">“${q}”</span><span class="src">${src}</span>`;
+      if (trumpMode) {
+        b.innerHTML = `<span class="q">${isDrone ? 'SCREEEEE!' : draw(yeeBag, YEEHAWS)}</span>`;
+        if (isDrone) tone(2200, 0, .35, 'sawtooth', .05, 1300);
+      } else {
+        const { q, src } = draw(quoteBag, QUOTES);
+        b.innerHTML = `<span class="q">“${q}”</span><span class="src">${src}</span>`;
+      }
       el.querySelector('.rig').appendChild(b);
       tone(880, 0, .05, 'square', .04); tone(1175, .06, .06, 'square', .04);
       setTimeout(() => b.classList.add('bye'), 3600);
@@ -1997,14 +2170,14 @@
         const sp = document.createElement('div');
         sp.className = 'spark fxspark';
         sp.style.left = cx + 'px'; sp.style.top = cy + 'px';
-        sp.innerHTML = '<svg viewBox="0 0 60 60" width="18" height="18"><use href="#star"/></svg>';
+        sp.innerHTML = `<svg viewBox="0 0 60 60" width="18" height="18"><use href="${window.__trump ? '#star5' : '#star'}"/></svg>`;
         sp.style.setProperty('--dx', Math.cos(a) * d + 'px');
         sp.style.setProperty('--dy', Math.sin(a) * d + 'px');
         sp.style.setProperty('--rot', (Math.random() * 360 - 180) + 'deg');
         document.body.appendChild(sp);
         sp.addEventListener('animationend', () => sp.remove());
       }
-      showToast(`${name} zapped! +${fmt(gain)}`);
+      showToast(trumpMode ? `${isDrone ? 'Eagle spotted!' : 'Yeehaw!'} +${fmt(gain)}` : `${name} zapped! +${fmt(gain)}`);
       render();
     };
     el.addEventListener('pointerdown', zap);
@@ -2076,7 +2249,7 @@
   const cpEl = $('checkpoint'), cpBot = $('cpbot'), cpCard = $('cpcard'), cpSay = $('cpsay'), cpBody = $('cpbody');
 
   function maybeCheckpoint(faceSrc, side) {
-    if (window.__frozen || oc.active || miniOpen() || !loreEl.hidden || introOn || document.hidden) return;
+    if (window.__trump || window.__frozen || oc.active || miniOpen() || !loreEl.hidden || introOn || document.hidden) return;
     if (performance.now() - cpLast < CP_COOLDOWN) return;
     cpLast = performance.now();
     startCheckpoint(faceSrc, side);
@@ -2198,7 +2371,214 @@
   }
   window.checkpoint = () => startCheckpoint(BOT_FACES[0], 'right'); // for testing from the console
 
-  const foundryMul = () => Math.max(.25, Math.pow(.85, owned('foundry')));
+
+  // ---- Trump-mode characters ----
+  const YEEHAWS = ['YEEHAW!', 'FREEDOM!', "'MURICA!", 'Git off my lawn!', 'Is that a Yahu-Bot?', 'This here is a normal-sized gun.'];
+  let yeeBag = [];
+  const redneckBody = `<svg class="body" viewBox="0 0 170 132" aria-hidden="true">
+      <g class="leg a"><rect x="34" y="88" width="13" height="30" rx="4" fill="#3d5fa8" stroke="#0a1a4f" stroke-width="2.5"/><rect x="30" y="114" width="22" height="10" rx="4" fill="#6b3b17" stroke="#0a1a4f" stroke-width="2.5"/></g>
+      <g class="leg b"><rect x="50" y="88" width="13" height="30" rx="4" fill="#3d5fa8" stroke="#0a1a4f" stroke-width="2.5"/><rect x="46" y="114" width="22" height="10" rx="4" fill="#6b3b17" stroke="#0a1a4f" stroke-width="2.5"/></g>
+      <rect x="28" y="50" width="42" height="44" rx="10" fill="#c8203f" stroke="#0a1a4f" stroke-width="3"/>
+      <path d="M28 62h42M28 74h42M40 50v44M56 50v44" stroke="#8c0f2b" stroke-width="2"/>
+      <path d="M33 62h32v26a6 6 0 0 1-6 6H39a6 6 0 0 1-6-6z" fill="#3d5fa8" stroke="#0a1a4f" stroke-width="3"/>
+      <path d="M37 50v14M61 50v14" stroke="#3d5fa8" stroke-width="4"/>
+      <circle cx="49" cy="32" r="17" fill="#f1c27d" stroke="#0a1a4f" stroke-width="3"/>
+      <path d="M33 34c2 14 9 20 16 20s14-6 16-20c-5 5-10 6-16 6s-11-1-16-6z" fill="#8a5a2b" stroke="#0a1a4f" stroke-width="2.5"/>
+      <rect x="38" y="25" width="25" height="7" rx="3" fill="#0a1a4f"/>
+      <path d="M31 22c1-11 8-16 18-16s17 5 18 13" fill="#c8203f" stroke="#0a1a4f" stroke-width="3"/>
+      <path d="M58 18c8 0 14 2 19 5" stroke="#0a1a4f" stroke-width="5" stroke-linecap="round"/>
+      <path d="M58 18c8 0 14 2 19 5" stroke="#c8203f" stroke-width="2" stroke-linecap="round"/>
+      <rect x="36" y="58" width="134" height="11" rx="3" fill="#4a4f5c" stroke="#0a1a4f" stroke-width="3"/>
+      <rect x="160" y="57" width="10" height="13" rx="2" fill="#ff7a1a" stroke="#0a1a4f" stroke-width="2.5"/>
+      <path d="M36 60l-14 4v12l18-2z" fill="#7a4a22" stroke="#0a1a4f" stroke-width="3" stroke-linejoin="round"/>
+      <rect x="78" y="45" width="40" height="9" rx="4.5" fill="#2b2f3a" stroke="#0a1a4f" stroke-width="2.5"/>
+      <rect x="92" y="35" width="24" height="7" rx="3.5" fill="#2b2f3a" stroke="#0a1a4f" stroke-width="2.5"/>
+      <circle cx="95" cy="76" r="10" fill="#2b2f3a" stroke="#0a1a4f" stroke-width="3"/>
+      <rect x="120" y="69" width="7" height="14" rx="2" fill="#2b2f3a" stroke="#0a1a4f" stroke-width="2.5"/>
+      <rect x="62" y="56" width="16" height="9" rx="4.5" fill="#f1c27d" stroke="#0a1a4f" stroke-width="2.5"/>
+    </svg>`;
+  const eagleBody = `<svg class="body" viewBox="0 0 150 96" aria-hidden="true">
+      <path class="wing far" d="M66 46C60 26 70 8 92 4c-4 12-2 24 4 34z" fill="#3e2410" stroke="#0a1a4f" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M38 48L8 36l8 14-10 10 32-4z" fill="#fff" stroke="#0a1a4f" stroke-width="3" stroke-linejoin="round"/>
+      <ellipse cx="72" cy="54" rx="38" ry="15" fill="#5a3416" stroke="#0a1a4f" stroke-width="3"/>
+      <path d="M70 68l-4 10M84 68l2 10" stroke="#ffc531" stroke-width="4" stroke-linecap="round"/>
+      <path d="M100 42c4-12 26-12 30 2 2 8-6 14-16 14-8 0-16-6-14-16z" fill="#fff" stroke="#0a1a4f" stroke-width="3"/>
+      <path d="M126 44c8 0 14 3 16 7-5 1-10 2-15 0z" fill="#ffc531" stroke="#0a1a4f" stroke-width="2.5" stroke-linejoin="round"/>
+      <circle cx="119" cy="44" r="2.6" fill="#0a1a4f"/>
+      <path d="M113 40l9-2" stroke="#0a1a4f" stroke-width="2.5" stroke-linecap="round"/>
+      <path class="wing" d="M58 50C50 26 64 6 90 0c-6 14-2 28 8 40z" fill="#6b3f1a" stroke="#0a1a4f" stroke-width="3" stroke-linejoin="round"/>
+    </svg>`;
+
+  // =====================================================================
+  //  THE TAKEOVER
+  //  When the score gets so big it runs off the screen, Bibi looks worried,
+  //  splits in half and reveals Trump, who taxes everything at 100%.
+  //  Then the game restarts as Trump Clicker, with no lore at all.
+  // =====================================================================
+  const TRUMP_FACE = 'data:image/webp;base64,__TRUMPFACE__';
+  const trumpWhispers = [
+    '“You’re fired!” (his catchphrase on The Apprentice)',
+    '“Make America Great Again.” (campaign slogan)',
+    '“Covfefe.” (a 2017 post)',
+    'The lore was taxed. All of it.',
+    'Somewhere, a Yahu-Bot is filing an appeal.',
+    'The eagles do not pay taxes.',
+    'Bibi is fine. Probably.',
+    'The rednecks are just passing through.',
+  ];
+  let takeoverOn = false;
+  const plaqueEl = document.querySelector('.plaque');
+  const tk = $('takeover');
+
+  function checkOverflow() {
+    if (window.__trump || takeoverOn || window.__frozen || oc.active || introOn) return;
+    const r = plaqueEl.getBoundingClientRect();
+    if (r.width && (r.left < 2 || r.right > innerWidth - 2)) startTakeover();
+  }
+
+  function swapSymbols() {
+    document.querySelectorAll('use').forEach(u => {
+      const h = u.getAttribute('href');
+      const to = { '#il': '#us', '#star': '#star5', '#coin': '#coin5' }[h];
+      if (to) u.setAttribute('href', to);
+    });
+  }
+  function applyTrumpMode() {
+    window.__trump = true;
+    document.body.classList.add('trump');
+    document.title = 'Trump Clicker';
+    face.src = TRUMP_FACE;
+    face.alt = 'Donald Trump';
+    stage.setAttribute('aria-label', 'Click Trump to earn points');
+    swapSymbols();
+    titleEl.innerHTML = '<span class="l1">Trump</span><span class="l2">Clicker</span>';
+    const it = document.getElementById('introtitle');
+    if (it) it.innerHTML = '<span class="l1">Trump</span><span class="l2">Clicker</span>';
+    const ifc = document.getElementById('introface');
+    if (ifc) ifc.src = TRUMP_FACE;
+    const tg = document.querySelector('.tagline');
+    if (tg) tg.textContent = 'A clicker game. The lore has been taxed.';
+    $('loretitle').textContent = 'The Book of Bibi (Taxed)';
+    document.querySelector('#lore .tabs').hidden = true;
+    loreBtn.classList.remove('new');
+    upgrades = trumpUpgrades;
+    buildShop();
+    whisperEl.textContent = trumpWhispers[0];
+  }
+
+  function startTakeover() {
+    takeoverOn = true;
+    window.__frozen = true;
+    if (!loreEl.hidden) closeLore();
+    if (miniOpen()) closeMini();
+    for (const b of bots) b.el.remove(); bots.clear();
+    if (musicBus) musicBus.gain.setTargetAtTime(0, ac.currentTime, .3);
+    tk.hidden = false; tk.className = ''; tk.innerHTML = '';
+    toastQueue.length = 0;
+    const fw = $('face-wrap');
+    const bibiSrc = face.src;
+
+    // 1. Bibi looks worried
+    face.src = BOT_FACES[2];
+    fw.classList.add('worried');
+    fw.insertAdjacentHTML('beforeend', '<i class="sweat s1"></i><i class="sweat s2"></i>');
+    whisperEl.textContent = '“Something is wrong with the numbers.”';
+    showToast('Uh oh.');
+    [0, .35, .7, 1.05].forEach((t, k) => tone(300 - k * 30, t, .3, 'triangle', .14, 260 - k * 30));
+
+    // 2. a crack runs down the middle
+    setTimeout(() => {
+      fw.insertAdjacentHTML('beforeend', '<svg class="crack" viewBox="0 0 100 100" preserveAspectRatio="none"><polyline points="52,-2 46,30 54,55 47,102" fill="none" stroke="#fff" stroke-width="5"/><polyline points="52,-2 46,30 54,55 47,102" fill="none" stroke="#0a1a4f" stroke-width="2.5"/></svg>');
+      if (ac && !muted) noise(ac.currentTime, .25, .3, 1200, sfxBus);
+      tone(160, 0, .2, 'square', .1, 80);
+    }, 2300);
+
+    // 3. it splits in half and Trump is underneath
+    setTimeout(() => {
+      fw.classList.remove('worried');
+      fw.querySelectorAll('.sweat, .crack').forEach(x => x.remove());
+      fw.insertAdjacentHTML('beforeend', `<img class="reveal" alt="" src="${TRUMP_FACE}"><img class="half l" alt="" src="${face.src}"><img class="half r" alt="" src="${face.src}">`);
+      face.style.visibility = 'hidden';
+      document.body.insertAdjacentHTML('beforeend', '<div class="flash"></div>');
+      setTimeout(() => document.querySelector('.flash')?.remove(), 800);
+      tone(90, 0, .6, 'sawtooth', .2, 40);
+      if (ac && !muted) noise(ac.currentTime, .5, .3, 300, sfxBus);
+      // an original brass fanfare
+      [[392, .5], [392, .65], [523, .8], [659, 1.05], [784, 1.3], [659, 1.6], [784, 1.75]].forEach(([f, t]) => {
+        tone(f, t, .22, 'sawtooth', .08); tone(f / 2, t, .22, 'square', .04);
+      });
+      document.body.classList.add('trump');
+      swapSymbols();
+      titleEl.innerHTML = '<span class="l1">Trump</span><span class="l2">Clicker</span>';
+    }, 3300);
+
+    // 4. the tax bill
+    setTimeout(() => {
+      const lore = state.seen.length;
+      const nUp = Object.values(state.owned).reduce((a, b) => a + b, 0);
+      const nBots = (state.zaps || 0) + (state.droneZaps || 0);
+      tk.classList.add('dim');
+      tk.innerHTML = `<div class="bill" id="bill">
+          <h3>OFFICIAL TAX BILL</h3>
+          <p class="who">Issued by the new management</p>
+          <p class="say">“Tax time. You owe everything.”</p>
+          <table>
+            <tr><td>Points</td><td>${short(state.score)}</td></tr>
+            <tr><td>Upgrades</td><td>${fmt(nUp)}</td></tr>
+            <tr><td>Lore pages, Codex entries and the Benji Anthem</td><td>${fmt(lore)}</td></tr>
+            <tr><td>Yahu-Bots and Benji-Drones</td><td>${fmt(nBots)} met</td></tr>
+            <tr><td>Mini-game records</td><td>${Object.keys(state.mini || {}).length}</td></tr>
+            <tr class="total"><td>Tax rate</td><td>100%</td></tr>
+          </table>
+          <div class="mg-btns"><button class="mg-btn" id="paybtn" type="button">Pay in full</button><button class="mg-btn alt" id="appealbtn" type="button">Appeal</button></div>
+        </div>`;
+      tone(1200, 0, .08, 'square', .06); tone(1600, .08, .25, 'square', .06);
+      $('paybtn').focus();
+      // the score drains to zero while you read the bill
+      const from = state.score, t0 = performance.now();
+      const drain = () => {
+        const k = Math.min(1, (performance.now() - t0) / 2200);
+        scoreEl.textContent = fmt(from * (1 - k) * (1 - k));
+        if (k < 1 && takeoverOn) { if (Math.random() < .3) tone(1500 + Math.random() * 400, 0, .04, 'square', .03); requestAnimationFrame(drain); }
+      };
+      requestAnimationFrame(drain);
+      $('appealbtn').onclick = () => {
+        const a = $('appealbtn');
+        a.textContent = 'Appeal denied';
+        a.disabled = true;
+        $('bill').classList.remove('shake'); void $('bill').offsetWidth; $('bill').classList.add('shake');
+        sfx.bad();
+      };
+      $('paybtn').onclick = () => {
+        $('paybtn').disabled = true;
+        $('bill').insertAdjacentHTML('beforeend', '<div class="paid">PAID</div>');
+        [523, 659, 784].forEach((f, k) => tone(f, k * .06, .1, 'square', .06));
+        setTimeout(() => finishTakeover(fw), 1100);
+      };
+    }, 5600);
+  }
+
+  function finishTakeover(fw) {
+    // everything is gone: points, upgrades, lore, records
+    state = { score: 0, owned: {}, best: 0, mode: 'trump', total: 0, zaps: 0, crits: 0, clicks: 0, seen: [], resets: 0, mini: {} };
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {}
+    fw.querySelectorAll('.half, .reveal').forEach(x => x.remove());
+    face.style.visibility = '';
+    tk.hidden = true; tk.innerHTML = '';
+    applyTrumpMode();
+    takeoverOn = false;
+    window.__frozen = false;
+    if (musicBus && musicOn) musicBus.gain.setTargetAtTime(.55, ac.currentTime, .3);
+    last = performance.now();
+    sfx.fanfare();
+    toastQueue.length = 0;
+    showToast('Welcome to Trump Clicker.');
+    render();
+  }
+  window.takeover = startTakeover; // for testing from the console
+  if (state.mode === 'trump') applyTrumpMode();
+
+  const foundryMul = () => Math.max(.25, Math.pow(.85, owned('foundry') + owned('sanct')));
   function scheduleBot(first) {
     setTimeout(() => { spawnBot('bot'); scheduleBot(); }, first ? 6000 : (15000 + Math.random() * 20000) * foundryMul());
   }
