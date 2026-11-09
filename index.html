@@ -1454,7 +1454,7 @@
   //  THE LORE. Entirely made up. None of this happened. All of it is canon.
   // =====================================================================
   const pageOpened = Date.now();
-  const chronicle = [
+  let chronicle = [
     { at: 0, title: 'Prologue: The First Click', text: [
       'In the beginning there was the Void, and the Void had zero points, and it was displayed in a very large font.',
       'Then a single Finger descended from the Cursor Heavens and pressed upon the Face. A small blue ring went out from that place, and the number became 1. The scribes call this the First Click. The Face did a little squash-and-stretch about it, which the scribes found undignified but wrote down anyway.' ] },
@@ -1498,7 +1498,7 @@
       'There is no Last Click. There is only the next one. The Face is waiting. It has always been waiting. Go on.' ] },
   ];
 
-  const codex = [
+  let codex = [
     { id: 'face', title: 'The Face', when: () => true, how: '', text: [
       'Cut from a photograph 192 pixels wide, then enlarged four times by the ancient LANCZOS method until it was 272 pixels wide. It is stored inside the page itself, so it can never be lost again.',
       'It has been clicked __CLICKS__ times on this device.' ] },
@@ -1596,6 +1596,9 @@
     .replace('__OCW__', fmt(state.ocWins || 0)).replace('__OC__', fmt(state.overclicks || 0))
     .replace('__DRONES__', fmt(state.droneZaps || 0))
     .replace('__CPWIN__', fmt(state.cpWins || 0)).replace('__CP__', fmt(state.checkpoints || 0))
+    .replace('__TAXED__', short(state.taxed || 0)).replace('__TAXLORE__', fmt(state.taxedLore || 0))
+    .replace('__REDS__', fmt(state.zaps || 0)).replace('__EAGLES__', fmt(state.droneZaps || 0))
+    .replace('__TOWERS__', fmt(owned('tower')))
     .replace('__CRITS__', fmt(state.crits)).replace('__RESETS__', fmt(state.resets));
   const unlocked = () => [
     ...chronicle.filter(c => state.total >= c.at).map(c => 'c' + c.at),
@@ -1604,7 +1607,6 @@
   let fresh = new Set();
 
   function checkLore() {
-    if (window.__trump) return;
     const now = unlocked();
     const added = now.filter(k => !state.seen.includes(k));
     if (!added.length) return;
@@ -1621,14 +1623,6 @@
   }
 
   function renderLore() {
-    if (window.__trump) {
-      $('loremeta').textContent = '0 of 0 chapters · 0 of 0 codex entries · taxed at 100%';
-      pagesEl.innerHTML = `<article class="entry"><h3>This book has been taxed.</h3>
-        <p>Every chapter, every Codex entry, the Benji Anthem, the Bot Lounge (which does not exist) and the coffee machine were seized at a rate of 100%.</p>
-        <p>The pages are blank now. Somewhere, a Yahu-Bot is filing an appeal.</p>
-        <p class="note">To get the lore back, reset your progress. Bibi will be waiting.</p></article>`;
-      return;
-    }
     const isChron = loreTab === 'chron';
     $('tab-chron').setAttribute('aria-selected', isChron);
     $('tab-codex').setAttribute('aria-selected', !isChron);
@@ -1643,7 +1637,7 @@
       for (const c of chronicle) {
         const k = 'c' + c.at;
         if (state.total >= c.at) {
-          html += `<article class="entry${fresh.has(k) ? ' fresh' : ''}"><h3>${c.title}</h3>${c.text.map(p).join('')}${c.note ? `<p class="note">${c.note}</p>` : ''}</article>`;
+          html += `<article class="entry${fresh.has(k) ? ' fresh' : ''}"><h3>${c.title}</h3>${c.text.map(p).join('')}${c.note ? `<p class="note">${fill(c.note)}</p>` : ''}</article>`;
         } else {
           const pct = Math.min(100, state.total / c.at * 100);
           html += `<article class="entry locked"><h3>? ? ? ? ?</h3><p>Earn ${fmt(c.at)} lifetime points to unlock this chapter.</p><div class="bar"><i style="width:${pct}%"></i></div></article>`;
@@ -2047,6 +2041,7 @@
     introEl.classList.add('leaving');
     sfx.fanfare();
     setTimeout(() => introEl.remove(), 520);
+    setTimeout(checkOverflow, 700); // a returning player may already have a score too wide for the screen
   }
   introEl.addEventListener('click', startGame);
   introEl.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startGame(); } });
@@ -2414,6 +2409,92 @@
       <path class="wing" d="M58 50C50 26 64 6 90 0c-6 14-2 28 8 40z" fill="#6b3f1a" stroke="#0a1a4f" stroke-width="3" stroke-linejoin="round"/>
     </svg>`;
 
+
+  // =====================================================================
+  //  THE BOOK OF TRUMP. The new lore for Trump mode. Entirely made up.
+  // =====================================================================
+  const trumpChronicle = [
+    { at: 0, title: 'Prologue: The Hostile Takeover', text: [
+      'The number grew wider than the screen, exactly as Chapter XI of the old book warned. The Face began to sweat. Then it split down the middle, and underneath it was another Face. It had been there the whole time, which explains a lot about the squash-and-stretch.',
+      'The first act of the new management was a tax. The rate was 100%. The second act was printing this book.' ] },
+    { at: 50, title: 'I. The Bill', text: [
+      'The bill had six lines and one total. Those who pressed Appeal were told "Appeal denied" in a tone that suggested the matter was closed, and also that it had never been open.',
+      'The Book of Bibi was placed in a vault beneath the Golden Escalator. It is still there. Pressing Reset will bring it back, but the vault charges a fee, and the fee is everything.' ],
+      note: 'The old book had __TAXLORE__ pages unlocked when it was seized.' },
+    { at: 250, title: 'II. The Golden Pen', text: [
+      'The Golden Pen signs anything put in front of it. In its first week it signed eleven laws, two treaties, a birthday card and the scribe\'s lunch order, which is now legally binding.',
+      'It tried to sign this book. The ink was too thick. That is why the pages are slightly gold.' ] },
+    { at: 1000, title: 'III. The Arrival of the Eagles', text: [
+      'The eagles moved in from the Eagle Sanctuary before the Eagle Sanctuary had been built. Eagles do not wait for construction.',
+      'They cross the top of the screen in six to nine seconds and say only one thing: SCREEEEE. The scribes asked what it means. The eagle said SCREEEEE. The scribes wrote that down.' ] },
+    { at: 5000, title: 'IV. The Rednecks Walk', text: [
+      'They walk from one side of the screen to the other carrying guns so large the scribes had to make the page wider. The guns have orange tips. They have never been fired. They are, by every available measure, decorative.',
+      'Mostly the rednecks want you off their lawn. Nobody has asked which lawn. It is assumed to be a large one.' ] },
+    { at: 25000, title: 'V. The Escalator Only Goes Down', text: [
+      'The Golden Escalator was installed for one ceremonial descent. It has been going down ever since. Nobody has ever gone up it. Going up is handled by a separate, less golden staircase that is not discussed.' ] },
+    { at: 100000, title: 'VI. The Great Tariff', text: [
+      'The Tariff Machine placed a tariff on imported lore. The Book of Bibi, still in its vault, now costs 25% more to remember.',
+      'The machine then placed a tariff on tariffs. Economists are still working out who paid it. The machine is very proud of itself.' ] },
+    { at: 500000, title: 'VII. The Very Tall Tower', text: [
+      'The Very Tall Tower gets taller every time someone describes it. It started at forty floors. After a long press conference it had ninety. The architects have stopped attending press conferences.' ] },
+    { at: 2000000, title: 'VIII. The Steak Situation', text: [
+      'The Steak Empire produces 8,000 points per second and exactly one steak, which nobody has been allowed to eat. It is kept under glass. Some say it is well done. Some say that is the point.' ] },
+    { at: 10000000, title: 'IX. Space Force', text: [
+      'The rocket in the shop has never left the shop. It has, however, earned 180,000 points per second while standing still, which the scribes agree is the most efficient space program in history.' ] },
+    { at: 50000000, title: 'X. Where Is Bibi?', text: [
+      'Rumours spread. One says he is in the vault with his book, reading the Codex to the Yahu-Bots. Another says the split was just a very dramatic costume change.',
+      'Late at night, if you listen closely to the stage, you can sometimes hear a voice from underneath say: "A red line should be drawn right here."' ] },
+    { at: 250000000, title: 'XI. Gold Everything', text: [
+      'Everything is gold now. The stage, the buttons, the scribes. The coins were already gold, which caused a scheduling conflict that took three meetings to resolve. The coins won.' ] },
+    { at: 1000000000, title: 'Epilogue: The Number Gets Wide Again', text: [
+      'The score is getting wider. Somebody should check whether there is another face hiding under this one.',
+      'Nobody has checked. Nobody wants to be the one who checks.' ] },
+  ];
+
+  const trumpCodex = [
+    { id: 'tface', title: 'The New Face', when: () => true, how: '', text: [
+      'Found directly underneath Bibi\'s face, where it had apparently been all along. It was cut from a photograph 632 pixels wide and enlarged to 432 pixels across, with plenty of room for the hair.',
+      'It has been clicked __CLICKS__ times since the takeover.' ] },
+    { id: 'tax', title: 'The Tax', when: () => true, how: '', text: [
+      'Rate: 100%. Appeals: denied. Your bill came to __TAXED__ points, which were collected in full, along with every upgrade, every page of lore and the Benji Anthem.',
+      'The receipt is framed in the Very Tall Tower, on whichever floor it is up to now.' ] },
+    { id: 'pen', title: 'Golden Pen', when: () => owned('pen') > 0, how: 'Buy a Golden Pen.', text: [
+      'Signs anything (see Chronicle II). Each one adds a point per click, in gold ink, with a flourish that takes slightly longer than necessary.' ] },
+    { id: 'hat', title: 'Red Hat Stand', when: () => owned('hat') > 0, how: 'Set up a Red Hat Stand.', text: [
+      'A stand of red caps. Every passing redneck takes one and leaves a point. The stand has never run out of hats, which the accountants describe as "concerning."' ] },
+    { id: 'crowd', title: 'Rally Crowd', when: () => owned('crowd') > 0, how: 'Gather a Rally Crowd.', text: [
+      'Five points per second of pure cheering. Nobody is sure what they are cheering for. They are very sure about it.' ] },
+    { id: 'golf', title: 'Golf Cart', when: () => owned('golf') > 0, how: 'Buy a Golf Cart.', text: [
+      'Ten points per click and the only vehicle allowed on the stage. Top speed: leisurely. It has a cup holder for each Golden Pen.' ] },
+    { id: 'post', title: 'Late-Night Post', when: () => owned('post') > 0, how: 'Post something late at night.', text: [
+      'Posted at 3 a.m., read by everyone by 3:01. Forty points per second, plus several thousand replies, all in capital letters.' ] },
+    { id: 'escal', title: 'Golden Escalator', when: () => owned('escal') > 0, how: 'Install a Golden Escalator.', text: [
+      'Goes down only (see Chronicle V). Each one produces 250 points per second by being looked at.' ] },
+    { id: 'tower', title: 'Very Tall Tower', when: () => owned('tower') > 0, how: 'Build something very tall.', text: [
+      'Taller every time it is described (see Chronicle VII). You own __TOWERS__ of them. They are all, officially, the tallest.' ] },
+    { id: 'steak', title: 'Steak Empire', when: () => owned('steak') > 0, how: 'Found a Steak Empire.', text: [
+      'One steak, under glass, never eaten (see Chronicle VIII). 8,000 points per second from merchandising alone.' ] },
+    { id: 'tariff', title: 'Tariff Machine', when: () => owned('tariff') > 0, how: 'Build the machine.', text: [
+      'Applies a tariff to everything, including other tariffs (see Chronicle VI). 40,000 points per second, most of it paperwork.' ] },
+    { id: 'space', title: 'Space Force', when: () => owned('space') > 0, how: 'Aim for the stars.', text: [
+      'A rocket that has never left the shop (see Chronicle IX). The countdown has been at "ten" for a while now. Nobody wants to rush it.' ] },
+    { id: 'sanct', title: 'Eagle Sanctuary', when: () => owned('sanct') > 0, how: 'Build a home for the eagles.', text: [
+      'Brings more eagles, and somehow also more rednecks. The sanctuary is for eagles only. The rednecks visit anyway and bring snacks. The eagles have accepted this.' ] },
+    { id: 'goldall', title: 'Gold Everything', when: () => owned('goldall') > 0, how: 'Make it all gold.', text: [
+      'Exactly what it says (see Chronicle XI). Five million points per second and a strong glare at noon.' ] },
+    { id: 'pen2', title: 'A Second Golden Pen', when: () => owned('pen2') > 0, how: 'One pen is not enough.', text: [
+      'Doubles your points per click. The two pens do not get along. They keep signing each other.',
+      'You now earn __PERCLICK__ per click.' ] },
+    { id: 'redneck', title: 'The Redneck', when: () => (state.zaps || 0) > 0, how: 'Click someone walking past.', text: [
+      'Red cap, overalls, sunglasses, a beard you could lose a Golden Pen in, and a gun so oversized it is clearly mostly for show (the orange tip is a hint). Worth a big bonus when clicked. They always say something.',
+      'You have met __REDS__ of them. They would like you off their lawn.' ] },
+    { id: 'eagle', title: 'The Bald Eagle', when: () => (state.droneZaps || 0) > 0, how: 'Click something that screeches.', text: [
+      'Flies across the top of the screen at speeds the scribes describe as "showing off." Worth 50% more than a redneck. Says SCREEEEE (see Chronicle III).',
+      'You have spotted __EAGLES__ of them.' ] },
+    { id: 'tcrit', title: 'The Golden Click, Again', when: () => (state.crits || 0) > 0, how: 'Land a critical click.', text: [
+      'One click in twenty is still worth ten. The new management tried to tax it, but it was already gold. You have landed __CRITS__ since the takeover.' ] },
+  ];
+
   // =====================================================================
   //  THE TAKEOVER
   //  When the score gets so big it runs off the screen, Bibi looks worried,
@@ -2425,7 +2506,10 @@
     '“You’re fired!” (his catchphrase on The Apprentice)',
     '“Make America Great Again.” (campaign slogan)',
     '“Covfefe.” (a 2017 post)',
-    'The lore was taxed. All of it.',
+    'The lore was taxed. All of it. Then new lore moved in.',
+    'The Golden Escalator only goes down.',
+    'Somebody should check whether there is another face under this one.',
+    'The guns have orange tips. Nobody has asked why.',
     'Somewhere, a Yahu-Bot is filing an appeal.',
     'The eagles do not pay taxes.',
     'Bibi is fine. Probably.',
@@ -2462,9 +2546,10 @@
     const ifc = document.getElementById('introface');
     if (ifc) ifc.src = TRUMP_FACE;
     const tg = document.querySelector('.tagline');
-    if (tg) tg.textContent = 'A clicker game. The lore has been taxed.';
-    $('loretitle').textContent = 'The Book of Bibi (Taxed)';
-    document.querySelector('#lore .tabs').hidden = true;
+    if (tg) tg.textContent = 'A clicker game. The old lore was taxed. This is the new lore.';
+    $('loretitle').textContent = 'The Book of Trump';
+    chronicle = trumpChronicle;
+    codex = trumpCodex;
     loreBtn.classList.remove('new');
     upgrades = trumpUpgrades;
     buildShop();
@@ -2564,8 +2649,9 @@
   }
 
   function finishTakeover(fw) {
-    // everything is gone: points, upgrades, lore, records
-    state = { score: 0, owned: {}, best: 0, mode: 'trump', total: 0, zaps: 0, crits: 0, clicks: 0, seen: [], resets: 0, mini: {} };
+    // everything is gone: points, upgrades, lore, records. The new book remembers only the size of the bill.
+    const taxed = state.score, taxedLore = state.seen.length;
+    state = { score: 0, owned: {}, best: 0, mode: 'trump', total: 0, zaps: 0, crits: 0, clicks: 0, seen: [], resets: 0, mini: {}, taxed, taxedLore };
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {}
     fw.querySelectorAll('.half, .reveal').forEach(x => x.remove());
     face.style.visibility = '';
@@ -2581,6 +2667,7 @@
     render();
   }
   window.takeover = startTakeover; // for testing from the console
+  addEventListener('resize', () => checkOverflow());
   if (state.mode === 'trump') applyTrumpMode();
 
   const foundryMul = () => Math.max(.25, Math.pow(.85, owned('foundry') + owned('sanct')));
