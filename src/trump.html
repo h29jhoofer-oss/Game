@@ -1,0 +1,721 @@
+<title>Trump Clicker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;900&family=Heebo:wght@400;600&display=swap">
+<style>
+  /* Layout: flag-striped arena on the left, upgrade ledger on the right; stacks on phones. */
+  :root {
+    --blue: #0a3161;
+    --blue-deep: #b31942;
+    --blue-soft: #e2e7f1;
+    --red: #b31942;
+    --white: #ffffff;
+    --ground: #f6f7fa;
+    --ink: #0b1a33;
+    --ink-soft: #56607a;
+    --display: "Rubik", "Arial Black", system-ui, sans-serif;
+    --body: "Heebo", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 15px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* drifting flags in the background */
+  #sky { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .drift {
+    position: absolute; bottom: -80px; width: 54px; opacity: .22;
+    animation: drift linear forwards;
+  }
+  @keyframes drift {
+    to { transform: translateY(calc(-100vh - 160px)) rotate(var(--spin, 20deg)); }
+  }
+
+  .band { position: relative; z-index: 1; flex: none; height: 12px; background: repeating-linear-gradient(90deg, var(--red) 0 24px, var(--white) 24px 48px); border-block: 2px solid var(--blue); }
+  .wrap {
+    position: relative; z-index: 1;
+    flex: 1; min-height: 0; width: 100%;
+    max-width: 1040px; margin: 0 auto;
+    display: flex; flex-direction: column;
+    padding-block: clamp(8px, 2vh, 18px);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  header { position: relative; flex: none; display: flex; align-items: center; justify-content: center; gap: 14px; }
+  header h1 {
+    margin: 0;
+    font-family: var(--display); font-weight: 900;
+    font-size: clamp(1.5rem, min(6vw, 5.5vh), 2.8rem);
+    letter-spacing: -.5px; text-wrap: balance;
+    color: var(--blue-deep);
+  }
+  .wstars { color: #fff; }
+  #halo, .spark { color: var(--blue); }
+  .spark:nth-child(3n) { color: var(--red); }
+  .flag { display: block; width: clamp(38px, min(9vw, 8vh), 72px); height: auto; filter: drop-shadow(0 3px 5px rgba(10,49,97,.25)); }
+  header .flag { transform-origin: left center; animation: wave 2.6s ease-in-out infinite; }
+  header .flag.r { transform-origin: right center; animation-delay: -1.3s; }
+  @keyframes wave {
+    0%,100% { transform: perspective(200px) rotateY(0) skewY(0); }
+    50% { transform: perspective(200px) rotateY(-18deg) skewY(-3deg); }
+  }
+
+  .scoreline { flex: none; text-align: center; margin: clamp(2px, 1vh, 8px) 0 clamp(6px, 1.8vh, 16px); }
+  #score {
+    display: inline-block;
+    font-family: var(--display); font-weight: 900;
+    font-size: clamp(2rem, min(10vw, 7vh), 3.6rem); line-height: 1.1;
+    color: var(--blue); font-variant-numeric: tabular-nums;
+  }
+  #score.bump { animation: bump .18s ease-out; }
+  @keyframes bump { 50% { transform: scale(1.12); } }
+  #rate { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+  main {
+    flex: 1; min-height: 0;
+    display: flex; gap: clamp(12px, 2.5vw, 24px); justify-content: center; align-items: stretch;
+  }
+
+  /* arena: white field with the flag's two stripes */
+  #stage {
+    position: relative;
+    height: 100%; max-height: 560px; max-width: 100%;
+    aspect-ratio: 3 / 4;
+    flex: none;
+    border: 5px solid var(--blue); border-radius: 20px;
+    background:
+      linear-gradient(transparent 7%, var(--red) 7%, var(--red) 13%, transparent 13%,
+                      transparent 87%, var(--red) 87%, var(--red) 93%, transparent 93%),
+      var(--white);
+    box-shadow: 0 12px 34px rgba(10,49,97,.22);
+    overflow: hidden;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  #stage:focus-visible { outline: 4px solid var(--blue-deep); outline-offset: 4px; }
+
+  /* slow rotating star behind the face */
+  #halo {
+    position: absolute; left: 50%; top: 50%;
+    width: 86%; translate: -50% -50%;
+    opacity: .12; pointer-events: none;
+    animation: spin 30s linear infinite;
+  }
+  @keyframes spin { to { rotate: 360deg; } }
+
+  #face-wrap {
+    position: absolute; left: 50%; top: 50%;
+    width: 58%; translate: -50% -50%;
+    animation: float 3.2s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes float { 50% { transform: translateY(-10px) rotate(1.5deg); } }
+  #face {
+    display: block; width: 100%; height: auto;
+    border-radius: 50%;
+    box-shadow: 0 0 0 6px var(--white), 0 0 0 11px var(--blue), 0 14px 26px rgba(10,49,97,.35);
+    transition: transform .08s;
+  }
+  #face.hit { animation: squash .22s ease-out; }
+  @keyframes squash {
+    0% { transform: scale(1, 1); }
+    30% { transform: scale(1.12, .86); }
+    60% { transform: scale(.94, 1.08); }
+    100% { transform: scale(1, 1); }
+  }
+
+  .ring {
+    position: absolute; width: 20px; height: 20px; margin: -10px 0 0 -10px;
+    border: 3px solid var(--blue); border-radius: 50%;
+    pointer-events: none; animation: ring .5s ease-out forwards;
+  }
+  @keyframes ring { to { transform: scale(7); opacity: 0; } }
+
+  .pop {
+    position: absolute; pointer-events: none;
+    font-family: var(--display); font-weight: 900; font-size: 1.6rem;
+    color: var(--blue);
+    text-shadow: 0 0 3px var(--white), 0 0 6px var(--white), 0 0 10px var(--white);
+    animation: rise .9s ease-out forwards;
+  }
+  .pop.crit { font-size: 2.3rem; color: var(--blue-deep); }
+  @keyframes rise {
+    0% { opacity: 1; transform: translate(-50%, 0) scale(.6); }
+    20% { transform: translate(-50%, -14px) scale(1.15); }
+    100% { opacity: 0; transform: translate(-50%, -90px) scale(1); }
+  }
+
+  .spark {
+    position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+    pointer-events: none;
+    animation: burst .7s cubic-bezier(.2,.7,.4,1) forwards;
+  }
+  @keyframes burst {
+    to { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; }
+  }
+
+  #stage .corner { position: absolute; top: 17%; width: 52px; pointer-events: none; animation: wave 2.6s ease-in-out infinite; }
+  #stage .corner.l { left: 10px; rotate: -12deg; }
+  #stage .corner.r { right: 10px; rotate: 12deg; animation-delay: -1.3s; }
+
+  /* ledger */
+  #shop {
+    width: min(380px, 100%);
+    max-height: 560px; min-height: 0;
+    background: var(--white);
+    border: 3px solid var(--blue); border-radius: 20px;
+    padding: clamp(10px, 1.6vh, 16px);
+    box-shadow: 0 12px 34px rgba(10,49,97,.14);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  #items {
+    flex: 1; min-height: 0;
+    display: grid; grid-auto-rows: 1fr; gap: clamp(4px, .9vh, 8px);
+    overflow-y: auto;
+  }
+  #shop h2 {
+    margin: 0; display: flex; align-items: center; gap: 10px;
+    font-family: var(--display); font-weight: 700; font-size: 1.25rem; color: var(--blue-deep);
+  }
+  #shop h2 .flag { width: 30px; }
+  #mute {
+    margin-left: auto; width: 36px; height: 36px; padding: 6px;
+    border: 2px solid var(--blue-soft); border-radius: 10px; background: var(--ground);
+    color: var(--blue); cursor: pointer;
+  }
+  #mute:hover { border-color: var(--blue); }
+  #mute:focus-visible { outline: 3px solid var(--blue-deep); outline-offset: 2px; }
+  #mute svg { width: 100%; height: 100%; display: block; }
+  #mute .off { display: none; }
+  #mute[aria-pressed="true"] .on { display: none; }
+  #mute[aria-pressed="true"] .off { display: block; }
+  .item {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    width: 100%; min-height: 0; padding: 4px 12px 4px 8px;
+    border: 2px solid var(--blue-soft); border-radius: 12px;
+    background: var(--ground); color: var(--ink);
+    font: inherit; text-align: left; cursor: pointer;
+    position: relative; overflow: hidden;
+    transition: transform .12s, border-color .12s, background .12s;
+  }
+  .item .name { font-weight: 600; }
+  .item .label { flex: 1; min-width: 0; line-height: 1.2; }
+  .icon {
+    flex: none; width: clamp(30px, 5vh, 42px); aspect-ratio: 1;
+    padding: 5px; border-radius: 10px;
+    background: var(--white); border: 2px solid var(--blue-soft);
+    color: var(--blue);
+  }
+  .icon svg { display: block; width: 100%; height: 100%; }
+  .item:not(:disabled):hover .icon { animation: jiggle .4s ease-in-out; }
+  @keyframes jiggle { 25% { rotate: -10deg; } 75% { rotate: 10deg; } }
+  .item.bought .icon { animation: hop .4s ease-out; }
+  @keyframes hop { 40% { transform: translateY(-6px) scale(1.15); } }
+  .item small { display: block; color: var(--ink-soft); }
+  .item .cost { font-family: var(--display); font-weight: 700; color: var(--blue); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .item:hover:not(:disabled) { border-color: var(--blue); background: var(--blue-soft); transform: translateY(-2px); }
+  .item:focus-visible { outline: 3px solid var(--blue-deep); outline-offset: 2px; }
+  .item:disabled { opacity: .5; cursor: not-allowed; }
+  /* shimmer across upgrades you can afford */
+  .item:not(:disabled)::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.75) 50%, transparent 65%);
+    transform: translateX(-100%);
+    animation: shimmer 2.8s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes shimmer { 60%,100% { transform: translateX(100%); } }
+  .item.bought { animation: bought .4s ease-out; }
+  @keyframes bought { 40% { background: var(--blue); color: var(--white); transform: scale(1.03); } }
+  .count {
+    display: inline-block; min-width: 1.6em; padding: 0 6px; margin-left: 6px;
+    border-radius: 999px; background: var(--blue); color: var(--white);
+    font-size: .8rem; text-align: center;
+  }
+
+  #reset {
+    flex: none; align-self: flex-start;
+    background: none; border: none; padding: 4px 0;
+    color: var(--ink-soft); text-decoration: underline; cursor: pointer; font: inherit;
+  }
+  #reset.armed { color: #b00020; font-weight: 600; }
+
+  /* milestone banner */
+  #toast {
+    position: fixed; left: 50%; top: calc(24px + env(safe-area-inset-top, 0px)); z-index: 5;
+    translate: -50% -160%;
+    padding: 12px 22px; border-radius: 999px;
+    background: var(--blue); color: var(--white);
+    font-family: var(--display); font-weight: 700; font-size: 1.1rem;
+    box-shadow: 0 10px 24px rgba(10,49,97,.35);
+    transition: translate .35s cubic-bezier(.2,1.4,.4,1);
+    pointer-events: none; white-space: nowrap;
+  }
+  #toast.show { translate: -50% 0; }
+
+  /* Trump-Bots: little robots that walk across the whole screen */
+  #bots { position: fixed; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; }
+  .bot {
+    position: absolute; left: 0; width: 84px;
+    pointer-events: auto; cursor: pointer;
+    filter: drop-shadow(0 6px 6px rgba(10,49,97,.3));
+    touch-action: manipulation;
+  }
+  .bot:focus-visible { outline: 3px solid var(--blue-deep); outline-offset: 4px; border-radius: 12px; }
+  .bot .rig { animation: bob .44s ease-in-out infinite; }
+  @keyframes bob { 50% { translate: 0 -5px; } }
+  .bot .head {
+    position: relative; z-index: 1; display: block;
+    width: 62px; margin: 0 auto -6px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px var(--white), 0 0 0 6px var(--blue);
+  }
+  .bot .antenna {
+    position: absolute; left: 50%; top: -14px; width: 3px; height: 14px; margin-left: -1.5px;
+    background: var(--blue);
+  }
+  .bot .antenna::after {
+    content: ""; position: absolute; left: -4px; top: -8px; width: 11px; height: 11px;
+    border-radius: 50%; background: #ff3b3b; box-shadow: 0 0 8px #ff3b3b;
+    animation: blink .8s steps(2) infinite;
+  }
+  @keyframes blink { 50% { opacity: .25; } }
+  .bot svg.body { display: block; width: 100%; height: auto; overflow: visible; }
+  .bot .leg { transform-box: fill-box; transform-origin: 50% 0; animation: step .44s ease-in-out infinite alternate; }
+  .bot .leg.b { animation-direction: alternate-reverse; }
+  .bot .arm { transform-box: fill-box; transform-origin: 50% 0; animation: step .44s ease-in-out infinite alternate-reverse; }
+  .bot .arm.b { animation-direction: alternate; }
+  @keyframes step { from { rotate: -22deg; } to { rotate: 22deg; } }
+  .bot .tag {
+    position: absolute; left: 50%; top: -38px; translate: -50% 0;
+    padding: 2px 8px; border-radius: 999px;
+    background: var(--blue); color: var(--white);
+    font-family: var(--display); font-weight: 700; font-size: .72rem; white-space: nowrap;
+  }
+  .bot.zapped { pointer-events: none; animation: zap .45s ease-in forwards; }
+  @keyframes zap { 30% { scale: 1.25; } 100% { scale: 0; rotate: 200deg; opacity: 0; } }
+  .bigpop {
+    position: fixed; z-index: 6; pointer-events: none;
+    font-family: var(--display); font-weight: 900; font-size: 2.6rem; color: var(--blue-deep);
+    text-shadow: 0 0 4px var(--white), 0 0 8px var(--white), 0 0 14px var(--white);
+    animation: rise 1.3s ease-out forwards;
+  }
+  .fxspark { position: fixed; z-index: 6; }
+
+  @media (max-width: 700px) {
+    .bot { width: 66px; }
+    .bot .head { width: 48px; }
+  }
+
+  @media (max-width: 700px) {
+    main { flex-direction: column; align-items: center; }
+    #stage { height: auto; flex: 1 1 0; min-height: 0; width: auto; max-height: none; }
+    #shop { width: 100%; flex: none; max-height: 52%; }
+    #items { grid-template-columns: 1fr 1fr; grid-auto-rows: auto; }
+    .item { padding: 6px; display: grid; grid-template-columns: auto 1fr; column-gap: 6px; row-gap: 0; align-items: center; }
+    .item .icon { grid-row: span 2; }
+    .item .cost { grid-column: 2; line-height: 1.1; }
+    .item small { display: none; }
+    .item .name { font-size: .82rem; }
+    .item .cost { font-size: .85rem; }
+    .icon { width: 30px; padding: 4px; }
+    .count { position: absolute; top: 4px; right: 4px; margin: 0; font-size: .68rem; }
+    .item { min-height: 50px; }
+    .item .name { display: block; padding-right: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #shop h2 { font-size: 1.05rem; }
+    #reset { font-size: .85rem; }
+  }
+  @media (max-height: 560px) {
+    .item small { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    #sky { display: none; }
+  }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="il" viewBox="0 0 190 100">
+    <rect width="190" height="100" fill="#fff"/>
+    <rect y="0.00" width="190" height="7.69" fill="#b31942"/><rect y="15.38" width="190" height="7.69" fill="#b31942"/><rect y="30.77" width="190" height="7.69" fill="#b31942"/><rect y="46.15" width="190" height="7.69" fill="#b31942"/><rect y="61.54" width="190" height="7.69" fill="#b31942"/><rect y="76.92" width="190" height="7.69" fill="#b31942"/><rect y="92.31" width="190" height="7.69" fill="#b31942"/>
+    <rect width="76" height="53.85" fill="#0a3161"/>
+    <g class="wstars"><use href="#star" x="6" y="3" width="8" height="8"/><use href="#star" x="18" y="3" width="8" height="8"/><use href="#star" x="30" y="3" width="8" height="8"/><use href="#star" x="42" y="3" width="8" height="8"/><use href="#star" x="54" y="3" width="8" height="8"/><use href="#star" x="66" y="3" width="8" height="8"/><use href="#star" x="12" y="13" width="8" height="8"/><use href="#star" x="24" y="13" width="8" height="8"/><use href="#star" x="36" y="13" width="8" height="8"/><use href="#star" x="48" y="13" width="8" height="8"/><use href="#star" x="60" y="13" width="8" height="8"/><use href="#star" x="6" y="23" width="8" height="8"/><use href="#star" x="18" y="23" width="8" height="8"/><use href="#star" x="30" y="23" width="8" height="8"/><use href="#star" x="42" y="23" width="8" height="8"/><use href="#star" x="54" y="23" width="8" height="8"/><use href="#star" x="66" y="23" width="8" height="8"/><use href="#star" x="12" y="33" width="8" height="8"/><use href="#star" x="24" y="33" width="8" height="8"/><use href="#star" x="36" y="33" width="8" height="8"/><use href="#star" x="48" y="33" width="8" height="8"/><use href="#star" x="60" y="33" width="8" height="8"/><use href="#star" x="6" y="43" width="8" height="8"/><use href="#star" x="18" y="43" width="8" height="8"/><use href="#star" x="30" y="43" width="8" height="8"/><use href="#star" x="42" y="43" width="8" height="8"/><use href="#star" x="54" y="43" width="8" height="8"/><use href="#star" x="66" y="43" width="8" height="8"/></g>
+  </symbol>
+  <symbol id="star" viewBox="0 0 60 60">
+    <polygon points="30.0,4.0 36.5,22.1 55.7,22.7 40.5,34.4 45.9,52.8 30.0,42.0 14.1,52.8 19.5,34.4 4.3,22.7 23.5,22.1" fill="currentColor"/>
+  </symbol>
+</svg>
+
+<div id="sky" aria-hidden="true"></div>
+<div class="band"></div>
+
+<div class="wrap">
+  <header>
+    <svg class="flag" viewBox="0 0 190 100" aria-hidden="true"><use href="#il"/></svg>
+    <h1>Trump Clicker</h1>
+    <svg class="flag r" viewBox="0 0 190 100" aria-hidden="true"><use href="#il"/></svg>
+  </header>
+
+  <div class="scoreline">
+    <div id="score">0</div>
+    <div id="rate">0 per second · 1 per click</div>
+  </div>
+
+  <main>
+    <div id="stage" role="button" tabindex="0" aria-label="Click Trump to earn points">
+      <svg id="halo" viewBox="0 0 60 60" aria-hidden="true"><use href="#star"/></svg>
+      <svg class="corner l" viewBox="0 0 190 100" aria-hidden="true"><use href="#il"/></svg>
+      <svg class="corner r" viewBox="0 0 190 100" aria-hidden="true"><use href="#il"/></svg>
+      <div id="face-wrap"><img id="face" alt="Donald Trump" src="data:image/webp;base64,__FACE__"></div>
+    </div>
+
+    <section id="shop" aria-label="Upgrades">
+      <h2><svg class="flag" viewBox="0 0 190 100" aria-hidden="true"><use href="#il"/></svg>Upgrades
+        <button id="mute" type="button" aria-pressed="false" aria-label="Mute sound" title="Sound on/off">
+          <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+          <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M17 9l5 6M22 9l-5 6"/></svg>
+        </button>
+      </h2>
+      <div id="items"></div>
+      <button id="reset" type="button">Reset progress</button>
+    </section>
+  </main>
+</div>
+
+<div class="band"></div>
+<div id="toast" role="status"></div>
+<div id="bots"></div>
+
+<script>
+(() => {
+  // simple line icons, drawn in currentColor on a 24x24 grid
+  const I = (inner, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${inner}</svg>`;
+  const icons = {
+    finger:  I('<path d="M9 11V4.5a1.5 1.5 0 0 1 3 0V10"/><path d="M12 9.5a1.5 1.5 0 0 1 3 0V11"/><path d="M15 10.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1a6 6 0 0 1-4.6-2.2L4 16a1.6 1.6 0 0 1 2.4-2.1L9 16"/>'),
+    intern:  I('<circle cx="12" cy="7" r="3.5"/><path d="M5 21v-1.5A5.5 5.5 0 0 1 10.5 14h3a5.5 5.5 0 0 1 5.5 5.5V21"/><path d="M12 14l-1.2 3 1.2 2 1.2-2z" fill="currentColor"/>'),
+    crew:    I('<rect x="2.5" y="7" width="13" height="10" rx="2"/><path d="M15.5 11l6-3.5v9l-6-3.5"/><circle cx="7" cy="12" r="2"/>'),
+    mouse:   I('<rect x="6" y="3" width="12" height="18" rx="6" fill="#f5c400" stroke="#9a7a00"/><path d="M12 3v6M6 10h12" stroke="#9a7a00"/>', ''),
+    rally:   I('<path d="M5 21V3"/><path d="M5 4h14v9H5" fill="#fff"/><path d="M11 6.2h8M11 8.5h8M5 10.8h14" stroke="#b31942"/><rect x="5" y="4" width="6" height="5" fill="currentColor"/>'),
+    network: I('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 3l4 4 4-4"/><path d="M7 11h6M7 14.5h4"/><circle cx="17" cy="13" r="1.4" fill="currentColor"/>'),
+    senate:  I('<path d="M3 21h18M4 18h16M5 18V9M9.5 18V9M14.5 18V9M19 18V9M3 9h18l-9-5.5z"/>'),
+  };
+
+  const upgrades = [
+    { id: 'finger',  name: 'Stronger Finger',  desc: '+1 per click',     cost: 15,     click: 1 },
+    { id: 'intern',  name: 'Campaign Intern',  desc: '+1 per second',    cost: 50,     auto: 1 },
+    { id: 'crew',    name: 'Camera Crew',      desc: '+5 per second',    cost: 300,    auto: 5 },
+    { id: 'mouse',   name: 'Golden Mouse',     desc: '+10 per click',    cost: 1000,   click: 10 },
+    { id: 'rally',   name: 'Rally Crowd',       desc: '+40 per second',   cost: 5000,   auto: 40 },
+    { id: 'network', name: 'Cable News',       desc: '+250 per second',  cost: 40000,  auto: 250 },
+    { id: 'senate',  name: 'Senate Majority',  desc: '+1,500 per second', cost: 300000, auto: 1500 },
+  ];
+
+  const SAVE_KEY = 'trump-clicker-save';
+  let state = { score: 0, owned: {}, best: 0 };
+  const hot = window.claude && window.claude.hot;
+  try { Object.assign(state, JSON.parse(localStorage.getItem(SAVE_KEY)) || {}); } catch (e) {}
+  if (hot && hot.data && hot.data.state) state = hot.data.state;
+  if (hot && hot.snapshot) hot.snapshot(() => ({ state }));
+
+  const owned = id => state.owned[id] || 0;
+  const priceOf = u => Math.floor(u.cost * Math.pow(1.15, owned(u.id)));
+  const perClick = () => 1 + upgrades.reduce((s, u) => s + (u.click || 0) * owned(u.id), 0);
+  const perSec = () => upgrades.reduce((s, u) => s + (u.auto || 0) * owned(u.id), 0);
+  const fmt = n => Math.floor(n).toLocaleString();
+
+  const $ = id => document.getElementById(id);
+  const scoreEl = $('score'), rateEl = $('rate'), stage = $('stage'), face = $('face'), toast = $('toast');
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---- sound: tiny Web Audio synth, starts on the first click ----
+  let ac = null, muted = false;
+  try { muted = localStorage.getItem('trump-muted') === '1'; } catch (e) {}
+  const muteBtn = $('mute');
+  muteBtn.setAttribute('aria-pressed', muted);
+  muteBtn.onclick = () => {
+    muted = !muted;
+    muteBtn.setAttribute('aria-pressed', muted);
+    try { localStorage.setItem('trump-muted', muted ? '1' : '0'); } catch (e) {}
+    if (!muted) sfx.buy();
+  };
+  function audio() {
+    if (muted) return null;
+    if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function tone(freq, start, dur, type = 'sine', vol = .2, slideTo) {
+    const a = audio(); if (!a) return;
+    const t = a.currentTime + start;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(a.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  const sfx = {
+    click() { const f = 520 + Math.random() * 140; tone(f, 0, .09, 'triangle', .22, f * 1.8); tone(f / 2, 0, .06, 'sine', .15); },
+    crit()  { [660, 880, 1320].forEach((f, i) => tone(f, i * .05, .22, 'square', .07)); tone(1760, .15, .3, 'sine', .12); },
+    buy()   { tone(988, 0, .09, 'square', .07); tone(1319, .08, .25, 'square', .07); },
+    jackpot() {
+      tone(220, 0, .25, 'sawtooth', .08, 880);
+      [784, 988, 1175, 1568, 1976].forEach((f, i) => tone(f, .12 + i * .06, .18, 'square', .06));
+      tone(2349, .45, .5, 'sine', .14);
+    },
+    fanfare() { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * .11, i === 3 ? .5 : .14, 'triangle', .2)); },
+  };
+
+  const buttons = {};
+  for (const u of upgrades) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'item';
+    b.innerHTML = `<span class="icon">${icons[u.id]}</span><span class="label"><span class="name">${u.name}</span><span class="count">0</span><small>${u.desc}</small></span><span class="cost"></span>`;
+    b.onclick = () => {
+      const p = priceOf(u);
+      if (state.score < p) return;
+      state.score -= p;
+      state.owned[u.id] = owned(u.id) + 1;
+      sfx.buy();
+      b.classList.remove('bought'); void b.offsetWidth; b.classList.add('bought');
+      render();
+    };
+    $('items').appendChild(b);
+    buttons[u.id] = b;
+  }
+
+  function render() {
+    scoreEl.textContent = fmt(state.score);
+    rateEl.textContent = `${fmt(perSec())} per second · ${fmt(perClick())} per click`;
+    for (const u of upgrades) {
+      const b = buttons[u.id], p = priceOf(u);
+      b.disabled = state.score < p;
+      b.querySelector('.count').textContent = owned(u.id);
+      b.querySelector('.cost').textContent = fmt(p);
+    }
+    checkMilestone();
+  }
+
+  // milestones: 100, 1k, 10k, ...
+  let toastTimer;
+  function checkMilestone() {
+    const next = Math.max(100, (state.best || 0) * 10);
+    if (state.score >= next) {
+      state.best = Math.pow(10, Math.floor(Math.log10(state.score)));
+      toast.textContent = `${fmt(state.best)} points!`;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+      sfx.fanfare();
+      if (!calm) for (let i = 0; i < 6; i++) setTimeout(launchFlag, i * 120);
+    }
+  }
+
+  function spawn(cls, x, y, html) {
+    const el = document.createElement('div');
+    el.className = cls; el.style.left = x + 'px'; el.style.top = y + 'px';
+    if (html) el.innerHTML = html;
+    stage.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+    return el;
+  }
+
+  function hit(x, y) {
+    const crit = Math.random() < 0.05;
+    const gain = perClick() * (crit ? 10 : 1);
+    state.score += gain;
+    crit ? sfx.crit() : sfx.click();
+
+    face.classList.remove('hit'); void face.offsetWidth; face.classList.add('hit');
+    scoreEl.classList.remove('bump'); void scoreEl.offsetWidth; scoreEl.classList.add('bump');
+
+    if (!calm) {
+      spawn('ring', x, y);
+      const n = crit ? 12 : 5;
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, d = 50 + Math.random() * (crit ? 110 : 60);
+        const s = spawn('spark', x, y, '<svg viewBox="0 0 60 60" width="18" height="18"><use href="#star"/></svg>');
+        s.style.setProperty('--dx', Math.cos(a) * d + 'px');
+        s.style.setProperty('--dy', Math.sin(a) * d + 'px');
+        s.style.setProperty('--rot', (Math.random() * 360 - 180) + 'deg');
+      }
+    }
+    const pop = spawn('pop' + (crit ? ' crit' : ''), x, y - 20);
+    pop.textContent = (crit ? 'CRIT +' : '+') + fmt(gain);
+    render();
+  }
+
+  stage.addEventListener('pointerdown', e => {
+    const r = stage.getBoundingClientRect();
+    hit(e.clientX - r.left, e.clientY - r.top);
+  });
+  stage.addEventListener('keydown', e => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      hit(stage.clientWidth / 2, stage.clientHeight / 2);
+    }
+  });
+
+  // reset needs a second click to confirm
+  const reset = $('reset'); let armTimer;
+  reset.onclick = () => {
+    if (!reset.classList.contains('armed')) {
+      reset.classList.add('armed'); reset.textContent = 'Click again to reset';
+      armTimer = setTimeout(() => { reset.classList.remove('armed'); reset.textContent = 'Reset progress'; }, 3000);
+      return;
+    }
+    clearTimeout(armTimer);
+    reset.classList.remove('armed'); reset.textContent = 'Reset progress';
+    state = { score: 0, owned: {}, best: 0 };
+    render();
+  };
+
+  // background flags drifting upward
+  const sky = $('sky');
+  function launchFlag() {
+    const f = document.createElement('div');
+    f.className = 'drift';
+    f.innerHTML = '<svg class="flag" style="width:100%" viewBox="0 0 190 100"><use href="#il"/></svg>';
+    f.style.left = Math.random() * 100 + 'vw';
+    f.style.animationDuration = 9 + Math.random() * 8 + 's';
+    f.style.setProperty('--spin', (Math.random() * 60 - 30) + 'deg');
+    sky.appendChild(f);
+    f.addEventListener('animationend', () => f.remove());
+  }
+  if (!calm) { for (let i = 0; i < 3; i++) setTimeout(launchFlag, i * 900); setInterval(launchFlag, 2600); }
+
+  // ---- Trump-Bots ----
+  const botLayer = $('bots');
+  const botBody = `<svg class="body" viewBox="0 0 84 74" aria-hidden="true">
+      <g class="arm a"><rect x="4" y="6" width="9" height="28" rx="4.5" fill="#0a3161"/><circle cx="8.5" cy="36" r="5.5" fill="#e2e7f1" stroke="#0a3161" stroke-width="2"/></g>
+      <g class="arm b"><rect x="71" y="6" width="9" height="28" rx="4.5" fill="#0a3161"/><circle cx="75.5" cy="36" r="5.5" fill="#e2e7f1" stroke="#0a3161" stroke-width="2"/></g>
+      <g class="leg a"><rect x="24" y="42" width="11" height="24" rx="4" fill="#0a3161"/><rect x="20" y="62" width="19" height="9" rx="4" fill="#0a3161"/></g>
+      <g class="leg b"><rect x="49" y="42" width="11" height="24" rx="4" fill="#0a3161"/><rect x="45" y="62" width="19" height="9" rx="4" fill="#0a3161"/></g>
+      <rect x="14" y="0" width="56" height="48" rx="10" fill="#fff" stroke="#0a3161" stroke-width="4"/>
+      <rect x="16" y="7" width="52" height="5" fill="#b31942"/>
+      <rect x="16" y="36" width="52" height="5" fill="#b31942"/>
+      <path d="M38 12h8l-2 4 4 18-6 7-6-7 4-18z" fill="#b31942"/>
+    </svg>`;
+  const bots = new Set();
+
+  function botReward() {
+    const base = Math.max(100, perSec() * 25 + perClick() * 30);
+    return Math.round(base * (1 + Math.random() * .5));
+  }
+
+  function spawnBot() {
+    if (document.hidden || bots.size >= 2) return;
+    const W = innerWidth, H = innerHeight;
+    const goLeft = Math.random() < .5;
+    const el = document.createElement('div');
+    el.className = 'bot' + (goLeft ? ' left' : '');
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', 'Trump-Bot: click for bonus points');
+    el.innerHTML = `<div class="rig"><span class="tag">Trump-Bot</span><div style="position:relative"><span class="antenna"></span><img class="head" alt="" src="${face.src}"></div>${botBody}</div>`;
+    botLayer.appendChild(el);
+
+    const w = el.offsetWidth;
+    const bot = {
+      el,
+      x: goLeft ? W + 10 : -w - 10,
+      y: H * (.22 + Math.random() * .58),
+      vx: (goLeft ? -1 : 1) * W / (8 + Math.random() * 4), // crosses in 8-12s
+      t: Math.random() * 6,
+      done: false,
+    };
+    bots.add(bot);
+    place(bot);
+
+    const zap = e => {
+      if (bot.done) return;
+      e.preventDefault();
+      bot.done = true;
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 3;
+      const gain = botReward();
+      state.score += gain;
+      sfx.jackpot();
+      el.classList.add('zapped');
+      el.addEventListener('animationend', () => { el.remove(); bots.delete(bot); });
+      if (calm) setTimeout(() => { el.remove(); bots.delete(bot); }, 50);
+
+      const pop = document.createElement('div');
+      pop.className = 'bigpop';
+      pop.textContent = '+' + fmt(gain);
+      pop.style.left = cx + 'px'; pop.style.top = cy + 'px';
+      document.body.appendChild(pop);
+      pop.addEventListener('animationend', () => pop.remove());
+      if (calm) setTimeout(() => pop.remove(), 1200);
+
+      if (!calm) for (let i = 0; i < 16; i++) {
+        const a = Math.random() * Math.PI * 2, d = 60 + Math.random() * 120;
+        const sp = document.createElement('div');
+        sp.className = 'spark fxspark';
+        sp.style.left = cx + 'px'; sp.style.top = cy + 'px';
+        sp.innerHTML = '<svg viewBox="0 0 60 60" width="18" height="18"><use href="#star"/></svg>';
+        sp.style.setProperty('--dx', Math.cos(a) * d + 'px');
+        sp.style.setProperty('--dy', Math.sin(a) * d + 'px');
+        sp.style.setProperty('--rot', (Math.random() * 360 - 180) + 'deg');
+        document.body.appendChild(sp);
+        sp.addEventListener('animationend', () => sp.remove());
+      }
+      toast.textContent = `Trump-Bot zapped! +${fmt(gain)}`;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+      render();
+    };
+    el.addEventListener('pointerdown', zap);
+    el.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') zap(e); });
+  }
+
+  function place(b) {
+    const hop = Math.abs(Math.sin(b.t * 7)) * 4;
+    b.el.style.transform = `translate(${b.x}px, ${b.y - hop}px)`;
+  }
+
+  let last = performance.now();
+  function walk(now) {
+    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    for (const b of bots) {
+      if (b.done) continue;
+      b.x += b.vx * dt; b.t += dt;
+      // gentle wander up and down, kept on screen
+      b.y = Math.min(innerHeight - 140, Math.max(60, b.y + Math.sin(b.t * 1.3) * 12 * dt));
+      place(b);
+      if ((b.vx < 0 && b.x < -140) || (b.vx > 0 && b.x > innerWidth + 40)) {
+        b.el.remove(); bots.delete(b);
+      }
+    }
+    requestAnimationFrame(walk);
+  }
+  requestAnimationFrame(walk);
+
+  function scheduleBot(first) {
+    setTimeout(() => { spawnBot(); scheduleBot(); }, first ? 6000 : 15000 + Math.random() * 20000);
+  }
+  scheduleBot(true);
+  window.spawnTrumpBot = spawnBot; // handy for testing from the console
+
+  setInterval(() => { if (perSec()) { state.score += perSec() / 10; render(); } }, 100);
+  setInterval(() => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {} }, 2000);
+
+  render();
+})();
+</script>

@@ -1,8 +1,12 @@
-# Bibi Clicker
+# Clicker Games
 
-A simple clicker game. Open `index.html` in a browser and click the face.
+Two clicker games. Open either file in a browser:
 
-- Click to earn points (5% chance of a 10x crit), buy upgrades for more points per click / per second.
-- Progress saves automatically in your browser.
-- The face image is embedded in `index.html`. To change it, replace `images/netanyahu.png`,
-  edit `src/game.html` if needed, and run `python3 build.py` to rebuild `index.html`.
+- `index.html`: **Bibi Clicker** (blue and white, Israeli flags, Yahu-Bots)
+- `trump.html`: **Trump Clicker** (red, white and blue, US flags, Trump-Bots)
+
+Click the face to earn points (5% chance of a 10x crit), buy upgrades, and click the
+robots that walk across the screen for bonus points. Progress saves in your browser.
+
+The face images are embedded in the pages. To change one, replace the image in `images/`,
+edit the page in `src/` if needed, and run `python3 build.py` to rebuild.

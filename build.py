@@ -1,15 +1,25 @@
-"""Builds index.html (and artifact.html for publishing) from src/game.html,
-embedding images/netanyahu.png so the face always shows."""
+"""Builds the playable pages from src/, embedding each face image so it always shows.
+
+  src/game.html  + images/netanyahu.png -> index.html  (Bibi Clicker)
+  src/trump.html + images/trump.png     -> trump.html  (Trump Clicker)
+
+Also writes artifact*.html (same page without the <html>/<head> wrapper) for publishing.
+"""
 import base64, io
 from PIL import Image
 
-b = io.BytesIO()
-Image.open('images/netanyahu.png').save(b, 'WEBP', quality=88)
-face = base64.b64encode(b.getvalue()).decode()
-body = open('src/game.html').read().replace('__FACE__', face)
+GAMES = [
+    ('src/game.html', 'images/netanyahu.png', 'index.html', 'artifact.html'),
+    ('src/trump.html', 'images/trump.png', 'trump.html', 'artifact-trump.html'),
+]
 
-open('artifact.html', 'w').write(body)
-open('index.html', 'w').write(
-    '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
-    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
-    + body + '\n</html>\n')
+for src, img, out, art in GAMES:
+    b = io.BytesIO()
+    Image.open(img).save(b, 'WEBP', quality=88)
+    face = base64.b64encode(b.getvalue()).decode()
+    body = open(src).read().replace('__FACE__', face)
+    open(art, 'w').write(body)
+    open(out, 'w').write(
+        '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
+        + body + '\n</html>\n')
