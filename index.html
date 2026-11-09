@@ -7,17 +7,21 @@
 <style>
   :root {
     --chroma: #00ff3c;
-    --bg: #111;
-    --panel: #1d1d1d;
-    --text: #f2f2f2;
-    --muted: #9a9a9a;
-    --accent: #ffd400;
+    --blue: #0038b8;
+    --blue-dark: #002a8a;
+    --bg: #f4f7ff;
+    --panel: #ffffff;
+    --text: #0b1f5c;
+    --muted: #5a6a96;
+    --accent: #0038b8;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     min-height: 100vh;
     background: var(--bg);
+    border-top: 18px solid var(--blue);
+    border-bottom: 18px solid var(--blue);
     color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     display: flex;
@@ -25,7 +29,12 @@
     align-items: center;
     user-select: none;
   }
-  h1 { margin: 20px 16px 4px; font-size: clamp(1.6rem, 5vw, 2.4rem); letter-spacing: 1px; }
+  header { display: flex; align-items: center; gap: 16px; margin-top: 16px; padding: 0 16px; }
+  .flag { width: clamp(48px, 12vw, 90px); height: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,.25)); }
+  header .flag:first-child { animation: wave 2.4s ease-in-out infinite; }
+  header .flag:last-child { animation: wave 2.4s ease-in-out infinite reverse; }
+  @keyframes wave { 50% { transform: rotate(-4deg) skewY(3deg); } }
+  h1 { margin: 0; font-size: clamp(1.6rem, 5vw, 2.4rem); letter-spacing: 1px; }
   #score { font-size: clamp(2rem, 8vw, 3.2rem); font-weight: 800; color: var(--accent); }
   #rate { color: var(--muted); margin-bottom: 12px; }
 
@@ -44,41 +53,51 @@
     position: relative;
     width: min(420px, 100%);
     aspect-ratio: 3 / 4;
-    background: var(--chroma);
-    border-radius: 12px;
+    background: var(--panel);
+    border: 6px solid var(--blue);
+    border-radius: 16px;
     overflow: hidden;
     cursor: pointer;
-    box-shadow: 0 0 40px rgba(0, 255, 60, .45), inset 0 0 60px rgba(0, 0, 0, .25);
+    box-shadow: 0 8px 30px rgba(0, 56, 184, .25);
+    background-image:
+      linear-gradient(transparent 8%, var(--blue) 8%, var(--blue) 14%, transparent 14%,
+                      transparent 86%, var(--blue) 86%, var(--blue) 92%, transparent 92%);
   }
-  /* uneven-lighting look of a cheap green screen */
-  #stage::before {
-    content: "";
-    position: absolute; inset: 0;
+  /* small green-screen patch behind the face, with patchy lighting */
+  #screen {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 72%; height: 64%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
     background:
-      radial-gradient(ellipse at 30% 20%, rgba(255,255,255,.25), transparent 55%),
-      radial-gradient(ellipse at 80% 90%, rgba(0,0,0,.25), transparent 60%);
+      radial-gradient(ellipse at 30% 25%, rgba(255,255,255,.35), transparent 55%),
+      radial-gradient(ellipse at 75% 85%, rgba(0,0,0,.2), transparent 60%),
+      var(--chroma);
+    box-shadow: 0 0 30px 10px rgba(0, 255, 60, .55);
     pointer-events: none;
   }
   #stage img {
     position: absolute;
-    left: 50%; bottom: 0;
-    height: 92%;
-    max-width: 100%;
-    object-fit: contain;
-    transform: translateX(-50%);
+    left: 50%; top: 50%;
+    height: 56%;
+    transform: translate(-50%, -50%);
     transition: transform .06s;
     /* green spill / bad-keying fringe around the cutout */
-    filter: drop-shadow(0 0 3px var(--chroma)) drop-shadow(0 0 10px rgba(0,255,60,.8));
+    filter: drop-shadow(0 0 3px var(--chroma)) drop-shadow(0 0 12px rgba(0,255,60,.9));
     pointer-events: none;
   }
-  #stage.pressed img { transform: translateX(-50%) scale(.94); }
+  #stage.pressed img { transform: translate(-50%, -50%) scale(.93); }
+  #stage .corner { position: absolute; width: 56px; top: 22%; pointer-events: none; }
+  #stage .corner.l { left: 10px; transform: rotate(-12deg); }
+  #stage .corner.r { right: 10px; transform: rotate(12deg); }
 
   .pop {
     position: absolute;
     font-weight: 800;
     font-size: 1.4rem;
-    color: #fff;
-    text-shadow: 0 2px 0 #000, 0 0 6px #000;
+    color: var(--blue);
+    text-shadow: 0 0 4px #fff, 0 0 8px #fff;
     pointer-events: none;
     animation: rise .8s ease-out forwards;
   }
@@ -90,10 +109,13 @@
   #shop {
     width: min(360px, 100%);
     background: var(--panel);
-    border-radius: 12px;
+    border: 3px solid var(--blue);
+    border-radius: 16px;
     padding: 16px;
+    box-shadow: 0 8px 30px rgba(0, 56, 184, .15);
   }
-  #shop h2 { margin: 0 0 12px; font-size: 1.2rem; }
+  #shop h2 { margin: 0 0 12px; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; }
+  #shop h2 .flag { width: 36px; }
   .item {
     display: flex;
     justify-content: space-between;
@@ -102,15 +124,15 @@
     width: 100%;
     padding: 12px;
     margin-bottom: 10px;
-    border: 1px solid #333;
+    border: 2px solid #d5def5;
     border-radius: 8px;
-    background: #262626;
+    background: #f7f9ff;
     color: var(--text);
     font: inherit;
     text-align: left;
     cursor: pointer;
   }
-  .item:hover:not(:disabled) { border-color: var(--chroma); }
+  .item:hover:not(:disabled) { border-color: var(--blue); background: #e9efff; }
   .item:disabled { opacity: .45; cursor: not-allowed; }
   .item small { display: block; color: var(--muted); }
   .item .cost { color: var(--accent); font-weight: 700; white-space: nowrap; }
@@ -122,22 +144,40 @@
 </style>
 </head>
 <body>
-  <h1>Bibi Clicker</h1>
+  <header>
+    <svg class="flag" viewBox="0 0 220 160"><use href="#il"/></svg>
+    <h1>Bibi Clicker</h1>
+    <svg class="flag" viewBox="0 0 220 160"><use href="#il"/></svg>
+  </header>
   <div id="score">0</div>
   <div id="rate">0 per second</div>
 
   <main>
     <div id="stage" title="Click me!">
+      <div id="screen"></div>
+      <svg class="corner l flag" viewBox="0 0 220 160"><use href="#il"/></svg>
+      <svg class="corner r flag" viewBox="0 0 220 160"><use href="#il"/></svg>
       <img id="bibi" src="images/netanyahu.png" alt="Benjamin Netanyahu on a green screen">
     </div>
 
     <section id="shop">
-      <h2>Upgrades</h2>
+      <h2><svg class="flag" viewBox="0 0 220 160"><use href="#il"/></svg>Upgrades</h2>
       <div id="items"></div>
       <button id="reset">Reset progress</button>
     </section>
   </main>
 
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="il" viewBox="0 0 220 160">
+    <rect width="220" height="160" fill="#fff"/>
+    <rect y="15" width="220" height="25" fill="#0038b8"/>
+    <rect y="120" width="220" height="25" fill="#0038b8"/>
+    <g fill="none" stroke="#0038b8" stroke-width="5.5">
+      <polygon points="110,52 137,98 83,98"/>
+      <polygon points="110,108 137,62 83,62"/>
+    </g>
+  </symbol>
+</svg>
 <script>
   // Fallback if images/netanyahu.png hasn't been added yet: a simple silhouette.
   const img = document.getElementById('bibi');
@@ -145,8 +185,8 @@
     img.onerror = null;
     img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400">
-         <circle cx="150" cy="120" r="70" fill="#222"/>
-         <path d="M30 400 C30 260 90 210 150 210 C210 210 270 260 270 400 Z" fill="#222"/>
+         <circle cx="150" cy="120" r="70" fill="#0038b8"/>
+         <path d="M30 400 C30 260 90 210 150 210 C210 210 270 260 270 400 Z" fill="#0038b8"/>
          <text x="150" y="130" font-size="22" text-anchor="middle" fill="#00ff3c"
                font-family="sans-serif">add image</text>
        </svg>`);
