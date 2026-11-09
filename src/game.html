@@ -17,16 +17,17 @@
     color-scheme: light;
   }
   * { box-sizing: border-box; }
-  html, body { min-height: 100%; }
+  html, body { height: 100%; }
   body {
     margin: 0;
+    display: flex; flex-direction: column;
+    overflow: hidden;
     background: var(--ground);
     color: var(--ink);
     font-family: var(--body);
     font-size: 15px;
     user-select: none;
     -webkit-user-select: none;
-    overflow-x: hidden;
   }
 
   /* drifting flags in the background */
@@ -39,24 +40,26 @@
     to { transform: translateY(calc(-100vh - 160px)) rotate(var(--spin, 20deg)); }
   }
 
-  .band { position: relative; z-index: 1; height: 14px; background: var(--blue); }
+  .band { position: relative; z-index: 1; flex: none; height: 10px; background: var(--blue); }
   .wrap {
     position: relative; z-index: 1;
-    max-width: 1000px; margin: 0 auto;
-    padding-block: 20px 36px;
+    flex: 1; min-height: 0; width: 100%;
+    max-width: 1040px; margin: 0 auto;
+    display: flex; flex-direction: column;
+    padding-block: clamp(8px, 2vh, 18px);
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
 
-  header { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  header { position: relative; flex: none; display: flex; align-items: center; justify-content: center; gap: 14px; }
   header h1 {
     margin: 0;
     font-family: var(--display); font-weight: 900;
-    font-size: clamp(1.8rem, 6vw, 3rem);
+    font-size: clamp(1.5rem, min(6vw, 5.5vh), 2.8rem);
     letter-spacing: -.5px; text-wrap: balance;
     color: var(--blue-deep);
   }
-  .flag { display: block; width: clamp(46px, 10vw, 78px); height: auto; filter: drop-shadow(0 3px 5px rgba(0,38,125,.25)); }
+  .flag { display: block; width: clamp(38px, min(9vw, 8vh), 72px); height: auto; filter: drop-shadow(0 3px 5px rgba(0,38,125,.25)); }
   header .flag { transform-origin: left center; animation: wave 2.6s ease-in-out infinite; }
   header .flag.r { transform-origin: right center; animation-delay: -1.3s; }
   @keyframes wave {
@@ -64,24 +67,28 @@
     50% { transform: perspective(200px) rotateY(-18deg) skewY(-3deg); }
   }
 
-  .scoreline { text-align: center; margin: 10px 0 18px; }
+  .scoreline { flex: none; text-align: center; margin: clamp(2px, 1vh, 8px) 0 clamp(6px, 1.8vh, 16px); }
   #score {
     display: inline-block;
     font-family: var(--display); font-weight: 900;
-    font-size: clamp(2.4rem, 10vw, 3.8rem);
+    font-size: clamp(2rem, min(10vw, 7vh), 3.6rem); line-height: 1.1;
     color: var(--blue); font-variant-numeric: tabular-nums;
   }
   #score.bump { animation: bump .18s ease-out; }
   @keyframes bump { 50% { transform: scale(1.12); } }
   #rate { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 
-  main { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; align-items: flex-start; }
+  main {
+    flex: 1; min-height: 0;
+    display: flex; gap: clamp(12px, 2.5vw, 24px); justify-content: center; align-items: stretch;
+  }
 
   /* arena: white field with the flag's two stripes */
   #stage {
     position: relative;
-    width: min(420px, 100%); max-width: 100%;
+    height: 100%; max-height: 560px; max-width: 100%;
     aspect-ratio: 3 / 4;
+    flex: none;
     border: 5px solid var(--blue); border-radius: 20px;
     background:
       linear-gradient(transparent 7%, var(--blue) 7%, var(--blue) 13%, transparent 13%,
@@ -160,21 +167,38 @@
 
   /* ledger */
   #shop {
-    width: min(360px, 100%);
+    width: min(380px, 100%);
+    max-height: 560px; min-height: 0;
     background: var(--white);
     border: 3px solid var(--blue); border-radius: 20px;
-    padding: 16px;
+    padding: clamp(10px, 1.6vh, 16px);
     box-shadow: 0 12px 34px rgba(0,56,184,.14);
-    display: flex; flex-direction: column; gap: 10px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  #items {
+    flex: 1; min-height: 0;
+    display: grid; grid-auto-rows: 1fr; gap: clamp(4px, .9vh, 8px);
+    overflow-y: auto;
   }
   #shop h2 {
-    margin: 0 0 2px; display: flex; align-items: center; gap: 10px;
+    margin: 0; display: flex; align-items: center; gap: 10px;
     font-family: var(--display); font-weight: 700; font-size: 1.25rem; color: var(--blue-deep);
   }
-  #shop h2 .flag { width: 34px; }
+  #shop h2 .flag { width: 30px; }
+  #mute {
+    margin-left: auto; width: 36px; height: 36px; padding: 6px;
+    border: 2px solid var(--blue-soft); border-radius: 10px; background: var(--ground);
+    color: var(--blue); cursor: pointer;
+  }
+  #mute:hover { border-color: var(--blue); }
+  #mute:focus-visible { outline: 3px solid var(--blue-deep); outline-offset: 2px; }
+  #mute svg { width: 100%; height: 100%; display: block; }
+  #mute .off { display: none; }
+  #mute[aria-pressed="true"] .on { display: none; }
+  #mute[aria-pressed="true"] .off { display: block; }
   .item {
     display: flex; justify-content: space-between; align-items: center; gap: 12px;
-    width: 100%; padding: 12px 14px;
+    width: 100%; min-height: 0; padding: 4px 12px 4px 8px;
     border: 2px solid var(--blue-soft); border-radius: 12px;
     background: var(--ground); color: var(--ink);
     font: inherit; text-align: left; cursor: pointer;
@@ -182,6 +206,18 @@
     transition: transform .12s, border-color .12s, background .12s;
   }
   .item .name { font-weight: 600; }
+  .item .label { flex: 1; min-width: 0; line-height: 1.2; }
+  .icon {
+    flex: none; width: clamp(30px, 5vh, 42px); aspect-ratio: 1;
+    padding: 5px; border-radius: 10px;
+    background: var(--white); border: 2px solid var(--blue-soft);
+    color: var(--blue);
+  }
+  .icon svg { display: block; width: 100%; height: 100%; }
+  .item:not(:disabled):hover .icon { animation: jiggle .4s ease-in-out; }
+  @keyframes jiggle { 25% { rotate: -10deg; } 75% { rotate: 10deg; } }
+  .item.bought .icon { animation: hop .4s ease-out; }
+  @keyframes hop { 40% { transform: translateY(-6px) scale(1.15); } }
   .item small { display: block; color: var(--ink-soft); }
   .item .cost { font-family: var(--display); font-weight: 700; color: var(--blue); white-space: nowrap; font-variant-numeric: tabular-nums; }
   .item:hover:not(:disabled) { border-color: var(--blue); background: var(--blue-soft); transform: translateY(-2px); }
@@ -205,7 +241,7 @@
   }
 
   #reset {
-    align-self: flex-start;
+    flex: none; align-self: flex-start;
     background: none; border: none; padding: 4px 0;
     color: var(--ink-soft); text-decoration: underline; cursor: pointer; font: inherit;
   }
@@ -223,6 +259,28 @@
     pointer-events: none; white-space: nowrap;
   }
   #toast.show { translate: -50% 0; }
+
+  @media (max-width: 700px) {
+    main { flex-direction: column; align-items: center; }
+    #stage { height: auto; flex: 1 1 0; min-height: 0; width: auto; max-height: none; }
+    #shop { width: 100%; flex: none; max-height: 52%; }
+    #items { grid-template-columns: 1fr 1fr; grid-auto-rows: auto; }
+    .item { padding: 6px; display: grid; grid-template-columns: auto 1fr; column-gap: 6px; row-gap: 0; align-items: center; }
+    .item .icon { grid-row: span 2; }
+    .item .cost { grid-column: 2; line-height: 1.1; }
+    .item small { display: none; }
+    .item .name { font-size: .82rem; }
+    .item .cost { font-size: .85rem; }
+    .icon { width: 30px; padding: 4px; }
+    .count { position: absolute; top: 4px; right: 4px; margin: 0; font-size: .68rem; }
+    .item { min-height: 50px; }
+    .item .name { display: block; padding-right: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #shop h2 { font-size: 1.05rem; }
+    #reset { font-size: .85rem; }
+  }
+  @media (max-height: 560px) {
+    .item small { display: none; }
+  }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -272,8 +330,13 @@
     </div>
 
     <section id="shop" aria-label="Upgrades">
-      <h2><svg class="flag" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>Upgrades</h2>
-      <div id="items" style="display:flex;flex-direction:column;gap:10px"></div>
+      <h2><svg class="flag" viewBox="0 0 220 160" aria-hidden="true"><use href="#il"/></svg>Upgrades
+        <button id="mute" type="button" aria-pressed="false" aria-label="Mute sound" title="Sound on/off">
+          <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+          <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M17 9l5 6M22 9l-5 6"/></svg>
+        </button>
+      </h2>
+      <div id="items"></div>
       <button id="reset" type="button">Reset progress</button>
     </section>
   </main>
@@ -284,6 +347,18 @@
 
 <script>
 (() => {
+  // simple line icons, drawn in currentColor on a 24x24 grid
+  const I = (inner, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${inner}</svg>`;
+  const icons = {
+    finger:  I('<path d="M9 11V4.5a1.5 1.5 0 0 1 3 0V10"/><path d="M12 9.5a1.5 1.5 0 0 1 3 0V11"/><path d="M15 10.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1a6 6 0 0 1-4.6-2.2L4 16a1.6 1.6 0 0 1 2.4-2.1L9 16"/>'),
+    intern:  I('<circle cx="12" cy="7" r="3.5"/><path d="M5 21v-1.5A5.5 5.5 0 0 1 10.5 14h3a5.5 5.5 0 0 1 5.5 5.5V21"/><path d="M12 14l-1.2 3 1.2 2 1.2-2z" fill="currentColor"/>'),
+    crew:    I('<rect x="2.5" y="7" width="13" height="10" rx="2"/><path d="M15.5 11l6-3.5v9l-6-3.5"/><circle cx="7" cy="12" r="2"/>'),
+    mouse:   I('<rect x="6" y="3" width="12" height="18" rx="6" fill="#f5c400" stroke="#9a7a00"/><path d="M12 3v6M6 10h12" stroke="#9a7a00"/>', ''),
+    rally:   I('<path d="M5 21V3"/><path d="M5 4h14v9H5" fill="#fff"/><path d="M5 6h14M5 11h14"/><path d="M12 6.8l1.6 2.7h-3.2zM12 10.2l1.6-2.7h-3.2z" stroke-width="1"/>'),
+    network: I('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 3l4 4 4-4"/><path d="M7 11h6M7 14.5h4"/><circle cx="17" cy="13" r="1.4" fill="currentColor"/>'),
+    knesset: I('<path d="M3 21h18M4 18h16M5 18V9M9.5 18V9M14.5 18V9M19 18V9M3 9h18l-9-5.5z"/>'),
+  };
+
   const upgrades = [
     { id: 'finger',  name: 'Stronger Finger',  desc: '+1 per click',     cost: 15,     click: 1 },
     { id: 'intern',  name: 'Campaign Intern',  desc: '+1 per second',    cost: 50,     auto: 1 },
@@ -311,16 +386,54 @@
   const scoreEl = $('score'), rateEl = $('rate'), stage = $('stage'), face = $('face'), toast = $('toast');
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // ---- sound: tiny Web Audio synth, starts on the first click ----
+  let ac = null, muted = false;
+  try { muted = localStorage.getItem('bibi-muted') === '1'; } catch (e) {}
+  const muteBtn = $('mute');
+  muteBtn.setAttribute('aria-pressed', muted);
+  muteBtn.onclick = () => {
+    muted = !muted;
+    muteBtn.setAttribute('aria-pressed', muted);
+    try { localStorage.setItem('bibi-muted', muted ? '1' : '0'); } catch (e) {}
+    if (!muted) sfx.buy();
+  };
+  function audio() {
+    if (muted) return null;
+    if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function tone(freq, start, dur, type = 'sine', vol = .2, slideTo) {
+    const a = audio(); if (!a) return;
+    const t = a.currentTime + start;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(a.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  const sfx = {
+    click() { const f = 520 + Math.random() * 140; tone(f, 0, .09, 'triangle', .22, f * 1.8); tone(f / 2, 0, .06, 'sine', .15); },
+    crit()  { [660, 880, 1320].forEach((f, i) => tone(f, i * .05, .22, 'square', .07)); tone(1760, .15, .3, 'sine', .12); },
+    buy()   { tone(988, 0, .09, 'square', .07); tone(1319, .08, .25, 'square', .07); },
+    fanfare() { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * .11, i === 3 ? .5 : .14, 'triangle', .2)); },
+  };
+
   const buttons = {};
   for (const u of upgrades) {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'item';
-    b.innerHTML = `<span><span class="name">${u.name}</span><span class="count">0</span><small>${u.desc}</small></span><span class="cost"></span>`;
+    b.innerHTML = `<span class="icon">${icons[u.id]}</span><span class="label"><span class="name">${u.name}</span><span class="count">0</span><small>${u.desc}</small></span><span class="cost"></span>`;
     b.onclick = () => {
       const p = priceOf(u);
       if (state.score < p) return;
       state.score -= p;
       state.owned[u.id] = owned(u.id) + 1;
+      sfx.buy();
       b.classList.remove('bought'); void b.offsetWidth; b.classList.add('bought');
       render();
     };
@@ -350,6 +463,7 @@
       toast.classList.add('show');
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+      sfx.fanfare();
       if (!calm) for (let i = 0; i < 6; i++) setTimeout(launchFlag, i * 120);
     }
   }
@@ -367,6 +481,7 @@
     const crit = Math.random() < 0.05;
     const gain = perClick() * (crit ? 10 : 1);
     state.score += gain;
+    crit ? sfx.crit() : sfx.click();
 
     face.classList.remove('hit'); void face.offsetWidth; face.classList.add('hit');
     scoreEl.classList.remove('bump'); void scoreEl.offsetWidth; scoreEl.classList.add('bump');
