@@ -92,8 +92,55 @@
   #whisper:hover { text-decoration: underline; }
   #whisper.fade { opacity: 0; }
 
+  /* hidden mini-games */
+  #mini .pages { align-items: center; text-align: center; }
+  #mini .pages p { max-width: 52ch; margin: 0; line-height: 1.5; }
+  .mg-hud {
+    display: flex; gap: 18px; justify-content: center; flex-wrap: wrap;
+    font-family: var(--display); font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums;
+  }
+  .mg-hud b { color: var(--blue-deep); }
+  .mg-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .mg-btn {
+    padding: 10px 20px; border-radius: 12px; border: 2px solid var(--blue);
+    background: var(--blue); color: var(--white);
+    font-family: var(--display); font-weight: 700; font-size: 1rem; cursor: pointer;
+  }
+  .mg-btn.alt { background: var(--white); color: var(--blue); }
+  .mg-btn:hover { filter: brightness(1.1); }
+  .mg-btn:focus-visible { outline: 3px solid var(--blue-deep); outline-offset: 3px; }
+  .mg-big { font-family: var(--display); font-weight: 900; font-size: 2.4rem; color: var(--blue); }
+  .holes {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    width: min(330px, 100%);
+  }
+  .hole {
+    position: relative; aspect-ratio: 1; border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 70%, #001a5c 0 55%, var(--blue) 56%);
+    overflow: hidden; cursor: pointer;
+    box-shadow: inset 0 -6px 0 rgba(0,0,0,.2);
+    touch-action: manipulation;
+  }
+  .hole > * {
+    position: absolute; left: 12%; width: 76%; top: 115%;
+    transition: top .12s ease-out; pointer-events: none;
+  }
+  .hole.up > * { top: 10%; }
+  .hole img { border-radius: 50%; box-shadow: 0 0 0 3px var(--white); }
+  .hole.whack { animation: whack .25s ease-out; }
+  @keyframes whack { 40% { transform: scale(.88); } }
+  .hole.oops { animation: oops .3s; }
+  @keyframes oops { 25%, 75% { translate: -5px 0; } 50% { translate: 5px 0; } }
+  #mgcanvas {
+    display: block; width: min(360px, 100%); max-width: 100%; aspect-ratio: 3 / 4;
+    max-height: 56vh;
+    border-radius: 14px; border: 3px solid var(--blue);
+    background: linear-gradient(#e9f0ff, var(--white));
+    touch-action: none; cursor: none;
+  }
+
   /* the lore book */
-  #lore {
+  #lore, #mini {
     position: fixed; inset: 0; z-index: 8;
     display: grid; place-items: center;
     padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
@@ -118,13 +165,13 @@
   }
   .book-head h2 { margin: 0; font-family: var(--display); font-weight: 900; font-size: 1.3rem; text-wrap: balance; }
   .book-head .meta { font-size: .82rem; opacity: .85; }
-  #loreclose {
+  #loreclose, #miniclose {
     margin-left: auto; flex: none; width: 36px; height: 36px; border-radius: 10px;
     border: 2px solid rgba(255,255,255,.5); background: transparent; color: var(--white);
     font-size: 1.3rem; line-height: 1; cursor: pointer;
   }
-  #loreclose:hover { background: rgba(255,255,255,.15); }
-  #loreclose:focus-visible { outline: 3px solid var(--white); outline-offset: 2px; }
+  #miniclose:hover, #loreclose:hover { background: rgba(255,255,255,.15); }
+  #miniclose:focus-visible, #loreclose:focus-visible { outline: 3px solid var(--white); outline-offset: 2px; }
   .tabs { flex: none; display: flex; gap: 6px; padding: 10px 16px 0; border-bottom: 2px solid var(--blue-soft); }
   .tab {
     padding: 8px 14px; border: 2px solid var(--blue-soft); border-bottom: none;
@@ -229,7 +276,7 @@
     to { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; }
   }
 
-  #stage .corner { position: absolute; top: 17%; width: 52px; pointer-events: none; animation: wave 2.6s ease-in-out infinite; }
+  #stage .corner { position: absolute; top: 17%; width: 52px; pointer-events: auto; cursor: help; animation: wave 2.6s ease-in-out infinite; }
   #stage .corner.l { left: 10px; rotate: -12deg; }
   #stage .corner.r { right: 10px; rotate: 12deg; animation-delay: -1.3s; }
 
@@ -477,6 +524,18 @@
 <div class="band"></div>
 <div id="toast" role="status"></div>
 <div id="bots"></div>
+<div id="mini" hidden>
+  <div class="book" role="dialog" aria-modal="true" aria-labelledby="minititle">
+    <div class="book-head">
+      <div>
+        <h2 id="minititle"></h2>
+        <div class="meta" id="minimeta"></div>
+      </div>
+      <button id="miniclose" type="button" aria-label="Close the mini-game">&times;</button>
+    </div>
+    <div class="pages" id="minipages"></div>
+  </div>
+</div>
 <div id="lore" hidden>
   <div class="book" role="dialog" aria-modal="true" aria-labelledby="loretitle">
     <div class="book-head">
@@ -529,6 +588,7 @@
   state.zaps = state.zaps || 0; state.crits = state.crits || 0;
   state.clicks = state.clicks || 0; state.seen = state.seen || [];
   state.resets = state.resets || 0;
+  state.mini = state.mini || {};
   const earn = n => { state.score += n; state.total += n; };
 
   const owned = id => state.owned[id] || 0;
@@ -575,6 +635,7 @@
     click() { const f = 520 + Math.random() * 140; tone(f, 0, .09, 'triangle', .22, f * 1.8); tone(f / 2, 0, .06, 'sine', .15); },
     crit()  { [660, 880, 1320].forEach((f, i) => tone(f, i * .05, .22, 'square', .07)); tone(1760, .15, .3, 'sine', .12); },
     buy()   { tone(988, 0, .09, 'square', .07); tone(1319, .08, .25, 'square', .07); },
+    bad()   { tone(200, 0, .18, 'sawtooth', .07, 110); },
     jackpot() {
       tone(220, 0, .25, 'sawtooth', .08, 880);
       [784, 988, 1175, 1568, 1976].forEach((f, i) => tone(f, .12 + i * .06, .18, 'square', .06));
@@ -789,6 +850,12 @@
     { id: 'crit', title: 'The Golden Click', when: () => state.crits > 0, how: 'Land a critical click.', text: [
       'One click in twenty is worth ten. The sacred chime plays three notes, then a fourth, higher one, as foretold by the Five (see Chronicle VI).',
       'You have landed __CRITS__ Golden Clicks.' ] },
+    { id: 'lounge', title: 'The Bot Lounge (Does Not Exist)', when: () => 'lounge' in state.mini, how: 'Find the place that does not exist. Listen to the whispers.', text: [
+      'You found it. It still does not exist. Every Yahu-Bot that walks off the screen ends up here, popping out of holes for reasons the Foundry will not explain.',
+      'Lounge record: __LOUNGE__ bots whacked in one visit. The coffee machine is here too. It is still broken. Do not click it.' ] },
+    { id: 'migration', title: 'The Migration Route', when: () => 'flags' in state.mini, how: 'The flags beside the Face know something.', text: [
+      'The waving flags beside the Face finally told you where the drifting flags go: they fall back down somewhere else, and someone has to catch them with the Golden Mouse.',
+      'Best catch: __FLAGS__ flags. Avoid the green screens. You know why (see Chronicle I).' ] },
     { id: 'returned', title: 'The Returned', when: () => state.resets > 0, how: 'Do the forbidden thing. Twice.', text: [
       'You pressed the Button. Twice. You came back. The Book remembers you, and has noted it here, slightly judgmentally.',
       'Times returned: __RESETS__.' ] },
@@ -798,6 +865,8 @@
     'The Face has been waiting for you.',
     'The Star behind the Face turns once every 30 seconds. It has never been late.',
     'The Bot Lounge does not exist.',
+    'The flags beside the Face know where the others go. Ask them three times.',
+    'Nobody has ever clicked on the Bot Lounge. Because it does not exist.',
     'The thumb is still bitter about not being chosen.',
     'Some say a faint green fringe remains. It does not. But some say it.',
     'The coffee machine has still not been fixed.',
@@ -815,6 +884,7 @@
   const fill = t => t
     .replace('__SPINS__', fmt((Date.now() - pageOpened) / 30000))
     .replace('__CLICKS__', fmt(state.clicks)).replace('__ZAPS__', fmt(state.zaps))
+    .replace('__LOUNGE__', fmt(state.mini.lounge || 0)).replace('__FLAGS__', fmt(state.mini.flags || 0))
     .replace('__CRITS__', fmt(state.crits)).replace('__RESETS__', fmt(state.resets));
   const unlocked = () => [
     ...chronicle.filter(c => state.total >= c.at).map(c => 'c' + c.at),
@@ -906,6 +976,216 @@
   whisperEl.textContent = '“' + whispers[wi] + '”';
   setInterval(whisper, 9000);
 
+
+  // =====================================================================
+  //  HIDDEN MINI-GAMES
+  //  1. The Bot Lounge: click the whisper while it says the Bot Lounge does not exist
+  //  2. The Migration Route: tap the flags beside the Face three times in a row
+  // =====================================================================
+  const miniEl = $('mini'), miniPages = $('minipages');
+  let mg = null; // the running game, if any
+  const miniOpen = () => !miniEl.hidden;
+  const rewardPer = () => Math.max(25, perClick() * 15 + Math.round(perSec() * 2));
+
+  function openMini(title, meta) {
+    if (!loreEl.hidden) closeLore();
+    lastFocus = document.activeElement;
+    $('minititle').textContent = title;
+    $('minimeta').textContent = meta;
+    miniEl.hidden = false;
+  }
+  function stopGame() {
+    if (mg) { mg.stop(); mg = null; }
+  }
+  function closeMini() {
+    stopGame();
+    miniEl.hidden = true;
+    if (lastFocus) lastFocus.focus();
+  }
+  $('miniclose').onclick = closeMini;
+  miniEl.addEventListener('pointerdown', e => { if (e.target === miniEl) closeMini(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && miniOpen()) closeMini(); });
+
+  function intro(html, start) {
+    miniPages.innerHTML = html + `<div class="mg-btns"><button class="mg-btn" id="mgstart" type="button">Start</button></div>`;
+    $('mgstart').onclick = start;
+    $('mgstart').focus();
+  }
+  function results(key, hits, label, again) {
+    stopGame();
+    const first = !(key in state.mini);
+    const best = Math.max(state.mini[key] || 0, hits);
+    const isBest = hits > 0 && hits >= best && hits !== (state.mini[key] || 0);
+    state.mini[key] = best;
+    const prize = hits * rewardPer();
+    if (prize) earn(prize);
+    sfx[hits ? 'fanfare' : 'bad']();
+    miniPages.innerHTML = `
+      <p>${label}</p>
+      <div class="mg-big">${fmt(hits)}</div>
+      <p>${hits ? `You earned <b>${fmt(prize)}</b> points.` : 'No points this time.'} ${isBest ? 'New record!' : `Record: ${fmt(best)}.`}</p>
+      ${first ? '<p class="note">A new Codex entry has been written about this place.</p>' : ''}
+      <div class="mg-btns">
+        <button class="mg-btn" id="mgagain" type="button">Play again</button>
+        <button class="mg-btn alt" id="mgback" type="button">Back to clicking</button>
+      </div>`;
+    $('mgagain').onclick = again;
+    $('mgback').onclick = closeMini;
+    $('mgagain').focus();
+    render();
+  }
+
+  // ---------- 1. THE BOT LOUNGE: whack-a-bot ----------
+  const mug = `<svg viewBox="0 0 60 60" aria-hidden="true"><rect x="10" y="16" width="32" height="36" rx="6" fill="#fff" stroke="#00267d" stroke-width="4"/><path d="M42 24h6a6 6 0 0 1 0 12h-6" fill="none" stroke="#00267d" stroke-width="4"/><path d="M18 10c0-4 4-4 4-8M28 10c0-4 4-4 4-8" stroke="#00267d" stroke-width="3" fill="none" stroke-linecap="round"/><text x="26" y="40" font-size="14" text-anchor="middle" fill="#b00020" font-family="sans-serif" font-weight="700">X</text></svg>`;
+
+  function openLounge() {
+    openMini('The Bot Lounge', 'This place does not exist. Please enjoy your stay.');
+    intro(`<p>Every Yahu-Bot that walks off the screen ends up here. Whack as many as you can in <b>20 seconds</b>.</p>
+           <p>Do not click the broken coffee machine. It costs you 2.</p>
+           <p class="note">Each bot is worth ${fmt(rewardPer())} points when you finish.</p>`, startLounge);
+  }
+
+  function startLounge() {
+    stopGame();
+    let hits = 0, left = 20, timers = [], alive = true;
+    miniPages.innerHTML = `<div class="mg-hud"><span>Bots: <b id="mghits">0</b></span><span>Time: <b id="mgtime">20</b></span></div>
+      <div class="holes">${'<div class="hole"></div>'.repeat(9)}</div>`;
+    const holes = [...miniPages.querySelectorAll('.hole')];
+    const hud = () => { $('mghits').textContent = hits; $('mgtime').textContent = left; };
+    holes.forEach(h => h.addEventListener('pointerdown', () => {
+      if (!h.classList.contains('up')) return;
+      const bad = h.dataset.kind === 'mug';
+      h.classList.remove('up', 'whack', 'oops'); void h.offsetWidth;
+      h.classList.add(bad ? 'oops' : 'whack');
+      if (bad) { hits = Math.max(0, hits - 2); sfx.bad(); } else { hits++; sfx.click(); }
+      hud();
+    }));
+    function pop() {
+      if (!alive) return;
+      const free = holes.filter(h => !h.classList.contains('up'));
+      if (free.length) {
+        const h = free[Math.floor(Math.random() * free.length)];
+        const isMug = Math.random() < .18;
+        h.dataset.kind = isMug ? 'mug' : 'bot';
+        h.innerHTML = isMug ? mug : `<img alt="" src="${face.src}">`;
+        void h.offsetWidth;
+        h.classList.add('up');
+        const stay = 1050 - (20 - left) * 22;
+        timers.push(setTimeout(() => h.classList.remove('up'), stay));
+      }
+      timers.push(setTimeout(pop, 650 - (20 - left) * 12));
+    }
+    const clock = setInterval(() => {
+      left--; hud();
+      if (left <= 0) results('lounge', hits, 'Bots whacked in the Lounge', startLounge);
+    }, 1000);
+    mg = { stop() { alive = false; clearInterval(clock); timers.forEach(clearTimeout); } };
+    pop();
+  }
+
+  // trigger: click the whisper while it talks about the Bot Lounge
+  whisperEl.onclick = () => (/Bot Lounge/.test(whisperEl.textContent) ? openLounge() : openLore());
+  whisperEl.addEventListener('keydown', e => {
+    if ((e.key === 'Enter' || e.key === ' ') && /Bot Lounge/.test(whisperEl.textContent)) { e.stopImmediatePropagation(); e.preventDefault(); openLounge(); }
+  }, true);
+
+  // ---------- 2. THE MIGRATION ROUTE: catch the falling flags ----------
+  const flagImg = new Image();
+  flagImg.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 160"><rect width="220" height="160" fill="#fff" stroke="#0038b8" stroke-width="6"/><rect y="15" width="220" height="25" fill="#0038b8"/><rect y="120" width="220" height="25" fill="#0038b8"/><g fill="none" stroke="#0038b8" stroke-width="7"><polygon points="110,52 137,98 83,98"/><polygon points="110,108 137,62 83,62"/></g></svg>');
+
+  function openMigration() {
+    openMini('The Migration Route', 'Where the drifting flags come back down.');
+    intro(`<p>The flags beside the Face have told you their secret. The drifting flags fall back down here. Catch them with the <b>Golden Mouse</b> for <b>30 seconds</b>.</p>
+           <p>Move with your finger, mouse, or the arrow keys. Avoid the <b>green screens</b>: each one costs you 3 flags.</p>
+           <p class="note">Each flag is worth ${fmt(rewardPer())} points when you finish.</p>`, startMigration);
+  }
+
+  function startMigration() {
+    stopGame();
+    miniPages.innerHTML = `<div class="mg-hud"><span>Flags: <b id="mghits">0</b></span><span>Time: <b id="mgtime">30</b></span></div>
+      <canvas id="mgcanvas" width="360" height="480" aria-label="Catch the falling flags"></canvas>`;
+    const cv = $('mgcanvas'), cx = cv.getContext('2d');
+    const W = 360, H = 480;
+    let hits = 0, left = 30, alive = true, things = [], px = W / 2, keys = {}, spawnT = 0, last = performance.now(), flash = 0;
+    const hud = () => { $('mghits').textContent = hits; $('mgtime').textContent = Math.ceil(left); };
+
+    const move = e => {
+      const r = cv.getBoundingClientRect();
+      px = Math.max(32, Math.min(W - 32, (e.clientX - r.left) / r.width * W));
+    };
+    cv.addEventListener('pointermove', move);
+    cv.addEventListener('pointerdown', e => { move(e); cv.setPointerCapture(e.pointerId); });
+    const kd = e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { keys[e.key] = true; e.preventDefault(); } };
+    const ku = e => { keys[e.key] = false; };
+    addEventListener('keydown', kd); addEventListener('keyup', ku);
+
+    function frame(now) {
+      if (!alive) return;
+      const dt = Math.min(.05, (now - last) / 1000); last = now;
+      left -= dt;
+      if (keys.ArrowLeft) px = Math.max(32, px - 320 * dt);
+      if (keys.ArrowRight) px = Math.min(W - 32, px + 320 * dt);
+
+      spawnT -= dt;
+      if (spawnT <= 0) {
+        const speedUp = (30 - left) / 30;
+        spawnT = .55 - speedUp * .25;
+        const bad = Math.random() < .22;
+        things.push({ x: 24 + Math.random() * (W - 48), y: -30, vy: 120 + speedUp * 140 + Math.random() * 60, bad, spin: Math.random() * 6 });
+      }
+
+      cx.clearRect(0, 0, W, H);
+      // things
+      for (const t of things) {
+        t.y += t.vy * dt; t.spin += dt * 3;
+        cx.save(); cx.translate(t.x, t.y); cx.rotate(Math.sin(t.spin) * .25);
+        if (t.bad) {
+          cx.fillStyle = '#00ff3c'; cx.fillRect(-20, -15, 40, 30);
+          cx.strokeStyle = '#00a828'; cx.lineWidth = 2; cx.strokeRect(-20, -15, 40, 30);
+          cx.fillStyle = '#00591a'; cx.font = 'bold 9px sans-serif'; cx.textAlign = 'center'; cx.fillText('GREEN', 0, 3);
+        } else {
+          cx.drawImage(flagImg, -22, -16, 44, 32);
+        }
+        cx.restore();
+        // caught?
+        if (!t.done && t.y > H - 62 && t.y < H - 30 && Math.abs(t.x - px) < 42) {
+          t.done = true;
+          if (t.bad) { hits = Math.max(0, hits - 3); sfx.bad(); flash = .3; }
+          else { hits++; sfx.click(); }
+          hud();
+        }
+      }
+      things = things.filter(t => !t.done && t.y < H + 40);
+
+      // the Golden Mouse
+      cx.save(); cx.translate(px, H - 40);
+      cx.fillStyle = '#f5c400'; cx.strokeStyle = '#9a7a00'; cx.lineWidth = 3;
+      cx.beginPath(); cx.roundRect(-34, -18, 68, 36, 18); cx.fill(); cx.stroke();
+      cx.beginPath(); cx.moveTo(0, -18); cx.lineTo(0, 0); cx.moveTo(-34, 0); cx.lineTo(34, 0); cx.stroke();
+      cx.restore();
+
+      if (flash > 0) { flash -= dt; cx.fillStyle = `rgba(0,255,60,${flash})`; cx.fillRect(0, 0, W, H); }
+      $('mgtime').textContent = Math.max(0, Math.ceil(left));
+      if (left <= 0) { results('flags', hits, 'Flags caught on the Migration Route', startMigration); return; }
+      requestAnimationFrame(frame);
+    }
+    mg = { stop() { alive = false; removeEventListener('keydown', kd); removeEventListener('keyup', ku); } };
+    requestAnimationFrame(frame);
+  }
+
+  // trigger: tap the waving flags beside the Face three times in a row
+  let flagTaps = 0, flagTimer;
+  stage.querySelectorAll('.corner').forEach(c => c.addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    flagTaps++;
+    c.animate([{ scale: 1 }, { scale: 1.35 }, { scale: 1 }], { duration: 250 });
+    tone(700 + flagTaps * 200, 0, .1, 'triangle', .15);
+    clearTimeout(flagTimer);
+    flagTimer = setTimeout(() => { flagTaps = 0; }, 2500);
+    if (flagTaps >= 3) { flagTaps = 0; openMigration(); }
+  }));
+
   // ---- Yahu-Bots ----
   const botLayer = $('bots');
   const botBody = `<svg class="body" viewBox="0 0 84 74" aria-hidden="true">
@@ -928,7 +1208,7 @@
   }
 
   function spawnBot() {
-    if (document.hidden || bots.size >= 2) return;
+    if (document.hidden || bots.size >= 2 || miniOpen()) return;
     const W = innerWidth, H = innerHeight;
     const goLeft = Math.random() < .5;
     const el = document.createElement('div');
