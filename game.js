@@ -7,6 +7,9 @@
   // ==================================================================
   const ROUNDS = 7;
   const ROUND_SECONDS = 20;
+  // Playtest mode: no once-a-day limit. Finishing a set unlocks the next one right away.
+  // Set to false for launch so each set unlocks at midnight.
+  const PLAYTEST = true;
   const METERS_PER_POINT = 10;
   const MAX_METERS = ROUNDS * 100 * METERS_PER_POINT;
   const LAUNCH = new Date(2026, 10, 11); // Dig #1 (local time)
@@ -990,9 +993,17 @@
   // ==================================================================
   // Game state
   // ==================================================================
-  const today = localDayNumber();
-  const todayKey = dateKey();
-  const digNumber = today + 1;
+  const realKey = dateKey();
+  let dayOffset = PLAYTEST ? store.get("deepdig-offset", 0) : 0;
+  let today, todayKey, digNumber;
+  function setDayOffset(n) {
+    dayOffset = n;
+    if (PLAYTEST) store.set("deepdig-offset", n);
+    today = localDayNumber() + dayOffset;
+    todayKey = `${realKey}#${dayOffset}`;
+    digNumber = today + 1;
+  }
+  setDayOffset(dayOffset);
 
   let mode = "daily";
   let game = null;
@@ -1019,6 +1030,7 @@
     });
     S.focus = SCREENS[name];
     $("pips").classList.toggle("hidden", name === "title");
+    $("btn-home").classList.toggle("hidden", name === "title");
   }
 
   function typeText(el, text) {
@@ -1208,7 +1220,8 @@
       li.append(q, a, chip);
       ol.append(li);
     });
-    $("btn-again").classList.toggle("hidden", mode !== "practice");
+    $("btn-again").classList.toggle("hidden", mode !== "practice" && !PLAYTEST);
+    $("btn-again").textContent = mode === "practice" ? "Practice again" : "Next set";
     $("btn-share").classList.toggle("hidden", mode !== "daily");
     $("share-fallback").classList.add("hidden");
     updateCountdown();
@@ -1234,9 +1247,10 @@
     const s = Math.max(0, Math.floor((next - now) / 1000));
     const p2 = (n) => String(n).padStart(2, "0");
     const txt = `Next dig in ${p2(Math.floor(s / 3600))}:${p2(Math.floor((s % 3600) / 60))}:${p2(s % 60)}`;
-    if (!$("screen-results").classList.contains("hidden")) $("res-next").textContent = txt;
-    if (!$("screen-title").classList.contains("hidden") && dailyDone()) $("title-note").textContent = txt;
-    if (dateKey() !== todayKey) location.reload();
+    const shownTxt = PLAYTEST ? "Playtest mode: play as many sets as you like" : txt;
+    if (!$("screen-results").classList.contains("hidden")) $("res-next").textContent = shownTxt;
+    if (!$("screen-title").classList.contains("hidden") && dailyDone()) $("title-note").textContent = shownTxt;
+    if (dateKey() !== realKey) location.reload();
   }
   setInterval(updateCountdown, 1000);
 
@@ -1282,7 +1296,7 @@
       <table class="tier-table">${rows}
         <tr><td><span class="chip tier-0">BEDROCK</span></td><td>Wrong or blank</td><td>+0</td></tr></table>
       <p>Every point digs ${METERS_PER_POINT}m deeper. A perfect day reaches <b>${MAX_METERS}m</b>, all the way down to the magma.</p>
-      <p>Small typos are forgiven. Everyone gets the same prompts, and a new set unlocks at midnight. The practice mine has random prompts any time.</p>`;
+      <p>Small typos are forgiven. ${PLAYTEST ? "You're in playtest mode, so a new set of prompts unlocks as soon as you finish one." : "Everyone gets the same prompts, and a new set unlocks at midnight."} The practice mine has random prompts any time.</p>`;
   }
 
   function statsHtml() {
@@ -1310,7 +1324,9 @@
     mode = "daily";
     cancelAnimationFrame(timerRaf);
     show("title");
-    $("title-dig").textContent = `Dig #${digNumber} · ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+    $("title-dig").textContent = PLAYTEST
+      ? `Dig #${digNumber} · Playtest`
+      : `Dig #${digNumber} · ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
     const saved = loadDaily();
     const btn = $("btn-play");
     resetScene();
@@ -1320,14 +1336,14 @@
       S.target = pts * METERS_PER_POINT;
     }
     if (saved && saved.results.length >= ROUNDS) {
-      btn.textContent = "View today's dig";
+      btn.textContent = PLAYTEST ? `Play next set (#${digNumber + 1})` : "View today's dig";
       updateCountdown();
     } else if (saved && saved.results.length > 0) {
       btn.textContent = `Resume dig (${saved.results.length}/${ROUNDS})`;
       $("title-note").textContent = "";
     } else {
-      btn.textContent = "Start today's dig";
-      $("title-note").textContent = "Same 7 prompts for everyone today";
+      btn.textContent = PLAYTEST ? `Start dig #${digNumber}` : "Start today's dig";
+      $("title-note").textContent = PLAYTEST ? "Playtest mode: unlimited digs" : "Same 7 prompts for everyone today";
     }
     game = null;
     renderPips();
@@ -1336,6 +1352,7 @@
   $("btn-play").addEventListener("click", () => {
     SFX.click();
     mode = "daily";
+    if (PLAYTEST && dailyDone()) { startNextSet(); return; }
     game = loadDaily() || newGame(dailyQuestionIndexes(today));
     if (game.results.length >= ROUNDS) { showResults(); return; }
     game.round = game.results.length;
@@ -1348,7 +1365,17 @@
     game = newGame(randomQuestionIndexes());
     startRound();
   });
-  $("btn-again").addEventListener("click", () => $("btn-practice").click());
+  function startNextSet() {
+    setDayOffset(dayOffset + 1);
+    mode = "daily";
+    resetScene();
+    game = newGame(dailyQuestionIndexes(today));
+    startRound();
+  }
+  $("btn-again").addEventListener("click", () => {
+    if (mode === "practice") $("btn-practice").click();
+    else { SFX.click(); startNextSet(); }
+  });
 
   $("answer-form").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1392,7 +1419,9 @@
   });
 
   $("logo").addEventListener("click", () => showTitle());
+  $("btn-home").addEventListener("click", () => { SFX.click(); showTitle(); });
 
+  if (PLAYTEST) document.querySelector(".foot").textContent = "Playtest build: unlimited digs. Each set has 7 new prompts.";
   showTitle();
   requestAnimationFrame(frame);
   if (!store.get("deepdig-seen-help", false)) {
