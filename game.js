@@ -227,17 +227,22 @@
   };
 
   // ==================================================================
-  // Pixel scene (320 x 200)
+  // Pixel scene — 288 x 432 art pixels, rendered at 3x so motion is smooth
   // ==================================================================
   const canvas = $("scene");
   const ctx = canvas.getContext("2d");
-  const W = canvas.width, H = canvas.height;
-  const SURFACE = 70;
+  const W = 288, H = 432, SCALE = 3;
+  canvas.width = W * SCALE;
+  canvas.height = H * SCALE;
+  ctx.imageSmoothingEnabled = false;
+  const SURFACE = 215;
   const PX_PER_M = 1 / 12.5;
   const WORLD_H = SURFACE + Math.ceil(MAX_METERS * PX_PER_M) + H;
   const SHAFT_W = 22;
   const SHAFT_X = Math.round(W / 2 - SHAFT_W / 2);
   const mToY = (m) => SURFACE + m * PX_PER_M;
+  const snap = (v) => Math.round(v * SCALE) / SCALE;
+  const R = (x, y, w, h) => ctx.fillRect(snap(x), snap(y), w, h);
 
   const LAYERS = [
     { m: 0,    name: "TOPSOIL",  c: [[118, 76, 40],  [96, 60, 30],  [140, 94, 54]] },
@@ -251,7 +256,7 @@
 
   const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
   const bayer = (x, y) => BAYER[(y & 3) * 4 + (x & 3)];
-  const SKY = [[12, 10, 36], [24, 20, 62], [50, 34, 92], [96, 54, 114], [168, 90, 112]];
+  const SKY = [[10, 8, 30], [18, 14, 48], [32, 24, 74], [56, 36, 100], [96, 56, 120], [156, 86, 118]];
 
   function hash2(x, y) {
     let h = (x * 374761393 + y * 668265263) ^ 0x5bd1e995;
@@ -267,10 +272,9 @@
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
   }
   const rgb = (c, k = 1) => `rgb(${Math.round(c[0] * k)},${Math.round(c[1] * k)},${Math.round(c[2] * k)})`;
-  const farH = (x) => 16 + vnoise(x / 40, 3) * 18;
-  const nearH = (x) => 6 + vnoise(x / 22, 7) * 12;
+  const farH = (x) => 20 + vnoise(x / 40, 3) * 26;
+  const nearH = (x) => 8 + vnoise(x / 22, 7) * 14;
 
-  // World features (generated once, deterministic)
   const caves = [], crystals = [], lavaPools = [], worms = [], lanterns = [];
 
   const terrain = document.createElement("canvas");
@@ -289,8 +293,8 @@
           const tt = (y / SURFACE) * (SKY.length - 1);
           const si = Math.floor(tt);
           c = SKY[Math.min(SKY.length - 1, si + ((tt - si) > bayer(x, y) ? 1 : 0))];
-          if (y >= SURFACE - nearH(x)) c = [30, 22, 50];
-          else if (y >= SURFACE - farH(x)) c = (y + x) % 7 === 0 ? [54, 38, 82] : [46, 32, 74];
+          if (y >= SURFACE - nearH(x)) c = [26, 20, 44];
+          else if (y >= SURFACE - farH(x)) c = [40, 30, 66];
         } else if (y < SURFACE + 3) {
           c = hash2(x, y) < 0.5 ? [96, 200, 92] : [72, 172, 74];
         } else if (y < SURFACE + 6) {
@@ -326,12 +330,10 @@
     };
     const groundBottom = WORLD_H - 4;
     const layerAtY = (y) => LAYERS[layerIndexAt((y - SURFACE) / PX_PER_M)];
-    const awayFromShaft = () => {
-      const left = rng() < 0.5;
-      return left ? 4 + rng() * (SHAFT_X - 40) : SHAFT_X + SHAFT_W + 36 + rng() * (W - SHAFT_X - SHAFT_W - 40);
-    };
+    const awayFromShaft = () => (rng() < 0.5
+      ? 4 + rng() * (SHAFT_X - 36)
+      : SHAFT_X + SHAFT_W + 32 + rng() * (W - SHAFT_X - SHAFT_W - 36));
 
-    // embedded stones
     for (let i = 0; i < 700; i++) {
       const x = Math.floor(rng() * W);
       const y = Math.floor(SURFACE + 10 + rng() * (groundBottom - SURFACE - 10));
@@ -341,7 +343,6 @@
       if (r > 1) circle(x, y, r - 1, rgb(L.c[2], 0.95));
       px(x - Math.max(0, r - 2), y - Math.max(0, r - 1), 1, 1, rgb(L.c[2], 1.25));
     }
-    // roots under the grass
     for (let i = 0; i < 40; i++) {
       let x = Math.floor(rng() * W), y = SURFACE + 5;
       if (Math.abs(x - W / 2) < SHAFT_W) continue;
@@ -353,7 +354,6 @@
         x += r < 0.28 ? -1 : r > 0.72 ? 1 : 0;
       }
     }
-    // ore specks, richer the deeper you go
     const ORE = [[224, 123, 57], [201, 212, 224], [255, 210, 63], [111, 240, 255], [200, 110, 240]];
     for (let i = 0; i < 1100; i++) {
       const x = Math.floor(rng() * W);
@@ -365,24 +365,22 @@
       if (rng() < 0.4) px(x + 1, y, 1, 1, rgb(c, 0.7));
       if (rng() < 0.3) px(x, y + 1, 1, 1, rgb(c, 0.55));
     }
-    // fossils in the clay
     for (let i = 0; i < 10; i++) {
       const x = Math.floor(awayFromShaft());
       const y = Math.floor(mToY(1100 + rng() * 1300));
-      if (i % 2 === 0) { // ammonite
+      if (i % 2 === 0) {
         circle(x, y, 4, "#d8c8a0"); circle(x, y, 3, "#b8a07a"); circle(x, y, 2, "#d8c8a0"); px(x, y, 1, 1, "#8a7050");
-      } else { // bone
+      } else {
         px(x - 4, y, 9, 2, "#e4d8bc");
         px(x - 5, y - 1, 2, 2, "#e4d8bc"); px(x - 5, y + 1, 2, 2, "#e4d8bc");
         px(x + 4, y - 1, 2, 2, "#e4d8bc"); px(x + 4, y + 1, 2, 2, "#e4d8bc");
         px(x - 3, y + 1, 7, 1, "#bfae8c");
       }
     }
-    // caves with stalactites
     for (let i = 0; i < 12; i++) {
       const cx = Math.floor(awayFromShaft());
       const cy = Math.floor(mToY(2600 + rng() * 3600));
-      const rx = 14 + Math.floor(rng() * 12), ry = 7 + Math.floor(rng() * 5);
+      const rx = 14 + Math.floor(rng() * 10), ry = 7 + Math.floor(rng() * 5);
       const L = layerAtY(cy);
       ellipse(cx, cy, rx + 1, ry + 1, rgb(L.c[1], 0.6));
       ellipse(cx, cy, rx, ry, "#140e1a");
@@ -392,13 +390,12 @@
         const top = cy - Math.floor(ry * Math.sqrt(1 - ((sx - cx) / rx) ** 2));
         const len = 2 + Math.floor(rng() * 5);
         for (let s = 0; s < len; s++) px(sx - (s < len / 2 ? 1 : 0), top + s, s < len / 2 ? 3 : 1, 1, rgb(L.c[2]));
-        const bot = cy + Math.floor(ry * Math.sqrt(1 - ((sx - cx + 3) / rx) ** 2));
+        const bot = cy + Math.floor(ry * Math.sqrt(Math.max(0, 1 - ((sx - cx + 3) / rx) ** 2)));
         const blen = 1 + Math.floor(rng() * 4);
         for (let s = 0; s < blen; s++) px(sx + 3 - (s < blen / 2 ? 1 : 0), bot - s, s < blen / 2 ? 3 : 1, 1, rgb(L.c[0]));
       }
       caves.push({ cx, cy, rx, ry });
     }
-    // crystal clusters in the deep
     const CRY = [[190, 120, 250], [110, 240, 255], [255, 120, 210]];
     for (let i = 0; i < 30; i++) {
       const x = Math.floor(rng() * W);
@@ -407,72 +404,61 @@
       const col = CRY[Math.floor(rng() * CRY.length)];
       for (let s = 0; s < 3; s++) {
         const sx = x + (s - 1) * 3, h = 4 + Math.floor(rng() * 5);
-        for (let k = 0; k < h; k++) {
-          const w = k === 0 ? 1 : 2;
-          px(sx, y - k, w, 1, rgb(col, k < h / 2 ? 0.75 : 1));
-        }
+        for (let k = 0; k < h; k++) px(sx, y - k, k === 0 ? 1 : 2, 1, rgb(col, k < h / 2 ? 0.75 : 1));
         px(sx, y - h, 1, 1, "#ffffff");
       }
       crystals.push({ x, y: y - 6, col, ph: rng() * 10 });
     }
-    // magma pools
     for (let i = 0; i < 10; i++) {
       const cx = Math.floor(awayFromShaft());
       const cy = Math.floor(mToY(6450 + rng() * 650));
-      const rx = 10 + Math.floor(rng() * 12), ry = 4 + Math.floor(rng() * 3);
+      const rx = 10 + Math.floor(rng() * 10), ry = 4 + Math.floor(rng() * 3);
       ellipse(cx, cy, rx + 1, ry + 1, "#3a0e08");
       ellipse(cx, cy, rx, ry, "#e2561e");
       ellipse(cx, cy, rx - 3, ry - 2, "#ff9a2e");
       ellipse(cx - 2, cy - 1, Math.max(2, rx - 8), 1, "#ffd860");
       lavaPools.push({ cx, cy, rx, ry });
     }
-    // worms (animated later)
     for (let i = 0; i < 16; i++) {
       worms.push({ x: Math.floor(awayFromShaft()), y: Math.floor(mToY(80 + rng() * 2200)), ph: rng() * 6, len: 5 + Math.floor(rng() * 4), dir: rng() < 0.5 ? 1 : -1 });
     }
-    // lanterns along the shaft walls
     for (let m = 400; m < MAX_METERS + 600; m += 800) lanterns.push({ y: Math.floor(mToY(m)), side: (m / 800) % 2 < 1 ? 0 : 1 });
 
     // ---- surface props ----
-    // moon
-    circle(270, 18, 9, "#f4ead5"); circle(273, 16, 8, "#2a1f52");
-    circle(270, 18, 9, "#f4ead5"); circle(266, 16, 2, "#d8cdb5"); circle(273, 22, 1, "#d8cdb5"); px(268, 22, 1, 1, "#d8cdb5");
-    // pine trees
+    const moonX = W - 42, moonY = 34;
+    circle(moonX, moonY, 11, "#f4ead5");
+    circle(moonX - 4, moonY - 3, 2, "#ddd2ba"); circle(moonX + 3, moonY + 4, 2, "#ddd2ba"); px(moonX - 2, moonY + 5, 1, 1, "#ddd2ba");
     const pine = (x, h) => {
       px(x - 1, SURFACE - 4, 3, 4, "#4a2e18");
       for (let k = 0; k < h; k++) {
         const w = Math.floor((k / h) * 7) + 1;
         px(x - w, SURFACE - 4 - (h - k), w * 2 + 1, 1, k % 4 === 3 ? "#1f5a34" : "#2a7440");
       }
-      px(x - 1, SURFACE - 4 - h, 1, 1, "#4f9a5a");
+      px(x, SURFACE - 4 - h, 1, 1, "#4f9a5a");
     };
-    pine(16, 22); pine(118, 16); pine(304, 26); pine(292, 14);
-    // shack
-    const sx = 40;
+    pine(10, 24); pine(102, 16); pine(268, 26); pine(280, 15);
+    const sx = 22;
     for (let k = 0; k < 18; k++) px(sx, SURFACE - 18 + k, 32, 1, k % 3 === 2 ? "#6a3e22" : "#8a5430");
     for (let k = 0; k < 12; k++) px(sx - 3 + k, SURFACE - 19 - k, 38 - k * 2, 1, k % 2 ? "#b04444" : "#9a3838");
     px(sx + 23, SURFACE - 36, 5, 10, "#6e6a78"); px(sx + 22, SURFACE - 37, 7, 2, "#8a8696");
     px(sx + 18, SURFACE - 12, 7, 12, "#2a1a10"); px(sx + 23, SURFACE - 6, 1, 1, "#ffcc33");
     px(sx + 3, SURFACE - 14, 10, 8, "#3a2414");
-    // headframe over the shaft
     const hl = SHAFT_X - 3, hr = SHAFT_X + SHAFT_W + 1, top = SURFACE - 34;
     px(hl, top, 2, 34, "#6a4222"); px(hr, top, 2, 34, "#6a4222");
     px(hl - 2, top - 2, hr - hl + 6, 3, "#8a5a2e");
-    for (let k = 0; k < 30; k += 1) {
+    for (let k = 0; k < 30; k++) {
       const fx = Math.round(lerp(hl + 2, hr - 1, k / 30));
       px(fx, top + 3 + k, 1, 1, "#5a361a");
       px(hr - 1 - (fx - hl - 2), top + 3 + k, 1, 1, "#5a361a");
     }
     px(hl - 4, SURFACE - 2, hr - hl + 10, 2, "#4a2e18");
-    // mine cart with ore
-    const cx0 = 200;
+    const cx0 = SHAFT_X + SHAFT_W + 22;
     px(cx0, SURFACE - 9, 18, 7, "#5c5866"); px(cx0 + 1, SURFACE - 8, 16, 1, "#7a7686");
     px(cx0 + 2, SURFACE - 11, 4, 2, "#ffd23f"); px(cx0 + 7, SURFACE - 12, 4, 3, "#e07b39"); px(cx0 + 12, SURFACE - 11, 3, 2, "#6ff0ff");
     circle(cx0 + 4, SURFACE - 2, 2, "#2a2630"); circle(cx0 + 14, SURFACE - 2, 2, "#2a2630");
     px(cx0 - 6, SURFACE - 1, 32, 1, "#7a7686");
-    // fence
-    for (let x = 236; x < 286; x += 8) px(x, SURFACE - 7, 2, 7, "#6a4a2a");
-    px(234, SURFACE - 6, 54, 1, "#8a6a3a"); px(234, SURFACE - 3, 54, 1, "#8a6a3a");
+    for (let x = 212; x < 258; x += 8) px(x, SURFACE - 7, 2, 7, "#6a4a2a");
+    px(210, SURFACE - 6, 50, 1, "#8a6a3a"); px(210, SURFACE - 3, 50, 1, "#8a6a3a");
   })();
 
   // ---- sprites ----
@@ -506,12 +492,10 @@
   function shade(hex, k) {
     const n = parseInt(hex.slice(1), 16);
     const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-    return k >= 1
-      ? rgb(c.map((v) => v + (255 - v) * (k - 1)))
-      : rgb(c, k);
+    return k >= 1 ? rgb(c.map((v) => v + (255 - v) * (k - 1))) : rgb(c, k);
   }
-
   function drawSprite(rows, pal, x, y) {
+    x = snap(x); y = snap(y);
     for (let ry = 0; ry < rows.length; ry++) {
       const row = rows[ry];
       for (let rx = 0; rx < row.length; rx++) {
@@ -522,24 +506,24 @@
       }
     }
   }
-  const gemPal = (hex) => ({ C: hex, L: shade(hex, 1.45), W: "#ffffff", D: shade(hex, 0.62) });
+  const palCache = {};
+  const gemPal = (hex) => palCache[hex] || (palCache[hex] = { C: hex, L: shade(hex, 1.45), W: "#ffffff", D: shade(hex, 0.62) });
 
   // ---- scene state ----
   const S = {
-    depth: 0, target: 0, camY: 0,
+    depth: 0, target: 0, camY: 0, focus: 0.55,
     finds: [], flying: [], particles: [],
     shake: 0, flash: 0, flashColor: "255,255,255",
     swing: 0, tap: 0, t: 0, last: 0,
     blink: 0, nextBlink: 2,
-    wheel: 0, layer: 0, shoot: null, nextShoot: 4,
-    smokeT: 0,
+    wheel: 0, layer: 0, shoot: null, nextShoot: 4, smokeT: 0,
   };
-  const stars = Array.from({ length: 80 }, (_, i) => {
+  const stars = Array.from({ length: 130 }, (_, i) => {
     const x = Math.floor(hash2(i, 1) * W);
-    return { x, y: Math.floor(hash2(i, 2) * (SURFACE - farH(x) - 4)), ph: hash2(i, 3) * 6.28, big: hash2(i, 4) > 0.85 };
+    return { x, y: Math.floor(hash2(i, 2) * (SURFACE - farH(x) - 6)), ph: hash2(i, 3) * 6.28, sp: 1 + hash2(i, 5) * 2, big: hash2(i, 4) > 0.88 };
   });
-  const clouds = [0, 1, 2, 3].map((i) => ({ x: i * 90 + 20, y: 10 + i * 9 % 26, w: 18 + (i * 7) % 14, v: 2 + i * 0.7 }));
-  const fireflies = Array.from({ length: 9 }, (_, i) => ({ x: 20 + hash2(i, 9) * 280, y: SURFACE - 4 - hash2(i, 8) * 16, ph: hash2(i, 7) * 6 }));
+  const clouds = [0, 1, 2, 3, 4].map((i) => ({ x: i * 70 + 10, y: 18 + ((i * 23) % 70), w: 20 + ((i * 7) % 16), v: 2.5 + i * 0.6 }));
+  const fireflies = Array.from({ length: 10 }, (_, i) => ({ x: 10 + hash2(i, 9) * (W - 20), y: SURFACE - 6 - hash2(i, 8) * 20, ph: hash2(i, 7) * 6 }));
   const grass = [];
   for (let x = 0; x < W; x += 2 + Math.floor(hash2(x, 99) * 3)) {
     if (x > SHAFT_X - 5 && x < SHAFT_X + SHAFT_W + 4) continue;
@@ -549,18 +533,13 @@
   function particle(o) {
     S.particles.push(Object.assign({ vx: 0, vy: 0, g: 60, life: 0.6, max: 0.6, size: 1, c: "#fff" }, o));
   }
-
   function minerPos() {
-    const footY = mToY(S.depth);
-    return { x: SHAFT_X + Math.floor((SHAFT_W - 12) / 2), y: footY - MINER.length };
+    return { x: SHAFT_X + Math.floor((SHAFT_W - 12) / 2), y: mToY(S.depth) - MINER.length };
   }
-
   function findSlot(meters, side) {
     const same = S.finds.filter((f) => f.side === side && Math.abs(f.meters - meters) < 80).length;
-    const x = side ? SHAFT_X + SHAFT_W + 2 : SHAFT_X - 9;
-    return { x, y: mToY(meters) - 9 - same * 9 };
+    return { x: side ? SHAFT_X + SHAFT_W + 2 : SHAFT_X - 9, y: mToY(meters) - 9 - same * 9 };
   }
-
   function addFind(meters, tier, instant) {
     const side = (S.finds.length + S.flying.length) % 2;
     if (instant) {
@@ -568,9 +547,8 @@
       S.finds.push({ meters, tier, side, x: slot.x, y: slot.y, born: -10 });
       return;
     }
-    S.flying.push({ meters, tier, side, t: 0, delayDepth: meters });
+    S.flying.push({ meters, tier, side, t: 0 });
   }
-
   function resetScene() {
     S.depth = 0; S.target = 0; S.finds = []; S.flying = []; S.particles = [];
     S.camY = 0; S.layer = 0; S.flash = 0; S.shake = 0;
@@ -581,24 +559,24 @@
     const cx = m.x + 6, cy = m.y + 4;
     if (tier === 0) {
       for (let i = 0; i < 14; i++) particle({ x: cx, y: cy + 8, vx: (Math.random() - 0.5) * 70, vy: -Math.random() * 60, g: 220, life: 0.7, max: 0.7, size: 2, c: i % 2 ? "#5a5462" : "#7a7484" });
-      S.shake = REDUCED ? 0 : 2;
+      S.shake = REDUCED ? 0 : 1.5;
       return;
     }
     const col = TIERS[tier].color;
-    const n = tier >= 4 ? 70 : 12 + tier * 6;
+    const n = tier >= 4 ? 80 : 14 + tier * 6;
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, sp = 30 + Math.random() * (tier >= 4 ? 120 : 60);
       const confetti = tier >= 4 && i % 3 === 0;
       particle({
         x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, g: confetti ? 50 : 120,
         life: 0.8 + Math.random() * 0.9, max: 1.6, size: Math.random() < 0.3 ? 2 : 1,
-        c: confetti ? ["#ff7bd5", "#5fc9e8", "#ffcc33", "#9dff7b"][i % 4] : (i % 4 === 0 ? "#ffffff" : col),
+        c: confetti ? ["#ff7bd5", "#6fe3ff", "#ffc94d", "#9dff7b"][i % 4] : (i % 4 === 0 ? "#ffffff" : col),
       });
     }
     if (tier >= 4) {
-      S.flash = tier === 5 ? 0.7 : 0.4;
+      S.flash = tier === 5 ? 0.6 : 0.35;
       S.flashColor = tier === 5 ? "180,250,255" : "255,236,150";
-      S.shake = REDUCED ? 0 : (tier === 5 ? 4 : 2);
+      S.shake = REDUCED ? 0 : (tier === 5 ? 3 : 1.5);
     }
   }
 
@@ -610,212 +588,227 @@
 
   function onLayerChange(i) {
     const el = $("layer-banner");
-    el.innerHTML = `<small>ENTERING</small>${LAYERS[i].name} LAYER`;
+    el.innerHTML = `<small>Entering</small>${LAYERS[i].name}`;
     el.classList.remove("hidden");
     restartAnim(el, "layer-banner");
   }
 
-  // ---- drawing helpers ----
-  function line(x0, y0, x1, y1, col) {
-    ctx.fillStyle = col;
-    const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) || 1;
-    for (let i = 0; i <= steps; i++) {
-      ctx.fillRect(Math.round(lerp(x0, x1, i / steps)), Math.round(lerp(y0, y1, i / steps)), 1, 1);
-    }
+  function minerScreenPos() {
+    const m = minerPos();
+    return { x: ((m.x + 6) / W) * 100, y: ((m.y - S.camY) / H) * 100 };
   }
 
+  // ---- drawing helpers ----
   function drawPickaxe(hx, hy, deg) {
-    const a = (deg * Math.PI) / 180;
-    const len = 11;
-    const ex = hx + Math.cos(a) * len, ey = hy + Math.sin(a) * len;
-    line(hx, hy, ex, ey, "#8a5a2a");
-    const px = -Math.sin(a), py = Math.cos(a);
-    line(ex - px * 5 + Math.cos(a) * 1, ey - py * 5 + Math.sin(a) * 1, ex + px * 4, ey + py * 4, "#b8b8c8");
+    ctx.save();
+    ctx.translate(snap(hx), snap(hy));
+    ctx.rotate((deg * Math.PI) / 180);
+    ctx.fillStyle = "#8a5a2a";
+    ctx.fillRect(0, -0.5, 11, 1.2);
+    ctx.fillStyle = "#6a4220";
+    ctx.fillRect(0, 0.3, 11, 0.4);
+    ctx.fillStyle = "#b8b8c8";
+    ctx.fillRect(10, -5, 1.6, 9);
+    ctx.fillStyle = "#e8e8f4";
+    ctx.fillRect(10, -5, 0.8, 9);
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(Math.round(ex - px * 5), Math.round(ey - py * 5), 1, 1);
+    ctx.fillRect(10, -5.4, 1, 1);
+    ctx.restore();
+  }
+  function glow(x, y, r, col, a) {
+    const gg = ctx.createRadialGradient(x, y, 0, x, y, r);
+    gg.addColorStop(0, `rgba(${col},${a})`);
+    gg.addColorStop(1, `rgba(${col},0)`);
+    ctx.fillStyle = gg;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
   }
 
   // ---- main loop ----
+  const hudDepth = $("hud-depth");
   function frame(ts) {
     const dt = Math.min(0.05, (ts - (S.last || ts)) / 1000);
     S.last = ts;
     S.t += dt;
     const t = S.t;
 
-    // dig toward target
     const digging = S.depth < S.target - 0.5;
     if (digging) {
       const rate = clamp((S.target - S.depth) * 1.4, 380, 2600);
       S.depth = Math.min(S.target, S.depth + rate * dt);
-      S.wheel += dt * 8;
+      S.wheel += dt * 6;
     } else {
       S.depth = S.target;
     }
     const li = layerIndexAt(S.depth);
     if (li !== S.layer) { if (li > S.layer) onLayerChange(li); S.layer = li; }
 
-    // camera
+    // camera eases smoothly toward the miner
     const footY = mToY(S.depth);
-    const want = clamp(footY - H * 0.58, 0, WORLD_H - H);
-    S.camY = Math.abs(want - S.camY) < 0.5 ? want : lerp(S.camY, want, Math.min(1, dt * 7));
-    const cam = Math.round(S.camY);
-    const sy = (wy) => Math.round(wy) - cam;
+    const want = clamp(footY - H * S.focus, 0, WORLD_H - H);
+    S.camY = lerp(S.camY, want, 1 - Math.exp(-dt * 5));
+    if (Math.abs(want - S.camY) < 0.01) S.camY = want;
+    const cam = snap(S.camY);
+    const sy = (wy) => wy - cam;
     const inView = (wy, pad = 20) => wy - cam > -pad && wy - cam < H + pad;
 
-    // pickaxe animation
+    // pickaxe
     let angle;
     const prevSwing = S.swing;
     if (digging) {
-      S.swing += dt * 3.2;
+      S.swing += dt * 2.6;
       const p = S.swing % 1;
-      angle = p < 0.62 ? lerp(25, -115, p / 0.62) : lerp(-115, 25, (p - 0.62) / 0.38);
+      const up = (k) => 1 - Math.pow(1 - k, 2);
+      const down = (k) => k * k * k;
+      angle = p < 0.6 ? lerp(25, -115, up(p / 0.6)) : lerp(-115, 25, down((p - 0.6) / 0.4));
       if (Math.floor(S.swing) !== Math.floor(prevSwing)) {
         const m = minerPos();
-        for (let i = 0; i < 6; i++) {
-          const L = LAYERS[li];
-          particle({ x: m.x + 14 + Math.random() * 4, y: m.y + MINER.length - 1, vx: (Math.random() - 0.4) * 70, vy: -30 - Math.random() * 50, g: 200, life: 0.6, max: 0.6, size: Math.random() < 0.4 ? 2 : 1, c: rgb(L.c[Math.floor(Math.random() * 3)], 1.15) });
+        const L = LAYERS[li];
+        for (let i = 0; i < 7; i++) {
+          particle({ x: m.x + 16 + Math.random() * 4, y: m.y + MINER.length - 1, vx: (Math.random() - 0.4) * 70, vy: -30 - Math.random() * 50, g: 200, life: 0.6, max: 0.6, size: Math.random() < 0.4 ? 2 : 1, c: rgb(L.c[Math.floor(Math.random() * 3)], 1.15) });
         }
-        if (!REDUCED) S.shake = Math.max(S.shake, 1);
+        if (!REDUCED) S.shake = Math.max(S.shake, 0.8);
         SFX.strike();
       }
     } else if (S.tap > 0) {
-      S.tap = Math.max(0, S.tap - dt * 7);
-      angle = lerp(25, -80, S.tap);
+      S.tap = Math.max(0, S.tap - dt * 5);
+      const k = S.tap;
+      angle = lerp(20, -75, Math.sin(k * Math.PI / 2));
     } else {
-      angle = -70 + Math.sin(t * 2) * 3;
+      angle = -70 + Math.sin(t * 2) * 4;
     }
 
-    // shake offset
     let ox = 0, oy = 0;
     if (S.shake > 0) {
-      ox = Math.round((Math.random() - 0.5) * 2 * S.shake);
-      oy = Math.round((Math.random() - 0.5) * 2 * S.shake);
-      S.shake = Math.max(0, S.shake - dt * 10);
+      ox = Math.sin(t * 73) * S.shake;
+      oy = Math.cos(t * 61) * S.shake;
+      S.shake = Math.max(0, S.shake - dt * 6);
     }
 
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
     ctx.fillStyle = "#0d0910";
     ctx.fillRect(0, 0, W, H);
-    ctx.setTransform(1, 0, 0, 1, ox, oy);
-    ctx.drawImage(terrain, 0, cam, W, H, 0, 0, W, H);
+    ctx.setTransform(SCALE, 0, 0, SCALE, snap(ox) * SCALE, snap(oy) * SCALE);
+    ctx.imageSmoothingEnabled = false;
+    const camI = Math.floor(cam);
+    ctx.drawImage(terrain, 0, camI, W, Math.min(H + 2, WORLD_H - camI), 0, camI - cam, W, Math.min(H + 2, WORLD_H - camI));
 
-    // ---- sky & surface life ----
+    // ---- sky & surface ----
     if (cam < SURFACE + 10) {
       stars.forEach((s) => {
-        const tw = Math.sin(t * 2.2 + s.ph);
-        if (tw < -0.4) return;
-        ctx.fillStyle = tw > 0.7 ? "#ffffff" : "#bfb4e0";
-        const y = sy(s.y);
-        ctx.fillRect(s.x, y, 1, 1);
-        if (s.big && tw > 0.8) {
-          ctx.fillStyle = "rgba(255,255,255,.55)";
-          ctx.fillRect(s.x - 1, y, 1, 1); ctx.fillRect(s.x + 1, y, 1, 1);
-          ctx.fillRect(s.x, y - 1, 1, 1); ctx.fillRect(s.x, y + 1, 1, 1);
+        const tw = Math.sin(t * s.sp + s.ph);
+        if (tw < -0.5) return;
+        ctx.globalAlpha = clamp((tw + 0.5) / 1.2, 0, 1);
+        ctx.fillStyle = s.big ? "#ffffff" : "#cfc6ee";
+        R(s.x, sy(s.y), 1, 1);
+        if (s.big && tw > 0.6) {
+          ctx.globalAlpha = (tw - 0.6) * 1.5;
+          R(s.x - 1, sy(s.y), 1, 1); R(s.x + 1, sy(s.y), 1, 1);
+          R(s.x, sy(s.y) - 1, 1, 1); R(s.x, sy(s.y) + 1, 1, 1);
         }
       });
-      // shooting star
+      ctx.globalAlpha = 1;
+      // moon halo
+      glow(W - 42, sy(34), 30, "255,240,210", 0.12);
+
       S.nextShoot -= dt;
       if (S.nextShoot <= 0 && !S.shoot) {
-        S.shoot = { x: 40 + Math.random() * 200, y: 4 + Math.random() * 14, life: 0.8 };
+        S.shoot = { x: 20 + Math.random() * 160, y: 6 + Math.random() * 30, life: 0.9 };
         S.nextShoot = 5 + Math.random() * 8;
       }
       if (S.shoot) {
         const sh = S.shoot;
-        sh.x += 180 * dt; sh.y += 60 * dt; sh.life -= dt;
-        for (let k = 0; k < 8; k++) {
-          ctx.fillStyle = `rgba(255,255,230,${(1 - k / 8) * Math.min(1, sh.life * 2)})`;
-          ctx.fillRect(Math.round(sh.x - k * 3), sy(sh.y - k), 2, 1);
+        sh.x += 200 * dt; sh.y += 70 * dt; sh.life -= dt;
+        for (let k = 0; k < 10; k++) {
+          ctx.fillStyle = `rgba(255,255,230,${(1 - k / 10) * Math.min(1, sh.life * 2)})`;
+          R(sh.x - k * 2.8, sy(sh.y - k), 1.5, 1);
         }
         if (sh.life <= 0) S.shoot = null;
       }
-      // clouds
       clouds.forEach((c) => {
         c.x += c.v * dt;
         if (c.x > W + 30) c.x = -c.w - 10;
-        const x = Math.round(c.x), y = sy(c.y);
-        ctx.fillStyle = "#4a3678";
-        ctx.fillRect(x, y + 2, c.w, 3);
-        ctx.fillRect(x + 3, y, c.w - 8, 2);
-        ctx.fillRect(x + 6, y - 2, Math.floor(c.w / 3), 2);
-        ctx.fillStyle = "#6a50a0";
-        ctx.fillRect(x + 4, y, c.w - 10, 1);
-        ctx.fillRect(x + 7, y - 2, Math.floor(c.w / 3) - 2, 1);
+        const x = c.x, y = sy(c.y);
+        ctx.fillStyle = "rgba(70,52,116,.9)";
+        R(x, y + 2, c.w, 3);
+        R(x + 3, y, c.w - 8, 2);
+        R(x + 6, y - 2, Math.floor(c.w / 3), 2);
+        ctx.fillStyle = "rgba(112,88,160,.9)";
+        R(x + 4, y, c.w - 10, 1);
+        R(x + 7, y - 2, Math.floor(c.w / 3) - 2, 1);
       });
-      // chimney smoke
       S.smokeT -= dt;
       if (S.smokeT <= 0) {
-        S.smokeT = 0.35;
-        particle({ x: 65 + Math.random() * 2, y: SURFACE - 38, vx: 4 + Math.random() * 3, vy: -8, g: -2, life: 2.6, max: 2.6, size: 2, c: "smoke" });
+        S.smokeT = 0.3;
+        particle({ x: 46 + Math.random() * 2, y: SURFACE - 38, vx: 4 + Math.random() * 3, vy: -9, g: -2, life: 2.8, max: 2.8, size: 2, c: "smoke" });
       }
-      // shack window glow
       const flick = 0.75 + Math.sin(t * 9) * 0.08 + Math.sin(t * 23) * 0.05;
       ctx.fillStyle = `rgba(255,200,90,${flick})`;
-      ctx.fillRect(44, sy(SURFACE - 13), 8, 6);
+      R(26, sy(SURFACE - 13), 8, 6);
       ctx.fillStyle = "#3a2414";
-      ctx.fillRect(47, sy(SURFACE - 13), 1, 6);
-      ctx.fillRect(44, sy(SURFACE - 10), 8, 1);
+      R(29, sy(SURFACE - 13), 1, 6);
+      R(26, sy(SURFACE - 10), 8, 1);
+      glow(30, sy(SURFACE - 10), 14, "255,190,90", 0.18 * flick);
       // headframe wheel
       const wx = SHAFT_X + SHAFT_W / 2, wy = sy(SURFACE - 40);
+      ctx.save();
+      ctx.translate(wx, wy);
       ctx.fillStyle = "#3a3640";
-      for (let a = 0; a < 16; a++) {
-        const an = (a / 16) * Math.PI * 2;
-        ctx.fillRect(Math.round(wx + Math.cos(an) * 6), Math.round(wy + Math.sin(an) * 6), 1, 1);
+      for (let a = 0; a < 20; a++) {
+        const an = (a / 20) * Math.PI * 2;
+        ctx.fillRect(Math.cos(an) * 6 - 0.5, Math.sin(an) * 6 - 0.5, 1.2, 1.2);
       }
-      for (let k = 0; k < 4; k++) {
-        const an = S.wheel + (k * Math.PI) / 4;
-        line(wx - Math.cos(an) * 5, wy - Math.sin(an) * 5, wx + Math.cos(an) * 5, wy + Math.sin(an) * 5, "#8a8696");
-      }
-      ctx.fillStyle = "#ffcc33"; ctx.fillRect(Math.round(wx), wy, 1, 1);
-      // grass sway
+      ctx.rotate(S.wheel);
+      ctx.fillStyle = "#8a8696";
+      for (let k = 0; k < 3; k++) { ctx.rotate(Math.PI / 3); ctx.fillRect(-5.5, -0.5, 11, 1); }
+      ctx.restore();
+      ctx.fillStyle = "#ffcc33"; R(wx - 0.5, wy - 0.5, 1, 1);
       grass.forEach((g) => {
-        const sw = Math.round(Math.sin(t * 2.4 + g.x * 0.35) * 1.2);
+        const sw = Math.sin(t * 2.2 + g.x * 0.35) * 1.1;
         ctx.fillStyle = "#4aa84e";
-        ctx.fillRect(g.x, sy(SURFACE) - g.h + 1, 1, g.h - 1);
+        R(g.x, sy(SURFACE) - g.h + 1, 1, g.h - 1);
         ctx.fillStyle = "#7ddc72";
-        ctx.fillRect(g.x + sw, sy(SURFACE) - g.h, 1, 1);
+        R(g.x + sw, sy(SURFACE) - g.h, 1, 1);
       });
-      // fireflies
       fireflies.forEach((f) => {
-        const on = Math.sin(t * 3 + f.ph * 3) > 0.2;
-        if (!on) return;
-        const x = Math.round(f.x + Math.sin(t * 0.7 + f.ph) * 12);
-        const y = sy(f.y + Math.sin(t * 1.3 + f.ph) * 4);
-        ctx.fillStyle = "rgba(220,255,120,.35)";
-        ctx.fillRect(x - 1, y - 1, 3, 3);
+        const a = clamp(Math.sin(t * 2 + f.ph * 3) * 1.5, 0, 1);
+        if (a <= 0) return;
+        const x = f.x + Math.sin(t * 0.6 + f.ph) * 12;
+        const y = sy(f.y + Math.sin(t * 1.1 + f.ph) * 5);
+        glow(x, y, 4, "220,255,120", 0.5 * a);
+        ctx.globalAlpha = a;
         ctx.fillStyle = "#eaff8a";
-        ctx.fillRect(x, y, 1, 1);
+        R(x, y, 1, 1);
+        ctx.globalAlpha = 1;
       });
     }
 
-    // ---- underground critters ----
+    // ---- underground life ----
     worms.forEach((w) => {
       if (!inView(w.y)) return;
-      const crawl = Math.sin(t * 0.8 + w.ph) * 4;
+      const crawl = Math.sin(t * 0.7 + w.ph) * 4;
       for (let k = 0; k < w.len; k++) {
-        const x = Math.round(w.x + (k * w.dir) + crawl);
-        const y = sy(w.y + Math.round(Math.sin(t * 5 + k * 0.9 + w.ph)));
         ctx.fillStyle = k === 0 ? "#ff9ab0" : "#e27890";
-        ctx.fillRect(x, y, 1, 1);
+        R(w.x + k * w.dir + crawl, sy(w.y + Math.sin(t * 4 + k * 0.9 + w.ph) * 0.9), 1, 1);
       }
     });
     caves.forEach((c, i) => {
       if (!inView(c.cy, 30)) return;
-      // a bat flaps around in every cave
-      const bx = Math.round(c.cx + Math.sin(t * 1.3 + i) * (c.rx - 6));
-      const by = sy(c.cy - 2 + Math.sin(t * 2.6 + i * 2) * (c.ry - 5));
-      const up = Math.floor(t * 10 + i) % 2 === 0;
+      const bx = c.cx + Math.sin(t * 1.1 + i) * (c.rx - 6);
+      const by = sy(c.cy - 2 + Math.sin(t * 2.2 + i * 2) * (c.ry - 5));
+      const flap = Math.sin(t * 22 + i);
       ctx.fillStyle = "#0a0610";
-      ctx.fillRect(bx - 1, by, 3, 2);
-      ctx.fillRect(bx - 3, by + (up ? -1 : 1), 2, 1);
-      ctx.fillRect(bx + 2, by + (up ? -1 : 1), 2, 1);
+      R(bx - 1, by, 3, 2);
+      R(bx - 3, by + flap, 2, 1);
+      R(bx + 2, by + flap, 2, 1);
       ctx.fillStyle = "#ff4060";
-      ctx.fillRect(bx - 1, by, 1, 1); ctx.fillRect(bx + 1, by, 1, 1);
-      // dripping water
-      const dp = (t * 0.7 + i * 0.37) % 1;
+      R(bx - 1, by, 1, 1); R(bx + 1, by, 1, 1);
+      const dp = (t * 0.6 + i * 0.37) % 1;
       const dx = c.cx - 4 + (i % 3) * 4;
-      const dy = sy(c.cy - c.ry + 3 + dp * (c.ry * 2 - 5));
+      const fall = dp < 0.3 ? 0 : ((dp - 0.3) / 0.7) ** 2;
       ctx.fillStyle = "#7ac8ff";
-      ctx.fillRect(dx, dy, 1, dp < 0.15 ? 1 : 2);
+      ctx.globalAlpha = dp < 0.3 ? dp / 0.3 : 1;
+      R(dx, sy(c.cy - c.ry + 3 + fall * (c.ry * 2 - 6)), 1, dp < 0.3 ? 1 : 2);
+      ctx.globalAlpha = 1;
     });
 
     // ---- shaft ----
@@ -824,41 +817,28 @@
       const top = Math.max(sy(SURFACE), -2);
       const bot = sy(shaftBottom);
       if (bot > top) {
-        ctx.fillStyle = "#1a1220";
-        ctx.fillRect(SHAFT_X, top, SHAFT_W, bot - top);
-        ctx.fillStyle = "#120c18";
-        ctx.fillRect(SHAFT_X, top, 3, bot - top);
-        ctx.fillStyle = "#2c2030";
-        ctx.fillRect(SHAFT_X + SHAFT_W - 2, top, 2, bot - top);
-        // ladder
+        ctx.fillStyle = "#1a1220"; ctx.fillRect(SHAFT_X, top, SHAFT_W, bot - top);
+        ctx.fillStyle = "#120c18"; ctx.fillRect(SHAFT_X, top, 3, bot - top);
+        ctx.fillStyle = "#2c2030"; ctx.fillRect(SHAFT_X + SHAFT_W - 2, top, 2, bot - top);
         ctx.fillStyle = "#5a3a1a";
         ctx.fillRect(SHAFT_X + 3, top, 1, bot - top);
         ctx.fillRect(SHAFT_X + 8, top, 1, bot - top);
-        for (let y = SURFACE + 2; y < shaftBottom - 2; y += 4) {
-          if (inView(y, 2)) ctx.fillRect(SHAFT_X + 3, sy(y), 6, 1);
-        }
-        // support timbers
+        for (let y = SURFACE + 2; y < shaftBottom - 2; y += 4) if (inView(y, 2)) ctx.fillRect(SHAFT_X + 3, sy(y), 6, 1);
         for (let y = SURFACE + 24; y < shaftBottom - 4; y += 30) {
           if (!inView(y, 4)) continue;
-          ctx.fillStyle = "#6a4422";
-          ctx.fillRect(SHAFT_X, sy(y), SHAFT_W, 2);
-          ctx.fillStyle = "#8a5c30";
-          ctx.fillRect(SHAFT_X, sy(y), SHAFT_W, 1);
+          ctx.fillStyle = "#6a4422"; ctx.fillRect(SHAFT_X, sy(y), SHAFT_W, 2);
+          ctx.fillStyle = "#8a5c30"; ctx.fillRect(SHAFT_X, sy(y), SHAFT_W, 1);
+          ctx.fillStyle = "#5a3a1a";
         }
       }
     }
-    // rope from the wheel to the miner
     {
       const m = minerPos();
-      const rx = SHAFT_X + SHAFT_W / 2 + 6;
+      const rx = SHAFT_X + SHAFT_W / 2 + 5.5;
       const ry0 = Math.max(sy(SURFACE - 40), -1);
       const ry1 = sy(m.y + 8);
-      if (ry1 > ry0) {
-        ctx.fillStyle = "#c8b48a";
-        ctx.fillRect(Math.round(rx), ry0, 1, ry1 - ry0);
-      }
+      if (ry1 > ry0) { ctx.fillStyle = "#c8b48a"; ctx.fillRect(rx, ry0, 1, ry1 - ry0); }
     }
-    // lanterns
     lanterns.forEach((l) => {
       if (l.y > shaftBottom - 6 || !inView(l.y)) return;
       const x = l.side ? SHAFT_X + SHAFT_W - 4 : SHAFT_X + 1;
@@ -867,40 +847,41 @@
       ctx.fillStyle = "#fff6c0"; ctx.fillRect(x + 1, sy(l.y) - 1, 1, 1);
     });
 
-    // ---- finds in the walls ----
+    // ---- finds ----
     S.finds.forEach((f) => {
       if (!inView(f.y)) return;
       const y = sy(f.y);
       const col = f.tier === 0 ? "#4e4856" : TIERS[f.tier].color;
       const age = t - f.born;
-      const pop = age < 0.25 ? -Math.round(Math.sin((age / 0.25) * Math.PI) * 2) : 0;
+      const pop = age < 0.4 ? -Math.sin((age / 0.4) * Math.PI) * 2.5 : 0;
       if (f.tier <= 1) drawSprite(CLUMP, gemPal(col), f.x, y + 2 + pop);
       else {
-        const bob = Math.round(Math.sin(t * 2 + f.meters) * 0.6);
+        const bob = Math.sin(t * 2 + f.meters) * 0.7;
         drawSprite(GEM, gemPal(col), f.x, y + pop + bob);
-        const sp = (t * 0.6 + f.meters * 0.013) % 2;
-        if (sp < 0.25) {
-          const k = sp < 0.12 ? 1 : 2;
+        const sp = (t * 0.5 + f.meters * 0.013) % 2;
+        if (sp < 0.4) {
+          const k = Math.sin((sp / 0.4) * Math.PI) * 2.5;
           ctx.fillStyle = "#ffffff";
-          ctx.fillRect(f.x + 5, y - k + bob, 1, k * 2 + 1);
-          ctx.fillRect(f.x + 5 - k, y + bob, k * 2 + 1, 1);
+          ctx.fillRect(f.x + 5, y + bob - k, 0.8, k * 2 + 0.8);
+          ctx.fillRect(f.x + 5 - k, y + bob, k * 2 + 0.8, 0.8);
         }
       }
     });
-    // flying finds (gem pops out of the rock and lands in the wall)
     S.flying = S.flying.filter((f) => {
-      if (S.depth < f.delayDepth - 1) return true; // wait until the miner reaches it
-      f.t += dt / 0.55;
+      if (S.depth < f.meters - 1) return true;
+      f.t += dt / 0.6;
       const m = minerPos();
       if (!f.slot) f.slot = findSlot(f.meters, f.side);
-      const fx = lerp(m.x + 3, f.slot.x, Math.min(1, f.t));
-      const fy = lerp(m.y + 4, f.slot.y, Math.min(1, f.t)) - Math.sin(Math.min(1, f.t) * Math.PI) * 18;
+      const k = Math.min(1, f.t);
+      const e = 1 - Math.pow(1 - k, 3);
+      const fx = lerp(m.x + 3, f.slot.x, e);
+      const fy = lerp(m.y + 4, f.slot.y, e) - Math.sin(k * Math.PI) * 18;
       const col = f.tier === 0 ? "#4e4856" : TIERS[f.tier].color;
-      drawSprite(f.tier <= 1 ? CLUMP : GEM, gemPal(col), Math.round(fx), sy(fy));
-      if (f.tier >= 2 && Math.random() < 0.6) particle({ x: fx + 3, y: fy + 3, vx: 0, vy: 6, g: 0, life: 0.3, max: 0.3, c: col });
+      drawSprite(f.tier <= 1 ? CLUMP : GEM, gemPal(col), fx, sy(fy));
+      if (f.tier >= 2 && Math.random() < 0.7) particle({ x: fx + 3, y: fy + 3, vx: 0, vy: 6, g: 0, life: 0.35, max: 0.35, c: col });
       if (f.t >= 1) {
         S.finds.push({ meters: f.meters, tier: f.tier, side: f.side, x: f.slot.x, y: f.slot.y, born: t });
-        for (let i = 0; i < 8; i++) particle({ x: f.slot.x + 3, y: f.slot.y + 3, vx: (Math.random() - 0.5) * 50, vy: (Math.random() - 0.5) * 50, g: 40, life: 0.4, max: 0.4, c: i % 2 ? "#ffffff" : col });
+        for (let i = 0; i < 10; i++) particle({ x: f.slot.x + 3, y: f.slot.y + 3, vx: (Math.random() - 0.5) * 50, vy: (Math.random() - 0.5) * 50, g: 40, life: 0.45, max: 0.45, c: i % 2 ? "#ffffff" : col });
         return false;
       }
       return true;
@@ -912,15 +893,13 @@
       S.nextBlink -= dt;
       if (S.nextBlink <= 0) { S.blink = 0.12; S.nextBlink = 2 + Math.random() * 3; }
       S.blink = Math.max(0, S.blink - dt);
-      const breathe = !digging && Math.sin(t * 2.2) > 0.6 ? 1 : 0;
-      const bob = digging ? (Math.floor(S.swing * 2) % 2) : 0;
+      const breathe = digging ? 0 : (Math.sin(t * 2.2) * 0.5 + 0.5) * 0.67;
+      const bob = digging ? Math.abs(Math.sin(S.swing * Math.PI)) * 0.67 : 0;
       const my = sy(m.y) + bob;
-      // body (legs stay planted while breathing)
       drawSprite((S.blink > 0 ? MINER_BLINK : MINER).slice(0, 13), MINER_PAL, m.x, my - breathe);
       drawSprite(MINER.slice(13), MINER_PAL, m.x, my + 13);
-      // lamp flicker
       ctx.fillStyle = Math.sin(t * 14) > -0.3 ? "#ffffff" : "#fff2a0";
-      ctx.fillRect(m.x + 10, my + 1 - breathe, 2, 1);
+      R(m.x + 10, my + 1 - breathe, 2, 1);
       drawPickaxe(m.x + 11, my + 10 - breathe, angle);
     }
 
@@ -928,14 +907,14 @@
     S.particles = S.particles.filter((p) => {
       p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
       if (p.c === "smoke") {
-        const a = Math.max(0, p.life / p.max) * 0.45;
-        ctx.fillStyle = `rgba(190,180,210,${a})`;
-        const s = Math.round(lerp(4, 1, p.life / p.max));
-        ctx.fillRect(Math.round(p.x), sy(p.y), s, s);
+        const k = p.life / p.max;
+        ctx.fillStyle = `rgba(190,180,210,${Math.max(0, k) * 0.4})`;
+        const s = lerp(5, 1.5, k);
+        ctx.fillRect(p.x - s / 2, sy(p.y) - s / 2, s, s);
       } else {
         ctx.fillStyle = p.c;
         ctx.globalAlpha = clamp(p.life / (p.max * 0.4), 0, 1);
-        ctx.fillRect(Math.round(p.x), sy(p.y), p.size, p.size);
+        R(p.x, sy(p.y), p.size, p.size);
         ctx.globalAlpha = 1;
       }
       return p.life > 0;
@@ -947,76 +926,66 @@
       const m = minerPos();
       const lx = m.x + 11, ly = sy(m.y) + 1;
       const flick = Math.sin(t * 13) * 2;
-      const g = ctx.createRadialGradient(lx, ly, 8, lx, ly, 120 + flick);
+      const g = ctx.createRadialGradient(lx, ly, 10, lx, ly, 170 + flick);
       g.addColorStop(0, "rgba(0,0,0,0)");
-      g.addColorStop(0.5, `rgba(6,2,12,${dark * 0.55})`);
+      g.addColorStop(0.45, `rgba(6,2,12,${dark * 0.5})`);
       g.addColorStop(1, `rgba(6,2,12,${dark})`);
       ctx.fillStyle = g;
-      ctx.fillRect(-4, -4, W + 8, H + 8);
+      ctx.fillRect(-6, -6, W + 12, H + 12);
 
       ctx.globalCompositeOperation = "lighter";
-      const glow = (x, y, r, col, a) => {
-        const gg = ctx.createRadialGradient(x, y, 0, x, y, r);
-        gg.addColorStop(0, `rgba(${col},${a})`);
-        gg.addColorStop(1, `rgba(${col},0)`);
-        ctx.fillStyle = gg;
-        ctx.fillRect(x - r, y - r, r * 2, r * 2);
-      };
       lanterns.forEach((l) => {
         if (l.y > shaftBottom - 6 || !inView(l.y, 30)) return;
-        const x = l.side ? SHAFT_X + SHAFT_W - 3 : SHAFT_X + 2;
-        glow(x, sy(l.y), 16 + Math.sin(t * 7 + l.y) * 1.5, "255,190,80", 0.35);
+        glow(l.side ? SHAFT_X + SHAFT_W - 3 : SHAFT_X + 2, sy(l.y), 18 + Math.sin(t * 7 + l.y) * 1.5, "255,190,80", 0.35);
       });
       lavaPools.forEach((p, i) => {
         if (!inView(p.cy, 40)) return;
-        glow(p.cx, sy(p.cy), p.rx + 14 + Math.sin(t * 2 + i) * 3, "255,110,30", 0.4);
+        glow(p.cx, sy(p.cy), p.rx + 16 + Math.sin(t * 2 + i) * 3, "255,110,30", 0.4);
       });
       crystals.forEach((c) => {
         if (!inView(c.y, 20)) return;
-        glow(c.x, sy(c.y), 9, c.col.join(","), 0.25 + Math.max(0, Math.sin(t * 2 + c.ph)) * 0.3);
+        glow(c.x, sy(c.y), 10, c.col.join(","), 0.22 + Math.max(0, Math.sin(t * 2 + c.ph)) * 0.3);
       });
       S.finds.forEach((f) => {
         if (f.tier < 3 || !inView(f.y)) return;
         const c = f.tier === 5 ? "111,240,255" : f.tier === 4 ? "255,210,63" : "200,212,224";
-        glow(f.x + 3, sy(f.y) + 3, 10, c, 0.3 + Math.sin(t * 3 + f.meters) * 0.1);
+        glow(f.x + 3, sy(f.y) + 3, 11, c, 0.3 + Math.sin(t * 3 + f.meters) * 0.1);
       });
       ctx.globalCompositeOperation = "source-over";
     }
-
-    // lava bubbles (always on top of the glow)
     lavaPools.forEach((p, i) => {
       if (!inView(p.cy, 20)) return;
       for (let k = 0; k < 3; k++) {
-        const ph = (t * 0.8 + k * 0.33 + i * 0.17) % 1;
+        const ph = (t * 0.7 + k * 0.33 + i * 0.17) % 1;
         const bx = p.cx - p.rx + 4 + ((k * 7 + i * 5) % Math.max(1, p.rx * 2 - 8));
-        const by = sy(p.cy - ph * 6);
-        ctx.fillStyle = ph > 0.85 ? "#fff0a0" : "#ffb040";
-        ctx.fillRect(bx, by, ph > 0.85 ? 2 : 1, 1);
+        ctx.globalAlpha = 1 - ph;
+        ctx.fillStyle = ph > 0.8 ? "#fff0a0" : "#ffb040";
+        R(bx, sy(p.cy - ph * 7), 1, 1);
       }
+      ctx.globalAlpha = 1;
     });
     crystals.forEach((c) => {
       if (!inView(c.y, 10)) return;
       const s = (t * 0.5 + c.ph) % 3;
-      if (s < 0.2) {
+      if (s < 0.4) {
+        const k = Math.sin((s / 0.4) * Math.PI) * 2.5;
         ctx.fillStyle = "#ffffff";
-        ctx.fillRect(c.x, sy(c.y) - 2, 1, 5);
-        ctx.fillRect(c.x - 2, sy(c.y), 5, 1);
+        ctx.fillRect(c.x, sy(c.y) - k, 0.8, k * 2 + 0.8);
+        ctx.fillRect(c.x - k, sy(c.y), k * 2 + 0.8, 0.8);
       }
     });
 
-    // flash
     if (S.flash > 0) {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
       ctx.fillStyle = `rgba(${S.flashColor},${S.flash})`;
       ctx.fillRect(0, 0, W, H);
-      S.flash = Math.max(0, S.flash - dt * 1.8);
+      S.flash = Math.max(0, S.flash - dt * 1.6);
     }
 
-    const shown = `${Math.round(S.depth)}m`;
+    const shown = String(Math.round(S.depth));
     if (hudDepth.textContent !== shown) hudDepth.textContent = shown;
     requestAnimationFrame(frame);
   }
-  const hudDepth = $("hud-depth");
 
   // ==================================================================
   // Game state
@@ -1027,54 +996,48 @@
 
   let mode = "daily";
   let game = null;
-  let timerHandle = null;
-  let typeHandle = null;
+  let timerRaf = null;
 
-  function newGame(qIdx) {
-    return { qIdx, results: [], round: 0, startedAt: null };
-  }
-
-  function saveDaily() {
-    if (mode === "daily") store.set("deepdig-daily", { key: todayKey, game });
-  }
-
+  function newGame(qIdx) { return { qIdx, results: [], round: 0, startedAt: null }; }
+  function saveDaily() { if (mode === "daily") store.set("deepdig-daily", { key: todayKey, game }); }
   function loadDaily() {
     const saved = store.get("deepdig-daily", null);
-    if (saved && saved.key === todayKey && saved.game) return saved.game;
-    return null;
+    return saved && saved.key === todayKey && saved.game ? saved.game : null;
   }
-
-  function totalPoints(g) {
-    return g.results.reduce((s, r) => s + TIERS[r.tier].pts, 0);
-  }
+  function totalPoints(g) { return g.results.reduce((s, r) => s + TIERS[r.tier].pts, 0); }
 
   // ==================================================================
   // UI helpers
   // ==================================================================
-  const SCREENS = ["title", "question", "reveal", "results"];
+  const SCREENS = { title: 0.5, question: 0.55, reveal: 0.3, results: 0.26 };
   function show(name) {
-    SCREENS.forEach((s) => {
+    Object.keys(SCREENS).forEach((s) => {
       const el = $(`screen-${s}`);
       const on = s === name;
       el.classList.toggle("hidden", !on);
       if (on) restartAnim(el, "enter");
     });
+    S.focus = SCREENS[name];
+    $("pips").classList.toggle("hidden", name === "title");
   }
 
   function typeText(el, text) {
-    clearInterval(typeHandle);
-    if (REDUCED) { el.textContent = text; return; }
     el.textContent = "";
-    el.classList.add("typing");
+    if (REDUCED) { el.textContent = text; return; }
     let i = 0;
-    typeHandle = setInterval(() => {
-      i++;
-      el.textContent = text.slice(0, i);
-      if (i >= text.length) {
-        clearInterval(typeHandle);
-        setTimeout(() => el.classList.remove("typing"), 600);
+    text.split(" ").forEach((word, wi, arr) => {
+      const w = document.createElement("span");
+      w.style.whiteSpace = "nowrap";
+      for (const ch of word) {
+        const c = document.createElement("span");
+        c.className = "ch";
+        c.textContent = ch;
+        c.style.animationDelay = `${i++ * 0.022}s`;
+        w.append(c);
       }
-    }, 28);
+      el.append(w);
+      if (wi < arr.length - 1) { el.append(" "); i++; }
+    });
   }
 
   function countUp(el, to, ms, fmt = (v) => String(v)) {
@@ -1082,8 +1045,7 @@
     const start = performance.now();
     const step = (now) => {
       const p = Math.min(1, (now - start) / ms);
-      const eased = 1 - Math.pow(1 - p, 3);
-      el.textContent = fmt(Math.round(to * eased));
+      el.textContent = fmt(Math.round(to * (1 - Math.pow(1 - p, 3))));
       if (p < 1) requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -1094,13 +1056,23 @@
     el.className = "float-pts";
     el.textContent = text;
     el.style.color = color;
+    const p = minerScreenPos();
+    el.style.left = `${clamp(p.x, 10, 90)}%`;
+    el.style.top = `${clamp(p.y, 12, 80)}%`;
     $("float-layer").append(el);
-    setTimeout(() => el.remove(), 1500);
+    setTimeout(() => el.remove(), 1600);
   }
 
-  function updateHudRound() {
-    if (!game || game.round >= ROUNDS) { $("hud-round").textContent = mode === "practice" ? "PRACTICE" : `DIG #${digNumber}`; return; }
-    $("hud-round").textContent = `${game.round + 1}/${ROUNDS}`;
+  function renderPips() {
+    const ol = $("pips");
+    ol.innerHTML = "";
+    for (let i = 0; i < ROUNDS; i++) {
+      const li = document.createElement("li");
+      const r = game && game.results[i];
+      if (r) { li.className = "done"; li.style.background = TIERS[r.tier].color; }
+      else if (game && i === game.results.length && !$("screen-question").classList.contains("hidden")) li.className = "current";
+      ol.append(li);
+    }
   }
 
   // ==================================================================
@@ -1111,39 +1083,41 @@
     if (!game.startedAt) game.startedAt = Date.now();
     saveDaily();
     show("question");
-    updateHudRound();
-    $("q-round").textContent = `PROMPT ${game.round + 1}/${ROUNDS}`;
+    renderPips();
+    $("q-round").textContent = `Prompt ${game.round + 1} of ${ROUNDS}`;
     typeText($("q-text"), q.prompt);
     const input = $("answer");
     input.value = "";
-    setTimeout(() => input.focus(), 30);
+    setTimeout(() => input.focus({ preventScroll: true }), 30);
     runTimer();
   }
 
   function runTimer() {
-    clearInterval(timerHandle);
+    cancelAnimationFrame(timerRaf);
+    const fill = $("timer-fill"), label = $("q-time");
     let lastSec = null;
     const tick = () => {
+      if (!game || game.startedAt === null) return;
       const left = Math.max(0, ROUND_SECONDS - (Date.now() - game.startedAt) / 1000);
-      const fill = $("timer-fill");
-      fill.style.width = `${(left / ROUND_SECONDS) * 100}%`;
-      fill.classList.toggle("warn", left <= 5);
-      $("timer").classList.toggle("warn", left <= 5 && left > 0);
+      fill.style.transform = `scaleX(${left / ROUND_SECONDS})`;
+      const warn = left <= 5;
+      fill.classList.toggle("warn", warn);
+      label.classList.toggle("warn", warn);
       const sec = Math.ceil(left);
-      $("q-time").textContent = `${sec}s`;
-      if (left <= 5 && sec !== lastSec && sec > 0) SFX.tick();
-      lastSec = sec;
-      if (left <= 0) submitAnswer($("answer").value, true);
+      if (sec !== lastSec) {
+        label.textContent = `${sec}s`;
+        if (warn && sec > 0) SFX.tick();
+        lastSec = sec;
+      }
+      if (left <= 0) { submitAnswer($("answer").value, true); return; }
+      timerRaf = requestAnimationFrame(tick);
     };
     tick();
-    timerHandle = setInterval(tick, 100);
   }
 
   function submitAnswer(raw, timedOut = false) {
     if (!game || game.round >= ROUNDS || game.startedAt === null) return;
-    clearInterval(timerHandle);
-    clearInterval(typeHandle);
-    $("timer").classList.remove("warn");
+    cancelAnimationFrame(timerRaf);
     const q = QUESTIONS[game.qIdx[game.round]];
     const res = judge(q, raw);
     const entry = { raw: (raw || "").trim(), tier: res.tier, display: res.display, timedOut: timedOut && !(raw || "").trim() };
@@ -1153,38 +1127,36 @@
     addFind(meters, res.tier, false);
     S.target = meters;
     burst(res.tier);
-    if (res.tier === 5) restartAnim($("scene-wrap"), "quake");
+    if (res.tier === 5 && !REDUCED) restartAnim($("stage"), "quake");
     floatText(res.tier ? `+${TIERS[res.tier].pts}` : "+0", TIERS[res.tier].color);
+    $("answer").blur();
     saveDaily();
     showReveal(q, entry);
   }
 
   function showReveal(q, entry) {
     show("reveal");
+    renderPips();
     SFX.tier(entry.tier);
     const t = TIERS[entry.tier];
     const badge = $("reveal-tier");
     badge.className = `tier-badge tier-${entry.tier}`;
-    badge.textContent = entry.tier ? `${t.name}!` : (entry.timedOut ? "TIME UP" : "BEDROCK");
-    $("reveal-answer").textContent = entry.raw ? `"${entry.display}"` : "(no answer)";
+    badge.textContent = entry.tier ? t.name : (entry.timedOut ? "TIME UP" : "BEDROCK");
+    $("reveal-answer").textContent = entry.raw ? `“${entry.display}”` : "No answer";
     const pointsEl = $("reveal-points");
-    if (entry.tier) {
-      countUp(pointsEl, t.pts, 600, (v) => `${t.label.toUpperCase()} · +${v} PTS · +${v * METERS_PER_POINT}m`);
-    } else {
-      pointsEl.textContent = entry.raw ? "Not in our vein · +0" : "+0";
-    }
+    if (entry.tier) countUp(pointsEl, t.pts, 700, (v) => `${t.label} · +${v} pts · ${v * METERS_PER_POINT}m deeper`);
+    else pointsEl.textContent = entry.raw ? "Not in this vein · +0" : "+0";
 
     const rng = mulberry32(game.qIdx[game.round] * 31 + today);
     const ex = [];
     for (const tier of [5, 4, 3, 1]) {
-      const pool = shuffle(q.byTier[tier].filter((d) => d !== entry.display), rng);
-      pool.slice(0, tier === 5 ? 2 : 1).forEach((d) => ex.push({ d, tier }));
+      shuffle(q.byTier[tier].filter((d) => d !== entry.display), rng).slice(0, 1).forEach((d) => ex.push({ d, tier }));
     }
     const ul = $("reveal-examples");
     ul.innerHTML = "";
     ex.forEach(({ d, tier }, i) => {
       const li = document.createElement("li");
-      li.style.animationDelay = `${0.45 + i * 0.09}s`;
+      li.style.animationDelay = `${0.3 + i * 0.08}s`;
       const span = document.createElement("span");
       span.textContent = d;
       const chip = document.createElement("span");
@@ -1196,13 +1168,12 @@
 
     game.round++;
     saveDaily();
-    $("btn-next").textContent = game.round >= ROUNDS ? "SEE RESULTS" : "KEEP DIGGING";
-    $("btn-next").focus();
+    $("btn-next").textContent = game.round >= ROUNDS ? "See results" : "Keep digging";
+    $("btn-next").focus({ preventScroll: true });
   }
 
   function finish() {
-    const meters = totalPoints(game) * METERS_PER_POINT;
-    if (mode === "daily") recordStats(meters);
+    if (mode === "daily") recordStats(totalPoints(game) * METERS_PER_POINT);
     showResults();
   }
 
@@ -1214,17 +1185,17 @@
 
   function showResults() {
     show("results");
-    updateHudRound();
+    renderPips();
     const meters = totalPoints(game) * METERS_PER_POINT;
     S.target = meters;
-    $("res-title").textContent = mode === "daily" ? `DIG #${digNumber} DONE` : "PRACTICE DONE";
-    countUp($("res-depth"), meters, 1200);
+    $("res-title").textContent = mode === "daily" ? `Dig #${digNumber} complete` : "Practice complete";
+    countUp($("res-depth"), meters, 1400);
     $("res-rank").textContent = rankFor(meters);
     const ol = $("res-list");
     ol.innerHTML = "";
     game.results.forEach((r, i) => {
       const li = document.createElement("li");
-      li.style.animationDelay = `${0.2 + i * 0.1}s`;
+      li.style.animationDelay = `${0.15 + i * 0.07}s`;
       const q = document.createElement("span");
       q.className = "q";
       q.textContent = QUESTIONS[game.qIdx[i]].prompt.replace(/^Name (a |an )?/i, "");
@@ -1245,8 +1216,7 @@
 
   function shareText() {
     const meters = totalPoints(game) * METERS_PER_POINT;
-    const row = game.results.map((r) => TIERS[r.tier].emoji).join("");
-    return `DEEP DIG #${digNumber} ⛏️ ${meters}m\n${row}`;
+    return `DEEP DIG #${digNumber} ⛏️ ${meters}m\n${game.results.map((r) => TIERS[r.tier].emoji).join("")}`;
   }
 
   function toast(msg) {
@@ -1262,10 +1232,8 @@
     const now = new Date();
     const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const s = Math.max(0, Math.floor((next - now) / 1000));
-    const hh = String(Math.floor(s / 3600)).padStart(2, "0");
-    const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
-    const ss = String(s % 60).padStart(2, "0");
-    const txt = `Next dig in ${hh}:${mm}:${ss}`;
+    const p2 = (n) => String(n).padStart(2, "0");
+    const txt = `Next dig in ${p2(Math.floor(s / 3600))}:${p2(Math.floor((s % 3600) / 60))}:${p2(s % 60)}`;
     if (!$("screen-results").classList.contains("hidden")) $("res-next").textContent = txt;
     if (!$("screen-title").classList.contains("hidden") && dailyDone()) $("title-note").textContent = txt;
     if (dateKey() !== todayKey) location.reload();
@@ -1278,7 +1246,6 @@
   function getStats() {
     return store.get("deepdig-stats", { played: 0, streak: 0, maxStreak: 0, best: 0, total: 0, lastDay: null, tiers: [0, 0, 0, 0, 0, 0] });
   }
-
   function recordStats(meters) {
     const st = getStats();
     if (st.lastDay === today) return;
@@ -1291,7 +1258,6 @@
     game.results.forEach((r) => { st.tiers[r.tier]++; });
     store.set("deepdig-stats", st);
   }
-
   function dailyDone() {
     const g = loadDaily();
     return !!(g && g.results.length >= ROUNDS);
@@ -1310,14 +1276,13 @@
     const rows = TIERS.slice(1).reverse().map((t, i) =>
       `<tr><td><span class="chip tier-${5 - i}">${t.name}</span></td><td>${t.label}</td><td>+${t.pts}</td></tr>`).join("");
     return `
-      <h3>HOW TO PLAY</h3>
-      <p>Every day you get <b>${ROUNDS} prompts</b> like <i>"Name a fruit"</i>. You have <b>${ROUND_SECONDS} seconds</b> and <b>one answer</b> each.</p>
-      <p>Any correct answer counts, but obvious answers are just dirt. Dig up an answer few people would think of to strike gold.</p>
+      <h3>How to play</h3>
+      <p>Each day brings <b>${ROUNDS} prompts</b> like “Name a fruit”. You get <b>${ROUND_SECONDS} seconds</b> and one answer for each.</p>
+      <p>Any correct answer counts, but obvious ones are just dirt. Think of something few people would say to strike gold.</p>
       <table class="tier-table">${rows}
-        <tr><td><span class="chip tier-0">BEDROCK</span></td><td>Wrong / no answer</td><td>+0</td></tr></table>
-      <p>Every point digs you ${METERS_PER_POINT}m deeper. A perfect dig reaches <b>${MAX_METERS}m</b>, past the stone, slate and obsidian all the way to the magma.</p>
-      <p>Small typos are forgiven. Everyone gets the same prompts each day, and a new set unlocks at midnight.</p>
-      <p>Want more? The <b>Practice Mine</b> serves random prompts any time and doesn't count toward your stats.</p>`;
+        <tr><td><span class="chip tier-0">BEDROCK</span></td><td>Wrong or blank</td><td>+0</td></tr></table>
+      <p>Every point digs ${METERS_PER_POINT}m deeper. A perfect day reaches <b>${MAX_METERS}m</b>, all the way down to the magma.</p>
+      <p>Small typos are forgiven. Everyone gets the same prompts, and a new set unlocks at midnight. The practice mine has random prompts any time.</p>`;
   }
 
   function statsHtml() {
@@ -1325,17 +1290,16 @@
     const avg = st.played ? Math.round(st.total / st.played) : 0;
     const max = Math.max(1, ...st.tiers);
     const bars = TIERS.map((t, i) => ({ t, i })).reverse().map(({ t, i }, k) =>
-      `<div class="bar-row"><span class="lbl">${t.name}</span><span class="bar" style="width:${(st.tiers[i] / max) * 70}%;background:${t.color};animation-delay:${k * 0.07}s"></span><span>${st.tiers[i]}</span></div>`).join("");
+      `<div class="bar-row"><span class="lbl">${t.name}</span><span class="bar" style="width:${(st.tiers[i] / max) * 65}%;background:${t.color};animation-delay:${k * 0.06}s"></span><span>${st.tiers[i]}</span></div>`).join("");
     return `
-      <h3>STATS</h3>
+      <h3>Your stats</h3>
       <div class="stat-grid">
-        <div><b>${st.played}</b><span>digs</span></div>
-        <div><b>${st.streak}</b><span>streak</span></div>
-        <div><b>${st.maxStreak}</b><span>best streak</span></div>
-        <div><b>${avg}</b><span>avg m</span></div>
+        <div><b>${st.played}</b><span>Digs</span></div>
+        <div><b>${st.streak}</b><span>Streak</span></div>
+        <div><b>${st.maxStreak}</b><span>Best streak</span></div>
+        <div><b>${avg}</b><span>Avg meters</span></div>
       </div>
       <p>Deepest dig: <b>${st.best}m</b></p>
-      <p class="small">Finds by tier</p>
       <div class="bars">${bars}</div>`;
   }
 
@@ -1344,32 +1308,29 @@
   // ==================================================================
   function showTitle() {
     mode = "daily";
-    clearInterval(timerHandle);
+    cancelAnimationFrame(timerRaf);
     show("title");
-    $("title-dig").textContent = `DIG #${digNumber} · ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+    $("title-dig").textContent = `Dig #${digNumber} · ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
     const saved = loadDaily();
     const btn = $("btn-play");
     resetScene();
     if (saved) {
       let pts = 0;
-      saved.results.forEach((r) => {
-        pts += TIERS[r.tier].pts;
-        addFind(pts * METERS_PER_POINT, r.tier, true);
-      });
+      saved.results.forEach((r) => { pts += TIERS[r.tier].pts; addFind(pts * METERS_PER_POINT, r.tier, true); });
       S.target = pts * METERS_PER_POINT;
     }
     if (saved && saved.results.length >= ROUNDS) {
-      btn.textContent = "VIEW TODAY'S DIG";
+      btn.textContent = "View today's dig";
       updateCountdown();
     } else if (saved && saved.results.length > 0) {
-      btn.textContent = `RESUME (${saved.results.length}/${ROUNDS})`;
+      btn.textContent = `Resume dig (${saved.results.length}/${ROUNDS})`;
       $("title-note").textContent = "";
     } else {
-      btn.textContent = "START DIG";
-      $("title-note").textContent = "Same prompts for everyone today.";
+      btn.textContent = "Start today's dig";
+      $("title-note").textContent = "Same 7 prompts for everyone today";
     }
     game = null;
-    updateHudRound();
+    renderPips();
   }
 
   $("btn-play").addEventListener("click", () => {
@@ -1380,7 +1341,6 @@
     game.round = game.results.length;
     startRound();
   });
-
   $("btn-practice").addEventListener("click", () => {
     SFX.click();
     mode = "practice";
@@ -1388,31 +1348,19 @@
     game = newGame(randomQuestionIndexes());
     startRound();
   });
-
   $("btn-again").addEventListener("click", () => $("btn-practice").click());
 
   $("answer-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const v = $("answer").value;
-    if (!v.trim()) {
-      restartAnim($("answer-form"), "shake");
-      return;
-    }
+    if (!v.trim()) { restartAnim($("answer-form"), "shake"); return; }
     submitAnswer(v);
   });
-
-  $("answer").addEventListener("input", () => {
-    restartAnim($("answer"), "key");
-    tapPickaxe();
-    SFX.key();
-  });
-
+  $("answer").addEventListener("input", () => { tapPickaxe(); SFX.key(); });
   $("btn-skip").addEventListener("click", () => submitAnswer(""));
-
   $("btn-next").addEventListener("click", () => {
     SFX.click();
-    if (game.round >= ROUNDS) finish();
-    else startRound();
+    if (game.round >= ROUNDS) finish(); else startRound();
   });
 
   $("btn-share").addEventListener("click", () => {
@@ -1423,11 +1371,9 @@
       ta.classList.remove("hidden");
       ta.focus();
       ta.select();
-      toast("SELECT & COPY");
+      toast("Select the text to copy it");
     };
-    try {
-      navigator.clipboard.writeText(text).then(() => toast("COPIED!"), fallback);
-    } catch { fallback(); }
+    try { navigator.clipboard.writeText(text).then(() => toast("Copied!"), fallback); } catch { fallback(); }
   });
 
   $("btn-help").addEventListener("click", () => openModal(helpHtml()));
@@ -1445,11 +1391,7 @@
     SFX.click();
   });
 
-  // Logo returns to the title screen (only when not mid-question in a daily dig).
-  $("logo").addEventListener("click", () => {
-    const midDaily = mode === "daily" && game && !$("screen-question").classList.contains("hidden");
-    if (!midDaily) showTitle();
-  });
+  $("logo").addEventListener("click", () => showTitle());
 
   showTitle();
   requestAnimationFrame(frame);
