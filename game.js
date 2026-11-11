@@ -198,14 +198,20 @@
     for (const k of variants(key)) {
       if (q.keys.has(k)) return q.keys.get(k);
     }
-    const tol = key.length >= 9 ? 2 : key.length >= 5 ? 1 : 0;
+    const tol = key.length >= 7 ? 2 : key.length >= 4 ? 1 : 0;
     if (tol) {
-      let best = null, bestD = tol + 1;
+      // closest answer wins; ties go to the one that looks most like a slip of the fingers:
+      // same start, then a longer word (dropped letters are the commonest typo)
+      const prefix = (k) => { let i = 0; while (i < k.length && k[i] === key[i]) i++; return i; };
+      let best = null, bestScore = null;
       for (const [k, info] of q.keys) {
         const d = editDistance(key, k, tol);
-        if (d < bestD || (d === bestD && best && info.tier > best.tier)) { bestD = d; best = info; }
+        if (d > tol) continue;
+        const score = [d, -prefix(k), -(k.length >= key.length ? 1 : 0)];
+        const better = !bestScore || score[0] < bestScore[0] || (score[0] === bestScore[0] && (score[1] < bestScore[1] || (score[1] === bestScore[1] && score[2] < bestScore[2])));
+        if (better) { best = info; bestScore = score; }
       }
-      if (best && bestD <= tol) return best;
+      if (best) return { ...best, fuzzy: true };
     }
     return { tier: 0, display: titleCase(raw.trim()) };
   }
@@ -1270,6 +1276,7 @@
     typeText($("q-text"), q.prompt);
     const input = $("answer");
     input.value = "";
+    showAutocorrect(null);
     setTimeout(() => input.focus({ preventScroll: true }), 30);
     runTimer();
   }
@@ -1302,7 +1309,8 @@
     cancelAnimationFrame(timerRaf);
     const q = QUESTIONS[game.qIdx[game.round]];
     const res = judge(q, raw);
-    const entry = { raw: (raw || "").trim(), tier: res.tier, display: res.display, timedOut: timedOut && !(raw || "").trim() };
+    const entry = { raw: (raw || "").trim(), tier: res.tier, display: res.display, corrected: !!res.fuzzy, timedOut: timedOut && !(raw || "").trim() };
+    showAutocorrect(null);
     game.results.push(entry);
     game.startedAt = null;
     const meters = totalPoints(game) * METERS_PER_POINT;
@@ -1325,6 +1333,9 @@
     badge.className = `tier-badge tier-${entry.tier}`;
     badge.textContent = entry.tier ? t.name : (entry.timedOut ? "TIME UP" : "BEDROCK");
     $("reveal-answer").textContent = entry.raw ? `“${entry.display}”` : "No answer";
+    const corr = $("reveal-corrected");
+    corr.classList.toggle("hidden", !entry.corrected);
+    if (entry.corrected) corr.textContent = `You typed “${entry.raw}” · autocorrected`;
     const pointsEl = $("reveal-points");
     if (entry.tier) countUp(pointsEl, t.pts, 700, (v) => `${t.label} · +${v} pts · ${v * METERS_PER_POINT}m deeper`);
     else pointsEl.textContent = entry.raw ? "Not in this vein · +0" : "+0";
@@ -1554,7 +1565,36 @@
     if (!v.trim()) { restartAnim($("answer-form"), "shake"); return; }
     submitAnswer(v);
   });
-  $("answer").addEventListener("input", () => { tapPickaxe(); SFX.key(); });
+  // Live autocorrect: when the typed text is a near-miss of a real answer,
+  // show what it will be counted as before the player submits.
+  let lastCorrection = null;
+  function showAutocorrect(display) {
+    const el = $("autocorrect");
+    if (!display) { el.classList.add("hidden"); lastCorrection = null; return; }
+    if (display !== lastCorrection) {
+      el.innerHTML = "";
+      const label = document.createElement("span");
+      label.className = "ac-label";
+      label.textContent = "Autocorrect";
+      const arrow = document.createElement("span");
+      arrow.className = "ac-arrow";
+      arrow.textContent = "→";
+      const word = document.createElement("b");
+      word.textContent = display;
+      el.append(label, arrow, word);
+      el.classList.remove("hidden");
+      restartAnim(el, "autocorrect");
+      lastCorrection = display;
+    }
+  }
+  $("answer").addEventListener("input", () => {
+    tapPickaxe();
+    SFX.key();
+    if (!game || game.round >= ROUNDS) return;
+    const v = $("answer").value;
+    const res = v.trim().length >= 3 ? judge(QUESTIONS[game.qIdx[game.round]], v) : null;
+    showAutocorrect(res && res.fuzzy ? res.display : null);
+  });
   $("btn-skip").addEventListener("click", () => submitAnswer(""));
   $("btn-next").addEventListener("click", () => {
     SFX.click();

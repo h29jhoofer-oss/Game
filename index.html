@@ -61,6 +61,7 @@
           <div class="timer"><div id="timer-fill"></div></div>
         </div>
         <div class="answer-wrap">
+          <p id="autocorrect" class="pix autocorrect hidden" aria-live="polite"></p>
           <form id="answer-form" class="pix answer-bar" autocomplete="off">
             <input id="answer" class="pix" type="text" maxlength="40" placeholder="Type an answer" spellcheck="false" autocapitalize="off" aria-label="Your answer">
             <button class="pix btn primary dig-btn" type="submit">Dig</button>
@@ -74,6 +75,7 @@
         <div class="pix card sheet">
           <div id="reveal-tier" class="tier-badge"></div>
           <p id="reveal-answer" class="reveal-answer"></p>
+          <p id="reveal-corrected" class="reveal-corrected hidden"></p>
           <p id="reveal-points" class="reveal-points"></p>
           <div class="finds">
             <p class="eyebrow">Other finds in this vein</p>

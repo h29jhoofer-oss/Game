@@ -335,6 +335,24 @@ button { font-family: inherit; }
 }
 #answer::placeholder { color: var(--muted); }
 .dig-btn { width: auto; padding-inline: 22px; }
+.autocorrect {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+  margin: 0 0 4px;
+  padding: 5px 12px;
+  border-image-source: var(--frame-strong);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: clamp(16px, 4.6cqi, 20px);
+  animation: acin .3s var(--ease-pop) both;
+}
+.autocorrect .ac-label { font-size: .7em; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.autocorrect .ac-arrow { color: var(--muted); }
+.autocorrect b { color: var(--accent); font-weight: 600; overflow-wrap: anywhere; }
+@keyframes acin { from { opacity: 0; transform: translateY(6px) scale(.95); } }
+.reveal-corrected { margin: 0; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
 
 /* ---------- reveal / results sheets ---------- */
 .screen-sheet { justify-content: flex-end; }
