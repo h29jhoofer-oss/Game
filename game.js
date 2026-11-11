@@ -1263,15 +1263,22 @@
   }
 
   // ==================================================================
-  // Crowd rarity — once enough people have answered a prompt, an answer's
-  // tier comes from the share of other players who gave it. Until then
-  // (or when the shared store isn't available) the hand-made tiers apply.
+  // Rarity — an answer's tier comes from the estimated share of people who
+  // would give it. The estimate starts from Claude's guess for each prompt
+  // (asked once, then saved for everyone in priors/<prompt>) and every real
+  // player's answer blends in on top: Claude counts as PRIOR_WEIGHT imaginary
+  // players. Without Claude's guess, the hand-made tier stands in for it.
   // Each player keeps one document, plays/<their id>, holding their latest
   // answer to every prompt, so nobody ever overwrites anyone else's data.
   // ==================================================================
-  const CROWD_MIN = 15; // other players needed on a prompt before the crowd decides
+  const PRIOR_WEIGHT = 20;
   const CROWD_BANDS = [[0.2, 1], [0.08, 2], [0.03, 3], [0.01, 4]]; // share >= x gives that tier; rarer is Diamond
-  const crowd = { db: null, me: null, owner: false, players: new Map(), ready: false, writable: true, chain: Promise.resolve() };
+  const HAND_SHARE = [0, 0.25, 0.12, 0.05, 0.018, 0.004];     // stand-in share for each hand-made tier
+  const ESTIMATE_MODEL = "claude-haiku-4-5";                  // falls back to the "quick" tier if unavailable
+  const crowd = {
+    db: null, me: null, owner: false, players: new Map(), ready: false, writable: true, chain: Promise.resolve(),
+    sample: null, sampleOff: false, priors: new Map(), priorsReady: false, asking: new Map(),
+  };
   const promptId = (q) => normalize(q.prompt).slice(0, 80);
 
   function crowdStats(q, display) {
@@ -1288,14 +1295,21 @@
     return { n, c };
   }
 
+  function priorShare(q, display, handTier) {
+    const pr = crowd.priors.get(promptId(q));
+    const v = pr && pr[normalize(display)];
+    if (typeof v === "number" && isFinite(v) && v >= 0) return { p: Math.min(1, v), source: "claude" };
+    return { p: HAND_SHARE[handTier] || 0.004, source: "hand" };
+  }
+
   function crowdTier(q, display, handTier) {
     if (!handTier) return { tier: 0, source: "list" };
-    const st = crowdStats(q, display);
-    if (!st || st.n < CROWD_MIN) return { tier: handTier, source: "start", n: st ? st.n : null };
-    const share = st.c / st.n;
+    const prior = priorShare(q, display, handTier);
+    const st = crowdStats(q, display) || { n: 0, c: 0 };
+    const share = (st.c + PRIOR_WEIGHT * prior.p) / (st.n + PRIOR_WEIGHT);
     let tier = 5;
     for (const [min, t] of CROWD_BANDS) if (share >= min) { tier = t; break; }
-    return { tier, source: "crowd", n: st.n, c: st.c };
+    return { tier, source: prior.source, share, n: st.n, c: st.c };
   }
 
   function recordCrowd(q, entry) {
@@ -1324,6 +1338,7 @@
   async function initCrowd() {
     try {
       if (!window.claude || typeof window.claude.use !== "function") return;
+      window.claude.use("sample").then((fn) => { crowd.sample = fn || null; }).catch(() => {});
       const [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
       if (!db || !user) return;
       const [me, owner, canWrite] = await Promise.all([user.id(), user.isOwner(), user.can("data.write")]);
@@ -1332,6 +1347,15 @@
       crowd.me = me;
       crowd.owner = !!owner;
       if (canWrite === false) crowd.writable = false;
+      db.collection("priors").onSnapshot((snap) => {
+        const priors = new Map();
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          if (data && data.shares && typeof data.shares === "object") { priors.set(d.id, data.shares); storedPriors.add(d.id); }
+        });
+        crowd.priors = new Map([...crowd.priors, ...priors]);
+        crowd.priorsReady = true;
+      }, () => { crowd.priorsReady = false; });
       db.collection("plays").onSnapshot((snap) => {
         const players = new Map();
         snap.docs.forEach((d) => {
@@ -1346,14 +1370,80 @@
 
   function crowdNote(entry) {
     const c = entry.crowd;
-    if (!entry.tier || !c) return "";
-    if (c.source === "crowd") {
-      if (!c.c) return `Nobody else out of ${c.n} players has said this`;
-      const pct = (c.c / c.n) * 100;
-      return `${pct < 1 ? "<1" : Math.round(pct)}% of ${c.n} other players said this`;
+    if (!entry.tier || !c || typeof c.share !== "number") return "";
+    const pct = c.share * 100;
+    const shown = pct >= 10 ? Math.round(pct) : pct >= 1 ? pct.toFixed(1).replace(/\.0$/, "") : pct.toFixed(1) === "0.0" ? "<0.1" : pct.toFixed(1);
+    const base = c.source === "claude" ? "Claude's estimate" : "the starting estimate";
+    if (!c.n) return `About ${shown}% of people would say this (${base})`;
+    const players = `${c.n} ${c.n === 1 ? "player" : "players"}`;
+    return `About ${shown}% would say this · ${base} + ${players}' answers`;
+  }
+
+  // ---- asking Claude for a prompt's answer spread ----
+  function estimateRequest(qs) {
+    const blocks = qs.map((q, i) => {
+      const answers = q.byTier.slice(1).flat();
+      return `Prompt ${i + 1}: ${q.prompt}\nAnswers (${answers.length}): ${answers.join(" | ")}`;
+    });
+    return [
+      "You are estimating how a crowd plays a quick trivia game.",
+      "For each prompt below, imagine 100 ordinary adults who each type ONE answer within 20 seconds.",
+      "For every listed answer, estimate how many of the 100 would give exactly that answer (0 to 100; use decimals such as 0.3 or 0.05 for rare ones).",
+      "Obvious first-thought answers get big numbers, obscure ones tiny numbers. A prompt's numbers should add up to at most 100, since some people give answers that aren't listed.",
+      "Reply with only a JSON array holding one array of numbers per prompt, in the same order as the answers are listed. Example for two prompts: [[31, 12, 0.4], [9, 2.5, 0.1, 0.05]]",
+      "",
+      ...blocks,
+    ].join("\n");
+  }
+
+  async function askClaude(qs) {
+    if (!crowd.sample || crowd.sampleOff || !qs.length) return;
+    let reply;
+    try {
+      reply = await crowd.sample.json(estimateRequest(qs), { model: ESTIMATE_MODEL, modelTier: "quick" });
+    } catch (e) {
+      const code = e && e.code;
+      if (["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].includes(code)) crowd.sampleOff = true;
+      return;
     }
-    if (c.n === null || c.n === undefined) return "Starting estimate";
-    return `Starting estimate · crowd rarity kicks in at ${CROWD_MIN} players (${c.n} so far)`;
+    if (!Array.isArray(reply)) return;
+    for (let i = 0; i < qs.length; i++) {
+      const nums = reply[i];
+      if (!Array.isArray(nums)) continue;
+      const answers = qs[i].byTier.slice(1).flat();
+      const raw = answers.map((_, j) => Number(nums[j]));
+      const total = raw.reduce((sum, v) => sum + (isFinite(v) && v > 0 ? v : 0), 0);
+      if (!total) continue;
+      const scale = total > 100 ? 100 / total : 1;
+      const shares = {};
+      answers.forEach((a, j) => {
+        const v = raw[j];
+        if (isFinite(v) && v >= 0) shares[normalize(a).slice(0, 80)] = Math.round((v * scale) / 100 * 1e5) / 1e5;
+      });
+      const pid = promptId(qs[i]);
+      crowd.priors.set(pid, shares);
+      if (crowd.db && crowd.writable && !(crowd.priorsReady && crowdHasStoredPrior(pid))) {
+        try { await crowd.db.doc("priors/" + pid).set({ shares, prompt: qs[i].prompt, model: ESTIMATE_MODEL, at: Date.now() }); }
+        catch { /* someone else's estimate will do */ }
+      }
+    }
+  }
+  const storedPriors = new Set();
+  function crowdHasStoredPrior(pid) { return storedPriors.has(pid); }
+
+  // Make sure every prompt in this run has an estimate; asks once for the missing ones.
+  async function ensurePriors(qIdx, maxWaitMs = 20000) {
+    if (!crowd.sample || crowd.sampleOff) return;
+    if (crowd.db && !crowd.priorsReady) await new Promise((r) => setTimeout(r, 1200));
+    const missing = qIdx.map((i) => QUESTIONS[i]).filter((q) => !crowd.priors.has(promptId(q)));
+    if (!missing.length) return;
+    const key = missing.map(promptId).join(",");
+    if (!crowd.asking.has(key)) crowd.asking.set(key, askClaude(missing).finally(() => crowd.asking.delete(key)));
+    const busy = $("busy");
+    busy.textContent = "Asking Claude to estimate how people answer…";
+    busy.classList.remove("hidden");
+    await Promise.race([crowd.asking.get(key) || Promise.resolve(), new Promise((r) => setTimeout(r, maxWaitMs))]);
+    busy.classList.add("hidden");
   }
 
   // ==================================================================
@@ -1577,7 +1667,7 @@
       <table class="tier-table">${rows}
         <tr><td><span class="chip tier-0">BEDROCK</span></td><td>Wrong or blank</td><td>+0</td></tr></table>
       <p>Every point digs ${METERS_PER_POINT}m deeper. A perfect day reaches <b>${MAX_METERS}m</b>, all the way down to the magma.</p>
-      <p>Rarity comes from other players: once ${CROWD_MIN} people have answered a prompt, an answer's tier depends on how many of them gave it. Under 1% is Diamond, 1–3% Gold, 3–8% Silver, 8–20% Copper, and anything more common is Dirt. Before that, the game uses its own starting estimate.</p>
+      <p>Rarity is the share of people who'd give your answer: under 1% is Diamond, 1–3% Gold, 3–8% Silver, 8–20% Copper, and anything more common is Dirt. It starts from Claude's estimate for each prompt, and every player's real answers shift it from there.</p>
       <p>Small typos are forgiven. ${PLAYTEST ? "You're in playtest mode, so a new set of prompts unlocks as soon as you finish one." : "Everyone gets the same prompts, and a new set unlocks at midnight."} The practice mine has random prompts any time.</p>`;
   }
 
@@ -1632,28 +1722,39 @@
     renderPips();
   }
 
+  let launching = false;
+  async function launch(g) {
+    if (launching) return;
+    launching = true;
+    try {
+      game = g;
+      if (!game.startedAt) await ensurePriors(game.qIdx.slice(game.results.length));
+      startRound();
+    } finally { launching = false; }
+  }
   $("btn-play").addEventListener("click", () => {
+    if (launching) return;
     SFX.click();
     mode = "daily";
     if (PLAYTEST && dailyDone()) { startNextSet(); return; }
-    game = loadDaily() || newGame(PLAYTEST ? freshQuestionIndexes() : dailyQuestionIndexes(today));
-    if (game.results.length >= ROUNDS) { showResults(); return; }
-    game.round = game.results.length;
-    startRound();
+    const g = loadDaily() || newGame(PLAYTEST ? freshQuestionIndexes() : dailyQuestionIndexes(today));
+    if (g.results.length >= ROUNDS) { game = g; showResults(); return; }
+    g.round = g.results.length;
+    launch(g);
   });
   $("btn-practice").addEventListener("click", () => {
+    if (launching) return;
     SFX.click();
     mode = "practice";
     resetScene();
-    game = newGame(freshQuestionIndexes());
-    startRound();
+    launch(newGame(freshQuestionIndexes()));
   });
   function startNextSet() {
+    if (launching) return;
     setDayOffset(dayOffset + 1);
     mode = "daily";
     resetScene();
-    game = newGame(freshQuestionIndexes());
-    startRound();
+    launch(newGame(freshQuestionIndexes()));
   }
   $("btn-again").addEventListener("click", () => {
     if (mode === "practice") $("btn-practice").click();
@@ -1766,6 +1867,27 @@
       ul.append(li);
     });
     wrap.append(ul);
+    if (crowd.sample && !crowd.sampleOff) {
+      const missing = QUESTIONS.filter((q) => !crowd.priors.has(promptId(q)));
+      const btn = document.createElement("button");
+      btn.className = "pix btn ghost est-btn";
+      btn.type = "button";
+      const label = (left) => left ? `Estimate the ${left} remaining prompts with Claude` : "Every prompt has Claude's estimate";
+      btn.textContent = label(missing.length);
+      btn.disabled = !missing.length;
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        const todo = QUESTIONS.filter((q) => !crowd.priors.has(promptId(q)));
+        for (let i = 0; i < todo.length && !crowd.sampleOff; i += 8) {
+          btn.textContent = `Estimating… ${Math.min(i, todo.length)}/${todo.length}`;
+          await askClaude(todo.slice(i, i + 8));
+        }
+        const left = QUESTIONS.filter((q) => !crowd.priors.has(promptId(q))).length;
+        btn.textContent = crowd.sampleOff ? "Claude isn't available here" : label(left);
+        btn.disabled = !left || crowd.sampleOff;
+      });
+      wrap.append(btn);
+    }
     return wrap;
   }
   $("modal-close").addEventListener("click", closeModal);

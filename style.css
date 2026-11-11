@@ -173,6 +173,23 @@ button { font-family: inherit; }
   78% { opacity: 1; transform: translate(-50%, 0) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -14px) scale(.98); }
 }
+.busy {
+  position: absolute;
+  left: 50%; top: 50%;
+  z-index: 5;
+  transform: translate(-50%, -50%);
+  max-width: calc(100% - 32px);
+  padding: 12px 18px;
+  border-image-source: var(--frame-strong);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: 17px;
+  text-align: center;
+  animation: busy 1.2s ease-in-out infinite;
+}
+@keyframes busy { 50% { opacity: .65; } }
+.est-btn { margin-top: 12px; font-size: 15px; }
+.est-btn:disabled { opacity: .6; cursor: default; }
 .float-layer { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
 .float-pts {
   position: absolute;
