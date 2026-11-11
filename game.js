@@ -84,7 +84,7 @@
   };
 
   function titleCase(s) {
-    return s.replace(/\b([a-z])/g, (m) => m.toUpperCase());
+    return s.replace(/(^|[\s\-\/(."])([a-z])/g, (m, pre, ch) => pre + ch.toUpperCase());
   }
 
   function restartAnim(el, cls) {
@@ -151,6 +151,8 @@
   const BANK = [
     ...window.QUESTION_BANK.map((q) => [...q, false]),
     ...(window.NICHE_BANK || []).map((q) => [...q, true]),
+    ...(window.EXTRA_CLASSIC || []).map((q) => [...q, false]),
+    ...(window.EXTRA_NICHE || []).map((q) => [...q, true]),
   ];
   const QUESTIONS = BANK.map(([prompt, tierStr, niche]) => {
     const keys = new Map();

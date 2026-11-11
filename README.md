@@ -35,8 +35,8 @@ How rare it is comes from an estimated share of people who would give it:
 
 ## Daily prompts
 
-There are 135 prompts: 70 classic ones in `questions.js` and 65 niche ones in
-`questions-niche.js`. While `PLAYTEST` is `true` in `game.js`, every run picks
+There are 200 prompts: 116 everyday ones (`questions.js` and `EXTRA_CLASSIC` in
+`questions-extra.js`) and 84 niche ones (`questions-niche.js` and `EXTRA_NICHE`). While `PLAYTEST` is `true` in `game.js`, every run picks
 7 prompts you haven't played yet (4 niche + 3 classic), with no daily limit.
 Once you've seen them all, the cycle starts over. With `PLAYTEST` set to
 `false`, everyone gets the same 7 prompts each day, picked from the date.
