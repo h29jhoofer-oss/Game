@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Deep Dig</title>
+  <meta name="description" content="A pixel-art daily trivia game. Seven new prompts every day. The rarer your answer, the deeper you dig.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="logo">DEEP<span>DIG</span></div>
+      <div class="topbar-right">
+        <button id="btn-help" class="icon-btn" title="How to play" aria-label="How to play">?</button>
+        <button id="btn-stats" class="icon-btn" title="Stats" aria-label="Stats">#</button>
+        <button id="btn-sound" class="icon-btn" title="Sound" aria-label="Toggle sound">♪</button>
+      </div>
+    </header>
+
+    <div class="scene-wrap">
+      <canvas id="scene" width="160" height="100"></canvas>
+      <div class="hud">
+        <div id="hud-depth">0m</div>
+        <div id="hud-round"></div>
+      </div>
+    </div>
+
+    <!-- TITLE -->
+    <section id="screen-title" class="screen panel">
+      <p class="dig-no" id="title-dig"></p>
+      <p class="tagline">7 prompts. 20 seconds each.<br>The <b>rarer</b> your answer, the <b>deeper</b> you dig.</p>
+      <button id="btn-play" class="btn big">START DIG</button>
+      <button id="btn-practice" class="btn alt">PRACTICE MINE</button>
+      <p class="small" id="title-note"></p>
+    </section>
+
+    <!-- QUESTION -->
+    <section id="screen-question" class="screen panel hidden">
+      <div class="q-meta"><span id="q-round"></span><span id="q-time"></span></div>
+      <div class="timer"><div id="timer-fill"></div></div>
+      <h2 id="q-text" class="prompt"></h2>
+      <form id="answer-form" autocomplete="off">
+        <input id="answer" type="text" maxlength="40" placeholder="type your answer..." spellcheck="false" autocapitalize="off">
+        <button class="btn" type="submit">DIG!</button>
+      </form>
+      <button id="btn-skip" class="link-btn" type="button">skip</button>
+    </section>
+
+    <!-- REVEAL -->
+    <section id="screen-reveal" class="screen panel hidden">
+      <div id="reveal-tier" class="tier-badge"></div>
+      <p id="reveal-answer" class="reveal-answer"></p>
+      <p id="reveal-points" class="reveal-points"></p>
+      <div class="rare-box">
+        <p class="small">Other finds in this vein:</p>
+        <ul id="reveal-examples"></ul>
+      </div>
+      <button id="btn-next" class="btn big">KEEP DIGGING</button>
+    </section>
+
+    <!-- RESULTS -->
+    <section id="screen-results" class="screen panel hidden">
+      <h2 class="prompt" id="res-title">DIG COMPLETE</h2>
+      <p class="res-depth"><span id="res-depth">0</span>m deep</p>
+      <p class="small" id="res-rank"></p>
+      <ol id="res-list" class="res-list"></ol>
+      <div class="res-buttons">
+        <button id="btn-share" class="btn">SHARE</button>
+        <button id="btn-again" class="btn alt hidden">PRACTICE AGAIN</button>
+      </div>
+      <p class="small" id="res-next"></p>
+    </section>
+
+    <footer class="foot">New prompts every day at midnight (your time).</footer>
+  </div>
+
+  <!-- MODALS -->
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-box panel">
+      <button id="modal-close" class="icon-btn modal-x" aria-label="Close">x</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="questions.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
