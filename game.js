@@ -223,7 +223,7 @@
   }
 
   // Fresh set: prompts this player hasn't seen yet, mostly niche ones.
-  const NICHE_PER_SET = 5;
+  const NICHE_PER_SET = 4;
   function freshQuestionIndexes() {
     let seen = new Set(store.get("deepdig-seen", []));
     let unseen = QUESTIONS.map((q, i) => i).filter((i) => !seen.has(QUESTIONS[i].prompt));
@@ -288,7 +288,8 @@
   const ctx = canvas.getContext("2d");
   const SCALE = 3;
   const PX_PER_M = 1 / 12.5;
-  const SHAFT_W = 22;
+  const SHAFT_W = 34;
+  const MS = 2; // the miner is drawn at double pixel size
   // The world is sized to the screen: 360 art pixels tall on wide screens, at least 260 wide on phones.
   let W = 288, H = 432, SURFACE = 215, WORLD_H = 0, SHAFT_X = 0;
   function computeSize() {
@@ -512,11 +513,11 @@
     px(sx + 23, SURFACE - 36, 5, 10, "#6e6a78"); px(sx + 22, SURFACE - 37, 7, 2, "#8a8696");
     px(sx + 18, SURFACE - 12, 7, 12, "#2a1a10"); px(sx + 23, SURFACE - 6, 1, 1, "#ffcc33");
     px(sx + 3, SURFACE - 14, 10, 8, "#3a2414");
-    const hl = SHAFT_X - 3, hr = SHAFT_X + SHAFT_W + 1, top = SURFACE - 34;
-    px(hl, top, 2, 34, "#6a4222"); px(hr, top, 2, 34, "#6a4222");
+    const hl = SHAFT_X - 3, hr = SHAFT_X + SHAFT_W + 1, top = SURFACE - 44;
+    px(hl, top, 2, 44, "#6a4222"); px(hr, top, 2, 44, "#6a4222");
     px(hl - 2, top - 2, hr - hl + 6, 3, "#8a5a2e");
-    for (let k = 0; k < 30; k++) {
-      const fx = Math.round(lerp(hl + 2, hr - 1, k / 30));
+    for (let k = 0; k < 40; k++) {
+      const fx = Math.round(lerp(hl + 2, hr - 1, k / 40));
       px(fx, top + 3 + k, 1, 1, "#5a361a");
       px(hr - 1 - (fx - hl - 2), top + 3 + k, 1, 1, "#5a361a");
     }
@@ -566,7 +567,7 @@
     const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
     return k >= 1 ? rgb(c.map((v) => v + (255 - v) * (k - 1))) : rgb(c, k);
   }
-  function drawSprite(rows, pal, x, y) {
+  function drawSprite(rows, pal, x, y, s = 1) {
     x = snap(x); y = snap(y);
     for (let ry = 0; ry < rows.length; ry++) {
       const row = rows[ry];
@@ -574,7 +575,7 @@
         const ch = row[rx];
         if (ch === "." || !pal[ch]) continue;
         ctx.fillStyle = pal[ch];
-        ctx.fillRect(x + rx, y + ry, 1, 1);
+        ctx.fillRect(x + rx * s, y + ry * s, s, s);
       }
     }
   }
@@ -624,7 +625,7 @@
     S.particles.push(Object.assign({ vx: 0, vy: 0, g: 60, life: 0.6, max: 0.6, size: 1, c: "#fff" }, o));
   }
   function minerPos() {
-    return { x: SHAFT_X + Math.floor((SHAFT_W - 12) / 2), y: mToY(S.depth) - MINER.length };
+    return { x: SHAFT_X + 3, y: mToY(S.depth) - MINER.length * MS };
   }
   function slotXY(meters, side, k) {
     return { x: side ? SHAFT_X + SHAFT_W + 2 : SHAFT_X - 9, y: mToY(meters) - 9 - k * 9, k };
@@ -650,7 +651,7 @@
 
   function burst(tier) {
     const m = minerPos();
-    const cx = m.x + 6, cy = m.y + 4;
+    const cx = m.x + 6 * MS, cy = m.y + 4 * MS;
     if (tier === 0) {
       for (let i = 0; i < 14; i++) particle({ x: cx, y: cy + 8, vx: (Math.random() - 0.5) * 70, vy: -Math.random() * 60, g: 220, life: 0.7, max: 0.7, size: 2, c: i % 2 ? "#5a5462" : "#7a7484" });
       S.shake = REDUCED ? 0 : 1.5;
@@ -677,7 +678,7 @@
   function tapPickaxe() {
     S.tap = 1;
     const m = minerPos();
-    for (let i = 0; i < 3; i++) particle({ x: m.x + 14, y: m.y + MINER.length, vx: (Math.random() - 0.3) * 40, vy: -20 - Math.random() * 30, g: 160, life: 0.35, max: 0.35, c: "#c8a070" });
+    for (let i = 0; i < 3; i++) particle({ x: m.x + 12 * MS, y: m.y + MINER.length * MS, vx: (Math.random() - 0.3) * 40, vy: -20 - Math.random() * 30, g: 160, life: 0.35, max: 0.35, c: "#c8a070" });
   }
 
   function onLayerChange(i) {
@@ -689,7 +690,7 @@
 
   function minerScreenPos() {
     const m = minerPos();
-    return { x: ((m.x + 6) / W) * 100, y: ((m.y - S.camY) / H) * 100 };
+    return { x: ((m.x + 6 * MS) / W) * 100, y: ((m.y - S.camY) / H) * 100 };
   }
 
   // ---- descent: dig at the floor, drop down the rope, land ----
@@ -699,7 +700,7 @@
     const m = minerPos();
     const L = LAYERS[layerIndexAt(S.depth)];
     for (let i = 0; i < n; i++) {
-      particle({ x: m.x + 6 + (Math.random() - 0.5) * spread, y: mToY(S.depth), vx: (Math.random() - 0.5) * 80, vy: up ? -30 - Math.random() * 60 : 10 + Math.random() * 60, g: 260, life: 0.7, max: 0.7, size: Math.random() < 0.5 ? 2 : 1, c: rgb(L.c[Math.floor(Math.random() * 3)], 1.1) });
+      particle({ x: m.x + 6 * MS + (Math.random() - 0.5) * spread, y: mToY(S.depth), vx: (Math.random() - 0.5) * 80, vy: up ? -30 - Math.random() * 60 : 10 + Math.random() * 60, g: 260, life: 0.7, max: 0.7, size: Math.random() < 0.5 ? 2 : 1, c: rgb(L.c[Math.floor(Math.random() * 3)], 1.1) });
     }
   }
   function onStrike() {
@@ -715,7 +716,7 @@
     const m = minerPos();
     for (let i = 0; i < 14; i++) {
       const dir = i % 2 ? 1 : -1;
-      particle({ x: m.x + 6 + dir * 3, y: mToY(S.depth) - 1, vx: dir * (20 + Math.random() * 50), vy: -6 - Math.random() * 14, g: 30, life: 0.6, max: 0.6, size: 2, c: i % 3 ? "#b8a890" : "#d8ccb4" });
+      particle({ x: m.x + 6 * MS + dir * 6, y: mToY(S.depth) - 1, vx: dir * (20 + Math.random() * 50), vy: -6 - Math.random() * 14, g: 30, life: 0.6, max: 0.6, size: 2, c: i % 3 ? "#b8a890" : "#d8ccb4" });
     }
     if (!REDUCED) S.shake = Math.max(S.shake, 1.4);
     SFX.strike();
@@ -726,6 +727,7 @@
     ctx.save();
     ctx.translate(snap(hx), snap(hy));
     ctx.rotate((deg * Math.PI) / 180);
+    ctx.scale(MS, MS);
     ctx.fillStyle = "#8a5a2a";
     ctx.fillRect(0, -0.5, 11, 1.2);
     ctx.fillStyle = "#6a4220";
@@ -774,7 +776,7 @@
       if (k >= 1) { S.depth = S.target; S.phase = "land"; S.phaseT = 0; S.vel = 0; onLand(); }
     }
     if (S.phase === "land") {
-      crouch = Math.sin(Math.min(1, S.phaseT / LAND_TIME) * Math.PI) * 1.4;
+      crouch = Math.sin(Math.min(1, S.phaseT / LAND_TIME) * Math.PI) * 1.4 * MS;
       if (S.phaseT >= LAND_TIME) { S.phase = S.target > S.depth + 0.5 ? "dig" : "idle"; S.phaseT = 0; S.strikes = 0; S.crack = 0; }
     }
     const digging = S.phase === "dig";
@@ -807,7 +809,7 @@
     } else if (hang) {
       angle = 100 + Math.sin(t * 9) * 6;
     } else if (S.phase === "land") {
-      angle = lerp(-70, 30, crouch / 1.4);
+      angle = lerp(-70, 30, crouch / (1.4 * MS));
     } else if (S.tap > 0) {
       S.tap = Math.max(0, S.tap - dt * 5);
       const k = S.tap;
@@ -888,17 +890,17 @@
       R(26, sy(SURFACE - 10), 8, 1);
       glow(30, sy(SURFACE - 10), 14, "255,190,90", 0.18 * flick);
       // headframe wheel
-      const wx = SHAFT_X + SHAFT_W / 2, wy = sy(SURFACE - 40);
+      const wx = SHAFT_X + 3 + 11.5 * MS - 9.5, wy = sy(SURFACE - 52);
       ctx.save();
       ctx.translate(wx, wy);
       ctx.fillStyle = "#3a3640";
-      for (let a = 0; a < 20; a++) {
-        const an = (a / 20) * Math.PI * 2;
-        ctx.fillRect(Math.cos(an) * 6 - 0.5, Math.sin(an) * 6 - 0.5, 1.2, 1.2);
+      for (let a = 0; a < 30; a++) {
+        const an = (a / 30) * Math.PI * 2;
+        ctx.fillRect(Math.cos(an) * 9 - 0.6, Math.sin(an) * 9 - 0.6, 1.4, 1.4);
       }
       ctx.rotate(S.wheel);
       ctx.fillStyle = "#8a8696";
-      for (let k = 0; k < 3; k++) { ctx.rotate(Math.PI / 3); ctx.fillRect(-5.5, -0.5, 11, 1); }
+      for (let k = 0; k < 3; k++) { ctx.rotate(Math.PI / 3); ctx.fillRect(-8.5, -0.6, 17, 1.2); }
       ctx.restore();
       ctx.fillStyle = "#ffcc33"; R(wx - 0.5, wy - 0.5, 1, 1);
       grass.forEach((g) => {
@@ -973,9 +975,9 @@
     }
     {
       const m = minerPos();
-      const rx = SHAFT_X + SHAFT_W / 2 + 5.5;
-      const ry0 = Math.max(sy(SURFACE - 40), -1);
-      const ry1 = hang ? sy(m.y - 3) : sy(m.y + 8);
+      const rx = m.x + 11.5 * MS - 0.5;
+      const ry0 = Math.max(sy(SURFACE - 52), -1);
+      const ry1 = hang ? sy(m.y - 3 * MS) : sy(m.y + 8 * MS);
       if (ry1 > ry0) { ctx.fillStyle = "#c8b48a"; ctx.fillRect(rx, ry0, 1, ry1 - ry0); }
     }
     lanterns.forEach((l) => {
@@ -1013,8 +1015,8 @@
       if (!f.slot) f.slot = findSlot(f.meters, f.side);
       const k = Math.min(1, f.t);
       const e = 1 - Math.pow(1 - k, 3);
-      const fx = lerp(m.x + 3, f.slot.x, e);
-      const fy = lerp(m.y + 4, f.slot.y, e) - Math.sin(k * Math.PI) * 18;
+      const fx = lerp(m.x + 3 * MS, f.slot.x, e);
+      const fy = lerp(m.y + 4 * MS, f.slot.y, e) - Math.sin(k * Math.PI) * 18;
       const col = f.tier === 0 ? "#4e4856" : TIERS[f.tier].color;
       drawSprite(f.tier <= 1 ? CLUMP : GEM, gemPal(col), fx, sy(fy));
       if (f.tier >= 2 && Math.random() < 0.7) particle({ x: fx + 3, y: fy + 3, vx: 0, vy: 6, g: 0, life: 0.35, max: 0.35, c: col });
@@ -1030,7 +1032,7 @@
     if (digging && S.crack > 0) {
       const m = minerPos();
       ctx.fillStyle = "#140a12";
-      CRACK.slice(0, S.crack * 4).forEach(([cx, cy]) => R(m.x + cx, sy(footY) + cy, 1, 1));
+      CRACK.slice(0, S.crack * 4).forEach(([cx, cy]) => R(m.x + cx * MS, sy(footY) + cy, MS, 1));
     }
 
     // ---- miner ----
@@ -1040,34 +1042,34 @@
       if (S.nextBlink <= 0) { S.blink = 0.12; S.nextBlink = 2 + Math.random() * 3; }
       S.blink = Math.max(0, S.blink - dt);
       const idle = S.phase === "idle";
-      const breathe = idle ? (Math.sin(t * 2.2) * 0.5 + 0.5) * 0.67 : 0;
-      const bob = digging ? Math.abs(Math.sin(S.swing * Math.PI)) * 0.67 : 0;
+      const breathe = idle ? (Math.sin(t * 2.2) * 0.5 + 0.5) * MS * 0.67 : 0;
+      const bob = digging ? Math.abs(Math.sin(S.swing * Math.PI)) * MS * 0.67 : 0;
       const my = sy(m.y) + bob;
       const body = (S.blink > 0 ? MINER_BLINK : MINER).slice(0, 13);
       if (hang) {
         // hanging on the rope: one arm up, legs swinging, a little sway
         const sway = Math.sin(t * 7) * 0.6;
-        drawSprite(MINER_HANG.slice(0, 13), MINER_PAL, m.x + sway, my);
-        drawSprite(MINER.slice(13, 15), MINER_PAL, m.x + sway + Math.sin(t * 12) * 0.67, my + 13);
-        drawSprite(MINER.slice(15), MINER_PAL, m.x + sway + Math.sin(t * 12 + 1) * 0.67, my + 15);
-        ctx.fillStyle = MINER_PAL.B; R(m.x + 10 + sway, my + 7, 2, 2);
-        ctx.fillStyle = MINER_PAL.S; R(m.x + 11 + sway, my - 2, 1, 9);
-        R(m.x + 10.67 + sway, my - 3, 2, 2);
-        drawPickaxe(m.x + 2 + sway, my + 9, angle);
+        drawSprite(MINER_HANG.slice(0, 13), MINER_PAL, m.x + sway, my, MS);
+        drawSprite(MINER.slice(13, 15), MINER_PAL, m.x + sway + Math.sin(t * 12) * MS * 0.67, my + 13 * MS, MS);
+        drawSprite(MINER.slice(15), MINER_PAL, m.x + sway + Math.sin(t * 12 + 1) * MS * 0.67, my + 15 * MS, MS);
+        ctx.fillStyle = MINER_PAL.B; R(m.x + 10 * MS + sway, my + 7 * MS, 2 * MS, 2 * MS);
+        ctx.fillStyle = MINER_PAL.S; R(m.x + 11 * MS + sway, my - 2 * MS, MS, 9 * MS);
+        R(m.x + 10.5 * MS + sway, my - 3 * MS, 2 * MS, 2 * MS);
+        drawPickaxe(m.x + 2 * MS + sway, my + 9 * MS, angle);
         // speed streaks along the shaft
         if (S.vel > 150 && !REDUCED) {
           const n = Math.min(3, Math.floor(S.vel / 600) + 1);
           for (let i = 0; i < n; i++) {
-            particle({ x: SHAFT_X + 3 + Math.random() * (SHAFT_W - 6), y: m.y + 20 + Math.random() * 40, g: 0, life: 0.22, max: 0.22, c: "streak", len: 4 + Math.random() * 8 });
+            particle({ x: SHAFT_X + 3 + Math.random() * (SHAFT_W - 6), y: m.y + 20 * MS + Math.random() * 40, g: 0, life: 0.22, max: 0.22, c: "streak", len: 4 + Math.random() * 8 });
           }
         }
       } else {
-        drawSprite(body, MINER_PAL, m.x, my - breathe + crouch);
-        drawSprite(MINER.slice(13), MINER_PAL, m.x, my + 13);
-        drawPickaxe(m.x + 11, my + 10 - breathe + crouch, angle);
+        drawSprite(body, MINER_PAL, m.x, my - breathe + crouch, MS);
+        drawSprite(MINER.slice(13), MINER_PAL, m.x, my + 13 * MS, MS);
+        drawPickaxe(m.x + 11 * MS, my + 10 * MS - breathe + crouch, angle);
       }
       ctx.fillStyle = Math.sin(t * 14) > -0.3 ? "#ffffff" : "#fff2a0";
-      R(m.x + 10 + (hang ? Math.sin(t * 7) * 0.6 : 0), my + 1 - breathe + crouch, 2, 1);
+      R(m.x + 10 * MS + (hang ? Math.sin(t * 7) * 0.6 : 0), my + MS - breathe + crouch, 2 * MS, MS);
     }
 
     // ---- particles ----
@@ -1094,7 +1096,7 @@
     const dark = Math.min(0.8, (S.depth / MAX_METERS) * 0.95);
     if (dark > 0.02) {
       const m = minerPos();
-      const lx = m.x + 11, ly = sy(m.y) + 1;
+      const lx = m.x + 11 * MS, ly = sy(m.y) + MS;
       const flick = Math.sin(t * 13) * 2;
       const g = ctx.createRadialGradient(lx, ly, 10, lx, ly, 170 + flick);
       g.addColorStop(0, "rgba(0,0,0,0)");

@@ -18,9 +18,9 @@ Each point = 10m of depth; a perfect dig reaches 7000m.
 
 ## Daily prompts
 
-There are 150 prompts: 70 classic ones in `questions.js` and 80 niche ones in
+There are 135 prompts: 70 classic ones in `questions.js` and 65 niche ones in
 `questions-niche.js`. While `PLAYTEST` is `true` in `game.js`, every run picks
-7 prompts you haven't played yet (5 niche + 2 classic), with no daily limit.
+7 prompts you haven't played yet (4 niche + 3 classic), with no daily limit.
 Once you've seen them all, the cycle starts over. With `PLAYTEST` set to
 `false`, everyone gets the same 7 prompts each day, picked from the date.
 A new dig unlocks at local midnight. There's also an unlimited **Practice Mine**

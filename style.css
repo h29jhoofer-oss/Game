@@ -155,7 +155,7 @@ button { font-family: inherit; }
 /* ---------- floating bits ---------- */
 .layer-banner {
   position: absolute;
-  left: 50%; top: 17%;
+  left: 50%; top: calc(64px + env(safe-area-inset-top, 0px));
   z-index: 4;
   padding: 8px 18px;
   text-align: center;
