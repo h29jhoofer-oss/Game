@@ -1,0 +1,769 @@
+<title>Devour Chess</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  /* Layout: pixel board left, stacked arcade panels right; stacks to one column on phones. Single dark arcade look. */
+  :root {
+    color-scheme: dark;
+    --bg: #1a1626;
+    --panel: #2a2340;
+    --raised: #4a3f6b;
+    --raised-hi: #5d5085;
+    --ink: #f4ecd6;
+    --muted: #a99fc4;
+    --accent: #ff7a59;
+    --ok: #3fd0a0;
+    --bad: #ff5e7a;
+    --edge: #000;
+    --font-pixel: "Press Start 2P", ui-monospace, "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { background: var(--bg); }
+  body {
+    color: var(--ink); font-family: var(--font-pixel); font-size: 10px; line-height: 1.7;
+    display: flex; flex-direction: column; align-items: center;
+    padding-block: 16px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  h1 { font-size: 18px; margin: 8px 0 4px; color: var(--accent); text-shadow: 3px 3px 0 var(--edge); letter-spacing: 1px; text-align: center; }
+  .tag { color: var(--muted); margin: 0 0 16px; text-align: center; }
+  .wrap { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; align-items: flex-start; width: 100%; max-width: 860px; }
+  .boardcol { flex: 1 1 400px; max-width: 560px; min-width: 0; }
+  canvas#board {
+    width: 100%; max-width: 100%; height: auto; aspect-ratio: 1; display: block;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    border: 4px solid var(--edge); box-shadow: 6px 6px 0 var(--edge); cursor: pointer;
+  }
+  .side { flex: 1 1 260px; max-width: 560px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  .box { background: var(--panel); border: 3px solid var(--edge); box-shadow: 4px 4px 0 var(--edge); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .box h2 { font-size: 10px; margin: 0; color: var(--accent); letter-spacing: 1px; }
+  .muted { color: var(--muted); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button, input {
+    font: inherit; color: var(--ink); border: 3px solid var(--edge);
+  }
+  button { background: var(--raised); padding: 8px 10px; cursor: pointer; box-shadow: 3px 3px 0 var(--edge); }
+  button:hover { background: var(--raised-hi); }
+  button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--edge); }
+  button.on, button.primary { background: var(--accent); color: var(--bg); }
+  button:disabled { opacity: .45; cursor: default; transform: none; }
+  button:focus-visible, input:focus-visible, canvas:focus-visible { outline: 3px solid var(--ok); outline-offset: 2px; }
+  input { background: var(--bg); padding: 8px; width: 9.5em; text-transform: uppercase; }
+  .code { font-size: 16px; color: var(--ok); letter-spacing: 3px; user-select: all; }
+  .players { display: grid; grid-template-columns: 14px 1fr; gap: 6px 8px; align-items: center; }
+  .chip { width: 14px; height: 14px; border: 2px solid var(--edge); }
+  .legend { display: grid; grid-template-columns: 12px 1fr; gap: 6px 8px; align-items: center; }
+  .sw { width: 12px; height: 12px; border: 2px solid var(--edge); }
+  #status { min-height: 3.6em; }
+  #log { max-height: 140px; overflow-y: auto; color: var(--muted); }
+  .rules p { margin: 0; color: var(--muted); }
+  .rules b { color: var(--ink); font-weight: normal; }
+  .err { color: var(--bad); }
+  .games { display: flex; flex-direction: column; gap: 6px; }
+  .games button { text-align: left; }
+</style>
+
+<h1>DEVOUR CHESS</h1>
+<p class="tag">You are what you eat.</p>
+<div class="wrap">
+  <div class="boardcol"><canvas id="board" width="128" height="128" aria-label="Chess board"></canvas></div>
+  <div class="side">
+    <div class="box" id="status"></div>
+
+    <div class="box" id="onlineHome">
+      <h2>PLAY A FRIEND</h2>
+      <div class="row"><button id="create" class="primary">CREATE GAME</button></div>
+      <div class="row">
+        <input id="joinCode" maxlength="6" placeholder="CODE" aria-label="Game code" autocomplete="off">
+        <button id="join">JOIN</button>
+      </div>
+      <div id="myGames" class="games" hidden></div>
+      <div id="onlineMsg" class="muted"></div>
+    </div>
+
+    <div class="box" id="onlineGame" hidden>
+      <h2>ONLINE GAME</h2>
+      <div>Code: <span class="code" id="gameCode"></span></div>
+      <div class="muted" id="shareHint">Send your friend this code, or use Share &gt; Copy link above. The link opens this game.</div>
+      <div class="players" id="players"></div>
+      <div class="row">
+        <button id="sit" class="primary" hidden>TAKE BLACK SEAT</button>
+        <button id="resign" hidden>RESIGN</button>
+        <button id="rematch" hidden>REMATCH</button>
+        <button id="leave">LEAVE</button>
+      </div>
+      <div id="gameMsg" class="muted"></div>
+    </div>
+
+    <div class="box" id="localBox">
+      <h2>PLAY HERE</h2>
+      <div class="row">
+        <button id="new">NEW</button>
+        <button id="undo">UNDO</button>
+        <button id="cpu">CPU: ON</button>
+      </div>
+    </div>
+
+    <div class="box" id="info">Click a piece to see its powers.</div>
+    <div class="box rules">
+      <p><b>The twist:</b> a piece that captures <b>absorbs</b> every power of its victim and can move like all of them.</p>
+      <p>Pawn eats knight? It can now hop like a knight. Colored pips under a piece show what it has eaten.</p>
+      <p>Checkmate wins as usual. Pawns promote to queens. No castling or en passant.</p>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="box" id="log"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ---------- Pixel sprites (silhouettes; outline is generated) ----------
+  const SPRITES = {
+    P: ["            ","            ","     xx     ","    xxxx    ","    xxxx    ","     xx     ","    xxxx    ","     xx     ","    xxxx    ","   xxxxxx   ","  xxxxxxxx  ","            "],
+    R: ["            ","  xx xx xx  ","  xxxxxxxx  ","   xxxxxx   ","   xxxxxx   ","   xxxxxx   ","   xxxxxx   ","   xxxxxx   ","  xxxxxxxx  "," xxxxxxxxxx "," xxxxxxxxxx ","            "],
+    N: ["            ","     xx     ","    xxxxx   ","   xxexxxx  ","  xxxxxxxx  "," xxxxxxxxx  "," xxx  xxxx  ","     xxxxx  ","    xxxxxx  ","  xxxxxxxx  "," xxxxxxxxxx ","            "],
+    B: ["            ","     xx     ","    xxxx    ","   xxx xx   ","   xx xxx   ","   xxxxxx   ","    xxxx    ","     xx     ","    xxxx    ","   xxxxxx   ","  xxxxxxxx  ","            "],
+    Q: ["            "," x  x  x  x "," x  x  x  x "," xx xxxx xx ","  xxxxxxxx  ","  xxxxxxxx  ","   xxxxxx   ","    xxxx    ","   xxxxxx   ","  xxxxxxxx  "," xxxxxxxxxx ","            "],
+    K: ["            ","     xx     ","    xxxx    ","     xx     ","  xx xx xx  "," xxxxxxxxxx "," xxxxxxxxxx ","  xxxxxxxx  ","   xxxxxx   ","  xxxxxxxx  "," xxxxxxxxxx ","            "],
+  };
+  const NAMES = { P: "Pawn", N: "Knight", B: "Bishop", R: "Rook", Q: "Queen", K: "King" };
+  const POWER_COLOR = { P: "#9be36b", N: "#ffb347", B: "#59c1ff", R: "#ff5e7a", Q: "#c98bff", K: "#ffe066" };
+  const VALUE = { P: 1, N: 3, B: 3, R: 5, Q: 9, K: 0 };
+  const PAL = {
+    w: { fill: "#f4ecd6", shade: "#c9bc98", line: "#1b1424" },
+    b: { fill: "#4b3a66", shade: "#33264a", line: "#0b0712" },
+  };
+  const SQ_LIGHT = "#d9a066", SQ_DARK = "#8f5a3c";
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- Rules ----------
+  const piece = (color, type) => ({ color, type, powers: [type], moved: false });
+  function startBoard() {
+    const b = Array.from({ length: 8 }, () => Array(8).fill(null));
+    const back = "RNBQKBNR";
+    for (let c = 0; c < 8; c++) {
+      b[0][c] = piece("b", back[c]); b[1][c] = piece("b", "P");
+      b[6][c] = piece("w", "P");     b[7][c] = piece("w", back[c]);
+    }
+    return b;
+  }
+  const clone = (b) => b.map(row => row.map(p => p ? { ...p, powers: [...p.powers] } : null));
+  const inside = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+  const other = (col) => col === "w" ? "b" : "w";
+
+  function pseudoMoves(b, r, c) {
+    const p = b[r][c]; if (!p) return [];
+    const out = new Map();
+    const add = (tr, tc) => out.set(tr * 8 + tc, { fr: r, fc: c, tr, tc });
+    const slide = (dirs) => {
+      for (const [dr, dc] of dirs) {
+        let tr = r + dr, tc = c + dc;
+        while (inside(tr, tc)) {
+          const t = b[tr][tc];
+          if (!t) add(tr, tc);
+          else { if (t.color !== p.color) add(tr, tc); break; }
+          tr += dr; tc += dc;
+        }
+      }
+    };
+    const step = (deltas) => {
+      for (const [dr, dc] of deltas) {
+        const tr = r + dr, tc = c + dc;
+        if (!inside(tr, tc)) continue;
+        const t = b[tr][tc];
+        if (!t || t.color !== p.color) add(tr, tc);
+      }
+    };
+    const ORTH = [[1,0],[-1,0],[0,1],[0,-1]], DIAG = [[1,1],[1,-1],[-1,1],[-1,-1]];
+    for (const pw of p.powers) {
+      if (pw === "R") slide(ORTH);
+      else if (pw === "B") slide(DIAG);
+      else if (pw === "Q") slide([...ORTH, ...DIAG]);
+      else if (pw === "N") step([[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]]);
+      else if (pw === "K") step([...ORTH, ...DIAG]);
+      else if (pw === "P") {
+        const d = p.color === "w" ? -1 : 1;
+        if (inside(r + d, c) && !b[r + d][c]) {
+          add(r + d, c);
+          if (p.type === "P" && !p.moved && inside(r + 2 * d, c) && !b[r + 2 * d][c]) add(r + 2 * d, c);
+        }
+        for (const dc of [-1, 1]) {
+          const tr = r + d, tc = c + dc;
+          if (inside(tr, tc) && b[tr][tc] && b[tr][tc].color !== p.color) add(tr, tc);
+        }
+      }
+    }
+    return [...out.values()];
+  }
+
+  function applyMove(b, m) {
+    const nb = clone(b);
+    const mover = nb[m.fr][m.fc], victim = nb[m.tr][m.tc];
+    if (victim) for (const pw of victim.powers) if (!mover.powers.includes(pw)) mover.powers.push(pw);
+    mover.moved = true;
+    nb[m.tr][m.tc] = mover; nb[m.fr][m.fc] = null;
+    if (mover.type === "P" && (m.tr === 0 || m.tr === 7)) {
+      mover.type = "Q";
+      if (!mover.powers.includes("Q")) mover.powers.push("Q");
+    }
+    return nb;
+  }
+
+  function findKing(b, color) {
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = b[r][c]; if (p && p.color === color && p.type === "K") return [r, c];
+    }
+    return null;
+  }
+  function attacked(b, r, c, byColor) {
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) {
+      const p = b[i][j];
+      if (p && p.color === byColor && pseudoMoves(b, i, j).some(m => m.tr === r && m.tc === c)) return true;
+    }
+    return false;
+  }
+  function inCheck(b, color) {
+    const k = findKing(b, color); if (!k) return true;
+    return attacked(b, k[0], k[1], other(color));
+  }
+  function legalMovesFrom(b, r, c) {
+    const p = b[r][c];
+    return pseudoMoves(b, r, c).filter(m => !inCheck(applyMove(b, m), p.color));
+  }
+  function allLegal(b, color) {
+    const out = [];
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++)
+      if (b[r][c] && b[r][c].color === color) out.push(...legalMovesFrom(b, r, c));
+    return out;
+  }
+  function pseudoAll(b, color) {
+    const out = [];
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++)
+      if (b[r][c] && b[r][c].color === color) out.push(...pseudoMoves(b, r, c));
+    return out;
+  }
+
+  // ---------- CPU (2-ply minimax on absorbed-power material) ----------
+  function pieceValue(p) {
+    if (p.type === "K") return 1000 + p.powers.filter(x => x !== "K").reduce((s, x) => s + VALUE[x] * 0.3, 0);
+    const vals = p.powers.map(x => VALUE[x]).sort((a, b) => b - a);
+    return vals[0] + vals.slice(1).reduce((s, v) => s + v * 0.4, 0);
+  }
+  function evaluate(b, color) {
+    let s = 0;
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = b[r][c]; if (!p) continue;
+      let v = pieceValue(p) + (3.5 - Math.abs(3.5 - c)) * 0.03 + (3.5 - Math.abs(3.5 - r)) * 0.03;
+      s += p.color === color ? v : -v;
+    }
+    return s;
+  }
+  function cpuMove(b, color) {
+    const moves = allLegal(b, color);
+    if (!moves.length) return null;
+    let best = -Infinity, choices = [];
+    for (const m of moves) {
+      const nb = applyMove(b, m);
+      let worst = Infinity;
+      const replies = pseudoAll(nb, other(color));
+      if (!replies.length) worst = evaluate(nb, color);
+      for (const rm of replies) {
+        const nb2 = applyMove(nb, rm);
+        const score = findKing(nb2, color) ? evaluate(nb2, color) : -1e6;
+        if (score < worst) worst = score;
+      }
+      const s = worst + Math.random() * 0.05;
+      if (s > best + 1e-9) { best = s; choices = [m]; }
+      else if (Math.abs(s - best) < 1e-9) choices.push(m);
+    }
+    return choices[Math.floor(Math.random() * choices.length)];
+  }
+
+  // ---------- Shared state ----------
+  // mode "local": vs CPU or pass-and-play in this browser.
+  // mode "online": state comes from the shared game document.
+  let mode = "local";
+  let board, turn, lastMove, logLines, gameOver = false, resultText = "";
+  let history = [], selected = null, legal = [], cpuOn = true, thinking = false;
+
+  const FILES = "abcdefgh";
+  const sqName = (r, c) => FILES[c] + (8 - r);
+  function describeMove(b, m) {
+    const mover = b[m.fr][m.fc], victim = b[m.tr][m.tc];
+    let line = `${mover.color === "w" ? "W" : "B"} ${NAMES[mover.type]} ${sqName(m.fr, m.fc)}-${sqName(m.tr, m.tc)}`;
+    const gained = victim ? victim.powers.filter(p => !mover.powers.includes(p)) : [];
+    if (victim) {
+      line += ` eats ${NAMES[victim.type]}`;
+      if (gained.length) line += ` +${gained.map(g => NAMES[g]).join("+")}`;
+    }
+    return { line, captured: !!victim, gained: gained.length > 0 };
+  }
+  function endText(b, toMove) {
+    return inCheck(b, toMove) ? `CHECKMATE! ${toMove === "w" ? "Black" : "White"} wins.` : "STALEMATE. It's a draw.";
+  }
+  function moveSound(info) {
+    if (info.captured) { blip(info.gained ? 660 : 440, 0.12); if (info.gained) setTimeout(() => blip(880, 0.1), 90); }
+    else blip(260, 0.06);
+  }
+
+  // ---------- Local mode ----------
+  function newLocalGame() {
+    board = startBoard(); turn = "w"; history = []; selected = null; legal = [];
+    lastMove = null; gameOver = false; resultText = ""; logLines = [];
+    render(); updateUI();
+  }
+  function localMove(m) {
+    history.push({ board: clone(board), turn, lastMove, logLines: [...logLines] });
+    const info = describeMove(board, m);
+    board = applyMove(board, m);
+    moveSound(info);
+    logLines.unshift(info.line);
+    lastMove = m; turn = other(turn); selected = null; legal = [];
+    if (!allLegal(board, turn).length) { gameOver = true; resultText = endText(board, turn); }
+    render(); updateUI();
+    if (!gameOver && cpuOn && turn === "b") scheduleCpu();
+  }
+  function scheduleCpu() {
+    thinking = true; updateUI();
+    setTimeout(() => {
+      if (mode !== "local") { thinking = false; return; }
+      const m = cpuMove(board, "b");
+      thinking = false;
+      if (m) localMove(m); else updateUI();
+    }, 350);
+  }
+
+  // ---------- Online mode ----------
+  let db = null, user = null, myId = null;
+  const online = { code: null, data: null, unsub: null, loaded: false, busy: false, readOnly: false, lastPly: -1, timer: null };
+
+  const flatten = (b) => b.flat();
+  const unflatten = (arr) => Array.from({ length: 8 }, (_, r) => arr.slice(r * 8, r * 8 + 8).map(p => p ? { ...p, powers: [...p.powers] } : null));
+  const myColor = () => {
+    const d = online.data; if (!d || !myId) return null;
+    if (d.white === myId) return "w";
+    if (d.black === myId) return "b";
+    return null;
+  };
+  const gameRef = (code) => db.doc("games/" + code);
+  function freshGameDoc(white, black) {
+    return {
+      v: 1, white, black, board: flatten(startBoard()), turn: "w", lastMove: null,
+      log: [], status: black ? "playing" : "waiting", result: "", ply: 0, updated: Date.now(),
+    };
+  }
+  function newCode() {
+    const abc = "abcdefghjkmnpqrstuvwxyz23456789";
+    let s = ""; for (let i = 0; i < 6; i++) s += abc[Math.floor(Math.random() * abc.length)];
+    return s;
+  }
+  function setMsg(id, text, isErr) {
+    const el = $(id); el.textContent = text || ""; el.classList.toggle("err", !!isErr);
+  }
+  function writeFailed(e, where) {
+    if (e && e.code === "invalid_argument") {
+      online.readOnly = true;
+      setMsg(where, "Your access to this page is view-only, so you can watch but not play. Ask the owner to share it with you as a Contributor.", true);
+    } else if (e && e.code === "quota_exceeded") {
+      setMsg(where, "The game store is full. Ask the owner to clear old games.", true);
+    } else {
+      setMsg(where, "Couldn't reach the game server. Try again in a moment.", true);
+    }
+  }
+
+  async function createGame() {
+    if (!db || !myId) return;
+    const code = newCode();
+    $("create").disabled = true;
+    try {
+      await gameRef(code).set(freshGameDoc(myId, null));
+      openGame(code);
+    } catch (e) { writeFailed(e, "onlineMsg"); }
+    $("create").disabled = false;
+  }
+
+  function openGame(code) {
+    code = String(code || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!db || code.length !== 6) { setMsg("onlineMsg", "Codes are 6 letters or numbers.", true); return; }
+    leaveGame(false);
+    mode = "online";
+    online.code = code; online.data = null; online.loaded = false; online.lastPly = -1;
+    selected = null; legal = [];
+    try { if (location.hash !== "#g-" + code) location.hash = "g-" + code; } catch (_) {}
+    setMsg("gameMsg", "Loading game...");
+    online.timer = setTimeout(() => {
+      if (!online.loaded) setMsg("gameMsg", "Can't reach the game server yet. It will load when the connection returns.", true);
+    }, 10000);
+    online.unsub = gameRef(code).onSnapshot((snap) => {
+      if (!snap.metadata.fromCache) { online.loaded = true; clearTimeout(online.timer); }
+      if (!snap.exists) {
+        if (online.loaded) { online.data = null; setMsg("gameMsg", `No game with code ${code.toUpperCase()}. Check the code and try again.`, true); updateUI(); }
+        return;
+      }
+      receive(snap.data());
+    }, (e) => {
+      clearTimeout(online.timer);
+      setMsg("gameMsg", "Lost the connection to this game. Leave and rejoin to reconnect.", true);
+    });
+    updateUI();
+  }
+
+  function receive(d) {
+    const prevPly = online.lastPly;
+    online.data = d;
+    board = unflatten(d.board);
+    turn = d.turn; lastMove = d.lastMove || null; logLines = [...(d.log || [])];
+    gameOver = d.status === "over"; resultText = d.result || "";
+    if (d.ply !== prevPly) { selected = null; legal = []; }
+    if (prevPly >= 0 && d.ply > prevPly && lastMove) {
+      // Sound for moves made on the other side of the board.
+      const moverColor = other(d.turn);
+      if (moverColor !== myColor()) blip(lastMove.captured ? 660 : 300, 0.08);
+    }
+    online.lastPly = d.ply;
+    if (!online.readOnly) setMsg("gameMsg", "");
+    render(); updateUI();
+  }
+
+  async function onlineMove(m) {
+    const d = online.data; if (!d || online.busy) return;
+    const info = describeMove(board, m);
+    const nb = applyMove(board, m);
+    const next = other(turn);
+    const over = !allLegal(nb, next).length;
+    const body = {
+      ...d, board: flatten(nb), turn: next,
+      lastMove: { ...m, captured: info.captured },
+      log: [info.line, ...(d.log || [])].slice(0, 80),
+      status: over ? "over" : "playing", result: over ? endText(nb, next) : "",
+      ply: d.ply + 1, updated: Date.now(),
+    };
+    online.busy = true; selected = null; legal = [];
+    moveSound(info);
+    try { await gameRef(online.code).set(body); }
+    catch (e) { writeFailed(e, "gameMsg"); render(); }
+    online.busy = false;
+  }
+
+  async function takeSeat() {
+    const ref = gameRef(online.code);
+    $("sit").disabled = true;
+    try {
+      const lease = await ref.acquire({ holder: myId, ttlMs: 4000 });
+      if (!lease.acquired) { setMsg("gameMsg", "Someone else is taking the seat right now."); return; }
+      const snap = await ref.get();
+      const d = snap.exists ? snap.data() : null;
+      if (!d) return;
+      if (d.black || d.white === myId) { setMsg("gameMsg", "That seat is already taken."); return; }
+      await ref.update({ black: myId, status: "playing", updated: Date.now() });
+    } catch (e) { writeFailed(e, "gameMsg"); }
+    finally { $("sit").disabled = false; }
+  }
+
+  async function resign() {
+    const me = myColor(); const d = online.data;
+    if (!me || !d || d.status !== "playing") return;
+    const winner = me === "w" ? "Black" : "White";
+    try {
+      await gameRef(online.code).update({
+        status: "over", result: `${me === "w" ? "White" : "Black"} resigned. ${winner} wins.`, updated: Date.now(),
+      });
+    } catch (e) { writeFailed(e, "gameMsg"); }
+  }
+
+  async function rematch() {
+    const d = online.data; if (!d || !myColor()) return;
+    // Swap colors so the other player gets White.
+    try { await gameRef(online.code).set(freshGameDoc(d.black, d.white)); }
+    catch (e) { writeFailed(e, "gameMsg"); }
+  }
+
+  function leaveGame(toLocal = true) {
+    if (online.unsub) { online.unsub(); online.unsub = null; }
+    clearTimeout(online.timer);
+    online.code = null; online.data = null; online.readOnly = false;
+    if (toLocal) {
+      mode = "local";
+      try { if (location.hash) location.hash = ""; } catch (_) {}
+      newLocalGame();
+      loadMyGames();
+    }
+  }
+
+  async function loadMyGames() {
+    const box = $("myGames");
+    if (!db || !myId) { box.hidden = true; return; }
+    try {
+      const [a, b] = await Promise.all([
+        db.collection("games").where("white", "==", myId).limit(20).get(),
+        db.collection("games").where("black", "==", myId).limit(20).get(),
+      ]);
+      const seen = new Map();
+      for (const s of [...a.docs, ...b.docs]) seen.set(s.id, s.data());
+      const list = [...seen.entries()].filter(([, d]) => d.status !== "over")
+        .sort((x, y) => (y[1].updated || 0) - (x[1].updated || 0)).slice(0, 5);
+      box.replaceChildren();
+      if (!list.length) { box.hidden = true; return; }
+      const h = document.createElement("div"); h.className = "muted"; h.textContent = "Your games in progress:";
+      box.append(h);
+      for (const [code, d] of list) {
+        const btn = document.createElement("button");
+        const mine = d.white === myId ? "w" : "b";
+        const waiting = d.status === "waiting" ? "waiting for friend" : (d.turn === mine ? "your move" : "their move");
+        btn.textContent = `${code.toUpperCase()} - ${waiting}`;
+        btn.onclick = () => openGame(code);
+        box.append(btn);
+      }
+      box.hidden = false;
+    } catch (_) { box.hidden = true; }
+  }
+
+  // ---------- Rendering ----------
+  const cv = $("board");
+  const ctx = cv.getContext("2d");
+  const S = 16;
+  const flipped = () => mode === "online" && myColor() === "b";
+  const toScreen = (r, c) => flipped() ? [7 - r, 7 - c] : [r, c];
+
+  function drawSprite(type, color, x, y) {
+    const rows = SPRITES[type], pal = PAL[color];
+    const filled = (i, j) => i >= 0 && i < 12 && j >= 0 && j < 12 && rows[i][j] !== " ";
+    for (let i = 0; i < 12; i++) for (let j = 0; j < 12; j++) {
+      const ch = rows[i][j];
+      let col = null;
+      if (ch === "x") col = (!filled(i, j + 1) || !filled(i + 1, j)) ? pal.shade : pal.fill;
+      else if (ch === "e") col = pal.line;
+      else if (filled(i - 1, j) || filled(i + 1, j) || filled(i, j - 1) || filled(i, j + 1)) col = pal.line;
+      if (col) { ctx.fillStyle = col; ctx.fillRect(x + j, y + i, 1, 1); }
+    }
+  }
+
+  function render() {
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      ctx.fillStyle = (r + c) % 2 ? SQ_DARK : SQ_LIGHT;
+      ctx.fillRect(c * S, r * S, S, S);
+    }
+    const fillSq = (r, c, color) => { const [sr, sc] = toScreen(r, c); ctx.fillStyle = color; ctx.fillRect(sc * S, sr * S, S, S); };
+    if (lastMove) {
+      fillSq(lastMove.fr, lastMove.fc, "rgba(255,224,102,0.35)");
+      fillSq(lastMove.tr, lastMove.tc, "rgba(255,224,102,0.35)");
+    }
+    const k = findKing(board, turn);
+    if (k && !gameOver && inCheck(board, turn)) fillSq(k[0], k[1], "#e0303a");
+    if (selected) {
+      const [sr, sc] = toScreen(selected[0], selected[1]);
+      ctx.fillStyle = "#3fd0a0";
+      ctx.fillRect(sc * S, sr * S, S, 1); ctx.fillRect(sc * S, sr * S + S - 1, S, 1);
+      ctx.fillRect(sc * S, sr * S, 1, S); ctx.fillRect(sc * S + S - 1, sr * S, 1, S);
+    }
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = board[r][c]; if (!p) continue;
+      const [sr, sc] = toScreen(r, c);
+      drawSprite(p.type, p.color, sc * S + 2, sr * S + 1);
+      const extra = p.powers.filter(x => x !== p.type);
+      if (extra.length) { ctx.fillStyle = "#000"; ctx.fillRect(sc * S, sr * S + 13, extra.length * 3 + 1, 3); }
+      extra.forEach((pw, i) => { ctx.fillStyle = POWER_COLOR[pw]; ctx.fillRect(sc * S + 1 + i * 3, sr * S + 14, 2, 2); });
+    }
+    for (const m of legal) {
+      const [sr, sc] = toScreen(m.tr, m.tc);
+      const x = sc * S, y = sr * S;
+      if (board[m.tr][m.tc]) {
+        ctx.fillStyle = "#3fd0a0";
+        for (const [dx, dy] of [[0,0],[S-3,0],[0,S-3],[S-3,S-3]]) ctx.fillRect(x + dx, y + dy, 3, 3);
+      } else {
+        ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(x + 6, y + 6, 4, 4);
+        ctx.fillStyle = "#3fd0a0"; ctx.fillRect(x + 7, y + 7, 2, 2);
+      }
+    }
+  }
+
+  // ---------- UI ----------
+  function describePiece(p) {
+    const extra = p.powers.filter(x => x !== p.type);
+    const box = $("info"); box.replaceChildren();
+    const t = document.createElement("div");
+    t.textContent = `${p.color === "w" ? "White" : "Black"} ${NAMES[p.type]}`;
+    const s = document.createElement("div"); s.className = "muted";
+    if (!extra.length) s.textContent = "No absorbed powers yet.";
+    else {
+      s.textContent = "Absorbed: ";
+      extra.forEach((x, i) => {
+        const sp = document.createElement("span"); sp.style.color = POWER_COLOR[x]; sp.textContent = NAMES[x];
+        s.append(sp); if (i < extra.length - 1) s.append(", ");
+      });
+    }
+    box.append(t, s);
+  }
+
+  function setStatus(main, sub, subErr) {
+    const el = $("status"); el.replaceChildren();
+    const a = document.createElement("div"); a.textContent = main; el.append(a);
+    if (sub) { const b = document.createElement("div"); b.textContent = sub; b.style.color = subErr ? "var(--bad)" : "var(--muted)"; el.append(b); }
+  }
+
+  let renderPlayersToken = 0;
+  async function renderPlayers() {
+    const d = online.data, el = $("players");
+    if (!d) { el.replaceChildren(); return; }
+    const token = ++renderPlayersToken;
+    const ids = [d.white, d.black].filter(Boolean);
+    let ps = {};
+    try { ps = user && ids.length ? await user.profiles(ids) : {}; } catch (_) {}
+    if (token !== renderPlayersToken) return;
+    el.replaceChildren();
+    for (const [color, id, label] of [["w", d.white, "White"], ["b", d.black, "Black"]]) {
+      const chip = document.createElement("div"); chip.className = "chip"; chip.style.background = PAL[color].fill;
+      const name = document.createElement("div");
+      if (!id) { name.textContent = `${label}: waiting...`; name.className = "muted"; }
+      else {
+        const n = (ps[id] && ps[id].name) || (label === "White" ? "Player 1" : "Player 2");
+        name.textContent = `${label}: ${n}${id === myId ? " (you)" : ""}${d.turn === color && d.status === "playing" ? "  <" : ""}`;
+      }
+      el.append(chip, name);
+    }
+  }
+
+  function updateUI() {
+    const isOnline = mode === "online";
+    $("onlineHome").hidden = isOnline;
+    $("onlineGame").hidden = !isOnline;
+    $("localBox").hidden = isOnline;
+    $("log").textContent = "";
+    (logLines && logLines.length ? logLines : ["No moves yet."]).forEach((l, i) => {
+      if (i) $("log").append(document.createElement("br"));
+      $("log").append(l);
+    });
+
+    if (!isOnline) {
+      if (gameOver) setStatus(resultText);
+      else if (thinking) setStatus("CPU is chewing...");
+      else setStatus(`${turn === "w" ? "White" : "Black"} to move`, inCheck(board, turn) ? "CHECK!" : "", true);
+      $("cpu").textContent = `CPU: ${cpuOn ? "ON" : "OFF"}`;
+      $("cpu").classList.toggle("on", cpuOn);
+      return;
+    }
+
+    const d = online.data;
+    $("gameCode").textContent = (online.code || "").toUpperCase();
+    const me = myColor();
+    $("sit").hidden = !(d && d.status === "waiting" && !d.black && myId && d.white !== myId && !online.readOnly);
+    $("resign").hidden = !(d && me && d.status === "playing");
+    $("rematch").hidden = !(d && me && d.status === "over" && d.white && d.black);
+    $("shareHint").hidden = !(d && d.status === "waiting");
+    renderPlayers();
+
+    if (!d) { setStatus("Online game", online.loaded ? "" : "Loading..."); return; }
+    if (d.status === "waiting") {
+      setStatus("Waiting for a friend", me ? "Share the code. You play White." : "Take the Black seat to play.");
+    } else if (d.status === "over") {
+      setStatus(resultText || "Game over");
+    } else {
+      const who = turn === "w" ? "White" : "Black";
+      const main = me ? (turn === me ? "Your move" : `Waiting for ${who}...`) : `${who} to move`;
+      const check = inCheck(board, turn) ? "CHECK!" : (me ? "" : "You're watching.");
+      setStatus(main, check, check === "CHECK!");
+    }
+  }
+
+  $("legend").innerHTML = Object.keys(NAMES).map(k =>
+    `<div class="sw" style="background:${POWER_COLOR[k]}"></div><div>${NAMES[k]} power</div>`).join("");
+
+  function canAct() {
+    if (gameOver) return false;
+    if (mode === "local") return !thinking && !(cpuOn && turn === "b");
+    const d = online.data;
+    return !!d && d.status === "playing" && !online.busy && !online.readOnly && myColor() === turn;
+  }
+
+  cv.addEventListener("click", (e) => {
+    const rect = cv.getBoundingClientRect();
+    let c = Math.floor((e.clientX - rect.left) / rect.width * 8);
+    let r = Math.floor((e.clientY - rect.top) / rect.height * 8);
+    if (!inside(r, c)) return;
+    if (flipped()) { r = 7 - r; c = 7 - c; }
+    const p = board[r][c];
+    const m = legal.find(m => m.tr === r && m.tc === c);
+    if (m && canAct()) { mode === "local" ? localMove(m) : onlineMove(m); return; }
+    if (p) describePiece(p);
+    if (p && p.color === turn && canAct()) { selected = [r, c]; legal = legalMovesFrom(board, r, c); }
+    else { selected = null; legal = []; }
+    render();
+  });
+
+  $("new").onclick = () => { if (!thinking) newLocalGame(); };
+  $("undo").onclick = () => {
+    if (thinking || !history.length) return;
+    let h = history.pop();
+    if (cpuOn && h.turn === "b" && history.length) h = history.pop();
+    ({ board, turn, lastMove, logLines } = h);
+    gameOver = false; resultText = ""; selected = null; legal = [];
+    render(); updateUI();
+  };
+  $("cpu").onclick = () => {
+    cpuOn = !cpuOn; updateUI();
+    if (cpuOn && turn === "b" && !gameOver && !thinking) scheduleCpu();
+  };
+  $("create").onclick = createGame;
+  $("join").onclick = () => openGame($("joinCode").value);
+  $("joinCode").addEventListener("keydown", (e) => { if (e.key === "Enter") openGame($("joinCode").value); });
+  $("sit").onclick = takeSeat;
+  $("resign").onclick = resign;
+  $("rematch").onclick = rematch;
+  $("leave").onclick = () => leaveGame(true);
+
+  function hashCode() {
+    const m = /^#g-([a-z0-9]{6})$/i.exec(location.hash || "");
+    return m ? m[1].toLowerCase() : null;
+  }
+  window.addEventListener("hashchange", () => {
+    const code = hashCode();
+    if (code && db && code !== online.code) openGame(code);
+  });
+
+  // ---------- Sound ----------
+  let actx = null;
+  function blip(freq, dur) {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = "square"; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.06, actx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
+      o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + dur);
+    } catch (_) {}
+  }
+
+  // ---------- Boot ----------
+  newLocalGame();
+  $("create").disabled = true; $("join").disabled = true;
+  setMsg("onlineMsg", "Connecting...");
+
+  (async () => {
+    const use = window.claude && window.claude.use;
+    if (!use) { setMsg("onlineMsg", "Online play works on the published page. You can still play the CPU here."); return; }
+    [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+    myId = user ? await user.id() : null;
+    if (!db || !myId) {
+      db = db && myId ? db : null;
+      setMsg("onlineMsg", "Sign in to claude.ai to play online. You can still play the CPU here.");
+      return;
+    }
+    let canWrite = null;
+    try { canWrite = await user.can("data.write"); } catch (_) {}
+    if (canWrite === false) {
+      online.readOnly = true;
+      setMsg("onlineMsg", "You have view-only access, so you can watch games but not play. Ask the owner for Contributor access.");
+      $("join").disabled = false;
+    } else {
+      $("create").disabled = false; $("join").disabled = false;
+      setMsg("onlineMsg", "");
+    }
+    loadMyGames();
+    const code = hashCode();
+    if (code) openGame(code);
+  })();
+})();
+</script>
