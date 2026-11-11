@@ -18,9 +18,11 @@ Each point = 10m of depth; a perfect dig reaches 7000m.
 
 ## Daily prompts
 
-Everyone gets the same 7 prompts each day (picked from the date, so no server
-is needed). The bank in `questions.js` holds 70 categories, so no prompt
-repeats for 10 days, and each 10-day cycle is reshuffled into new combinations.
+There are 150 prompts: 70 classic ones in `questions.js` and 80 niche ones in
+`questions-niche.js`. While `PLAYTEST` is `true` in `game.js`, every run picks
+7 prompts you haven't played yet (5 niche + 2 classic), with no daily limit.
+Once you've seen them all, the cycle starts over. With `PLAYTEST` set to
+`false`, everyone gets the same 7 prompts each day, picked from the date.
 A new dig unlocks at local midnight. There's also an unlimited **Practice Mine**
 that doesn't affect stats.
 
@@ -38,7 +40,7 @@ To host it for free, enable GitHub Pages on this repo (Settings → Pages → de
 
 ## Adding questions
 
-Add an entry to `questions.js`:
+Add an entry to `questions.js` (classic) or `questions-niche.js` (niche):
 
 ```js
 ["Name a fruit",

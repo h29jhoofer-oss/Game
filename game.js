@@ -118,7 +118,11 @@
     return v;
   }
 
-  const QUESTIONS = window.QUESTION_BANK.map(([prompt, tierStr]) => {
+  const BANK = [
+    ...window.QUESTION_BANK.map((q) => [...q, false]),
+    ...(window.NICHE_BANK || []).map((q) => [...q, true]),
+  ];
+  const QUESTIONS = BANK.map(([prompt, tierStr, niche]) => {
     const keys = new Map();
     const byTier = [[], [], [], [], [], []];
     tierStr.split("|").forEach((group, i) => {
@@ -135,7 +139,7 @@
         if (added) byTier[tier].push(display);
       });
     });
-    return { prompt, keys, byTier };
+    return { prompt, keys, byTier, niche };
   });
 
   // Optimal string alignment distance (Levenshtein + adjacent swaps)
@@ -188,9 +192,27 @@
     return order.slice(slot * ROUNDS, slot * ROUNDS + ROUNDS);
   }
 
-  function randomQuestionIndexes() {
+  // Fresh set: prompts this player hasn't seen yet, mostly niche ones.
+  const NICHE_PER_SET = 5;
+  function freshQuestionIndexes() {
+    let seen = new Set(store.get("deepdig-seen", []));
+    let unseen = QUESTIONS.map((q, i) => i).filter((i) => !seen.has(QUESTIONS[i].prompt));
+    if (unseen.length < ROUNDS) { // everything played: start a new cycle
+      seen = new Set();
+      store.set("deepdig-seen", []);
+      unseen = QUESTIONS.map((q, i) => i);
+    }
     const rng = mulberry32((Math.random() * 2 ** 32) >>> 0);
-    return shuffle([...Array(QUESTIONS.length).keys()], rng).slice(0, ROUNDS);
+    const niche = shuffle(unseen.filter((i) => QUESTIONS[i].niche), rng);
+    const classic = shuffle(unseen.filter((i) => !QUESTIONS[i].niche), rng);
+    const pick = niche.splice(0, NICHE_PER_SET);
+    pick.push(...classic.splice(0, ROUNDS - pick.length));
+    pick.push(...[...niche, ...classic].slice(0, ROUNDS - pick.length));
+    return shuffle(pick, rng);
+  }
+  function markSeen(i) {
+    const seen = store.get("deepdig-seen", []);
+    if (!seen.includes(QUESTIONS[i].prompt)) { seen.push(QUESTIONS[i].prompt); store.set("deepdig-seen", seen); }
   }
 
   // ==================================================================
@@ -1092,6 +1114,7 @@
   // ==================================================================
   function startRound() {
     const q = QUESTIONS[game.qIdx[game.round]];
+    markSeen(game.qIdx[game.round]);
     if (!game.startedAt) game.startedAt = Date.now();
     saveDaily();
     show("question");
@@ -1353,7 +1376,7 @@
     SFX.click();
     mode = "daily";
     if (PLAYTEST && dailyDone()) { startNextSet(); return; }
-    game = loadDaily() || newGame(dailyQuestionIndexes(today));
+    game = loadDaily() || newGame(PLAYTEST ? freshQuestionIndexes() : dailyQuestionIndexes(today));
     if (game.results.length >= ROUNDS) { showResults(); return; }
     game.round = game.results.length;
     startRound();
@@ -1362,14 +1385,14 @@
     SFX.click();
     mode = "practice";
     resetScene();
-    game = newGame(randomQuestionIndexes());
+    game = newGame(freshQuestionIndexes());
     startRound();
   });
   function startNextSet() {
     setDayOffset(dayOffset + 1);
     mode = "daily";
     resetScene();
-    game = newGame(dailyQuestionIndexes(today));
+    game = newGame(freshQuestionIndexes());
     startRound();
   }
   $("btn-again").addEventListener("click", () => {
