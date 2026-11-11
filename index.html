@@ -2,69 +2,130 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Pixel-art chess where capturing a piece absorbs its powers. Play a friend online with a link.">
 <title>Devour Chess</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
+  /* Layout: pixel board left, stacked arcade panels right; stacks to one column on phones. Single dark arcade look. */
   :root {
+    color-scheme: dark;
     --bg: #1a1626;
     --panel: #2a2340;
+    --raised: #4a3f6b;
+    --raised-hi: #5d5085;
     --ink: #f4ecd6;
     --muted: #a99fc4;
     --accent: #ff7a59;
+    --ok: #3fd0a0;
+    --bad: #ff5e7a;
+    --edge: #000;
+    --font-pixel: "Press Start 2P", ui-monospace, "Courier New", monospace;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { background: var(--bg); }
   body {
-    margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
-    font-family: "Press Start 2P", ui-monospace, monospace; font-size: 10px; line-height: 1.6;
-    display: flex; flex-direction: column; align-items: center; padding: 16px;
+    color: var(--ink); font-family: var(--font-pixel); font-size: 10px; line-height: 1.7;
+    display: flex; flex-direction: column; align-items: center;
+    padding-block: 16px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
-  h1 { font-size: 18px; margin: 8px 0 4px; color: var(--accent); text-shadow: 3px 3px 0 #000; letter-spacing: 1px; }
-  .tag { color: var(--muted); margin: 0 0 14px; text-align: center; }
-  .wrap { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; align-items: flex-start; max-width: 100%; }
+  h1 { font-size: 18px; margin: 8px 0 4px; color: var(--accent); text-shadow: 3px 3px 0 var(--edge); letter-spacing: 1px; text-align: center; }
+  .tag { color: var(--muted); margin: 0 0 16px; text-align: center; }
+  .wrap { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; align-items: flex-start; width: 100%; max-width: 860px; }
+  .boardcol { flex: 1 1 400px; max-width: 560px; min-width: 0; }
   canvas#board {
-    width: min(92vw, 560px); height: auto; aspect-ratio: 1;
+    width: 100%; max-width: 100%; height: auto; aspect-ratio: 1; display: block;
     image-rendering: pixelated; image-rendering: crisp-edges;
-    border: 4px solid #000; box-shadow: 6px 6px 0 #000; cursor: pointer; display: block;
+    border: 4px solid var(--edge); box-shadow: 6px 6px 0 var(--edge); cursor: pointer;
   }
-  .side { width: min(92vw, 260px); display: flex; flex-direction: column; gap: 12px; }
-  .box { background: var(--panel); border: 3px solid #000; box-shadow: 4px 4px 0 #000; padding: 10px; }
-  #status { min-height: 3.4em; }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; }
-  button {
-    font: inherit; color: var(--ink); background: #4a3f6b; border: 3px solid #000;
-    padding: 8px 10px; cursor: pointer; box-shadow: 3px 3px 0 #000;
+  .side { flex: 1 1 260px; max-width: 560px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  .box { background: var(--panel); border: 3px solid var(--edge); box-shadow: 4px 4px 0 var(--edge); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .box h2 { font-size: 10px; margin: 0; color: var(--accent); letter-spacing: 1px; }
+  .muted { color: var(--muted); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button, input {
+    font: inherit; color: var(--ink); border: 3px solid var(--edge);
   }
-  button:hover { background: #5d5085; }
-  button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #000; }
-  button.on { background: var(--accent); color: #1a1626; }
+  button { background: var(--raised); padding: 8px 10px; cursor: pointer; box-shadow: 3px 3px 0 var(--edge); }
+  button:hover { background: var(--raised-hi); }
+  button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--edge); }
+  button.on, button.primary { background: var(--accent); color: var(--bg); }
+  button:disabled { opacity: .45; cursor: default; transform: none; }
+  button:focus-visible, input:focus-visible, canvas:focus-visible { outline: 3px solid var(--ok); outline-offset: 2px; }
+  input { background: var(--bg); padding: 8px; width: 9.5em; text-transform: uppercase; }
+  .code { font-size: 16px; color: var(--ok); letter-spacing: 3px; user-select: all; }
+  .players { display: grid; grid-template-columns: 14px 1fr; gap: 6px 8px; align-items: center; }
+  .chip { width: 14px; height: 14px; border: 2px solid var(--edge); }
   .legend { display: grid; grid-template-columns: 12px 1fr; gap: 6px 8px; align-items: center; }
-  .sw { width: 12px; height: 12px; border: 2px solid #000; }
-  #info { min-height: 4.8em; }
+  .sw { width: 12px; height: 12px; border: 2px solid var(--edge); }
+  #status { min-height: 3.6em; }
   #log { max-height: 140px; overflow-y: auto; color: var(--muted); }
-  .rules p { margin: 0 0 8px; color: var(--muted); }
+  .rules p { margin: 0; color: var(--muted); }
   .rules b { color: var(--ink); font-weight: normal; }
+  .err { color: var(--bad); }
+  .games { display: flex; flex-direction: column; gap: 6px; }
+  .games button { text-align: left; }
 </style>
+<script src="vendor/peerjs.min.js"></script>
 </head>
 <body>
+
 <h1>DEVOUR CHESS</h1>
 <p class="tag">You are what you eat.</p>
 <div class="wrap">
-  <canvas id="board" width="128" height="128"></canvas>
+  <div class="boardcol"><canvas id="board" width="128" height="128" aria-label="Chess board"></canvas></div>
   <div class="side">
     <div class="box" id="status"></div>
-    <div class="box row">
-      <button id="new">NEW</button>
-      <button id="undo">UNDO</button>
-      <button id="cpu">CPU: ON</button>
+
+    <div class="box" id="onlineHome">
+      <h2>PLAY A FRIEND</h2>
+      <div class="row"><button id="create" class="primary">CREATE GAME</button></div>
+      <div class="row">
+        <input id="joinCode" maxlength="6" placeholder="CODE" aria-label="Game code" autocomplete="off">
+        <button id="join">JOIN</button>
+      </div>
+      <div id="onlineMsg" class="muted"></div>
     </div>
+
+    <div class="box" id="onlineGame" hidden>
+      <h2>ONLINE GAME</h2>
+      <div>Code: <span class="code" id="gameCode"></span></div>
+      <div id="shareBox">
+        <div class="muted">Send this link to a friend. Keep this page open while you play: your browser hosts the game.</div>
+        <div class="row" style="margin-top:6px">
+          <input id="shareLink" readonly aria-label="Game link" style="flex:1 1 10em;min-width:0;text-transform:none">
+          <button id="copyLink">COPY LINK</button>
+        </div>
+      </div>
+      <div class="players" id="players"></div>
+      <div class="row">
+        <button id="resign" hidden>RESIGN</button>
+        <button id="rematch" hidden>REMATCH</button>
+        <button id="reconnect" hidden>RECONNECT</button>
+        <button id="leave">LEAVE</button>
+      </div>
+      <div id="gameMsg" class="muted"></div>
+    </div>
+
+    <div class="box" id="localBox">
+      <h2>PLAY HERE</h2>
+      <div class="row">
+        <button id="new">NEW</button>
+        <button id="undo">UNDO</button>
+        <button id="cpu">CPU: ON</button>
+      </div>
+    </div>
+
     <div class="box" id="info">Click a piece to see its powers.</div>
-    <div class="box legend" id="legend"></div>
     <div class="box rules">
       <p><b>The twist:</b> a piece that captures <b>absorbs</b> every power of its victim and can move like all of them.</p>
       <p>Pawn eats knight? It can now hop like a knight. Colored pips under a piece show what it has eaten.</p>
       <p>Checkmate wins as usual. Pawns promote to queens. No castling or en passant.</p>
+      <div class="legend" id="legend"></div>
     </div>
     <div class="box" id="log"></div>
   </div>
@@ -89,33 +150,27 @@
     b: { fill: "#4b3a66", shade: "#33264a", line: "#0b0712" },
   };
   const SQ_LIGHT = "#d9a066", SQ_DARK = "#8f5a3c";
+  const $ = (id) => document.getElementById(id);
 
-  // ---------- Game state ----------
-  let board, turn, history, selected, legal, lastMove, gameOver, cpuOn = true, thinking = false, logLines;
-
+  // ---------- Rules ----------
   const piece = (color, type) => ({ color, type, powers: [type], moved: false });
-
-  function newGame() {
-    board = Array.from({ length: 8 }, () => Array(8).fill(null));
+  function startBoard() {
+    const b = Array.from({ length: 8 }, () => Array(8).fill(null));
     const back = "RNBQKBNR";
     for (let c = 0; c < 8; c++) {
-      board[0][c] = piece("b", back[c]);
-      board[1][c] = piece("b", "P");
-      board[6][c] = piece("w", "P");
-      board[7][c] = piece("w", back[c]);
+      b[0][c] = piece("b", back[c]); b[1][c] = piece("b", "P");
+      b[6][c] = piece("w", "P");     b[7][c] = piece("w", back[c]);
     }
-    turn = "w"; history = []; selected = null; legal = []; lastMove = null; gameOver = false; logLines = [];
-    render(); updateUI();
+    return b;
   }
-
   const clone = (b) => b.map(row => row.map(p => p ? { ...p, powers: [...p.powers] } : null));
   const inside = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+  const other = (col) => col === "w" ? "b" : "w";
 
-  // Pseudo-legal moves for a piece, using the union of all its powers.
   function pseudoMoves(b, r, c) {
     const p = b[r][c]; if (!p) return [];
     const out = new Map();
-    const add = (tr, tc) => { out.set(tr * 8 + tc, { fr: r, fc: c, tr, tc }); };
+    const add = (tr, tc) => out.set(tr * 8 + tc, { fr: r, fc: c, tr, tc });
     const slide = (dirs) => {
       for (const [dr, dc] of dirs) {
         let tr = r + dr, tc = c + dc;
@@ -159,11 +214,8 @@
 
   function applyMove(b, m) {
     const nb = clone(b);
-    const mover = nb[m.fr][m.fc];
-    const victim = nb[m.tr][m.tc];
-    if (victim) {
-      for (const pw of victim.powers) if (!mover.powers.includes(pw)) mover.powers.push(pw);
-    }
+    const mover = nb[m.fr][m.fc], victim = nb[m.tr][m.tc];
+    if (victim) for (const pw of victim.powers) if (!mover.powers.includes(pw)) mover.powers.push(pw);
     mover.moved = true;
     nb[m.tr][m.tc] = mover; nb[m.fr][m.fc] = null;
     if (mover.type === "P" && (m.tr === 0 || m.tr === 7)) {
@@ -179,7 +231,6 @@
     }
     return null;
   }
-
   function attacked(b, r, c, byColor) {
     for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) {
       const p = b[i][j];
@@ -187,13 +238,10 @@
     }
     return false;
   }
-
-  const other = (col) => col === "w" ? "b" : "w";
   function inCheck(b, color) {
     const k = findKing(b, color); if (!k) return true;
     return attacked(b, k[0], k[1], other(color));
   }
-
   function legalMovesFrom(b, r, c) {
     const p = b[r][c];
     return pseudoMoves(b, r, c).filter(m => !inCheck(applyMove(b, m), p.color));
@@ -202,6 +250,12 @@
     const out = [];
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++)
       if (b[r][c] && b[r][c].color === color) out.push(...legalMovesFrom(b, r, c));
+    return out;
+  }
+  function pseudoAll(b, color) {
+    const out = [];
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++)
+      if (b[r][c] && b[r][c].color === color) out.push(...pseudoMoves(b, r, c));
     return out;
   }
 
@@ -215,25 +269,17 @@
     let s = 0;
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
       const p = b[r][c]; if (!p) continue;
-      let v = pieceValue(p);
-      v += (3.5 - Math.abs(3.5 - c)) * 0.03 + (3.5 - Math.abs(3.5 - r)) * 0.03; // center
+      let v = pieceValue(p) + (3.5 - Math.abs(3.5 - c)) * 0.03 + (3.5 - Math.abs(3.5 - r)) * 0.03;
       s += p.color === color ? v : -v;
     }
     return s;
   }
-  function pseudoAll(b, color) {
-    const out = [];
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++)
-      if (b[r][c] && b[r][c].color === color) out.push(...pseudoMoves(b, r, c));
-    return out;
-  }
-  function cpuMove(color) {
-    const moves = allLegal(board, color);
+  function cpuMove(b, color) {
+    const moves = allLegal(b, color);
     if (!moves.length) return null;
     let best = -Infinity, choices = [];
     for (const m of moves) {
-      const nb = applyMove(board, m);
-      // Opponent's best reply (pseudo-legal; capturing the king = win).
+      const nb = applyMove(b, m);
       let worst = Infinity;
       const replies = pseudoAll(nb, other(color));
       if (!replies.length) worst = evaluate(nb, color);
@@ -249,42 +295,299 @@
     return choices[Math.floor(Math.random() * choices.length)];
   }
 
-  // ---------- Move execution ----------
+  // ---------- Shared state ----------
+  // mode "local": vs CPU or pass-and-play in this browser.
+  // mode "online": state comes from the shared game document.
+  let mode = "local";
+  let board, turn, lastMove, logLines, gameOver = false, resultText = "";
+  let history = [], selected = null, legal = [], cpuOn = true, thinking = false;
+
   const FILES = "abcdefgh";
   const sqName = (r, c) => FILES[c] + (8 - r);
-
-  function doMove(m) {
-    history.push({ board: clone(board), turn, lastMove, logLines: [...logLines] });
-    const mover = board[m.fr][m.fc], victim = board[m.tr][m.tc];
+  function describeMove(b, m) {
+    const mover = b[m.fr][m.fc], victim = b[m.tr][m.tc];
     let line = `${mover.color === "w" ? "W" : "B"} ${NAMES[mover.type]} ${sqName(m.fr, m.fc)}-${sqName(m.tr, m.tc)}`;
     const gained = victim ? victim.powers.filter(p => !mover.powers.includes(p)) : [];
-    board = applyMove(board, m);
     if (victim) {
       line += ` eats ${NAMES[victim.type]}`;
       if (gained.length) line += ` +${gained.map(g => NAMES[g]).join("+")}`;
-      blip(gained.length ? 660 : 440, 0.12); if (gained.length) setTimeout(() => blip(880, 0.1), 90);
-    } else blip(260, 0.06);
-    logLines.unshift(line);
+    }
+    return { line, captured: !!victim, gained: gained.length > 0 };
+  }
+  function endText(b, toMove) {
+    return inCheck(b, toMove) ? `CHECKMATE! ${toMove === "w" ? "Black" : "White"} wins.` : "STALEMATE. It's a draw.";
+  }
+  function moveSound(info) {
+    if (info.captured) { blip(info.gained ? 660 : 440, 0.12); if (info.gained) setTimeout(() => blip(880, 0.1), 90); }
+    else blip(260, 0.06);
+  }
+
+  // ---------- Local mode ----------
+  function newLocalGame() {
+    board = startBoard(); turn = "w"; history = []; selected = null; legal = [];
+    lastMove = null; gameOver = false; resultText = ""; logLines = [];
+    render(); updateUI();
+  }
+  function localMove(m) {
+    history.push({ board: clone(board), turn, lastMove, logLines: [...logLines] });
+    const info = describeMove(board, m);
+    board = applyMove(board, m);
+    moveSound(info);
+    logLines.unshift(info.line);
     lastMove = m; turn = other(turn); selected = null; legal = [];
-    const replies = allLegal(board, turn);
-    if (!replies.length) gameOver = true;
+    if (!allLegal(board, turn).length) { gameOver = true; resultText = endText(board, turn); }
     render(); updateUI();
     if (!gameOver && cpuOn && turn === "b") scheduleCpu();
   }
-
   function scheduleCpu() {
     thinking = true; updateUI();
     setTimeout(() => {
-      const m = cpuMove("b");
+      if (mode !== "local") { thinking = false; return; }
+      const m = cpuMove(board, "b");
       thinking = false;
-      if (m) doMove(m); else updateUI();
+      if (m) localMove(m); else updateUI();
     }, 350);
   }
 
+  // ---------- Online mode (peer-to-peer) ----------
+  // The player who creates a game hosts it in their own browser and is the
+  // referee: guests send moves, the host checks them and sends everyone the
+  // new state. A public PeerJS server only introduces the two browsers.
+  const PREFIX = "devour-chess-v1-";
+  const PEER_OPTS = window.DEVOUR_PEER_OPTS || {};
+  const online = {
+    code: null, seat: null, data: null, peer: null,
+    conns: [], guestConn: null, hostConn: null, connected: false, ready: false, retries: 0,
+  };
+  const flatten = (b) => b.flat();
+  const unflatten = (arr) => Array.from({ length: 8 }, (_, r) => arr.slice(r * 8, r * 8 + 8).map(p => p ? { ...p, powers: [...p.powers] } : null));
+  const colorName = (c) => c === "w" ? "White" : "Black";
+  const myColor = () => {
+    const d = online.data; if (mode !== "online" || !d) return null;
+    if (online.seat === "host") return d.hostColor;
+    if (online.seat === "guest") return other(d.hostColor);
+    return null;
+  };
+  function freshState(hostColor = "w") {
+    return { v: 1, board: flatten(startBoard()), turn: "w", lastMove: null, log: [], status: "waiting", result: "", ply: 0, hostColor };
+  }
+  function newCode() {
+    const abc = "abcdefghjkmnpqrstuvwxyz23456789";
+    let s = ""; for (let i = 0; i < 6; i++) s += abc[Math.floor(Math.random() * abc.length)];
+    return s;
+  }
+  function setMsg(id, text, isErr) {
+    const el = $(id); el.textContent = text || ""; el.classList.toggle("err", !!isErr);
+  }
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (_) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} },
+    del(k) { try { localStorage.removeItem(k); } catch (_) {} },
+  };
+  const gameLink = (code) => location.origin + location.pathname + "#g-" + code;
+  function setHash(code) { try { const h = code ? "#g-" + code : ""; if (location.hash !== h) window.history.replaceState(null, "", h || location.pathname); } catch (_) {} }
+
+  function applyState(st) {
+    const prev = online.data;
+    online.data = st;
+    board = unflatten(st.board);
+    turn = st.turn; lastMove = st.lastMove || null; logLines = [...(st.log || [])];
+    gameOver = st.status === "over"; resultText = st.result || "";
+    if (!prev || prev.ply !== st.ply) { selected = null; legal = []; }
+    render(); updateUI();
+  }
+  function makeMoveState(st, m) {
+    const b = unflatten(st.board);
+    const info = describeMove(b, m);
+    const nb = applyMove(b, m);
+    const next = other(st.turn);
+    const over = !allLegal(nb, next).length;
+    return { info, state: {
+      ...st, board: flatten(nb), turn: next,
+      lastMove: { fr: m.fr, fc: m.fc, tr: m.tr, tc: m.tc, captured: info.captured },
+      log: [info.line, ...(st.log || [])].slice(0, 80),
+      status: over ? "over" : "playing", result: over ? endText(nb, next) : "", ply: st.ply + 1,
+    } };
+  }
+
+  // ----- Host side -----
+  function hostCommit(st) {
+    store.set("dc-host-" + online.code, st);
+    for (const c of online.conns) if (c.open) { try { c.send({ type: "state", state: st }); } catch (_) {} }
+    applyState(st);
+  }
+  function hostGame(code, fresh) {
+    leaveGame(false);
+    mode = "online"; online.code = code; online.seat = "host";
+    const saved = !fresh && store.get("dc-host-" + code);
+    setHash(code);
+    applyState(saved && saved.v === 1 ? saved : freshState("w"));
+    store.set("dc-host-" + code, online.data);
+    startHostPeer();
+  }
+  function startHostPeer() {
+    const code = online.code;
+    setMsg("gameMsg", "Connecting to the match server...");
+    const peer = new Peer(PREFIX + code, PEER_OPTS); online.peer = peer;
+    peer.on("open", () => { online.ready = true; online.retries = 0; setMsg("gameMsg", ""); updateUI(); });
+    peer.on("connection", (conn) => {
+      conn.on("open", () => {
+        if (online.peer !== peer) { conn.close(); return; }
+        online.conns.push(conn);
+        let seat = "spectator";
+        if (!online.guestConn || !online.guestConn.open) {
+          online.guestConn = conn; seat = "guest"; online.connected = true;
+          if (online.data.status === "waiting") online.data = { ...online.data, status: "playing" };
+          setMsg("gameMsg", "Your friend joined."); blip(520, 0.1); setTimeout(() => blip(780, 0.1), 100);
+        }
+        try { conn.send({ type: "welcome", seat }); } catch (_) {}
+        hostCommit(online.data);
+      });
+      conn.on("data", (msg) => onHostMessage(conn, msg));
+      conn.on("close", () => {
+        online.conns = online.conns.filter(c => c !== conn);
+        if (conn === online.guestConn) {
+          online.guestConn = null; online.connected = false;
+          setMsg("gameMsg", "Your friend disconnected. They can open the link again to rejoin.");
+          updateUI();
+        }
+      });
+    });
+    peer.on("disconnected", () => { if (online.peer === peer && !peer.destroyed) { try { peer.reconnect(); } catch (_) {} } });
+    peer.on("error", (e) => {
+      if (online.peer !== peer) return;
+      if (e.type === "unavailable-id") {
+        // A reload can briefly leave the old connection registered; try again.
+        if (online.retries++ < 5) { peer.destroy(); setTimeout(() => { if (online.code === code && online.seat === "host") startHostPeer(); }, 3000); setMsg("gameMsg", "Reconnecting your game..."); }
+        else setMsg("gameMsg", "This game is already open in another tab. Close it there, or leave and create a new game.", true);
+      } else if (e.type === "network" || e.type === "server-error" || e.type === "socket-error" || e.type === "socket-closed") {
+        setMsg("gameMsg", "Can't reach the match server. Check your internet connection.", true);
+      } else if (e.type === "browser-incompatible") {
+        setMsg("gameMsg", "This browser can't play online. Try Chrome, Edge, Firefox or Safari.", true);
+      }
+    });
+  }
+  function onHostMessage(conn, msg) {
+    if (!msg || typeof msg !== "object" || conn !== online.guestConn) return; // spectators can't act
+    const st = online.data, gc = other(st.hostColor);
+    const resync = () => { try { conn.send({ type: "state", state: st }); } catch (_) {} };
+    if (msg.type === "move") {
+      const m = msg.m || {};
+      if (st.status !== "playing" || st.turn !== gc || msg.ply !== st.ply || !inside(m.fr, m.fc) || !inside(m.tr, m.tc)) return resync();
+      const b = unflatten(st.board);
+      if (!b[m.fr][m.fc] || b[m.fr][m.fc].color !== gc) return resync();
+      const ok = legalMovesFrom(b, m.fr, m.fc).find(x => x.tr === m.tr && x.tc === m.tc);
+      if (!ok) return resync();
+      const r = makeMoveState(st, ok);
+      moveSound(r.info); hostCommit(r.state);
+    } else if (msg.type === "resign" && st.status === "playing") {
+      hostCommit({ ...st, status: "over", result: `${colorName(gc)} resigned. ${colorName(st.hostColor)} wins.` });
+    } else if (msg.type === "rematch" && st.status === "over") {
+      hostCommit({ ...freshState(other(st.hostColor)), status: "playing" });
+    }
+  }
+
+  // ----- Guest side -----
+  function joinGame(code) {
+    leaveGame(false);
+    mode = "online"; online.code = code; online.seat = null;
+    setHash(code);
+    setMsg("gameMsg", "Connecting to the game...");
+    board = startBoard(); turn = "w"; lastMove = null; logLines = []; gameOver = false;
+    render(); updateUI();
+    const peer = new Peer(PEER_OPTS); online.peer = peer;
+    peer.on("open", () => { online.ready = true; connectToHost(); });
+    peer.on("error", (e) => {
+      if (online.peer !== peer) return;
+      if (e.type === "peer-unavailable") {
+        setMsg("gameMsg", "Can't find that game. Check the code, and make sure the person who created it still has the page open.", true);
+        $("reconnect").hidden = false;
+      } else if (e.type === "network" || e.type === "server-error" || e.type === "socket-error" || e.type === "socket-closed") {
+        setMsg("gameMsg", "Can't reach the match server. Check your internet connection.", true);
+        $("reconnect").hidden = false;
+      } else if (e.type === "browser-incompatible") {
+        setMsg("gameMsg", "This browser can't play online. Try Chrome, Edge, Firefox or Safari.", true);
+      }
+    });
+  }
+  function connectToHost() {
+    const peer = online.peer; if (!peer || peer.destroyed) return;
+    $("reconnect").hidden = true;
+    if (peer.disconnected) { try { peer.reconnect(); } catch (_) {} }
+    const conn = peer.connect(PREFIX + online.code, { reliable: true });
+    online.hostConn = conn;
+    const t = setTimeout(() => {
+      if (!conn.open && online.hostConn === conn) {
+        setMsg("gameMsg", "Still trying to reach the game. Some school or work networks block direct connections; try another network if this keeps happening.", true);
+        $("reconnect").hidden = false;
+      }
+    }, 15000);
+    conn.on("open", () => { clearTimeout(t); online.connected = true; setMsg("gameMsg", ""); updateUI(); });
+    conn.on("data", (msg) => {
+      if (!msg || typeof msg !== "object" || online.hostConn !== conn) return;
+      if (msg.type === "welcome") { online.seat = msg.seat === "guest" ? "guest" : "spectator"; updateUI(); }
+      if (msg.type === "state" && msg.state && Array.isArray(msg.state.board) && msg.state.board.length === 64) {
+        const prev = online.data;
+        if (prev && msg.state.ply > prev.ply && msg.state.lastMove && other(msg.state.turn) !== myColor())
+          blip(msg.state.lastMove.captured ? 660 : 300, 0.08);
+        applyState(msg.state);
+      }
+    });
+    conn.on("close", () => {
+      clearTimeout(t);
+      if (online.hostConn !== conn) return;
+      online.connected = false;
+      setMsg("gameMsg", "Lost the connection to the host. Press RECONNECT once they're back.", true);
+      $("reconnect").hidden = false;
+      updateUI();
+    });
+  }
+  function sendToHost(msg) {
+    const c = online.hostConn;
+    if (!c || !c.open) { setMsg("gameMsg", "Not connected to the host.", true); return false; }
+    try { c.send(msg); return true; } catch (_) { return false; }
+  }
+
+  // ----- Both sides -----
+  function onlineMove(m) {
+    const st = online.data; if (!st) return;
+    const r = makeMoveState(st, m);
+    moveSound(r.info);
+    if (online.seat === "host") hostCommit(r.state);
+    else if (sendToHost({ type: "move", m: { fr: m.fr, fc: m.fc, tr: m.tr, tc: m.tc }, ply: st.ply })) applyState(r.state);
+  }
+  function resign() {
+    const st = online.data, me = myColor();
+    if (!st || !me || st.status !== "playing") return;
+    if (online.seat === "host") hostCommit({ ...st, status: "over", result: `${colorName(me)} resigned. ${colorName(other(me))} wins.` });
+    else sendToHost({ type: "resign" });
+  }
+  function rematch() {
+    const st = online.data; if (!st || !myColor() || st.status !== "over") return;
+    if (online.seat === "host") hostCommit({ ...freshState(other(st.hostColor)), status: online.connected ? "playing" : "waiting" });
+    else sendToHost({ type: "rematch" });
+  }
+  function leaveGame(toLocal = true) {
+    if (online.peer) { try { online.peer.destroy(); } catch (_) {} }
+    Object.assign(online, { code: null, seat: null, data: null, peer: null, conns: [], guestConn: null, hostConn: null, connected: false, ready: false, retries: 0 });
+    $("reconnect").hidden = true;
+    if (toLocal) { mode = "local"; setHash(null); setMsg("gameMsg", ""); newLocalGame(); }
+  }
+  function createGame() { hostGame(newCode(), true); }
+  function openGame(code) {
+    code = String(code || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (code.length !== 6) { setMsg("onlineMsg", "Codes are 6 letters or numbers.", true); return; }
+    if (typeof Peer === "undefined") return;
+    // If this browser created the game, pick it back up as host.
+    if (store.get("dc-host-" + code)) hostGame(code, false); else joinGame(code);
+  }
+
   // ---------- Rendering ----------
-  const cv = document.getElementById("board");
+  const cv = $("board");
   const ctx = cv.getContext("2d");
   const S = 16;
+  const flipped = () => mode === "online" && myColor() === "b";
+  const toScreen = (r, c) => flipped() ? [7 - r, 7 - c] : [r, c];
 
   function drawSprite(type, color, x, y) {
     const rows = SPRITES[type], pal = PAL[color];
@@ -304,36 +607,30 @@
       ctx.fillStyle = (r + c) % 2 ? SQ_DARK : SQ_LIGHT;
       ctx.fillRect(c * S, r * S, S, S);
     }
+    const fillSq = (r, c, color) => { const [sr, sc] = toScreen(r, c); ctx.fillStyle = color; ctx.fillRect(sc * S, sr * S, S, S); };
     if (lastMove) {
-      ctx.fillStyle = "rgba(255,224,102,0.35)";
-      ctx.fillRect(lastMove.fc * S, lastMove.fr * S, S, S);
-      ctx.fillRect(lastMove.tc * S, lastMove.tr * S, S, S);
+      fillSq(lastMove.fr, lastMove.fc, "rgba(255,224,102,0.35)");
+      fillSq(lastMove.tr, lastMove.tc, "rgba(255,224,102,0.35)");
     }
     const k = findKing(board, turn);
-    if (k && inCheck(board, turn)) {
-      ctx.fillStyle = "#e0303a";
-      ctx.fillRect(k[1] * S, k[0] * S, S, S);
-    }
+    if (k && !gameOver && inCheck(board, turn)) fillSq(k[0], k[1], "#e0303a");
     if (selected) {
+      const [sr, sc] = toScreen(selected[0], selected[1]);
       ctx.fillStyle = "#3fd0a0";
-      const [r, c] = selected;
-      ctx.fillRect(c * S, r * S, S, 1); ctx.fillRect(c * S, r * S + S - 1, S, 1);
-      ctx.fillRect(c * S, r * S, 1, S); ctx.fillRect(c * S + S - 1, r * S, 1, S);
+      ctx.fillRect(sc * S, sr * S, S, 1); ctx.fillRect(sc * S, sr * S + S - 1, S, 1);
+      ctx.fillRect(sc * S, sr * S, 1, S); ctx.fillRect(sc * S + S - 1, sr * S, 1, S);
     }
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
       const p = board[r][c]; if (!p) continue;
-      drawSprite(p.type, p.color, c * S + 2, r * S + 1);
-      // Pips for absorbed powers
+      const [sr, sc] = toScreen(r, c);
+      drawSprite(p.type, p.color, sc * S + 2, sr * S + 1);
       const extra = p.powers.filter(x => x !== p.type);
-      if (extra.length) {
-        ctx.fillStyle = "#000"; ctx.fillRect(c * S, r * S + 13, extra.length * 3 + 1, 3);
-      }
-      extra.forEach((pw, i) => {
-        ctx.fillStyle = POWER_COLOR[pw]; ctx.fillRect(c * S + 1 + i * 3, r * S + 14, 2, 2);
-      });
+      if (extra.length) { ctx.fillStyle = "#000"; ctx.fillRect(sc * S, sr * S + 13, extra.length * 3 + 1, 3); }
+      extra.forEach((pw, i) => { ctx.fillStyle = POWER_COLOR[pw]; ctx.fillRect(sc * S + 1 + i * 3, sr * S + 14, 2, 2); });
     }
     for (const m of legal) {
-      const x = m.tc * S, y = m.tr * S;
+      const [sr, sc] = toScreen(m.tr, m.tc);
+      const x = sc * S, y = sr * S;
       if (board[m.tr][m.tc]) {
         ctx.fillStyle = "#3fd0a0";
         for (const [dx, dy] of [[0,0],[S-3,0],[0,S-3],[S-3,S-3]]) ctx.fillRect(x + dx, y + dy, 3, 3);
@@ -345,63 +642,152 @@
   }
 
   // ---------- UI ----------
-  const $ = (id) => document.getElementById(id);
-
-  function describe(p) {
+  function describePiece(p) {
     const extra = p.powers.filter(x => x !== p.type);
-    let s = `${p.color === "w" ? "White" : "Black"} ${NAMES[p.type]}`;
-    s += extra.length ? `<br><br>Absorbed: ${extra.map(x => `<span style="color:${POWER_COLOR[x]}">${NAMES[x]}</span>`).join(", ")}` : "<br><br>No absorbed powers yet.";
-    return s;
+    const box = $("info"); box.replaceChildren();
+    const t = document.createElement("div");
+    t.textContent = `${p.color === "w" ? "White" : "Black"} ${NAMES[p.type]}`;
+    const s = document.createElement("div"); s.className = "muted";
+    if (!extra.length) s.textContent = "No absorbed powers yet.";
+    else {
+      s.textContent = "Absorbed: ";
+      extra.forEach((x, i) => {
+        const sp = document.createElement("span"); sp.style.color = POWER_COLOR[x]; sp.textContent = NAMES[x];
+        s.append(sp); if (i < extra.length - 1) s.append(", ");
+      });
+    }
+    box.append(t, s);
+  }
+
+  function setStatus(main, sub, subErr) {
+    const el = $("status"); el.replaceChildren();
+    const a = document.createElement("div"); a.textContent = main; el.append(a);
+    if (sub) { const b = document.createElement("div"); b.textContent = sub; b.style.color = subErr ? "var(--bad)" : "var(--muted)"; el.append(b); }
+  }
+
+  function renderPlayers() {
+    const d = online.data, el = $("players");
+    el.replaceChildren();
+    if (!d) return;
+    const me = myColor();
+    for (const color of ["w", "b"]) {
+      const chip = document.createElement("div"); chip.className = "chip"; chip.style.background = PAL[color].fill;
+      const name = document.createElement("div");
+      const isHost = d.hostColor === color;
+      let who;
+      if (me === color) who = "You";
+      else if (online.seat === "spectator") who = isHost ? "Host" : "Guest";
+      else if (online.seat === "host" ? online.connected : online.connected) who = "Friend";
+      else who = online.seat === "host" ? "waiting..." : "Host (offline)";
+      name.textContent = `${colorName(color)}: ${who}${d.turn === color && d.status === "playing" ? "  <" : ""}`;
+      if (who.endsWith("...") || who.includes("offline")) name.className = "muted";
+      el.append(chip, name);
+    }
   }
 
   function updateUI() {
-    let s;
-    if (gameOver) {
-      s = inCheck(board, turn) ? `CHECKMATE!<br>${turn === "w" ? "Black" : "White"} wins.` : "STALEMATE.<br>It's a draw.";
-    } else {
-      s = `${turn === "w" ? "White" : "Black"} to move`;
-      if (thinking) s = "CPU is chewing...";
-      if (inCheck(board, turn)) s += "<br><span style='color:#ff5e7a'>CHECK!</span>";
+    const isOnline = mode === "online";
+    $("onlineHome").hidden = isOnline;
+    $("onlineGame").hidden = !isOnline;
+    $("localBox").hidden = isOnline;
+    $("log").textContent = "";
+    (logLines && logLines.length ? logLines : ["No moves yet."]).forEach((l, i) => {
+      if (i) $("log").append(document.createElement("br"));
+      $("log").append(l);
+    });
+
+    if (!isOnline) {
+      if (gameOver) setStatus(resultText);
+      else if (thinking) setStatus("CPU is chewing...");
+      else setStatus(`${turn === "w" ? "White" : "Black"} to move`, inCheck(board, turn) ? "CHECK!" : "", true);
+      $("cpu").textContent = `CPU: ${cpuOn ? "ON" : "OFF"}`;
+      $("cpu").classList.toggle("on", cpuOn);
+      return;
     }
-    $("status").innerHTML = s;
-    $("cpu").textContent = `CPU: ${cpuOn ? "ON" : "OFF"}`;
-    $("cpu").classList.toggle("on", cpuOn);
-    $("log").innerHTML = logLines.length ? logLines.join("<br>") : "No moves yet.";
+
+    const d = online.data;
+    $("gameCode").textContent = (online.code || "").toUpperCase();
+    $("shareLink").value = online.code ? gameLink(online.code) : "";
+    const me = myColor();
+    $("shareBox").hidden = online.seat !== "host";
+    $("resign").hidden = !(d && me && d.status === "playing");
+    $("rematch").hidden = !(d && me && d.status === "over");
+    renderPlayers();
+
+    if (!d) { setStatus("Online game", "Connecting..."); return; }
+    if (d.status === "waiting") {
+      setStatus("Waiting for a friend", online.seat === "host" ? "Send them the link below." : "");
+    } else if (d.status === "over") {
+      setStatus(resultText || "Game over");
+    } else {
+      const who = colorName(turn);
+      const main = me ? (turn === me ? "Your move" : `Waiting for ${who}...`) : `${who} to move`;
+      const check = inCheck(board, turn) ? "CHECK!" : (online.seat === "spectator" ? "You're watching." : "");
+      setStatus(main, check, check === "CHECK!");
+    }
   }
 
   $("legend").innerHTML = Object.keys(NAMES).map(k =>
     `<div class="sw" style="background:${POWER_COLOR[k]}"></div><div>${NAMES[k]} power</div>`).join("");
 
+  function canAct() {
+    if (gameOver) return false;
+    if (mode === "local") return !thinking && !(cpuOn && turn === "b");
+    const d = online.data;
+    if (!d || d.status !== "playing" || myColor() !== turn) return false;
+    return online.seat === "host" || online.connected;
+  }
+
   cv.addEventListener("click", (e) => {
-    if (gameOver || thinking) return;
     const rect = cv.getBoundingClientRect();
-    const c = Math.floor((e.clientX - rect.left) / rect.width * 8);
-    const r = Math.floor((e.clientY - rect.top) / rect.height * 8);
+    let c = Math.floor((e.clientX - rect.left) / rect.width * 8);
+    let r = Math.floor((e.clientY - rect.top) / rect.height * 8);
     if (!inside(r, c)) return;
+    if (flipped()) { r = 7 - r; c = 7 - c; }
     const p = board[r][c];
     const m = legal.find(m => m.tr === r && m.tc === c);
-    if (m) { doMove(m); return; }
-    if (p) $("info").innerHTML = describe(p);
-    if (p && p.color === turn && !(cpuOn && turn === "b")) {
-      selected = [r, c]; legal = legalMovesFrom(board, r, c);
-    } else { selected = null; legal = []; }
+    if (m && canAct()) { mode === "local" ? localMove(m) : onlineMove(m); return; }
+    if (p) describePiece(p);
+    if (p && p.color === turn && canAct()) { selected = [r, c]; legal = legalMovesFrom(board, r, c); }
+    else { selected = null; legal = []; }
     render();
   });
 
-  $("new").onclick = () => { if (!thinking) newGame(); };
+  $("new").onclick = () => { if (!thinking) newLocalGame(); };
   $("undo").onclick = () => {
     if (thinking || !history.length) return;
-    // With CPU on, undo back to the human's turn.
     let h = history.pop();
     if (cpuOn && h.turn === "b" && history.length) h = history.pop();
     ({ board, turn, lastMove, logLines } = h);
-    gameOver = false; selected = null; legal = [];
+    gameOver = false; resultText = ""; selected = null; legal = [];
     render(); updateUI();
   };
   $("cpu").onclick = () => {
     cpuOn = !cpuOn; updateUI();
     if (cpuOn && turn === "b" && !gameOver && !thinking) scheduleCpu();
   };
+  $("create").onclick = createGame;
+  $("join").onclick = () => openGame($("joinCode").value);
+  $("joinCode").addEventListener("keydown", (e) => { if (e.key === "Enter") openGame($("joinCode").value); });
+  $("resign").onclick = resign;
+  $("rematch").onclick = rematch;
+  $("reconnect").onclick = () => { setMsg("gameMsg", "Connecting to the game..."); connectToHost(); };
+  $("leave").onclick = () => leaveGame(true);
+  $("copyLink").onclick = () => {
+    const input = $("shareLink");
+    const done = () => { $("copyLink").textContent = "COPIED"; setTimeout(() => $("copyLink").textContent = "COPY LINK", 1500); };
+    const fallback = () => { input.focus(); input.select(); try { if (document.execCommand("copy")) done(); } catch (_) {} };
+    if (navigator.clipboard) navigator.clipboard.writeText(input.value).then(done, fallback); else fallback();
+  };
+
+  function hashCode() {
+    const m = /^#g-([a-z0-9]{6})$/i.exec(location.hash || "");
+    return m ? m[1].toLowerCase() : null;
+  }
+  window.addEventListener("hashchange", () => {
+    const code = hashCode();
+    if (code && code !== online.code) openGame(code);
+  });
 
   // ---------- Sound ----------
   let actx = null;
@@ -416,7 +802,15 @@
     } catch (_) {}
   }
 
-  newGame();
+  // ---------- Boot ----------
+  newLocalGame();
+  if (typeof Peer === "undefined") {
+    $("create").disabled = true; $("join").disabled = true;
+    setMsg("onlineMsg", "Online play couldn't load. You can still play the CPU here.", true);
+  } else {
+    const code = hashCode();
+    if (code) openGame(code);
+  }
 })();
 </script>
 </body>
