@@ -16,6 +16,20 @@ deeper your little miner digs.
 
 Each point = 10m of depth; a perfect dig reaches 7000m.
 
+## How rarity is decided
+
+Whether an answer counts at all comes from the lists in the question files.
+How rare it is comes from other players, once there are enough of them:
+
+- Every player's latest answer to each prompt is saved in the published
+  page's shared store (one document per player, `plays/<player id>`).
+- Once 15 other players have answered a prompt, an answer's tier is the share
+  of them who gave it: under 1% Diamond, 1-3% Gold, 3-8% Silver, 8-20% Copper,
+  20%+ Dirt. Before that, the hand-made tier from the question files is used.
+- Opened locally (or without the shared store), the hand-made tiers always apply.
+- The owner's stats screen lists answers players gave that aren't on any
+  list, so missing correct answers can be added.
+
 ## Daily prompts
 
 There are 135 prompts: 70 classic ones in `questions.js` and 65 niche ones in

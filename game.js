@@ -1263,6 +1263,100 @@
   }
 
   // ==================================================================
+  // Crowd rarity — once enough people have answered a prompt, an answer's
+  // tier comes from the share of other players who gave it. Until then
+  // (or when the shared store isn't available) the hand-made tiers apply.
+  // Each player keeps one document, plays/<their id>, holding their latest
+  // answer to every prompt, so nobody ever overwrites anyone else's data.
+  // ==================================================================
+  const CROWD_MIN = 15; // other players needed on a prompt before the crowd decides
+  const CROWD_BANDS = [[0.2, 1], [0.08, 2], [0.03, 3], [0.01, 4]]; // share >= x gives that tier; rarer is Diamond
+  const crowd = { db: null, me: null, owner: false, players: new Map(), ready: false, writable: true, chain: Promise.resolve() };
+  const promptId = (q) => normalize(q.prompt).slice(0, 80);
+
+  function crowdStats(q, display) {
+    if (!crowd.ready) return null;
+    const p = promptId(q), a = normalize(display);
+    let n = 0, c = 0;
+    for (const [uid, answers] of crowd.players) {
+      if (uid === crowd.me) continue;
+      const e = answers[p];
+      if (!e || typeof e.k !== "string" || !e.k) continue;
+      n++;
+      if (e.k === a) c++;
+    }
+    return { n, c };
+  }
+
+  function crowdTier(q, display, handTier) {
+    if (!handTier) return { tier: 0, source: "list" };
+    const st = crowdStats(q, display);
+    if (!st || st.n < CROWD_MIN) return { tier: handTier, source: "start", n: st ? st.n : null };
+    const share = st.c / st.n;
+    let tier = 5;
+    for (const [min, t] of CROWD_BANDS) if (share >= min) { tier = t; break; }
+    return { tier, source: "crowd", n: st.n, c: st.c };
+  }
+
+  function recordCrowd(q, entry) {
+    if (!crowd.db || !crowd.me || !crowd.writable || !entry.raw) return;
+    const shown = entry.listed ? entry.display : entry.raw;
+    const field = { k: normalize(shown).slice(0, 80), d: shown.slice(0, 60), ok: !!entry.listed, at: Date.now() };
+    if (!field.k) return;
+    const p = promptId(q);
+    const ref = crowd.db.doc("plays/" + crowd.me);
+    crowd.chain = crowd.chain.then(async () => {
+      try {
+        await ref.update({ answers: { [p]: field } });
+      } catch (e) {
+        if (!e || e.code !== "invalid_argument") return;
+        // no document yet (or no permission): create it with everything we know
+        if (crowd.ready && crowd.players.has(crowd.me)) { crowd.writable = false; return; }
+        try {
+          await ref.set({ answers: { ...(crowd.players.get(crowd.me) || {}), [p]: field } });
+        } catch (e2) {
+          if (e2 && e2.code === "invalid_argument") crowd.writable = false;
+        }
+      }
+    });
+  }
+
+  async function initCrowd() {
+    try {
+      if (!window.claude || typeof window.claude.use !== "function") return;
+      const [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+      if (!db || !user) return;
+      const [me, owner, canWrite] = await Promise.all([user.id(), user.isOwner(), user.can("data.write")]);
+      if (!me) return;
+      crowd.db = db;
+      crowd.me = me;
+      crowd.owner = !!owner;
+      if (canWrite === false) crowd.writable = false;
+      db.collection("plays").onSnapshot((snap) => {
+        const players = new Map();
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          if (data && data.answers && typeof data.answers === "object") players.set(d.id, data.answers);
+        });
+        crowd.players = players;
+        crowd.ready = true;
+      }, () => { crowd.ready = false; });
+    } catch { /* shared store unavailable: hand-made tiers apply */ }
+  }
+
+  function crowdNote(entry) {
+    const c = entry.crowd;
+    if (!entry.tier || !c) return "";
+    if (c.source === "crowd") {
+      if (!c.c) return `Nobody else out of ${c.n} players has said this`;
+      const pct = (c.c / c.n) * 100;
+      return `${pct < 1 ? "<1" : Math.round(pct)}% of ${c.n} other players said this`;
+    }
+    if (c.n === null || c.n === undefined) return "Starting estimate";
+    return `Starting estimate · crowd rarity kicks in at ${CROWD_MIN} players (${c.n} so far)`;
+  }
+
+  // ==================================================================
   // Rounds
   // ==================================================================
   function startRound() {
@@ -1309,16 +1403,18 @@
     cancelAnimationFrame(timerRaf);
     const q = QUESTIONS[game.qIdx[game.round]];
     const res = judge(q, raw);
-    const entry = { raw: (raw || "").trim(), tier: res.tier, display: res.display, corrected: !!res.fuzzy, timedOut: timedOut && !(raw || "").trim() };
+    const ct = crowdTier(q, res.display, res.tier);
+    const entry = { raw: (raw || "").trim(), tier: ct.tier, listed: res.tier > 0, crowd: ct, display: res.display, corrected: !!res.fuzzy, timedOut: timedOut && !(raw || "").trim() };
+    recordCrowd(q, entry);
     showAutocorrect(null);
     game.results.push(entry);
     game.startedAt = null;
     const meters = totalPoints(game) * METERS_PER_POINT;
-    addFind(meters, res.tier, false);
+    addFind(meters, entry.tier, false);
     S.target = meters;
-    burst(res.tier);
-    if (res.tier === 5 && !REDUCED) restartAnim($("stage"), "quake");
-    floatText(res.tier ? `+${TIERS[res.tier].pts}` : "+0", TIERS[res.tier].color);
+    burst(entry.tier);
+    if (entry.tier === 5 && !REDUCED) restartAnim($("stage"), "quake");
+    floatText(entry.tier ? `+${TIERS[entry.tier].pts}` : "+0", TIERS[entry.tier].color);
     $("answer").blur();
     saveDaily();
     showReveal(q, entry);
@@ -1336,6 +1432,10 @@
     const corr = $("reveal-corrected");
     corr.classList.toggle("hidden", !entry.corrected);
     if (entry.corrected) corr.textContent = `You typed “${entry.raw}” · autocorrected`;
+    const crowdEl = $("reveal-crowd");
+    const note = crowdNote(entry);
+    crowdEl.classList.toggle("hidden", !note);
+    crowdEl.textContent = note;
     const pointsEl = $("reveal-points");
     if (entry.tier) countUp(pointsEl, t.pts, 700, (v) => `${t.label} · +${v} pts · ${v * METERS_PER_POINT}m deeper`);
     else pointsEl.textContent = entry.raw ? "Not in this vein · +0" : "+0";
@@ -1343,7 +1443,7 @@
     const rng = mulberry32(game.qIdx[game.round] * 31 + today);
     const ex = [];
     for (const tier of [5, 4, 3, 1]) {
-      shuffle(q.byTier[tier].filter((d) => d !== entry.display), rng).slice(0, 1).forEach((d) => ex.push({ d, tier }));
+      shuffle(q.byTier[tier].filter((d) => d !== entry.display), rng).slice(0, 1).forEach((d) => ex.push({ d, tier: crowdTier(q, d, tier).tier }));
     }
     const ul = $("reveal-examples");
     ul.innerHTML = "";
@@ -1477,6 +1577,7 @@
       <table class="tier-table">${rows}
         <tr><td><span class="chip tier-0">BEDROCK</span></td><td>Wrong or blank</td><td>+0</td></tr></table>
       <p>Every point digs ${METERS_PER_POINT}m deeper. A perfect day reaches <b>${MAX_METERS}m</b>, all the way down to the magma.</p>
+      <p>Rarity comes from other players: once ${CROWD_MIN} people have answered a prompt, an answer's tier depends on how many of them gave it. Under 1% is Diamond, 1–3% Gold, 3–8% Silver, 8–20% Copper, and anything more common is Dirt. Before that, the game uses its own starting estimate.</p>
       <p>Small typos are forgiven. ${PLAYTEST ? "You're in playtest mode, so a new set of prompts unlocks as soon as you finish one." : "Everyone gets the same prompts, and a new set unlocks at midnight."} The practice mine has random prompts any time.</p>`;
   }
 
@@ -1615,7 +1716,58 @@
   });
 
   $("btn-help").addEventListener("click", () => openModal(helpHtml()));
-  $("btn-stats").addEventListener("click", () => openModal(statsHtml()));
+  $("btn-stats").addEventListener("click", () => {
+    openModal(statsHtml());
+    const body = $("modal-body");
+    if (crowd.ready) {
+      const p = document.createElement("p");
+      p.className = "crowd-count";
+      p.textContent = `${crowd.players.size} ${crowd.players.size === 1 ? "player has" : "players have"} dug in this mine so far.`;
+      body.append(p);
+    }
+    if (crowd.owner && crowd.ready) body.append(unlistedPanel());
+  });
+
+  // Owner-only: correct-looking answers players gave that aren't on any list yet.
+  function unlistedPanel() {
+    const byPrompt = new Map(QUESTIONS.map((q) => [promptId(q), q.prompt]));
+    const tally = new Map();
+    for (const answers of crowd.players.values()) {
+      for (const [p, e] of Object.entries(answers)) {
+        if (!e || e.ok || typeof e.k !== "string" || !byPrompt.has(p)) continue;
+        const key = p + "|" + e.k;
+        const cur = tally.get(key) || { prompt: byPrompt.get(p), d: String(e.d || e.k), n: 0 };
+        cur.n++;
+        tally.set(key, cur);
+      }
+    }
+    const top = [...tally.values()].sort((a, b) => b.n - a.n).slice(0, 15);
+    const wrap = document.createElement("div");
+    wrap.className = "unlisted";
+    const h = document.createElement("h3");
+    h.textContent = "Answers not on the lists";
+    const note = document.createElement("p");
+    note.className = "small-note";
+    note.textContent = top.length
+      ? "Only you see this. These scored 0; the most common are worth adding to the question lists."
+      : "Only you see this. Nothing yet: answers that score 0 because they're missing from the lists will show up here.";
+    wrap.append(h, note);
+    const ul = document.createElement("ul");
+    top.forEach((r) => {
+      const li = document.createElement("li");
+      const a = document.createElement("span");
+      a.textContent = r.d;
+      const q = document.createElement("span");
+      q.className = "u-q";
+      q.textContent = r.prompt.replace(/^Name (a |an )?/i, "");
+      const n = document.createElement("b");
+      n.textContent = `×${r.n}`;
+      li.append(a, q, n);
+      ul.append(li);
+    });
+    wrap.append(ul);
+    return wrap;
+  }
   $("modal-close").addEventListener("click", closeModal);
   $("modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
@@ -1632,6 +1784,7 @@
   $("logo").addEventListener("click", () => showTitle());
   $("btn-home").addEventListener("click", () => { SFX.click(); showTitle(); });
 
+  initCrowd();
   showTitle();
   requestAnimationFrame(frame);
   if (!store.get("deepdig-seen-help", false)) {

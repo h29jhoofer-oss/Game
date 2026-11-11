@@ -352,6 +352,16 @@ button { font-family: inherit; }
 .autocorrect .ac-arrow { color: var(--muted); }
 .autocorrect b { color: var(--accent); font-weight: 600; overflow-wrap: anywhere; }
 @keyframes acin { from { opacity: 0; transform: translateY(6px) scale(.95); } }
+.reveal-crowd { margin: 0; font-size: 14px; color: var(--cool); font-variant-numeric: tabular-nums; animation: rise .5s var(--ease-out) .24s both; }
+.crowd-count { color: var(--muted); }
+.unlisted { margin-top: 14px; padding-top: 12px; border-top: 2px dotted rgba(255, 255, 255, .15); }
+.unlisted h3 { font-size: 18px; }
+.unlisted .small-note { font-size: 14px; color: var(--muted); }
+.unlisted ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.unlisted li { display: flex; gap: 8px; align-items: baseline; font-size: 15px; }
+.unlisted li span:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.unlisted .u-q { color: var(--muted); font-size: 13px; text-align: right; }
+.unlisted b { color: var(--accent); font-variant-numeric: tabular-nums; }
 .reveal-corrected { margin: 0; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
 
 /* ---------- reveal / results sheets ---------- */
