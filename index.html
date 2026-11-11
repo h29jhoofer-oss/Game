@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devour Chess</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1a1626;
+    --panel: #2a2340;
+    --ink: #f4ecd6;
+    --muted: #a99fc4;
+    --accent: #ff7a59;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+    font-family: "Press Start 2P", ui-monospace, monospace; font-size: 10px; line-height: 1.6;
+    display: flex; flex-direction: column; align-items: center; padding: 16px;
+  }
+  h1 { font-size: 18px; margin: 8px 0 4px; color: var(--accent); text-shadow: 3px 3px 0 #000; letter-spacing: 1px; }
+  .tag { color: var(--muted); margin: 0 0 14px; text-align: center; }
+  .wrap { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; align-items: flex-start; max-width: 100%; }
+  canvas#board {
+    width: min(92vw, 560px); height: auto; aspect-ratio: 1;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    border: 4px solid #000; box-shadow: 6px 6px 0 #000; cursor: pointer; display: block;
+  }
+  .side { width: min(92vw, 260px); display: flex; flex-direction: column; gap: 12px; }
+  .box { background: var(--panel); border: 3px solid #000; box-shadow: 4px 4px 0 #000; padding: 10px; }
+  #status { min-height: 3.4em; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    font: inherit; color: var(--ink); background: #4a3f6b; border: 3px solid #000;
+    padding: 8px 10px; cursor: pointer; box-shadow: 3px 3px 0 #000;
+  }
+  button:hover { background: #5d5085; }
+  button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #000; }
+  button.on { background: var(--accent); color: #1a1626; }
+  .legend { display: grid; grid-template-columns: 12px 1fr; gap: 6px 8px; align-items: center; }
+  .sw { width: 12px; height: 12px; border: 2px solid #000; }
+  #info { min-height: 4.8em; }
+  #log { max-height: 140px; overflow-y: auto; color: var(--muted); }
+  .rules p { margin: 0 0 8px; color: var(--muted); }
+  .rules b { color: var(--ink); font-weight: normal; }
+</style>
+</head>
+<body>
+<h1>DEVOUR CHESS</h1>
+<p class="tag">You are what you eat.</p>
+<div class="wrap">
+  <canvas id="board" width="128" height="128"></canvas>
+  <div class="side">
+    <div class="box" id="status"></div>
+    <div class="box row">
+      <button id="new">NEW</button>
+      <button id="undo">UNDO</button>
+      <button id="cpu">CPU: ON</button>
+    </div>
+    <div class="box" id="info">Click a piece to see its powers.</div>
+    <div class="box legend" id="legend"></div>
+    <div class="box rules">
+      <p><b>The twist:</b> a piece that captures <b>absorbs</b> every power of its victim and can move like all of them.</p>
+      <p>Pawn eats knight? It can now hop like a knight. Colored pips under a piece show what it has eaten.</p>
+      <p>Checkmate wins as usual. Pawns promote to queens. No castling or en passant.</p>
+    </div>
+    <div class="box" id="log"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ---------- Pixel sprites (silhouettes; outline is generated) ----------
+  const SPRITES = {
+    P: ["            ","            ","     xx     ","    xxxx    ","    xxxx    ","     xx     ","    xxxx    ","     xx     ","    xxxx    ","   xxxxxx   ","  xxxxxxxx  ","            "],
+    R: ["            ","  xx xx xx  ","  xxxxxxxx  ","   xxxxxx   ","   xxxxxx   ","   xxxxxx   ","   xxxxxx   ","   xxxxxx   ","  xxxxxxxx  "," xxxxxxxxxx "," xxxxxxxxxx ","            "],
+    N: ["            ","     xx     ","    xxxxx   ","   xxexxxx  ","  xxxxxxxx  "," xxxxxxxxx  "," xxx  xxxx  ","     xxxxx  ","    xxxxxx  ","  xxxxxxxx  "," xxxxxxxxxx ","            "],
+    B: ["            ","     xx     ","    xxxx    ","   xxx xx   ","   xx xxx   ","   xxxxxx   ","    xxxx    ","     xx     ","    xxxx    ","   xxxxxx   ","  xxxxxxxx  ","            "],
+    Q: ["            "," x  x  x  x "," x  x  x  x "," xx xxxx xx ","  xxxxxxxx  ","  xxxxxxxx  ","   xxxxxx   ","    xxxx    ","   xxxxxx   ","  xxxxxxxx  "," xxxxxxxxxx ","            "],
+    K: ["            ","     xx     ","    xxxx    ","     xx     ","  xx xx xx  "," xxxxxxxxxx "," xxxxxxxxxx ","  xxxxxxxx  ","   xxxxxx   ","  xxxxxxxx  "," xxxxxxxxxx ","            "],
+  };
+  const NAMES = { P: "Pawn", N: "Knight", B: "Bishop", R: "Rook", Q: "Queen", K: "King" };
+  const POWER_COLOR = { P: "#9be36b", N: "#ffb347", B: "#59c1ff", R: "#ff5e7a", Q: "#c98bff", K: "#ffe066" };
+  const VALUE = { P: 1, N: 3, B: 3, R: 5, Q: 9, K: 0 };
+  const PAL = {
+    w: { fill: "#f4ecd6", shade: "#c9bc98", line: "#1b1424" },
+    b: { fill: "#4b3a66", shade: "#33264a", line: "#0b0712" },
+  };
+  const SQ_LIGHT = "#d9a066", SQ_DARK = "#8f5a3c";
+
+  // ---------- Game state ----------
+  let board, turn, history, selected, legal, lastMove, gameOver, cpuOn = true, thinking = false, logLines;
+
+  const piece = (color, type) => ({ color, type, powers: [type], moved: false });
+
+  function newGame() {
+    board = Array.from({ length: 8 }, () => Array(8).fill(null));
+    const back = "RNBQKBNR";
+    for (let c = 0; c < 8; c++) {
+      board[0][c] = piece("b", back[c]);
+      board[1][c] = piece("b", "P");
+      board[6][c] = piece("w", "P");
+      board[7][c] = piece("w", back[c]);
+    }
+    turn = "w"; history = []; selected = null; legal = []; lastMove = null; gameOver = false; logLines = [];
+    render(); updateUI();
+  }
+
+  const clone = (b) => b.map(row => row.map(p => p ? { ...p, powers: [...p.powers] } : null));
+  const inside = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+
+  // Pseudo-legal moves for a piece, using the union of all its powers.
+  function pseudoMoves(b, r, c) {
+    const p = b[r][c]; if (!p) return [];
+    const out = new Map();
+    const add = (tr, tc) => { out.set(tr * 8 + tc, { fr: r, fc: c, tr, tc }); };
+    const slide = (dirs) => {
+      for (const [dr, dc] of dirs) {
+        let tr = r + dr, tc = c + dc;
+        while (inside(tr, tc)) {
+          const t = b[tr][tc];
+          if (!t) add(tr, tc);
+          else { if (t.color !== p.color) add(tr, tc); break; }
+          tr += dr; tc += dc;
+        }
+      }
+    };
+    const step = (deltas) => {
+      for (const [dr, dc] of deltas) {
+        const tr = r + dr, tc = c + dc;
+        if (!inside(tr, tc)) continue;
+        const t = b[tr][tc];
+        if (!t || t.color !== p.color) add(tr, tc);
+      }
+    };
+    const ORTH = [[1,0],[-1,0],[0,1],[0,-1]], DIAG = [[1,1],[1,-1],[-1,1],[-1,-1]];
+    for (const pw of p.powers) {
+      if (pw === "R") slide(ORTH);
+      else if (pw === "B") slide(DIAG);
+      else if (pw === "Q") slide([...ORTH, ...DIAG]);
+      else if (pw === "N") step([[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]]);
+      else if (pw === "K") step([...ORTH, ...DIAG]);
+      else if (pw === "P") {
+        const d = p.color === "w" ? -1 : 1;
+        if (inside(r + d, c) && !b[r + d][c]) {
+          add(r + d, c);
+          if (p.type === "P" && !p.moved && inside(r + 2 * d, c) && !b[r + 2 * d][c]) add(r + 2 * d, c);
+        }
+        for (const dc of [-1, 1]) {
+          const tr = r + d, tc = c + dc;
+          if (inside(tr, tc) && b[tr][tc] && b[tr][tc].color !== p.color) add(tr, tc);
+        }
+      }
+    }
+    return [...out.values()];
+  }
+
+  function applyMove(b, m) {
+    const nb = clone(b);
+    const mover = nb[m.fr][m.fc];
+    const victim = nb[m.tr][m.tc];
+    if (victim) {
+      for (const pw of victim.powers) if (!mover.powers.includes(pw)) mover.powers.push(pw);
+    }
+    mover.moved = true;
+    nb[m.tr][m.tc] = mover; nb[m.fr][m.fc] = null;
+    if (mover.type === "P" && (m.tr === 0 || m.tr === 7)) {
+      mover.type = "Q";
+      if (!mover.powers.includes("Q")) mover.powers.push("Q");
+    }
+    return nb;
+  }
+
+  function findKing(b, color) {
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = b[r][c]; if (p && p.color === color && p.type === "K") return [r, c];
+    }
+    return null;
+  }
+
+  function attacked(b, r, c, byColor) {
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) {
+      const p = b[i][j];
+      if (p && p.color === byColor && pseudoMoves(b, i, j).some(m => m.tr === r && m.tc === c)) return true;
+    }
+    return false;
+  }
+
+  const other = (col) => col === "w" ? "b" : "w";
+  function inCheck(b, color) {
+    const k = findKing(b, color); if (!k) return true;
+    return attacked(b, k[0], k[1], other(color));
+  }
+
+  function legalMovesFrom(b, r, c) {
+    const p = b[r][c];
+    return pseudoMoves(b, r, c).filter(m => !inCheck(applyMove(b, m), p.color));
+  }
+  function allLegal(b, color) {
+    const out = [];
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++)
+      if (b[r][c] && b[r][c].color === color) out.push(...legalMovesFrom(b, r, c));
+    return out;
+  }
+
+  // ---------- CPU (2-ply minimax on absorbed-power material) ----------
+  function pieceValue(p) {
+    if (p.type === "K") return 1000 + p.powers.filter(x => x !== "K").reduce((s, x) => s + VALUE[x] * 0.3, 0);
+    const vals = p.powers.map(x => VALUE[x]).sort((a, b) => b - a);
+    return vals[0] + vals.slice(1).reduce((s, v) => s + v * 0.4, 0);
+  }
+  function evaluate(b, color) {
+    let s = 0;
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = b[r][c]; if (!p) continue;
+      let v = pieceValue(p);
+      v += (3.5 - Math.abs(3.5 - c)) * 0.03 + (3.5 - Math.abs(3.5 - r)) * 0.03; // center
+      s += p.color === color ? v : -v;
+    }
+    return s;
+  }
+  function pseudoAll(b, color) {
+    const out = [];
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++)
+      if (b[r][c] && b[r][c].color === color) out.push(...pseudoMoves(b, r, c));
+    return out;
+  }
+  function cpuMove(color) {
+    const moves = allLegal(board, color);
+    if (!moves.length) return null;
+    let best = -Infinity, choices = [];
+    for (const m of moves) {
+      const nb = applyMove(board, m);
+      // Opponent's best reply (pseudo-legal; capturing the king = win).
+      let worst = Infinity;
+      const replies = pseudoAll(nb, other(color));
+      if (!replies.length) worst = evaluate(nb, color);
+      for (const rm of replies) {
+        const nb2 = applyMove(nb, rm);
+        const score = findKing(nb2, color) ? evaluate(nb2, color) : -1e6;
+        if (score < worst) worst = score;
+      }
+      const s = worst + Math.random() * 0.05;
+      if (s > best + 1e-9) { best = s; choices = [m]; }
+      else if (Math.abs(s - best) < 1e-9) choices.push(m);
+    }
+    return choices[Math.floor(Math.random() * choices.length)];
+  }
+
+  // ---------- Move execution ----------
+  const FILES = "abcdefgh";
+  const sqName = (r, c) => FILES[c] + (8 - r);
+
+  function doMove(m) {
+    history.push({ board: clone(board), turn, lastMove, logLines: [...logLines] });
+    const mover = board[m.fr][m.fc], victim = board[m.tr][m.tc];
+    let line = `${mover.color === "w" ? "W" : "B"} ${NAMES[mover.type]} ${sqName(m.fr, m.fc)}-${sqName(m.tr, m.tc)}`;
+    const gained = victim ? victim.powers.filter(p => !mover.powers.includes(p)) : [];
+    board = applyMove(board, m);
+    if (victim) {
+      line += ` eats ${NAMES[victim.type]}`;
+      if (gained.length) line += ` +${gained.map(g => NAMES[g]).join("+")}`;
+      blip(gained.length ? 660 : 440, 0.12); if (gained.length) setTimeout(() => blip(880, 0.1), 90);
+    } else blip(260, 0.06);
+    logLines.unshift(line);
+    lastMove = m; turn = other(turn); selected = null; legal = [];
+    const replies = allLegal(board, turn);
+    if (!replies.length) gameOver = true;
+    render(); updateUI();
+    if (!gameOver && cpuOn && turn === "b") scheduleCpu();
+  }
+
+  function scheduleCpu() {
+    thinking = true; updateUI();
+    setTimeout(() => {
+      const m = cpuMove("b");
+      thinking = false;
+      if (m) doMove(m); else updateUI();
+    }, 350);
+  }
+
+  // ---------- Rendering ----------
+  const cv = document.getElementById("board");
+  const ctx = cv.getContext("2d");
+  const S = 16;
+
+  function drawSprite(type, color, x, y) {
+    const rows = SPRITES[type], pal = PAL[color];
+    const filled = (i, j) => i >= 0 && i < 12 && j >= 0 && j < 12 && rows[i][j] !== " ";
+    for (let i = 0; i < 12; i++) for (let j = 0; j < 12; j++) {
+      const ch = rows[i][j];
+      let col = null;
+      if (ch === "x") col = (!filled(i, j + 1) || !filled(i + 1, j)) ? pal.shade : pal.fill;
+      else if (ch === "e") col = pal.line;
+      else if (filled(i - 1, j) || filled(i + 1, j) || filled(i, j - 1) || filled(i, j + 1)) col = pal.line;
+      if (col) { ctx.fillStyle = col; ctx.fillRect(x + j, y + i, 1, 1); }
+    }
+  }
+
+  function render() {
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      ctx.fillStyle = (r + c) % 2 ? SQ_DARK : SQ_LIGHT;
+      ctx.fillRect(c * S, r * S, S, S);
+    }
+    if (lastMove) {
+      ctx.fillStyle = "rgba(255,224,102,0.35)";
+      ctx.fillRect(lastMove.fc * S, lastMove.fr * S, S, S);
+      ctx.fillRect(lastMove.tc * S, lastMove.tr * S, S, S);
+    }
+    const k = findKing(board, turn);
+    if (k && inCheck(board, turn)) {
+      ctx.fillStyle = "#e0303a";
+      ctx.fillRect(k[1] * S, k[0] * S, S, S);
+    }
+    if (selected) {
+      ctx.fillStyle = "#3fd0a0";
+      const [r, c] = selected;
+      ctx.fillRect(c * S, r * S, S, 1); ctx.fillRect(c * S, r * S + S - 1, S, 1);
+      ctx.fillRect(c * S, r * S, 1, S); ctx.fillRect(c * S + S - 1, r * S, 1, S);
+    }
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = board[r][c]; if (!p) continue;
+      drawSprite(p.type, p.color, c * S + 2, r * S + 1);
+      // Pips for absorbed powers
+      const extra = p.powers.filter(x => x !== p.type);
+      if (extra.length) {
+        ctx.fillStyle = "#000"; ctx.fillRect(c * S, r * S + 13, extra.length * 3 + 1, 3);
+      }
+      extra.forEach((pw, i) => {
+        ctx.fillStyle = POWER_COLOR[pw]; ctx.fillRect(c * S + 1 + i * 3, r * S + 14, 2, 2);
+      });
+    }
+    for (const m of legal) {
+      const x = m.tc * S, y = m.tr * S;
+      if (board[m.tr][m.tc]) {
+        ctx.fillStyle = "#3fd0a0";
+        for (const [dx, dy] of [[0,0],[S-3,0],[0,S-3],[S-3,S-3]]) ctx.fillRect(x + dx, y + dy, 3, 3);
+      } else {
+        ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(x + 6, y + 6, 4, 4);
+        ctx.fillStyle = "#3fd0a0"; ctx.fillRect(x + 7, y + 7, 2, 2);
+      }
+    }
+  }
+
+  // ---------- UI ----------
+  const $ = (id) => document.getElementById(id);
+
+  function describe(p) {
+    const extra = p.powers.filter(x => x !== p.type);
+    let s = `${p.color === "w" ? "White" : "Black"} ${NAMES[p.type]}`;
+    s += extra.length ? `<br><br>Absorbed: ${extra.map(x => `<span style="color:${POWER_COLOR[x]}">${NAMES[x]}</span>`).join(", ")}` : "<br><br>No absorbed powers yet.";
+    return s;
+  }
+
+  function updateUI() {
+    let s;
+    if (gameOver) {
+      s = inCheck(board, turn) ? `CHECKMATE!<br>${turn === "w" ? "Black" : "White"} wins.` : "STALEMATE.<br>It's a draw.";
+    } else {
+      s = `${turn === "w" ? "White" : "Black"} to move`;
+      if (thinking) s = "CPU is chewing...";
+      if (inCheck(board, turn)) s += "<br><span style='color:#ff5e7a'>CHECK!</span>";
+    }
+    $("status").innerHTML = s;
+    $("cpu").textContent = `CPU: ${cpuOn ? "ON" : "OFF"}`;
+    $("cpu").classList.toggle("on", cpuOn);
+    $("log").innerHTML = logLines.length ? logLines.join("<br>") : "No moves yet.";
+  }
+
+  $("legend").innerHTML = Object.keys(NAMES).map(k =>
+    `<div class="sw" style="background:${POWER_COLOR[k]}"></div><div>${NAMES[k]} power</div>`).join("");
+
+  cv.addEventListener("click", (e) => {
+    if (gameOver || thinking) return;
+    const rect = cv.getBoundingClientRect();
+    const c = Math.floor((e.clientX - rect.left) / rect.width * 8);
+    const r = Math.floor((e.clientY - rect.top) / rect.height * 8);
+    if (!inside(r, c)) return;
+    const p = board[r][c];
+    const m = legal.find(m => m.tr === r && m.tc === c);
+    if (m) { doMove(m); return; }
+    if (p) $("info").innerHTML = describe(p);
+    if (p && p.color === turn && !(cpuOn && turn === "b")) {
+      selected = [r, c]; legal = legalMovesFrom(board, r, c);
+    } else { selected = null; legal = []; }
+    render();
+  });
+
+  $("new").onclick = () => { if (!thinking) newGame(); };
+  $("undo").onclick = () => {
+    if (thinking || !history.length) return;
+    // With CPU on, undo back to the human's turn.
+    let h = history.pop();
+    if (cpuOn && h.turn === "b" && history.length) h = history.pop();
+    ({ board, turn, lastMove, logLines } = h);
+    gameOver = false; selected = null; legal = [];
+    render(); updateUI();
+  };
+  $("cpu").onclick = () => {
+    cpuOn = !cpuOn; updateUI();
+    if (cpuOn && turn === "b" && !gameOver && !thinking) scheduleCpu();
+  };
+
+  // ---------- Sound ----------
+  let actx = null;
+  function blip(freq, dur) {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = "square"; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.06, actx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
+      o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + dur);
+    } catch (_) {}
+  }
+
+  newGame();
+})();
+</script>
+</body>
+</html>
