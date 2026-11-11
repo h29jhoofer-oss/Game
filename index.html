@@ -20,23 +20,23 @@
       <canvas id="scene"></canvas>
 
       <header class="hud">
-        <div class="depth-pill" aria-live="polite"><span id="hud-depth">0</span><small>m</small></div>
+        <div class="pix depth-pill" aria-live="polite"><span id="hud-depth">0</span><small>m</small></div>
         <ol class="pips" id="pips" aria-label="Progress"></ol>
         <div class="hud-btns">
-          <button id="btn-home" class="icon-btn" type="button" aria-label="Home">
+          <button id="btn-home" class="pix icon-btn" type="button" aria-label="Home">
             <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 0.5 6H2v5h3V8h2v3h3V6h1.5z"/></svg>
           </button>
-          <button id="btn-help" class="icon-btn" type="button" aria-label="How to play">?</button>
-          <button id="btn-stats" class="icon-btn" type="button" aria-label="Stats">
+          <button id="btn-help" class="pix icon-btn" type="button" aria-label="How to play">?</button>
+          <button id="btn-stats" class="pix icon-btn" type="button" aria-label="Stats">
             <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 11h2V6H1zM5 11h2V2H5zM9 11h2V4H9z"/></svg>
           </button>
-          <button id="btn-sound" class="icon-btn" type="button" aria-label="Toggle sound">
+          <button id="btn-sound" class="pix icon-btn" type="button" aria-label="Toggle sound">
             <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 4h2l3-3v10L3 8H1z"/><path class="wave" d="M8 3.5c1.3 1.3 1.3 3.7 0 5M9.6 2c2 2 2 6 0 8" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>
           </button>
         </div>
       </header>
 
-      <div id="layer-banner" class="layer-banner hidden"></div>
+      <div id="layer-banner" class="pix layer-banner hidden"></div>
       <div id="float-layer" class="float-layer"></div>
 
       <!-- TITLE -->
@@ -45,25 +45,25 @@
           <h1 class="logo" id="logo"><span>Deep</span><span>Dig</span></h1>
           <p class="tagline">The rarer your answer, the deeper you dig.</p>
         </div>
-        <div class="card title-card">
+        <div class="pix card title-card">
           <p class="eyebrow" id="title-dig"></p>
-          <button id="btn-play" class="btn primary" type="button">Start today's dig</button>
-          <button id="btn-practice" class="btn ghost" type="button">Practice mine</button>
+          <button id="btn-play" class="pix btn primary" type="button">Start today's dig</button>
+          <button id="btn-practice" class="pix btn ghost" type="button">Practice mine</button>
           <p class="note" id="title-note"></p>
         </div>
       </section>
 
       <!-- QUESTION -->
       <section id="screen-question" class="screen screen-question hidden">
-        <div class="card prompt-card">
+        <div class="pix card prompt-card">
           <div class="q-meta"><span id="q-round"></span><span id="q-time"></span></div>
           <h2 id="q-text" class="prompt"></h2>
           <div class="timer"><div id="timer-fill"></div></div>
         </div>
         <div class="answer-wrap">
-          <form id="answer-form" class="answer-bar" autocomplete="off">
-            <input id="answer" type="text" maxlength="40" placeholder="Type an answer" spellcheck="false" autocapitalize="off" aria-label="Your answer">
-            <button class="btn primary dig-btn" type="submit">Dig</button>
+          <form id="answer-form" class="pix answer-bar" autocomplete="off">
+            <input id="answer" class="pix" type="text" maxlength="40" placeholder="Type an answer" spellcheck="false" autocapitalize="off" aria-label="Your answer">
+            <button class="pix btn primary dig-btn" type="submit">Dig</button>
           </form>
           <button id="btn-skip" class="link-btn" type="button">Skip</button>
         </div>
@@ -71,7 +71,7 @@
 
       <!-- REVEAL -->
       <section id="screen-reveal" class="screen screen-sheet hidden">
-        <div class="card sheet">
+        <div class="pix card sheet">
           <div id="reveal-tier" class="tier-badge"></div>
           <p id="reveal-answer" class="reveal-answer"></p>
           <p id="reveal-points" class="reveal-points"></p>
@@ -79,37 +79,36 @@
             <p class="eyebrow">Other finds in this vein</p>
             <ul id="reveal-examples"></ul>
           </div>
-          <button id="btn-next" class="btn primary" type="button">Keep digging</button>
+          <button id="btn-next" class="pix btn primary" type="button">Keep digging</button>
         </div>
       </section>
 
       <!-- RESULTS -->
       <section id="screen-results" class="screen screen-sheet hidden">
-        <div class="card sheet results">
+        <div class="pix card sheet results">
           <p class="eyebrow" id="res-title"></p>
           <p class="res-depth"><span id="res-depth">0</span><small>m</small></p>
           <p class="rank" id="res-rank"></p>
           <ol id="res-list" class="res-list"></ol>
           <div class="res-buttons">
-            <button id="btn-share" class="btn primary" type="button">Copy result</button>
-            <button id="btn-again" class="btn ghost hidden" type="button">Practice again</button>
+            <button id="btn-share" class="pix btn primary" type="button">Copy result</button>
+            <button id="btn-again" class="pix btn ghost hidden" type="button">Practice again</button>
           </div>
           <textarea id="share-fallback" class="share-fallback hidden" rows="2" readonly aria-label="Result text to copy"></textarea>
           <p class="note" id="res-next"></p>
         </div>
       </section>
     </div>
-    <p class="foot">New prompts every day at midnight, your time.</p>
   </main>
 
   <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
-    <div class="card modal-box">
-      <button id="modal-close" class="icon-btn modal-x" type="button" aria-label="Close">×</button>
+    <div class="pix card modal-box">
+      <button id="modal-close" class="pix icon-btn modal-x" type="button" aria-label="Close">×</button>
       <div id="modal-body"></div>
     </div>
   </div>
 
-  <div id="toast" class="toast hidden"></div>
+  <div id="toast" class="pix toast hidden"></div>
   <!--ARTIFACT-BODY-END-->
 
   <script src="questions.js"></script>

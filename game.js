@@ -94,6 +94,36 @@
   }
 
   // ==================================================================
+  // Pixel frames: 7x7 9-slice SVGs with stepped corners for panels & buttons
+  // ==================================================================
+  (function pixelFrames() {
+    const cell = (x, y, c, w = 1, h = 1) => {
+      if (!c) return "";
+      const [hex, op = 1] = c.split("@");
+      return `<rect x='${x}' y='${y}' width='${w}' height='${h}' fill='${hex}' fill-opacity='${op}'/>`;
+    };
+    const frame = ({ fill, line, hi, lo }) => {
+      let s = cell(2, 1, fill, 3, 1) + cell(1, 2, fill, 5, 3) + cell(2, 5, fill, 3, 1);
+      s += cell(2, 1, hi, 3, 1) + cell(2, 5, lo, 3, 1);
+      s += cell(2, 0, line, 3, 1) + cell(2, 6, line, 3, 1) + cell(0, 2, line, 1, 3) + cell(6, 2, line, 1, 3);
+      s += cell(1, 1, line) + cell(5, 1, line) + cell(1, 5, line) + cell(5, 5, line);
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 7' width='7' height='7' shape-rendering='crispEdges'>${s}</svg>`;
+      return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    };
+    const frames = {
+      card: { fill: "#120c22@0.8", line: "#ffffff@0.24", hi: "#ffffff@0.06" },
+      strong: { fill: "#0e0a1a@0.92", line: "#ffffff@0.28", hi: "#ffffff@0.05" },
+      primary: { fill: "#ffc94d", line: "#2a1a06", hi: "#ffe9a8", lo: "#c78a1c" },
+      "primary-hover": { fill: "#ffd76e", line: "#2a1a06", hi: "#fff2c8", lo: "#d99a2a" },
+      ghost: { fill: "#ffffff@0.07", line: "#ffffff@0.38", hi: "#ffffff@0.06" },
+      input: { fill: "#ffffff@0.07", line: "#ffffff@0.16" },
+      "input-focus": { fill: "#ffffff@0.1", line: "#ffc94d" },
+    };
+    const root = document.documentElement.style;
+    Object.entries(frames).forEach(([k, v]) => root.setProperty(`--frame-${k}`, frame(v)));
+  })();
+
+  // ==================================================================
   // Question bank + answer matching
   // ==================================================================
   function normalize(s) {
@@ -256,15 +286,23 @@
   // ==================================================================
   const canvas = $("scene");
   const ctx = canvas.getContext("2d");
-  const W = 288, H = 432, SCALE = 3;
-  canvas.width = W * SCALE;
-  canvas.height = H * SCALE;
-  ctx.imageSmoothingEnabled = false;
-  const SURFACE = 215;
+  const SCALE = 3;
   const PX_PER_M = 1 / 12.5;
-  const WORLD_H = SURFACE + Math.ceil(MAX_METERS * PX_PER_M) + H;
   const SHAFT_W = 22;
-  const SHAFT_X = Math.round(W / 2 - SHAFT_W / 2);
+  // The world is sized to the screen: 360 art pixels tall on wide screens, at least 260 wide on phones.
+  let W = 288, H = 432, SURFACE = 215, WORLD_H = 0, SHAFT_X = 0;
+  function computeSize() {
+    const vw = window.innerWidth || 400, vh = window.innerHeight || 700;
+    const aspect = vw / vh;
+    W = Math.max(260, Math.round(360 * aspect));
+    H = Math.round(W / aspect);
+    SURFACE = Math.round(H * 0.5);
+    WORLD_H = SURFACE + Math.ceil(MAX_METERS * PX_PER_M) + H;
+    SHAFT_X = Math.round(W / 2 - SHAFT_W / 2);
+    canvas.width = W * SCALE;
+    canvas.height = H * SCALE;
+    ctx.imageSmoothingEnabled = false;
+  }
   const mToY = (m) => SURFACE + m * PX_PER_M;
   const snap = (v) => Math.round(v * SCALE) / SCALE;
   const R = (x, y, w, h) => ctx.fillRect(snap(x), snap(y), w, h);
@@ -303,8 +341,9 @@
   const caves = [], crystals = [], lavaPools = [], worms = [], lanterns = [];
 
   const terrain = document.createElement("canvas");
-  terrain.width = W; terrain.height = WORLD_H;
-  (function buildTerrain() {
+  function buildTerrain() {
+    terrain.width = W; terrain.height = WORLD_H;
+    caves.length = 0; crystals.length = 0; lavaPools.length = 0; worms.length = 0; lanterns.length = 0;
     const t = terrain.getContext("2d");
     const img = t.createImageData(W, WORLD_H);
     const d = img.data;
@@ -461,7 +500,12 @@
       }
       px(x, SURFACE - 4 - h, 1, 1, "#4f9a5a");
     };
-    pine(10, 24); pine(102, 16); pine(268, 26); pine(280, 15);
+    // pines scattered wherever there's open ground
+    for (let x = 6; x < W - 4; x += 16 + Math.floor(rng() * 34)) {
+      const nearShack = x > 12 && x < 64;
+      const nearShaft = x > SHAFT_X - 14 && x < SHAFT_X + SHAFT_W + 120;
+      if (!nearShack && !nearShaft) pine(x, 12 + Math.floor(rng() * 16));
+    }
     const sx = 22;
     for (let k = 0; k < 18; k++) px(sx, SURFACE - 18 + k, 32, 1, k % 3 === 2 ? "#6a3e22" : "#8a5430");
     for (let k = 0; k < 12; k++) px(sx - 3 + k, SURFACE - 19 - k, 38 - k * 2, 1, k % 2 ? "#b04444" : "#9a3838");
@@ -482,9 +526,10 @@
     px(cx0 + 2, SURFACE - 11, 4, 2, "#ffd23f"); px(cx0 + 7, SURFACE - 12, 4, 3, "#e07b39"); px(cx0 + 12, SURFACE - 11, 3, 2, "#6ff0ff");
     circle(cx0 + 4, SURFACE - 2, 2, "#2a2630"); circle(cx0 + 14, SURFACE - 2, 2, "#2a2630");
     px(cx0 - 6, SURFACE - 1, 32, 1, "#7a7686");
-    for (let x = 212; x < 258; x += 8) px(x, SURFACE - 7, 2, 7, "#6a4a2a");
-    px(210, SURFACE - 6, 50, 1, "#8a6a3a"); px(210, SURFACE - 3, 50, 1, "#8a6a3a");
-  })();
+    const fx0 = SHAFT_X + SHAFT_W + 66;
+    for (let x = fx0 + 2; x < fx0 + 48; x += 8) px(x, SURFACE - 7, 2, 7, "#6a4a2a");
+    px(fx0, SURFACE - 6, 50, 1, "#8a6a3a"); px(fx0, SURFACE - 3, 50, 1, "#8a6a3a");
+  }
 
   // ---- sprites ----
   const MINER = [
@@ -505,6 +550,8 @@
     "...OO..OO...",
     "..GGG..GGG..",
   ];
+  const MINER_HANG = MINER.slice();
+  MINER_HANG[10] = ".SBOOOOOOB..";
   const MINER_BLINK = MINER.slice();
   MINER_BLINK[5] = "...SsSSsSs..";
   const MINER_PAL = {
@@ -542,18 +589,36 @@
     swing: 0, tap: 0, t: 0, last: 0,
     blink: 0, nextBlink: 2,
     wheel: 0, layer: 0, shoot: null, nextShoot: 4, smokeT: 0,
+    phase: "idle", phaseT: 0, from: 0, dropDur: 1, crack: 0, strikes: 0, vel: 0,
   };
-  const stars = Array.from({ length: 130 }, (_, i) => {
-    const x = Math.floor(hash2(i, 1) * W);
-    return { x, y: Math.floor(hash2(i, 2) * (SURFACE - farH(x) - 6)), ph: hash2(i, 3) * 6.28, sp: 1 + hash2(i, 5) * 2, big: hash2(i, 4) > 0.88 };
-  });
-  const clouds = [0, 1, 2, 3, 4].map((i) => ({ x: i * 70 + 10, y: 18 + ((i * 23) % 70), w: 20 + ((i * 7) % 16), v: 2.5 + i * 0.6 }));
-  const fireflies = Array.from({ length: 10 }, (_, i) => ({ x: 10 + hash2(i, 9) * (W - 20), y: SURFACE - 6 - hash2(i, 8) * 20, ph: hash2(i, 7) * 6 }));
-  const grass = [];
-  for (let x = 0; x < W; x += 2 + Math.floor(hash2(x, 99) * 3)) {
-    if (x > SHAFT_X - 5 && x < SHAFT_X + SHAFT_W + 4) continue;
-    grass.push({ x, h: 2 + Math.floor(hash2(x, 98) * 3) });
+  let stars = [], clouds = [], fireflies = [], grass = [];
+  function buildAmbient() {
+    const skyH = SURFACE;
+    stars = Array.from({ length: Math.round((W * skyH) / 480) }, (_, i) => {
+      const x = Math.floor(hash2(i, 1) * W);
+      return { x, y: Math.floor(hash2(i, 2) * (SURFACE - farH(x) - 6)), ph: hash2(i, 3) * 6.28, sp: 1 + hash2(i, 5) * 2, big: hash2(i, 4) > 0.88 };
+    });
+    clouds = Array.from({ length: Math.ceil(W / 60) }, (_, i) => ({ x: i * 62 + hash2(i, 11) * 30, y: 18 + hash2(i, 12) * (skyH * 0.45), w: 20 + ((i * 7) % 16), v: 2.5 + hash2(i, 13) * 3 }));
+    fireflies = Array.from({ length: Math.ceil(W / 28) }, (_, i) => ({ x: 10 + hash2(i, 9) * (W - 20), y: SURFACE - 6 - hash2(i, 8) * 20, ph: hash2(i, 7) * 6 }));
+    grass = [];
+    for (let x = 0; x < W; x += 2 + Math.floor(hash2(x, 99) * 3)) {
+      if (x > SHAFT_X - 5 && x < SHAFT_X + SHAFT_W + 4) continue;
+      grass.push({ x, h: 2 + Math.floor(hash2(x, 98) * 3) });
+    }
   }
+  function buildWorld() {
+    computeSize();
+    buildTerrain();
+    buildAmbient();
+    S.finds.forEach((f) => { const p = slotXY(f.meters, f.side, f.k); f.x = p.x; f.y = p.y; });
+    S.flying.forEach((f) => { f.slot = null; });
+  }
+  buildWorld();
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(buildWorld, 120);
+  });
 
   function particle(o) {
     S.particles.push(Object.assign({ vx: 0, vy: 0, g: 60, life: 0.6, max: 0.6, size: 1, c: "#fff" }, o));
@@ -561,15 +626,18 @@
   function minerPos() {
     return { x: SHAFT_X + Math.floor((SHAFT_W - 12) / 2), y: mToY(S.depth) - MINER.length };
   }
+  function slotXY(meters, side, k) {
+    return { x: side ? SHAFT_X + SHAFT_W + 2 : SHAFT_X - 9, y: mToY(meters) - 9 - k * 9, k };
+  }
   function findSlot(meters, side) {
-    const same = S.finds.filter((f) => f.side === side && Math.abs(f.meters - meters) < 80).length;
-    return { x: side ? SHAFT_X + SHAFT_W + 2 : SHAFT_X - 9, y: mToY(meters) - 9 - same * 9 };
+    const k = S.finds.filter((f) => f.side === side && Math.abs(f.meters - meters) < 80).length;
+    return slotXY(meters, side, k);
   }
   function addFind(meters, tier, instant) {
     const side = (S.finds.length + S.flying.length) % 2;
     if (instant) {
       const slot = findSlot(meters, side);
-      S.finds.push({ meters, tier, side, x: slot.x, y: slot.y, born: -10 });
+      S.finds.push({ meters, tier, side, k: slot.k, x: slot.x, y: slot.y, born: -10 });
       return;
     }
     S.flying.push({ meters, tier, side, t: 0 });
@@ -577,6 +645,7 @@
   function resetScene() {
     S.depth = 0; S.target = 0; S.finds = []; S.flying = []; S.particles = [];
     S.camY = 0; S.layer = 0; S.flash = 0; S.shake = 0;
+    S.phase = "idle"; S.phaseT = 0; S.crack = 0; S.strikes = 0; S.vel = 0;
   }
 
   function burst(tier) {
@@ -623,6 +692,35 @@
     return { x: ((m.x + 6) / W) * 100, y: ((m.y - S.camY) / H) * 100 };
   }
 
+  // ---- descent: dig at the floor, drop down the rope, land ----
+  const easeInOut = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+  const CRACK = [[6, 0], [7, 1], [5, 1], [8, 1], [4, 2], [9, 2], [3, 2], [10, 3], [2, 3], [11, 3], [6, 2], [7, 3]];
+  function floorChips(n, spread, up) {
+    const m = minerPos();
+    const L = LAYERS[layerIndexAt(S.depth)];
+    for (let i = 0; i < n; i++) {
+      particle({ x: m.x + 6 + (Math.random() - 0.5) * spread, y: mToY(S.depth), vx: (Math.random() - 0.5) * 80, vy: up ? -30 - Math.random() * 60 : 10 + Math.random() * 60, g: 260, life: 0.7, max: 0.7, size: Math.random() < 0.5 ? 2 : 1, c: rgb(L.c[Math.floor(Math.random() * 3)], 1.1) });
+    }
+  }
+  function onStrike() {
+    floorChips(6, 8, true);
+    if (!REDUCED) S.shake = Math.max(S.shake, 0.9);
+    SFX.strike();
+  }
+  function onBreak() {
+    floorChips(16, 14, false);
+    beep([140, 90], 0.08, "triangle", 0.1);
+  }
+  function onLand() {
+    const m = minerPos();
+    for (let i = 0; i < 14; i++) {
+      const dir = i % 2 ? 1 : -1;
+      particle({ x: m.x + 6 + dir * 3, y: mToY(S.depth) - 1, vx: dir * (20 + Math.random() * 50), vy: -6 - Math.random() * 14, g: 30, life: 0.6, max: 0.6, size: 2, c: i % 3 ? "#b8a890" : "#d8ccb4" });
+    }
+    if (!REDUCED) S.shake = Math.max(S.shake, 1.4);
+    SFX.strike();
+  }
+
   // ---- drawing helpers ----
   function drawPickaxe(hx, hy, deg) {
     ctx.save();
@@ -656,14 +754,30 @@
     S.t += dt;
     const t = S.t;
 
-    const digging = S.depth < S.target - 0.5;
-    if (digging) {
-      const rate = clamp((S.target - S.depth) * 1.4, 380, 2600);
-      S.depth = Math.min(S.target, S.depth + rate * dt);
-      S.wheel += dt * 6;
-    } else {
-      S.depth = S.target;
+    if (S.target < S.depth) { S.depth = S.target; S.phase = "idle"; }
+    if (S.phase === "idle" && S.target > S.depth + 0.5) { S.phase = "dig"; S.phaseT = 0; S.strikes = 0; S.crack = 0; }
+    S.phaseT += dt;
+    const DIG_TIME = REDUCED ? 0.01 : 0.84, LAND_TIME = 0.38;
+    let hang = false, crouch = 0;
+    if (S.phase === "dig" && S.phaseT >= DIG_TIME) {
+      S.phase = "drop"; S.phaseT = 0; S.from = S.depth;
+      S.dropDur = REDUCED ? 0.3 : clamp(0.8 + (S.target - S.depth) / 1200, 0.9, 2.4);
+      onBreak();
     }
+    if (S.phase === "drop") {
+      const k = Math.min(1, S.phaseT / S.dropDur);
+      const prev = S.depth;
+      S.depth = lerp(S.from, S.target, easeInOut(k));
+      S.vel = (S.depth - prev) / Math.max(dt, 0.001);
+      S.wheel += (S.depth - prev) * 0.04;
+      hang = true;
+      if (k >= 1) { S.depth = S.target; S.phase = "land"; S.phaseT = 0; S.vel = 0; onLand(); }
+    }
+    if (S.phase === "land") {
+      crouch = Math.sin(Math.min(1, S.phaseT / LAND_TIME) * Math.PI) * 1.4;
+      if (S.phaseT >= LAND_TIME) { S.phase = S.target > S.depth + 0.5 ? "dig" : "idle"; S.phaseT = 0; S.strikes = 0; S.crack = 0; }
+    }
+    const digging = S.phase === "dig";
     const li = layerIndexAt(S.depth);
     if (li !== S.layer) { if (li > S.layer) onLayerChange(li); S.layer = li; }
 
@@ -679,21 +793,21 @@
     // pickaxe
     let angle;
     const prevSwing = S.swing;
+    void prevSwing;
     if (digging) {
-      S.swing += dt * 2.6;
-      const p = S.swing % 1;
-      const up = (k) => 1 - Math.pow(1 - k, 2);
-      const down = (k) => k * k * k;
-      angle = p < 0.6 ? lerp(25, -115, up(p / 0.6)) : lerp(-115, 25, down((p - 0.6) / 0.4));
-      if (Math.floor(S.swing) !== Math.floor(prevSwing)) {
-        const m = minerPos();
-        const L = LAYERS[li];
-        for (let i = 0; i < 7; i++) {
-          particle({ x: m.x + 16 + Math.random() * 4, y: m.y + MINER.length - 1, vx: (Math.random() - 0.4) * 70, vy: -30 - Math.random() * 50, g: 200, life: 0.6, max: 0.6, size: Math.random() < 0.4 ? 2 : 1, c: rgb(L.c[Math.floor(Math.random() * 3)], 1.15) });
-        }
-        if (!REDUCED) S.shake = Math.max(S.shake, 0.8);
-        SFX.strike();
-      }
+      // three overhead swings down into the floor
+      const p = (S.phaseT / DIG_TIME) * 3;
+      const k = p % 1;
+      const up = (q) => 1 - Math.pow(1 - q, 2);
+      const down = (q) => q * q * q;
+      angle = k < 0.55 ? lerp(80, -110, up(k / 0.55)) : lerp(-110, 80, down((k - 0.55) / 0.45));
+      const n = Math.min(3, Math.floor(p + 0.0001));
+      if (n > S.strikes) { S.strikes = n; S.crack = n; onStrike(); }
+      S.swing = p;
+    } else if (hang) {
+      angle = 100 + Math.sin(t * 9) * 6;
+    } else if (S.phase === "land") {
+      angle = lerp(-70, 30, crouch / 1.4);
     } else if (S.tap > 0) {
       S.tap = Math.max(0, S.tap - dt * 5);
       const k = S.tap;
@@ -861,7 +975,7 @@
       const m = minerPos();
       const rx = SHAFT_X + SHAFT_W / 2 + 5.5;
       const ry0 = Math.max(sy(SURFACE - 40), -1);
-      const ry1 = sy(m.y + 8);
+      const ry1 = hang ? sy(m.y - 3) : sy(m.y + 8);
       if (ry1 > ry0) { ctx.fillStyle = "#c8b48a"; ctx.fillRect(rx, ry0, 1, ry1 - ry0); }
     }
     lanterns.forEach((l) => {
@@ -905,12 +1019,19 @@
       drawSprite(f.tier <= 1 ? CLUMP : GEM, gemPal(col), fx, sy(fy));
       if (f.tier >= 2 && Math.random() < 0.7) particle({ x: fx + 3, y: fy + 3, vx: 0, vy: 6, g: 0, life: 0.35, max: 0.35, c: col });
       if (f.t >= 1) {
-        S.finds.push({ meters: f.meters, tier: f.tier, side: f.side, x: f.slot.x, y: f.slot.y, born: t });
+        S.finds.push({ meters: f.meters, tier: f.tier, side: f.side, k: f.slot.k, x: f.slot.x, y: f.slot.y, born: t });
         for (let i = 0; i < 10; i++) particle({ x: f.slot.x + 3, y: f.slot.y + 3, vx: (Math.random() - 0.5) * 50, vy: (Math.random() - 0.5) * 50, g: 40, life: 0.45, max: 0.45, c: i % 2 ? "#ffffff" : col });
         return false;
       }
       return true;
     });
+
+    // ---- cracks in the floor while digging ----
+    if (digging && S.crack > 0) {
+      const m = minerPos();
+      ctx.fillStyle = "#140a12";
+      CRACK.slice(0, S.crack * 4).forEach(([cx, cy]) => R(m.x + cx, sy(footY) + cy, 1, 1));
+    }
 
     // ---- miner ----
     {
@@ -918,20 +1039,44 @@
       S.nextBlink -= dt;
       if (S.nextBlink <= 0) { S.blink = 0.12; S.nextBlink = 2 + Math.random() * 3; }
       S.blink = Math.max(0, S.blink - dt);
-      const breathe = digging ? 0 : (Math.sin(t * 2.2) * 0.5 + 0.5) * 0.67;
+      const idle = S.phase === "idle";
+      const breathe = idle ? (Math.sin(t * 2.2) * 0.5 + 0.5) * 0.67 : 0;
       const bob = digging ? Math.abs(Math.sin(S.swing * Math.PI)) * 0.67 : 0;
       const my = sy(m.y) + bob;
-      drawSprite((S.blink > 0 ? MINER_BLINK : MINER).slice(0, 13), MINER_PAL, m.x, my - breathe);
-      drawSprite(MINER.slice(13), MINER_PAL, m.x, my + 13);
+      const body = (S.blink > 0 ? MINER_BLINK : MINER).slice(0, 13);
+      if (hang) {
+        // hanging on the rope: one arm up, legs swinging, a little sway
+        const sway = Math.sin(t * 7) * 0.6;
+        drawSprite(MINER_HANG.slice(0, 13), MINER_PAL, m.x + sway, my);
+        drawSprite(MINER.slice(13, 15), MINER_PAL, m.x + sway + Math.sin(t * 12) * 0.67, my + 13);
+        drawSprite(MINER.slice(15), MINER_PAL, m.x + sway + Math.sin(t * 12 + 1) * 0.67, my + 15);
+        ctx.fillStyle = MINER_PAL.B; R(m.x + 10 + sway, my + 7, 2, 2);
+        ctx.fillStyle = MINER_PAL.S; R(m.x + 11 + sway, my - 2, 1, 9);
+        R(m.x + 10.67 + sway, my - 3, 2, 2);
+        drawPickaxe(m.x + 2 + sway, my + 9, angle);
+        // speed streaks along the shaft
+        if (S.vel > 150 && !REDUCED) {
+          const n = Math.min(3, Math.floor(S.vel / 600) + 1);
+          for (let i = 0; i < n; i++) {
+            particle({ x: SHAFT_X + 3 + Math.random() * (SHAFT_W - 6), y: m.y + 20 + Math.random() * 40, g: 0, life: 0.22, max: 0.22, c: "streak", len: 4 + Math.random() * 8 });
+          }
+        }
+      } else {
+        drawSprite(body, MINER_PAL, m.x, my - breathe + crouch);
+        drawSprite(MINER.slice(13), MINER_PAL, m.x, my + 13);
+        drawPickaxe(m.x + 11, my + 10 - breathe + crouch, angle);
+      }
       ctx.fillStyle = Math.sin(t * 14) > -0.3 ? "#ffffff" : "#fff2a0";
-      R(m.x + 10, my + 1 - breathe, 2, 1);
-      drawPickaxe(m.x + 11, my + 10 - breathe, angle);
+      R(m.x + 10 + (hang ? Math.sin(t * 7) * 0.6 : 0), my + 1 - breathe + crouch, 2, 1);
     }
 
     // ---- particles ----
     S.particles = S.particles.filter((p) => {
       p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
-      if (p.c === "smoke") {
+      if (p.c === "streak") {
+        ctx.fillStyle = `rgba(255,240,220,${Math.max(0, p.life / p.max) * 0.35})`;
+        ctx.fillRect(snap(p.x), sy(p.y), 0.67, p.len);
+      } else if (p.c === "smoke") {
         const k = p.life / p.max;
         ctx.fillStyle = `rgba(190,180,210,${Math.max(0, k) * 0.4})`;
         const s = lerp(5, 1.5, k);
@@ -1357,6 +1502,7 @@
       let pts = 0;
       saved.results.forEach((r) => { pts += TIERS[r.tier].pts; addFind(pts * METERS_PER_POINT, r.tier, true); });
       S.target = pts * METERS_PER_POINT;
+      S.depth = S.target;
     }
     if (saved && saved.results.length >= ROUNDS) {
       btn.textContent = PLAYTEST ? `Play next set (#${digNumber + 1})` : "View today's dig";
@@ -1444,7 +1590,6 @@
   $("logo").addEventListener("click", () => showTitle());
   $("btn-home").addEventListener("click", () => { SFX.click(); showTitle(); });
 
-  if (PLAYTEST) document.querySelector(".foot").textContent = "Playtest build: unlimited digs. Each set has 7 new prompts.";
   showTitle();
   requestAnimationFrame(frame);
   if (!store.get("deepdig-seen-help", false)) {
