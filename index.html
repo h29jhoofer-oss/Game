@@ -94,7 +94,12 @@
   .toggle[aria-checked="true"] .knob { left: 19px; background: var(--ink); }
   button.big { padding: 12px 10px; font-size: 12px; }
   .divider { border: 0; border-top: 3px dashed var(--raised); margin: 4px 0; width: 100%; }
-  @media (prefers-reduced-motion: reduce) { .knob { transition: none; } }
+  .dots { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+  .dots i { width: 4px; height: 4px; background: var(--accent); animation: dothop .9s steps(2, jump-none) infinite; }
+  .dots i:nth-child(2) { animation-delay: .3s; }
+  .dots i:nth-child(3) { animation-delay: .6s; }
+  @keyframes dothop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+  @media (prefers-reduced-motion: reduce) { .knob { transition: none; } .dots i { animation: none; } }
   .games { display: flex; flex-direction: column; gap: 6px; }
   .games button { text-align: left; }
 </style>
@@ -520,19 +525,20 @@
     if (!gameOver && cpuOn && turn === "b") scheduleCpu();
   }
   function scheduleCpu() {
-    thinking = true; updateUI();
+    thinking = true; updateUI(); render();
     const started = board;
     // Let the player's move animation play before the bot starts thinking.
     setTimeout(() => {
       if (mode !== "local" || board !== started) { thinking = false; updateUI(); return; }
       const t0 = performance.now();
       const m = botMove(fog ? viewBoard(board, "b", seen) : board, "b", botLevel, fog);
+      const ponder = 700 + Math.random() * 500 + botLevel * 100;
       setTimeout(() => {
         if (mode !== "local" || board !== started) { thinking = false; updateUI(); return; }
         thinking = false;
         if (m) localMove(m); else updateUI();
-      }, Math.max(0, 450 - (performance.now() - t0)));
-    }, 380);
+      }, Math.max(0, ponder - (performance.now() - t0)));
+    }, 300);
   }
 
   // ---------- Online mode (peer-to-peer) ----------
@@ -995,38 +1001,130 @@
     { tex: smokeTexture(11, 96, "#3e3b49", [[0.5, 0.35], [0.65, 0.55]]), vx: -2.5, vy: 1.2, wob: 1.5 },
     { tex: smokeTexture(23, 96, "#d6d3e0", [[0.45, 0.25], [0.58, 0.45], [0.7, 0.7]]), vx: 4, vy: -1.5, wob: 2.5 },
   ];
+  // The smoke's outline comes from a blurred map of the fogged squares, so its
+  // corners round off where it meets cleared ground. A drifting noise field
+  // nudges that outline and a 4x4 dither keeps the soft edge pixel-crisp.
+  const BOARD_PX = 8 * S;
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
+  const smokeCv = document.createElement("canvas"); smokeCv.width = smokeCv.height = BOARD_PX;
+  const smokeCtx = smokeCv.getContext("2d");
+  const maskCv = document.createElement("canvas"); maskCv.width = maskCv.height = BOARD_PX;
+  const maskCtx = maskCv.getContext("2d");
+  const maskImg = maskCtx.createImageData(BOARD_PX, BOARD_PX);
+  for (let i = 0; i < maskImg.data.length; i += 4) maskImg.data[i] = maskImg.data[i + 1] = maskImg.data[i + 2] = 255;
+  const WOB_N = 64;
+  const wobble = (() => {
+    const rand = rng(99), cells = 8, cs = WOB_N / cells;
+    const g = Array.from({ length: cells }, () => Array.from({ length: cells }, rand));
+    const sm = (t) => t * t * (3 - 2 * t), out = new Float32Array(WOB_N * WOB_N);
+    for (let y = 0; y < WOB_N; y++) for (let x = 0; x < WOB_N; x++) {
+      const gx = x / cs, gy = y / cs, x0 = Math.floor(gx), y0 = Math.floor(gy), x1 = (x0 + 1) % cells, y1 = (y0 + 1) % cells;
+      const tx = sm(gx - x0), ty = sm(gy - y0);
+      out[y * WOB_N + x] = (g[y0][x0] * (1 - tx) + g[y0][x1] * tx) * (1 - ty) + (g[y1][x0] * (1 - tx) + g[y1][x1] * tx) * ty - 0.5;
+    }
+    return out;
+  })();
+  function boxBlur(a, N, R) {
+    const tmp = new Float32Array(N * N), w = 2 * R + 1;
+    for (let y = 0; y < N; y++) {
+      const row = y * N; let sum = 0;
+      for (let k = -R; k <= R; k++) sum += a[row + Math.min(N - 1, Math.max(0, k))];
+      for (let x = 0; x < N; x++) {
+        tmp[row + x] = sum / w;
+        sum += a[row + Math.min(N - 1, x + R + 1)] - a[row + Math.max(0, x - R)];
+      }
+    }
+    for (let x = 0; x < N; x++) {
+      let sum = 0;
+      for (let k = -R; k <= R; k++) sum += tmp[Math.min(N - 1, Math.max(0, k)) * N + x];
+      for (let y = 0; y < N; y++) {
+        a[y * N + x] = sum / w;
+        sum += tmp[Math.min(N - 1, y + R + 1) * N + x] - tmp[Math.max(0, y - R) * N + x];
+      }
+    }
+  }
+  let fieldKey = "", field = null;
+  function fogField(cells) {
+    const key = cells.map(([r, c]) => r * 8 + c).join(",");
+    if (key === fieldKey) return field;
+    const N = BOARD_PX, a = new Float32Array(N * N);
+    for (const [sr, sc] of cells) for (let y = sr * S; y < sr * S + S; y++) a.fill(1, y * N + sc * S, y * N + sc * S + S);
+    const isFog = new Uint8Array(64);
+    for (const [sr, sc] of cells) isFog[sr * 8 + sc] = 1;
+    boxBlur(a, N, 4); boxBlur(a, N, 4);
+    // Smoke may only curl a few pixels onto cleared squares, so their pieces stay in view.
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (isFog[Math.floor(y / S) * 8 + Math.floor(x / S)]) continue;
+      const lx = x % S, ly = y % S;
+      if (Math.min(lx, ly, S - 1 - lx, S - 1 - ly) > 2) a[y * N + x] = 0;
+    }
+    fieldKey = key; field = a;
+    return a;
+  }
   function drawSmoke(now) {
     const cells = [];
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (fogged(r, c)) cells.push(toScreen(r, c));
     if (!cells.length) return;
+    const fld = fogField(cells);
     const t = REDUCED ? 0 : now / 1000;
-    ctx.save();
-    ctx.beginPath();
-    for (const [sr, sc] of cells) ctx.rect(sc * S, sr * S, S, S);
-    ctx.clip();
-    ctx.fillStyle = "rgba(98,95,112,0.94)"; ctx.fillRect(0, 0, 8 * S, 8 * S);
+    // 1. Paint drifting smoke over the whole board.
+    smokeCtx.globalCompositeOperation = "source-over";
+    smokeCtx.clearRect(0, 0, BOARD_PX, BOARD_PX);
+    smokeCtx.fillStyle = "rgba(98,95,112,0.94)"; smokeCtx.fillRect(0, 0, BOARD_PX, BOARD_PX);
     for (const L of SMOKE) {
       const n = L.tex.width;
       const ox = ((Math.round(t * L.vx + Math.sin(t * 0.6) * L.wob) % n) + n) % n;
       const oy = ((Math.round(t * L.vy + Math.cos(t * 0.45) * L.wob) % n) + n) % n;
-      for (let y = -oy; y < 8 * S; y += n) for (let x = -ox; x < 8 * S; x += n) ctx.drawImage(L.tex, x, y);
+      for (let y = -oy; y < BOARD_PX; y += n) for (let x = -ox; x < BOARD_PX; x += n) smokeCtx.drawImage(L.tex, x, y);
     }
-    ctx.restore();
-    // Fringe: haze pixels breathing a couple of pixels onto neighbouring clear squares.
-    const isFog = new Set(cells.map(([r, c]) => r * 8 + c));
-    const phase = Math.floor(t * 3) % 2;
-    ctx.fillStyle = "rgba(150,147,165,0.55)";
-    for (const [sr, sc] of cells) {
-      for (const [dr, dc] of [[1,0],[-1,0],[0,1],[0,-1]]) {
-        const nr = sr + dr, nc = sc + dc;
-        if (nr < 0 || nr > 7 || nc < 0 || nc > 7 || isFog.has(nr * 8 + nc)) continue;
-        for (let k = 0; k < S; k++) for (let d = 0; d < 2; d++) {
-          if ((k + d + phase) % 2 || (d === 1 && (k * 7 + sr + sc) % 3)) continue;
-          const x = dc ? (dc > 0 ? (sc + 1) * S + d : sc * S - 1 - d) : sc * S + k;
-          const y = dr ? (dr > 0 ? (sr + 1) * S + d : sr * S - 1 - d) : sr * S + k;
-          ctx.fillRect(x, y, 1, 1);
+    // 2. Cut it to the rounded, breathing outline.
+    const d = maskImg.data, N = BOARD_PX;
+    const wx = Math.floor(t * 4), wy = Math.floor(t * 2.5);
+    for (let y = 0; y < N; y++) {
+      const wrow = ((y + wy) % WOB_N) * WOB_N;
+      for (let x = 0; x < N; x++) {
+        const i = y * N + x, v = fld[i];
+        let a;
+        if (v <= 0.25) a = 0;
+        else if (v >= 0.75) a = 255;
+        else {
+          const e = v + wobble[wrow + ((x + wx) % WOB_N)] * 0.3;
+          a = (e - 0.42) / 0.16 >= BAYER[(y & 3) * 4 + (x & 3)] ? 255 : 0;
         }
+        d[i * 4 + 3] = a;
       }
+    }
+    maskCtx.putImageData(maskImg, 0, 0);
+    smokeCtx.globalCompositeOperation = "destination-in";
+    smokeCtx.drawImage(maskCv, 0, 0);
+    smokeCtx.globalCompositeOperation = "source-over";
+    ctx.drawImage(smokeCv, 0, 0);
+  }
+
+  // ----- Bot thinking bubble -----
+  function drawThinking(now) {
+    const t = REDUCED ? 0 : now / 1000;
+    const k = findKing(board, "b");
+    let ax, ay;
+    if (k && !fogged(k[0], k[1])) { const [sr, sc] = toScreen(k[0], k[1]); ax = sc * S + 12; ay = sr * S + 2; }
+    else { ax = 4 * S; ay = 2; } // king hidden in the smoke: think from the far edge
+    const bw = 22, bh = 12;
+    const bx = Math.max(-F + 1, Math.min(BOARD_PX + F - bw - 1, ax + 2));
+    const by = Math.max(-F + 1, ay - bh - 7) + Math.round(Math.sin(t * 4));
+    const ink = "#1a1626", paper = "#f4ecd6";
+    // trail of little thought puffs
+    const puff = (x, y, w) => { ctx.fillStyle = ink; ctx.fillRect(x - 1, y - 1, w + 2, w + 2); ctx.fillStyle = paper; ctx.fillRect(x, y, w, w); };
+    puff(ax, ay - 2, 1); puff(ax + 1, ay - 5, 2);
+    // rounded bubble
+    ctx.fillStyle = ink;
+    ctx.fillRect(bx + 1, by, bw - 2, bh); ctx.fillRect(bx, by + 1, bw, bh - 2);
+    ctx.fillStyle = paper;
+    ctx.fillRect(bx + 2, by + 1, bw - 4, bh - 2); ctx.fillRect(bx + 1, by + 2, bw - 2, bh - 4);
+    // three dots taking turns to hop
+    const active = Math.floor(t * 5) % 3;
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = i === active ? "#ff7a59" : "#8a82a6";
+      ctx.fillRect(bx + 5 + i * 5, by + 5 - (i === active ? 2 : 0), 2, 2);
     }
   }
 
@@ -1068,7 +1166,7 @@
     rafId = 0;
     const dt = Math.min(0.05, (now - (lastFrame || now)) / 1000); lastFrame = now;
     draw(now, dt);
-    if (anim || particles.length || flash || (selected && !REDUCED) || ((viewer() || curtain) && !REDUCED)) rafId = requestAnimationFrame(frame);
+    if (anim || particles.length || flash || (selected && !REDUCED) || ((viewer() || curtain || thinking) && !REDUCED)) rafId = requestAnimationFrame(frame);
     else lastFrame = 0;
   }
 
@@ -1158,6 +1256,7 @@
       if (now - q.born > q.life) { particles.splice(i, 1); continue; }
       ctx.fillStyle = q.col; ctx.fillRect(Math.round(q.x), Math.round(q.y), 2, 2);
     }
+    if (thinking && mode === "local") drawThinking(now);
     ctx.restore();
   }
 
@@ -1182,6 +1281,11 @@
   function note(text) {
     const box = $("info"); box.replaceChildren();
     const d = document.createElement("div"); d.textContent = text; box.append(d);
+  }
+  function addDots() {
+    const dots = document.createElement("span"); dots.className = "dots"; dots.setAttribute("aria-hidden", "true");
+    dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
+    $("status").firstChild.append(dots);
   }
   function setStatus(main, sub, subErr) {
     const el = $("status"); el.replaceChildren();
@@ -1227,7 +1331,7 @@
     if (!isOnline) {
       const tagline = (cpuOn ? `vs ${BOT[botLevel].name} bot` : "Same screen") + ` - Devour ${devour ? "ON" : "OFF"}` + (fog ? " - Fog" : "");
       if (gameOver) setStatus(resultText, tagline);
-      else if (thinking) setStatus(fog ? "Something stirs in the smoke..." : "Bot is chewing...", tagline);
+      else if (thinking) { setStatus(fog ? "Something stirs in the smoke" : "Bot is thinking", tagline); addDots(); }
       else if (!fog && inCheck(board, turn)) setStatus(`${colorName(turn)} to move`, "CHECK!", true);
       else setStatus(cpuOn && turn === "w" ? "Your move (White)" : `${colorName(turn)} to move`, tagline);
       return;

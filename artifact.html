@@ -30,14 +30,28 @@
   }
   h1 { font-size: 18px; margin: 8px 0 4px; color: var(--accent); text-shadow: 3px 3px 0 var(--edge); letter-spacing: 1px; text-align: center; }
   .tag { color: var(--muted); margin: 0 0 16px; text-align: center; }
-  .wrap { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; align-items: flex-start; width: 100%; max-width: 860px; }
-  .boardcol { flex: 1 1 400px; max-width: 560px; min-width: 0; }
+  /* Phone: board, then controls, then info. Tablet: board left, panels right. Desktop: controls | board | info. */
+  .wrap { display: grid; gap: 16px; width: 100%; max-width: 1180px; justify-content: center;
+    grid-template-columns: minmax(0, 560px); grid-template-areas: "board" "left" "right"; align-items: start; }
+  @media (min-width: 760px) {
+    .wrap { grid-template-columns: minmax(0, 560px) minmax(240px, 290px); grid-template-areas: "board left" "board right"; grid-template-rows: auto 1fr; }
+  }
+  @media (min-width: 1100px) {
+    .wrap { grid-template-columns: 260px minmax(0, 580px) 280px; grid-template-areas: "left board right"; grid-template-rows: auto; }
+  }
+  .boardcol { grid-area: board; min-width: 0; }
+  .boardwrap { position: relative; }
+  #curtain { position: absolute; inset: 4px; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .curtainCard { background: var(--panel); border: 3px solid var(--edge); box-shadow: 4px 4px 0 var(--edge); padding: 16px; display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center; }
+  #curtainText { font-size: 14px; color: var(--accent); }
+  .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .side.left { grid-area: left; }
+  .side.right { grid-area: right; }
   canvas#board {
     width: 100%; max-width: 100%; height: auto; aspect-ratio: 1; display: block;
     image-rendering: pixelated; image-rendering: crisp-edges;
     border: 4px solid var(--edge); box-shadow: 6px 6px 0 var(--edge); cursor: pointer;
   }
-  .side { flex: 1 1 260px; max-width: 560px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
   .box { background: var(--panel); border: 3px solid var(--edge); box-shadow: 4px 4px 0 var(--edge); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
   .box h2 { font-size: 10px; margin: 0; color: var(--accent); letter-spacing: 1px; }
   .muted { color: var(--muted); }
@@ -63,57 +77,114 @@
   .rules p { margin: 0; color: var(--muted); }
   .rules b { color: var(--ink); font-weight: normal; }
   .err { color: var(--bad); }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .label { color: var(--muted); font-size: 8px; letter-spacing: 1px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button { flex: 1 1 auto; padding: 8px 6px; }
+  .seg button[aria-pressed="true"] { background: var(--ok); color: var(--bg); }
+  .toggle { display: inline-flex; align-items: center; gap: 10px; align-self: flex-start; }
+  .track { width: 34px; height: 18px; background: var(--bg); border: 3px solid var(--edge); position: relative; display: inline-block; }
+  .knob { position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; background: var(--muted); transition: left .12s; }
+  .toggle[aria-checked="true"] .track { background: var(--ok); }
+  .toggle[aria-checked="true"] .knob { left: 19px; background: var(--ink); }
+  button.big { padding: 12px 10px; font-size: 12px; }
+  .divider { border: 0; border-top: 3px dashed var(--raised); margin: 4px 0; width: 100%; }
+  .dots { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+  .dots i { width: 4px; height: 4px; background: var(--accent); animation: dothop .9s steps(2, jump-none) infinite; }
+  .dots i:nth-child(2) { animation-delay: .3s; }
+  .dots i:nth-child(3) { animation-delay: .6s; }
+  @keyframes dothop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+  @media (prefers-reduced-motion: reduce) { .knob { transition: none; } .dots i { animation: none; } }
   .games { display: flex; flex-direction: column; gap: 6px; }
   .games button { text-align: left; }
 </style>
-
 <h1>DEVOUR CHESS</h1>
 <p class="tag">You are what you eat.</p>
 <div class="wrap">
-  <div class="boardcol"><canvas id="board" width="160" height="160" aria-label="Chess board"></canvas></div>
-  <div class="side">
+  <div class="boardcol"><div class="boardwrap">
+    <canvas id="board" width="184" height="184" aria-label="Chess board"></canvas>
+    <div id="curtain" hidden>
+      <div class="curtainCard">
+        <div id="curtainText">PASS TO BLACK</div>
+        <div class="muted">Don't peek, other player.</div>
+        <button id="curtainBtn" class="primary">I'M READY</button>
+      </div>
+    </div>
+  </div></div>
+  <div class="side left">
     <div class="box" id="status"></div>
 
-    <div class="box" id="onlineHome">
-      <h2>PLAY A FRIEND</h2>
-      <div class="row"><button id="create" class="primary">CREATE GAME</button></div>
+    <div class="box" id="setup">
+      <h2>NEW GAME</h2>
+      <div class="field">
+        <div class="label">OPPONENT</div>
+        <div class="seg" role="group" aria-label="Opponent">
+          <button id="oppBot" data-opp="bot">BOT</button>
+          <button id="oppOnline" data-opp="online">FRIEND ONLINE</button>
+          <button id="oppLocal" data-opp="local">SAME SCREEN</button>
+        </div>
+      </div>
+      <div class="field" id="levelField">
+        <div class="label">BOT SKILL</div>
+        <div class="seg" role="group" aria-label="Bot skill">
+          <button id="lvl1" data-level="1">EASY</button>
+          <button id="lvl2" data-level="2">MEDIUM</button>
+          <button id="lvl3" data-level="3">HARD</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="label">DEVOUR RULE</div>
+        <button id="devourToggle" class="toggle" role="switch" aria-checked="true"><span class="track"><span class="knob"></span></span><span id="devourLabel">ON</span></button>
+        <div class="muted" id="devourHint"></div>
+      </div>
+      <div class="field">
+        <div class="label">FOG OF WAR</div>
+        <button id="fogToggle" class="toggle" role="switch" aria-checked="false"><span class="track"><span class="knob"></span></span><span id="fogLabel">OFF</span></button>
+        <div class="muted" id="fogHint"></div>
+      </div>
+      <button id="start" class="primary big">START GAME</button>
+      <hr class="divider">
+      <div class="label">HAVE A CODE FROM A FRIEND?</div>
       <div class="row">
         <input id="joinCode" maxlength="6" placeholder="CODE" aria-label="Game code" autocomplete="off">
         <button id="join">JOIN</button>
       </div>
-      <div id="myGames" class="games" hidden></div>
       <div id="onlineMsg" class="muted"></div>
     </div>
 
     <div class="box" id="onlineGame" hidden>
       <h2>ONLINE GAME</h2>
       <div>Code: <span class="code" id="gameCode"></span></div>
-      <div class="muted" id="shareHint">Send your friend this code, or use Share &gt; Copy link above. The link opens this game.</div>
+      <div id="shareBox">
+        <div class="muted">Send this link to a friend. Keep this page open while you play: your browser hosts the game.</div>
+        <div class="row" style="margin-top:6px">
+          <input id="shareLink" readonly aria-label="Game link" style="flex:1 1 10em;min-width:0;text-transform:none">
+          <button id="copyLink">COPY LINK</button>
+        </div>
+      </div>
       <div class="players" id="players"></div>
       <div class="row">
-        <button id="sit" class="primary" hidden>TAKE BLACK SEAT</button>
         <button id="resign" hidden>RESIGN</button>
         <button id="rematch" hidden>REMATCH</button>
+        <button id="reconnect" hidden>RECONNECT</button>
         <button id="leave">LEAVE</button>
       </div>
       <div id="gameMsg" class="muted"></div>
     </div>
 
     <div class="box" id="localBox">
-      <h2>PLAY HERE</h2>
-      <div class="row">
-        <button id="new">NEW</button>
-        <button id="undo">UNDO</button>
-        <button id="cpu">CPU: ON</button>
-      </div>
+      <div class="row"><button id="undo">UNDO MOVE</button></div>
     </div>
-
+  </div>
+  <div class="side right">
     <div class="box" id="info">Click a piece to see its powers.</div>
     <div class="box rules">
       <p><b>The twist:</b> a piece that captures <b>absorbs</b> every power of its victim and can move like all of them.</p>
       <p>Checkmate wins as usual. Pawns promote to queens. No castling or en passant.</p>
       <p>Pawn eats knight? It can now hop like a knight. Eaten pieces fuse onto the eater in their own colors:</p>
       <div class="legend" id="legend"></div>
+      <p id="fogNote" hidden><b>Fog of war is ON:</b> smoke hides every square your team hasn't stood on or passed through. There is no check, so capture the enemy king to win. A piece that runs into a hidden enemy stops and captures it.</p>
+      <p id="devourNote" hidden><b>Devour is OFF</b> for this game: captures work like normal chess.</p>
     </div>
     <div class="box" id="log"></div>
   </div>
@@ -165,6 +236,7 @@
   const clone = (b) => b.map(row => row.map(p => p ? { ...p, powers: [...p.powers] } : null));
   const inside = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
   const other = (col) => col === "w" ? "b" : "w";
+  let devour = true; // the rule in force for the game on the board
 
   function pseudoMoves(b, r, c) {
     const p = b[r][c]; if (!p) return [];
@@ -214,7 +286,7 @@
   function applyMove(b, m) {
     const nb = clone(b);
     const mover = nb[m.fr][m.fc], victim = nb[m.tr][m.tc];
-    if (victim) for (const pw of victim.powers) if (!mover.powers.includes(pw)) mover.powers.push(pw);
+    if (victim && devour) for (const pw of victim.powers) if (!mover.powers.includes(pw)) mover.powers.push(pw);
     mover.moved = true;
     nb[m.tr][m.tc] = mover; nb[m.fr][m.fc] = null;
     if (mover.type === "P" && (m.tr === 0 || m.tr === 7)) {
@@ -258,6 +330,59 @@
     return out;
   }
 
+  // ---------- Fog of war ----------
+  // seen[color] is a 64-char string of 0/1: squares that team has stood on or
+  // passed through. Everything else is smoke for that team.
+  let fog = false, seen = null, curtain = false;
+  function initSeen(b) {
+    const s = { w: Array(64).fill("0"), b: Array(64).fill("0") };
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (b[r][c]) s[b[r][c].color][r * 8 + c] = "1";
+    return { w: s.w.join(""), b: s.b.join("") };
+  }
+  const isSeen = (sn, color, r, c) => !!sn && sn[color][r * 8 + c] === "1";
+  function markSeen(sn, color, squares) {
+    const a = sn[color].split("");
+    for (const [r, c] of squares) a[r * 8 + c] = "1";
+    return { ...sn, [color]: a.join("") };
+  }
+  // Squares a move travels over, ending on its target (knight hops only touch the target).
+  function pathSquares(m) {
+    const dr = m.tr - m.fr, dc = m.tc - m.fc;
+    if (dr !== 0 && dc !== 0 && Math.abs(dr) !== Math.abs(dc)) return [[m.tr, m.tc]];
+    const n = Math.max(Math.abs(dr), Math.abs(dc)), sr = Math.sign(dr), sc = Math.sign(dc), out = [];
+    for (let i = 1; i <= n; i++) out.push([m.fr + sr * i, m.fc + sc * i]);
+    return out;
+  }
+  // What one team knows: enemy pieces inside its smoke are left out.
+  function viewBoard(b, color, sn) {
+    return b.map((row, r) => row.map((p, c) => p && p.color !== color && !isSeen(sn, color, r, c) ? null : p));
+  }
+  // A move planned without seeing into the smoke: if it runs into a hidden
+  // enemy on the way, it stops there and captures it.
+  function resolveMove(b, m) {
+    const mover = b[m.fr][m.fc];
+    for (const [r, c] of pathSquares(m)) {
+      const t = b[r][c];
+      if (t && t.color !== mover.color) return { fr: m.fr, fc: m.fc, tr: r, tc: c, ambush: r !== m.tr || c !== m.tc };
+    }
+    return { fr: m.fr, fc: m.fc, tr: m.tr, tc: m.tc };
+  }
+  // Plays a move under the game's rules and reports the result.
+  function playMove(b, sn, m, fogOn) {
+    const rm = fogOn ? resolveMove(b, m) : m;
+    const mover = b[rm.fr][rm.fc];
+    const info = describeMove(b, rm);
+    const nb = applyMove(b, rm);
+    const next = other(mover.color);
+    let over = false, result = "";
+    if (fogOn) {
+      if (!findKing(nb, next)) { over = true; result = `${colorName(mover.color)} captured the king! ${colorName(mover.color)} wins.`; }
+      else if (!pseudoAll(nb, next).length) { over = true; result = "No moves left. It's a draw."; }
+    } else if (!allLegal(nb, next).length) { over = true; result = endText(nb, next); }
+    return { m: rm, board: nb, seen: fogOn ? markSeen(sn, mover.color, pathSquares(rm)) : sn, info, over, result };
+  }
+  const colorName = (c) => c === "w" ? "White" : "Black";
+
   // ---------- CPU (2-ply minimax on absorbed-power material) ----------
   function pieceValue(p) {
     if (p.type === "K") return 1000 + p.powers.filter(x => x !== "K").reduce((s, x) => s + VALUE[x] * 0.3, 0);
@@ -273,25 +398,64 @@
     }
     return s;
   }
-  function cpuMove(b, color) {
-    const moves = allLegal(b, color);
-    if (!moves.length) return null;
-    let best = -Infinity, choices = [];
+  // Captures first (biggest victim first) so alpha-beta prunes more.
+  function orderMoves(b, moves) {
+    const val = (m) => { const v = b[m.tr][m.tc]; return v ? (v.type === "K" ? 100 : pieceValue(v)) : 0; };
+    return moves.map(m => [val(m), m]).sort((x, y) => y[0] - x[0]).map(x => x[1]);
+  }
+  // Negamax with alpha-beta. Inner nodes use pseudo-legal moves: leaving your
+  // king en prise just loses it on the next ply, which scores as a loss.
+  let deadline = Infinity;
+  // In the fog the bot may not know where a king is; a king it can't see
+  // must not count as already captured.
+  let kingKnown = { w: true, b: true };
+  const TIMEOUT = {};
+  function search(b, color, depth, alpha, beta) {
+    if (performance.now() > deadline) throw TIMEOUT;
+    if (kingKnown[color] && !findKing(b, color)) return -100000 - depth;
+    if (depth === 0) return evaluate(b, color);
+    const moves = orderMoves(b, pseudoAll(b, color));
+    if (!moves.length) return 0;
+    let best = -Infinity;
     for (const m of moves) {
-      const nb = applyMove(b, m);
-      let worst = Infinity;
-      const replies = pseudoAll(nb, other(color));
-      if (!replies.length) worst = evaluate(nb, color);
-      for (const rm of replies) {
-        const nb2 = applyMove(nb, rm);
-        const score = findKing(nb2, color) ? evaluate(nb2, color) : -1e6;
-        if (score < worst) worst = score;
-      }
-      const s = worst + Math.random() * 0.05;
-      if (s > best + 1e-9) { best = s; choices = [m]; }
-      else if (Math.abs(s - best) < 1e-9) choices.push(m);
+      const sc = -search(applyMove(b, m), other(color), depth - 1, -beta, -alpha);
+      if (sc > best) best = sc;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break;
     }
-    return choices[Math.floor(Math.random() * choices.length)];
+    return best;
+  }
+  const BOT = {
+    1: { name: "Easy", depth: 1, noise: 2.5, randomMove: 0.3 },
+    2: { name: "Medium", depth: 2, noise: 0.3, randomMove: 0 },
+    3: { name: "Hard", depth: 3, noise: 0.05, randomMove: 0 },
+  };
+  function botMove(b, color, level, fogMode) {
+    const cfg = BOT[level] || BOT[2];
+    let moves = orderMoves(b, fogMode ? pseudoAll(b, color) : allLegal(b, color));
+    if (!moves.length) return null;
+    if (Math.random() < cfg.randomMove) return moves[Math.floor(Math.random() * moves.length)];
+    // Search one ply deeper at a time; if thinking runs long, play the best
+    // move from the deepest search that finished.
+    let pick = moves[0];
+    kingKnown = { w: !!findKing(b, "w"), b: !!findKing(b, "b") };
+    deadline = performance.now() + 2500;
+    try {
+      for (let depth = 1; depth <= cfg.depth; depth++) {
+        let best = -Infinity, bestMove = moves[0], alpha = -Infinity;
+        const scored = [];
+        for (const m of moves) {
+          const sc = -search(applyMove(b, m), other(color), depth - 1, -Infinity, -alpha + cfg.noise) + Math.random() * cfg.noise;
+          scored.push([sc, m]);
+          if (sc > best) { best = sc; bestMove = m; }
+          if (best - cfg.noise > alpha) alpha = best - cfg.noise;
+        }
+        pick = bestMove;
+        moves = scored.sort((x, y) => y[0] - x[0]).map(x => x[1]); // best first for the next pass
+      }
+    } catch (e) { if (e !== TIMEOUT) throw e; }
+    deadline = Infinity;
+    return pick;
   }
 
   // ---------- Shared state ----------
@@ -300,14 +464,21 @@
   let mode = "local";
   let board, turn, lastMove, logLines, gameOver = false, resultText = "";
   let history = [], selected = null, legal = [], cpuOn = true, thinking = false;
+  // Choices in the NEW GAME panel; they take effect when a game starts.
+  const settings = { opp: "bot", level: 2, devour: true, fog: false };
+  try { Object.assign(settings, JSON.parse(localStorage.getItem("dc-settings")) || {}); } catch (_) {}
+  let botLevel = settings.level;
 
   const FILES = "abcdefgh";
   const sqName = (r, c) => FILES[c] + (8 - r);
   function describeMove(b, m) {
     const mover = b[m.fr][m.fc], victim = b[m.tr][m.tc];
     let line = `${mover.color === "w" ? "W" : "B"} ${NAMES[mover.type]} ${sqName(m.fr, m.fc)}-${sqName(m.tr, m.tc)}`;
-    const gained = victim ? victim.powers.filter(p => !mover.powers.includes(p)) : [];
-    if (victim) {
+    const gained = victim && devour ? victim.powers.filter(p => !mover.powers.includes(p)) : [];
+    if (fog) { // the log is shared, so only say what both sides could know
+      const C = colorName(mover.color);
+      line = victim ? `${C} ate ${colorName(victim.color)}'s ${NAMES[victim.type]} on ${sqName(m.tr, m.tc)}` : `${C} moved`;
+    } else if (victim) {
       line += ` eats ${NAMES[victim.type]}`;
       if (gained.length) line += ` +${gained.map(g => NAMES[g]).join("+")}`;
     }
@@ -323,50 +494,65 @@
 
   // ---------- Local mode ----------
   function newLocalGame() {
-    board = startBoard(); turn = "w"; history = []; selected = null; legal = [];
+    devour = settings.devour; fog = settings.fog; cpuOn = settings.opp === "bot"; botLevel = settings.level;
+    anim = null; flash = null; curtain = false;
+    board = startBoard(); seen = initSeen(board); turn = "w"; history = []; selected = null; legal = [];
     lastMove = null; gameOver = false; resultText = ""; logLines = [];
     render(); updateUI();
   }
   function localMove(m) {
-    history.push({ board: clone(board), turn, lastMove, logLines: [...logLines] });
-    const info = describeMove(board, m);
-    startMoveAnim(board, m);
-    board = applyMove(board, m);
-    moveSound(info);
-    logLines.unshift(info.line);
-    lastMove = m; turn = other(turn); selected = null; legal = [];
-    if (!allLegal(board, turn).length) { gameOver = true; resultText = endText(board, turn); }
+    history.push({ board: clone(board), turn, lastMove, logLines: [...logLines], seen });
+    const humanMove = !(cpuOn && turn === "b");
+    const res = playMove(board, seen, m, fog);
+    startMoveAnim(board, res.m);
+    board = res.board; seen = res.seen;
+    moveSound(res.info);
+    logLines.unshift(res.info.line);
+    lastMove = res.m; turn = other(turn); selected = null; legal = [];
+    if (res.over) { gameOver = true; resultText = res.result; }
+    if (res.m.ambush && humanMove) note("Ambush! Your piece ran into something hidden in the smoke and ate it.");
+    if (fog && !cpuOn && !gameOver) curtain = true;
     render(); updateUI();
     if (!gameOver && cpuOn && turn === "b") scheduleCpu();
   }
   function scheduleCpu() {
-    thinking = true; updateUI();
+    thinking = true; updateUI(); render();
+    const started = board;
+    // Let the player's move animation play before the bot starts thinking.
     setTimeout(() => {
-      if (mode !== "local") { thinking = false; return; }
-      const m = cpuMove(board, "b");
-      thinking = false;
-      if (m) localMove(m); else updateUI();
-    }, 350);
+      if (mode !== "local" || board !== started) { thinking = false; updateUI(); return; }
+      const t0 = performance.now();
+      const m = botMove(fog ? viewBoard(board, "b", seen) : board, "b", botLevel, fog);
+      const ponder = 700 + Math.random() * 500 + botLevel * 100;
+      setTimeout(() => {
+        if (mode !== "local" || board !== started) { thinking = false; updateUI(); return; }
+        thinking = false;
+        if (m) localMove(m); else updateUI();
+      }, Math.max(0, ponder - (performance.now() - t0)));
+    }, 300);
   }
 
-  // ---------- Online mode ----------
-  let db = null, user = null, myId = null;
-  const online = { code: null, data: null, unsub: null, loaded: false, busy: false, readOnly: false, lastPly: -1, timer: null };
-
+  // ---------- Online mode (peer-to-peer) ----------
+  // The player who creates a game hosts it in their own browser and is the
+  // referee: guests send moves, the host checks them and sends everyone the
+  // new state. A public PeerJS server only introduces the two browsers.
+  const PREFIX = "devour-chess-v1-";
+  const PEER_OPTS = window.DEVOUR_PEER_OPTS || {};
+  const online = {
+    code: null, seat: null, data: null, peer: null,
+    conns: [], guestConn: null, hostConn: null, connected: false, ready: false, retries: 0,
+  };
   const flatten = (b) => b.flat();
   const unflatten = (arr) => Array.from({ length: 8 }, (_, r) => arr.slice(r * 8, r * 8 + 8).map(p => p ? { ...p, powers: [...p.powers] } : null));
   const myColor = () => {
-    const d = online.data; if (!d || !myId) return null;
-    if (d.white === myId) return "w";
-    if (d.black === myId) return "b";
+    const d = online.data; if (mode !== "online" || !d) return null;
+    if (online.seat === "host") return d.hostColor;
+    if (online.seat === "guest") return other(d.hostColor);
     return null;
   };
-  const gameRef = (code) => db.doc("games/" + code);
-  function freshGameDoc(white, black) {
-    return {
-      v: 1, white, black, board: flatten(startBoard()), turn: "w", lastMove: null,
-      log: [], status: black ? "playing" : "waiting", result: "", ply: 0, updated: Date.now(),
-    };
+  function freshState(hostColor = "w", dv = true, fg = false) {
+    const b = startBoard();
+    return { v: 1, board: flatten(b), turn: "w", lastMove: null, log: [], status: "waiting", result: "", ply: 0, hostColor, devour: dv, fog: fg, seen: initSeen(b) };
   }
   function newCode() {
     const abc = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -376,171 +562,225 @@
   function setMsg(id, text, isErr) {
     const el = $(id); el.textContent = text || ""; el.classList.toggle("err", !!isErr);
   }
-  function writeFailed(e, where) {
-    if (e && e.code === "invalid_argument") {
-      online.readOnly = true;
-      setMsg(where, "Your access to this page is view-only, so you can watch but not play. Ask the owner to share it with you as a Contributor.", true);
-    } else if (e && e.code === "quota_exceeded") {
-      setMsg(where, "The game store is full. Ask the owner to clear old games.", true);
-    } else {
-      setMsg(where, "Couldn't reach the game server. Try again in a moment.", true);
-    }
-  }
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (_) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} },
+    del(k) { try { localStorage.removeItem(k); } catch (_) {} },
+  };
+  const gameLink = (code) => location.origin + location.pathname + "#g-" + code;
+  function setHash(code) { try { const h = code ? "#g-" + code : ""; if (location.hash !== h) window.history.replaceState(null, "", h || location.pathname); } catch (_) {} }
 
-  async function createGame() {
-    if (!db || !myId) return;
-    const code = newCode();
-    $("create").disabled = true;
-    try {
-      await gameRef(code).set(freshGameDoc(myId, null));
-      openGame(code);
-    } catch (e) { writeFailed(e, "onlineMsg"); }
-    $("create").disabled = false;
-  }
-
-  function openGame(code) {
-    code = String(code || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (!db || code.length !== 6) { setMsg("onlineMsg", "Codes are 6 letters or numbers.", true); return; }
-    leaveGame(false);
-    mode = "online";
-    online.code = code; online.data = null; online.loaded = false; online.lastPly = -1;
-    selected = null; legal = [];
-    try { if (location.hash !== "#g-" + code) location.hash = "g-" + code; } catch (_) {}
-    setMsg("gameMsg", "Loading game...");
-    online.timer = setTimeout(() => {
-      if (!online.loaded) setMsg("gameMsg", "Can't reach the game server yet. It will load when the connection returns.", true);
-    }, 10000);
-    online.unsub = gameRef(code).onSnapshot((snap) => {
-      if (!snap.metadata.fromCache) { online.loaded = true; clearTimeout(online.timer); }
-      if (!snap.exists) {
-        if (online.loaded) { online.data = null; setMsg("gameMsg", `No game with code ${code.toUpperCase()}. Check the code and try again.`, true); updateUI(); }
-        return;
-      }
-      receive(snap.data());
-    }, (e) => {
-      clearTimeout(online.timer);
-      setMsg("gameMsg", "Lost the connection to this game. Leave and rejoin to reconnect.", true);
-    });
-    updateUI();
-  }
-
-  function receive(d) {
-    const prevPly = online.lastPly;
-    online.data = d;
-    if (prevPly >= 0 && d.ply === prevPly + 1 && d.lastMove) startMoveAnim(board, d.lastMove);
-    board = unflatten(d.board);
-    turn = d.turn; lastMove = d.lastMove || null; logLines = [...(d.log || [])];
-    gameOver = d.status === "over"; resultText = d.result || "";
-    if (d.ply !== prevPly) { selected = null; legal = []; }
-    if (prevPly >= 0 && d.ply > prevPly && lastMove) {
-      // Sound for moves made on the other side of the board.
-      const moverColor = other(d.turn);
-      if (moverColor !== myColor()) blip(lastMove.captured ? 660 : 300, 0.08);
-    }
-    online.lastPly = d.ply;
-    if (!online.readOnly) setMsg("gameMsg", "");
+  function applyState(st) {
+    const prev = online.data;
+    online.data = st;
+    devour = st.devour !== false; fog = !!st.fog;
+    if (prev && st.ply === prev.ply + 1 && st.lastMove) startMoveAnim(board, st.lastMove);
+    seen = st.seen || initSeen(unflatten(st.board));
+    board = unflatten(st.board);
+    turn = st.turn; lastMove = st.lastMove || null; logLines = [...(st.log || [])];
+    gameOver = st.status === "over"; resultText = st.result || "";
+    if (!prev || prev.ply !== st.ply) { selected = null; legal = []; }
     render(); updateUI();
   }
-
-  async function onlineMove(m) {
-    const d = online.data; if (!d || online.busy) return;
-    const info = describeMove(board, m);
-    const nb = applyMove(board, m);
-    const next = other(turn);
-    const over = !allLegal(nb, next).length;
-    const body = {
-      ...d, board: flatten(nb), turn: next,
-      lastMove: { ...m, captured: info.captured },
-      log: [info.line, ...(d.log || [])].slice(0, 80),
-      status: over ? "over" : "playing", result: over ? endText(nb, next) : "",
-      ply: d.ply + 1, updated: Date.now(),
-    };
-    online.busy = true; selected = null; legal = [];
-    moveSound(info);
-    try { await gameRef(online.code).set(body); }
-    catch (e) { writeFailed(e, "gameMsg"); render(); }
-    online.busy = false;
+  function makeMoveState(st, m) {
+    const b = unflatten(st.board);
+    const res = playMove(b, st.seen || initSeen(b), m, !!st.fog);
+    const rm = res.m;
+    return { info: res.info, ambush: !!rm.ambush, state: {
+      ...st, board: flatten(res.board), turn: other(st.turn), seen: res.seen,
+      lastMove: { fr: rm.fr, fc: rm.fc, tr: rm.tr, tc: rm.tc, captured: res.info.captured },
+      log: [res.info.line, ...(st.log || [])].slice(0, 80),
+      status: res.over ? "over" : "playing", result: res.result, ply: st.ply + 1,
+    } };
   }
 
-  async function takeSeat() {
-    const ref = gameRef(online.code);
-    $("sit").disabled = true;
-    try {
-      const lease = await ref.acquire({ holder: myId, ttlMs: 4000 });
-      if (!lease.acquired) { setMsg("gameMsg", "Someone else is taking the seat right now."); return; }
-      const snap = await ref.get();
-      const d = snap.exists ? snap.data() : null;
-      if (!d) return;
-      if (d.black || d.white === myId) { setMsg("gameMsg", "That seat is already taken."); return; }
-      await ref.update({ black: myId, status: "playing", updated: Date.now() });
-    } catch (e) { writeFailed(e, "gameMsg"); }
-    finally { $("sit").disabled = false; }
+  // ----- Host side -----
+  function hostCommit(st) {
+    store.set("dc-host-" + online.code, st);
+    for (const c of online.conns) if (c.open) { try { c.send({ type: "state", state: st }); } catch (_) {} }
+    applyState(st);
   }
-
-  async function resign() {
-    const me = myColor(); const d = online.data;
-    if (!me || !d || d.status !== "playing") return;
-    const winner = me === "w" ? "Black" : "White";
-    try {
-      await gameRef(online.code).update({
-        status: "over", result: `${me === "w" ? "White" : "Black"} resigned. ${winner} wins.`, updated: Date.now(),
+  function hostGame(code, fresh) {
+    leaveGame(false);
+    mode = "online"; online.code = code; online.seat = "host";
+    const saved = !fresh && store.get("dc-host-" + code);
+    setHash(code);
+    applyState(saved && saved.v === 1 ? saved : freshState("w", settings.devour, settings.fog));
+    store.set("dc-host-" + code, online.data);
+    startHostPeer();
+  }
+  function startHostPeer() {
+    const code = online.code;
+    setMsg("gameMsg", "Connecting to the match server...");
+    const peer = new Peer(PREFIX + code, PEER_OPTS); online.peer = peer;
+    peer.on("open", () => { online.ready = true; online.retries = 0; setMsg("gameMsg", ""); updateUI(); });
+    peer.on("connection", (conn) => {
+      conn.on("open", () => {
+        if (online.peer !== peer) { conn.close(); return; }
+        online.conns.push(conn);
+        let seat = "spectator";
+        if (!online.guestConn || !online.guestConn.open) {
+          online.guestConn = conn; seat = "guest"; online.connected = true;
+          if (online.data.status === "waiting") online.data = { ...online.data, status: "playing" };
+          setMsg("gameMsg", "Your friend joined."); blip(520, 0.1); setTimeout(() => blip(780, 0.1), 100);
+        }
+        try { conn.send({ type: "welcome", seat }); } catch (_) {}
+        hostCommit(online.data);
       });
-    } catch (e) { writeFailed(e, "gameMsg"); }
+      conn.on("data", (msg) => onHostMessage(conn, msg));
+      conn.on("close", () => {
+        online.conns = online.conns.filter(c => c !== conn);
+        if (conn === online.guestConn) {
+          online.guestConn = null; online.connected = false;
+          setMsg("gameMsg", "Your friend disconnected. They can open the link again to rejoin.");
+          updateUI();
+        }
+      });
+    });
+    peer.on("disconnected", () => { if (online.peer === peer && !peer.destroyed) { try { peer.reconnect(); } catch (_) {} } });
+    peer.on("error", (e) => {
+      if (online.peer !== peer) return;
+      if (e.type === "unavailable-id") {
+        // A reload can briefly leave the old connection registered; try again.
+        if (online.retries++ < 5) { peer.destroy(); setTimeout(() => { if (online.code === code && online.seat === "host") startHostPeer(); }, 3000); setMsg("gameMsg", "Reconnecting your game..."); }
+        else setMsg("gameMsg", "This game is already open in another tab. Close it there, or leave and create a new game.", true);
+      } else if (e.type === "network" || e.type === "server-error" || e.type === "socket-error" || e.type === "socket-closed") {
+        setMsg("gameMsg", "Can't reach the match server. Check your internet connection.", true);
+      } else if (e.type === "browser-incompatible") {
+        setMsg("gameMsg", "This browser can't play online. Try Chrome, Edge, Firefox or Safari.", true);
+      }
+    });
   }
-
-  async function rematch() {
-    const d = online.data; if (!d || !myColor()) return;
-    // Swap colors so the other player gets White.
-    try { await gameRef(online.code).set(freshGameDoc(d.black, d.white)); }
-    catch (e) { writeFailed(e, "gameMsg"); }
-  }
-
-  function leaveGame(toLocal = true) {
-    if (online.unsub) { online.unsub(); online.unsub = null; }
-    clearTimeout(online.timer);
-    online.code = null; online.data = null; online.readOnly = false;
-    if (toLocal) {
-      mode = "local";
-      try { if (location.hash) location.hash = ""; } catch (_) {}
-      newLocalGame();
-      loadMyGames();
+  function onHostMessage(conn, msg) {
+    if (!msg || typeof msg !== "object" || conn !== online.guestConn) return; // spectators can't act
+    const st = online.data, gc = other(st.hostColor);
+    const resync = () => { try { conn.send({ type: "state", state: st }); } catch (_) {} };
+    if (msg.type === "move") {
+      const m = msg.m || {};
+      if (st.status !== "playing" || st.turn !== gc || msg.ply !== st.ply || !inside(m.fr, m.fc) || !inside(m.tr, m.tc)) return resync();
+      const b = unflatten(st.board);
+      if (!b[m.fr][m.fc] || b[m.fr][m.fc].color !== gc) return resync();
+      const options = st.fog ? pseudoMoves(viewBoard(b, gc, st.seen), m.fr, m.fc) : legalMovesFrom(b, m.fr, m.fc);
+      const ok = options.find(x => x.tr === m.tr && x.tc === m.tc);
+      if (!ok) return resync();
+      const r = makeMoveState(st, ok);
+      moveSound(r.info); hostCommit(r.state);
+    } else if (msg.type === "resign" && st.status === "playing") {
+      hostCommit({ ...st, status: "over", result: `${colorName(gc)} resigned. ${colorName(st.hostColor)} wins.` });
+    } else if (msg.type === "rematch" && st.status === "over") {
+      hostCommit({ ...freshState(other(st.hostColor), st.devour !== false, !!st.fog), status: "playing" });
     }
   }
 
-  async function loadMyGames() {
-    const box = $("myGames");
-    if (!db || !myId) { box.hidden = true; return; }
-    try {
-      const [a, b] = await Promise.all([
-        db.collection("games").where("white", "==", myId).limit(20).get(),
-        db.collection("games").where("black", "==", myId).limit(20).get(),
-      ]);
-      const seen = new Map();
-      for (const s of [...a.docs, ...b.docs]) seen.set(s.id, s.data());
-      const list = [...seen.entries()].filter(([, d]) => d.status !== "over")
-        .sort((x, y) => (y[1].updated || 0) - (x[1].updated || 0)).slice(0, 5);
-      box.replaceChildren();
-      if (!list.length) { box.hidden = true; return; }
-      const h = document.createElement("div"); h.className = "muted"; h.textContent = "Your games in progress:";
-      box.append(h);
-      for (const [code, d] of list) {
-        const btn = document.createElement("button");
-        const mine = d.white === myId ? "w" : "b";
-        const waiting = d.status === "waiting" ? "waiting for friend" : (d.turn === mine ? "your move" : "their move");
-        btn.textContent = `${code.toUpperCase()} - ${waiting}`;
-        btn.onclick = () => openGame(code);
-        box.append(btn);
+  // ----- Guest side -----
+  function joinGame(code) {
+    leaveGame(false);
+    mode = "online"; online.code = code; online.seat = null;
+    setHash(code);
+    setMsg("gameMsg", "Connecting to the game...");
+    board = startBoard(); turn = "w"; lastMove = null; logLines = []; gameOver = false; fog = false; seen = null; curtain = false;
+    render(); updateUI();
+    const peer = new Peer(PEER_OPTS); online.peer = peer;
+    peer.on("open", () => { online.ready = true; connectToHost(); });
+    peer.on("error", (e) => {
+      if (online.peer !== peer) return;
+      if (e.type === "peer-unavailable") {
+        setMsg("gameMsg", "Can't find that game. Check the code, and make sure the person who created it still has the page open.", true);
+        $("reconnect").hidden = false;
+      } else if (e.type === "network" || e.type === "server-error" || e.type === "socket-error" || e.type === "socket-closed") {
+        setMsg("gameMsg", "Can't reach the match server. Check your internet connection.", true);
+        $("reconnect").hidden = false;
+      } else if (e.type === "browser-incompatible") {
+        setMsg("gameMsg", "This browser can't play online. Try Chrome, Edge, Firefox or Safari.", true);
       }
-      box.hidden = false;
-    } catch (_) { box.hidden = true; }
+    });
+  }
+  function connectToHost() {
+    const peer = online.peer; if (!peer || peer.destroyed) return;
+    $("reconnect").hidden = true;
+    if (peer.disconnected) { try { peer.reconnect(); } catch (_) {} }
+    const conn = peer.connect(PREFIX + online.code, { reliable: true });
+    online.hostConn = conn;
+    const t = setTimeout(() => {
+      if (!conn.open && online.hostConn === conn) {
+        setMsg("gameMsg", "Still trying to reach the game. Some school or work networks block direct connections; try another network if this keeps happening.", true);
+        $("reconnect").hidden = false;
+      }
+    }, 15000);
+    conn.on("open", () => { clearTimeout(t); online.connected = true; setMsg("gameMsg", ""); updateUI(); });
+    conn.on("data", (msg) => {
+      if (!msg || typeof msg !== "object" || online.hostConn !== conn) return;
+      if (msg.type === "welcome") { online.seat = msg.seat === "guest" ? "guest" : "spectator"; updateUI(); }
+      if (msg.type === "state" && msg.state && Array.isArray(msg.state.board) && msg.state.board.length === 64) {
+        const prev = online.data;
+        if (prev && msg.state.ply > prev.ply && msg.state.lastMove && other(msg.state.turn) !== myColor())
+          blip(msg.state.lastMove.captured ? 660 : 300, 0.08);
+        applyState(msg.state);
+      }
+    });
+    conn.on("close", () => {
+      clearTimeout(t);
+      if (online.hostConn !== conn) return;
+      online.connected = false;
+      setMsg("gameMsg", "Lost the connection to the host. Press RECONNECT once they're back.", true);
+      $("reconnect").hidden = false;
+      updateUI();
+    });
+  }
+  function sendToHost(msg) {
+    const c = online.hostConn;
+    if (!c || !c.open) { setMsg("gameMsg", "Not connected to the host.", true); return false; }
+    try { c.send(msg); return true; } catch (_) { return false; }
+  }
+
+  // ----- Both sides -----
+  function onlineMove(m) {
+    const st = online.data; if (!st) return;
+    const r = makeMoveState(st, m);
+    moveSound(r.info);
+    if (r.ambush) note("Ambush! Your piece ran into something hidden in the smoke and ate it.");
+    if (online.seat === "host") hostCommit(r.state);
+    else if (sendToHost({ type: "move", m: { fr: m.fr, fc: m.fc, tr: m.tr, tc: m.tc }, ply: st.ply })) applyState(r.state);
+  }
+  function resign() {
+    const st = online.data, me = myColor();
+    if (!st || !me || st.status !== "playing") return;
+    if (online.seat === "host") hostCommit({ ...st, status: "over", result: `${colorName(me)} resigned. ${colorName(other(me))} wins.` });
+    else sendToHost({ type: "resign" });
+  }
+  function rematch() {
+    const st = online.data; if (!st || !myColor() || st.status !== "over") return;
+    if (online.seat === "host") hostCommit({ ...freshState(other(st.hostColor), st.devour !== false, !!st.fog), status: online.connected ? "playing" : "waiting" });
+    else sendToHost({ type: "rematch" });
+  }
+  function leaveGame(toLocal = true) {
+    if (online.peer) { try { online.peer.destroy(); } catch (_) {} }
+    Object.assign(online, { code: null, seat: null, data: null, peer: null, conns: [], guestConn: null, hostConn: null, connected: false, ready: false, retries: 0 });
+    $("reconnect").hidden = true;
+    if (toLocal) { mode = "local"; setHash(null); setMsg("gameMsg", ""); newLocalGame(); }
+  }
+  function createGame() { hostGame(newCode(), true); }
+  function openGame(code) {
+    code = String(code || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (code.length !== 6) { setMsg("onlineMsg", "Codes are 6 letters or numbers.", true); return; }
+    if (typeof Peer === "undefined") return;
+    // If this browser created the game, pick it back up as host.
+    if (store.get("dc-host-" + code)) hostGame(code, false); else joinGame(code);
   }
 
   // ---------- Rendering ----------
   const cv = $("board");
   const ctx = cv.getContext("2d");
-  const S = 20;
+  const S = 20, F = 12, W = 8 * S + 2 * F; // square size, frame width, canvas size
   const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
-  const flipped = () => mode === "online" && myColor() === "b";
+  const flipped = () => mode === "online" ? myColor() === "b" : (fog && !cpuOn && turn === "b");
+  // Whose eyes the board is drawn through (null = see everything).
+  function viewer() {
+    if (!fog || (gameOver && !curtain)) return null;
+    if (mode === "online") return myColor();
+    return cpuOn ? "w" : turn;
+  }
+  const fogged = (r, c) => { if (curtain) return true; const v = viewer(); return !!v && !isSeen(seen, v, r, c); };
   const toScreen = (r, c) => flipped() ? [7 - r, 7 - c] : [r, c];
 
   // Builds one piece (with everything it has eaten) as a 20x20 pixel image.
@@ -624,6 +864,261 @@
     return c;
   }
 
+  // ----- Board background (pre-rendered once per orientation) -----
+  const GLYPHS = {
+    a: ["   "," ##","# #","# #"," ##"], b: ["#  ","## ","# #","# #","## "], c: ["   "," ##","#  ","#  "," ##"],
+    d: ["  #"," ##","# #","# #"," ##"], e: ["   "," # ","###","#  "," ##"], f: [" ##","#  ","## ","#  ","#  "],
+    g: [" ##","# #"," ##","  #","## "], h: ["#  ","## ","# #","# #","# #"],
+    1: [" # ","## "," # "," # ","###"], 2: ["## ","  #"," # ","#  ","###"], 3: ["## ","  #"," # ","  #","## "],
+    4: ["# #","# #","###","  #","  #"], 5: ["###","#  ","## ","  #","## "], 6: [" ##","#  ","## ","# #"," # "],
+    7: ["###","  #"," # "," # "," # "], 8: [" # ","# #"," # ","# #"," # "],
+  };
+  const WOOD = {
+    light: { base: "#d9a066", grainA: "#cf955b", grainB: "#e3ad74", hi: "#ecc08c", lo: "#b98048" },
+    dark: { base: "#8f5a3c", grainA: "#7f4e33", grainB: "#9c6546", hi: "#a8714f", lo: "#6c4129" },
+    frame: { base: "#4a2c18", grainA: "#3f2513", grainB: "#55331d", hi: "#7a4f2e", lo: "#24140a", groove: "#1a0e06", lip: "#8f6038" },
+  };
+  function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  // Wood grain: wavy streaks along one axis.
+  function grain(g, x, y, w, h, wood, vertical, rand) {
+    g.fillStyle = wood.base; g.fillRect(x, y, w, h);
+    const len = vertical ? h : w, across = vertical ? w : h;
+    for (let k = 0; k < across; k++) {
+      if (rand() < 0.45) continue;
+      const col = rand() < 0.5 ? wood.grainA : wood.grainB;
+      let pos = 0, wob = 0;
+      while (pos < len) {
+        const run = 2 + Math.floor(rand() * 7);
+        g.fillStyle = col;
+        const kk = Math.max(0, Math.min(across - 1, k + wob));
+        if (vertical) g.fillRect(x + kk, y + pos, 1, Math.min(run, len - pos));
+        else g.fillRect(x + pos, y + kk, Math.min(run, len - pos), 1);
+        pos += run + (rand() < 0.3 ? 2 : 0);
+        if (rand() < 0.15) wob += rand() < 0.5 ? -1 : 1;
+      }
+    }
+  }
+  // Inlaid text: a gold letter set into a dark carved cut.
+  function engraveText(g, text, x, y) {
+    for (const [pass, col, d] of [[0, WOOD.frame.groove, 1], [1, "#d9a552", 0]]) {
+      g.fillStyle = col;
+      let cx = x;
+      for (const ch of text) {
+        const gl = GLYPHS[ch];
+        gl.forEach((row, i) => { for (let j = 0; j < 3; j++) if (row[j] === "#") g.fillRect(cx + j + d, y + i + d, 1, 1); });
+        cx += 4;
+      }
+    }
+  }
+  const bgCache = {};
+  function boardBackground(flip) {
+    if (bgCache[flip]) return bgCache[flip];
+    const c = document.createElement("canvas"); c.width = W; c.height = W;
+    const g = c.getContext("2d");
+    const fr = WOOD.frame, rand = rng(1337);
+    // Frame: four planks with mitred grain, raised outer bevel, carved groove.
+    grain(g, 0, 0, W, F, fr, false, rand); grain(g, 0, W - F, W, F, fr, false, rand);
+    grain(g, 0, F, F, W - 2 * F, fr, true, rand); grain(g, W - F, F, F, W - 2 * F, fr, true, rand);
+    for (let i = 0; i < F; i++) { g.fillStyle = fr.lo; g.fillRect(i, W - 1 - i, 1, 1); g.fillRect(W - 1 - i, i, 1, 1); } // mitre joints
+    g.fillStyle = fr.hi; g.fillRect(0, 0, W, 1); g.fillRect(0, 0, 1, W);
+    g.fillStyle = fr.lo; g.fillRect(0, W - 1, W, 1); g.fillRect(W - 1, 0, 1, W);
+    const groove = (o) => {
+      g.fillStyle = fr.groove; g.fillRect(o, o, W - 2 * o, 1); g.fillRect(o, o, 1, W - 2 * o);
+      g.fillRect(o, W - 1 - o, W - 2 * o, 1); g.fillRect(W - 1 - o, o, 1, W - 2 * o);
+      g.fillStyle = fr.lip; g.fillRect(o + 1, o + 1, W - 2 * o - 2, 1); g.fillRect(o + 1, o + 1, 1, W - 2 * o - 2);
+    };
+    groove(2);
+    // Corner rosettes.
+    for (const [cx, cy] of [[5, 5], [W - 6, 5], [5, W - 6], [W - 6, W - 6]]) {
+      g.fillStyle = fr.groove; g.fillRect(cx - 1, cy, 3, 1); g.fillRect(cx, cy - 1, 1, 3);
+      g.fillStyle = fr.lip; g.fillRect(cx, cy, 1, 1);
+    }
+    // Inner lip around the playing surface: dark shadow line, then a gold inlay.
+    g.fillStyle = fr.groove; g.fillRect(F - 2, F - 2, 8 * S + 4, 2); g.fillRect(F - 2, F - 2, 2, 8 * S + 4);
+    g.fillRect(F - 2, F + 8 * S, 8 * S + 4, 2); g.fillRect(F + 8 * S, F - 2, 2, 8 * S + 4);
+    g.fillStyle = "#c8963e"; g.fillRect(F - 1, F - 1, 8 * S + 2, 1); g.fillRect(F - 1, F - 1, 1, 8 * S + 2);
+    g.fillStyle = "#7a5520"; g.fillRect(F - 1, F + 8 * S, 8 * S + 2, 1); g.fillRect(F + 8 * S, F - 1, 1, 8 * S + 2);
+    // Coordinates carved into the frame.
+    for (let i = 0; i < 8; i++) {
+      const file = "abcdefgh"[flip ? 7 - i : i], rank = String(flip ? i + 1 : 8 - i);
+      engraveText(g, file, F + i * S + 8, W - F + 4);
+      engraveText(g, file, F + i * S + 8, 3);
+      engraveText(g, rank, 4, F + i * S + 7);
+      engraveText(g, rank, W - F + 4, F + i * S + 7);
+    }
+    // Parquet squares: light maple with grain one way, dark walnut the other, each with a small bevel.
+    const sr = rng(7);
+    for (let r = 0; r < 8; r++) for (let col = 0; col < 8; col++) {
+      const dark = (r + col) % 2 === 1, wood = dark ? WOOD.dark : WOOD.light;
+      const x = F + col * S, y = F + r * S;
+      grain(g, x, y, S, S, wood, dark, sr);
+      g.fillStyle = wood.hi; g.fillRect(x, y, S, 1); g.fillRect(x, y, 1, S);
+      g.fillStyle = wood.lo; g.fillRect(x, y + S - 1, S, 1); g.fillRect(x + S - 1, y, 1, S);
+      if (!dark) { // a tiny inlaid diamond in each light square's corner
+        g.fillStyle = wood.lo; g.fillRect(x + 3, y + 2, 1, 1); g.fillRect(x + 2, y + 3, 1, 1); g.fillRect(x + 4, y + 3, 1, 1); g.fillRect(x + 3, y + 4, 1, 1);
+      }
+    }
+    bgCache[flip] = c;
+    return c;
+  }
+
+  // ----- Smoke -----
+  // Two tileable pixel-noise layers drift in different directions over the
+  // fogged squares; a dithered fringe lets the haze spill onto clear squares.
+  function smokeTexture(seed, size, color, levels) {
+    const rand = rng(seed);
+    const octave = (cells) => {
+      const g = Array.from({ length: cells }, () => Array.from({ length: cells }, rand));
+      const cs = size / cells, sm = (t) => t * t * (3 - 2 * t);
+      return (x, y) => {
+        const gx = x / cs, gy = y / cs, x0 = Math.floor(gx), y0 = Math.floor(gy);
+        const tx = sm(gx - x0), ty = sm(gy - y0), x1 = (x0 + 1) % cells, y1 = (y0 + 1) % cells;
+        const a = g[y0 % cells][x0 % cells], b = g[y0 % cells][x1], c = g[y1][x0 % cells], d = g[y1][x1];
+        return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
+      };
+    };
+    const o1 = octave(size / 16), o2 = octave(size / 8);
+    const cv2 = document.createElement("canvas"); cv2.width = size; cv2.height = size;
+    const g2 = cv2.getContext("2d");
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const v = o1(x, y) * 0.65 + o2(x, y) * 0.35;
+      let a = 0;
+      for (const [th, al] of levels) if (v > th) a = al;
+      if (a) { g2.fillStyle = color; g2.globalAlpha = a; g2.fillRect(x, y, 1, 1); }
+    }
+    return cv2;
+  }
+  const SMOKE = [
+    { tex: smokeTexture(11, 96, "#3e3b49", [[0.5, 0.35], [0.65, 0.55]]), vx: -2.5, vy: 1.2, wob: 1.5 },
+    { tex: smokeTexture(23, 96, "#d6d3e0", [[0.45, 0.25], [0.58, 0.45], [0.7, 0.7]]), vx: 4, vy: -1.5, wob: 2.5 },
+  ];
+  // The smoke's outline comes from a blurred map of the fogged squares, so its
+  // corners round off where it meets cleared ground. A drifting noise field
+  // nudges that outline and a 4x4 dither keeps the soft edge pixel-crisp.
+  const BOARD_PX = 8 * S;
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
+  const smokeCv = document.createElement("canvas"); smokeCv.width = smokeCv.height = BOARD_PX;
+  const smokeCtx = smokeCv.getContext("2d");
+  const maskCv = document.createElement("canvas"); maskCv.width = maskCv.height = BOARD_PX;
+  const maskCtx = maskCv.getContext("2d");
+  const maskImg = maskCtx.createImageData(BOARD_PX, BOARD_PX);
+  for (let i = 0; i < maskImg.data.length; i += 4) maskImg.data[i] = maskImg.data[i + 1] = maskImg.data[i + 2] = 255;
+  const WOB_N = 64;
+  const wobble = (() => {
+    const rand = rng(99), cells = 8, cs = WOB_N / cells;
+    const g = Array.from({ length: cells }, () => Array.from({ length: cells }, rand));
+    const sm = (t) => t * t * (3 - 2 * t), out = new Float32Array(WOB_N * WOB_N);
+    for (let y = 0; y < WOB_N; y++) for (let x = 0; x < WOB_N; x++) {
+      const gx = x / cs, gy = y / cs, x0 = Math.floor(gx), y0 = Math.floor(gy), x1 = (x0 + 1) % cells, y1 = (y0 + 1) % cells;
+      const tx = sm(gx - x0), ty = sm(gy - y0);
+      out[y * WOB_N + x] = (g[y0][x0] * (1 - tx) + g[y0][x1] * tx) * (1 - ty) + (g[y1][x0] * (1 - tx) + g[y1][x1] * tx) * ty - 0.5;
+    }
+    return out;
+  })();
+  function boxBlur(a, N, R) {
+    const tmp = new Float32Array(N * N), w = 2 * R + 1;
+    for (let y = 0; y < N; y++) {
+      const row = y * N; let sum = 0;
+      for (let k = -R; k <= R; k++) sum += a[row + Math.min(N - 1, Math.max(0, k))];
+      for (let x = 0; x < N; x++) {
+        tmp[row + x] = sum / w;
+        sum += a[row + Math.min(N - 1, x + R + 1)] - a[row + Math.max(0, x - R)];
+      }
+    }
+    for (let x = 0; x < N; x++) {
+      let sum = 0;
+      for (let k = -R; k <= R; k++) sum += tmp[Math.min(N - 1, Math.max(0, k)) * N + x];
+      for (let y = 0; y < N; y++) {
+        a[y * N + x] = sum / w;
+        sum += tmp[Math.min(N - 1, y + R + 1) * N + x] - tmp[Math.max(0, y - R) * N + x];
+      }
+    }
+  }
+  let fieldKey = "", field = null;
+  function fogField(cells) {
+    const key = cells.map(([r, c]) => r * 8 + c).join(",");
+    if (key === fieldKey) return field;
+    const N = BOARD_PX, a = new Float32Array(N * N);
+    for (const [sr, sc] of cells) for (let y = sr * S; y < sr * S + S; y++) a.fill(1, y * N + sc * S, y * N + sc * S + S);
+    const isFog = new Uint8Array(64);
+    for (const [sr, sc] of cells) isFog[sr * 8 + sc] = 1;
+    boxBlur(a, N, 4); boxBlur(a, N, 4);
+    // Smoke may only curl a few pixels onto cleared squares, so their pieces stay in view.
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (isFog[Math.floor(y / S) * 8 + Math.floor(x / S)]) continue;
+      const lx = x % S, ly = y % S;
+      if (Math.min(lx, ly, S - 1 - lx, S - 1 - ly) > 2) a[y * N + x] = 0;
+    }
+    fieldKey = key; field = a;
+    return a;
+  }
+  function drawSmoke(now) {
+    const cells = [];
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (fogged(r, c)) cells.push(toScreen(r, c));
+    if (!cells.length) return;
+    const fld = fogField(cells);
+    const t = REDUCED ? 0 : now / 1000;
+    // 1. Paint drifting smoke over the whole board.
+    smokeCtx.globalCompositeOperation = "source-over";
+    smokeCtx.clearRect(0, 0, BOARD_PX, BOARD_PX);
+    smokeCtx.fillStyle = "rgba(98,95,112,0.94)"; smokeCtx.fillRect(0, 0, BOARD_PX, BOARD_PX);
+    for (const L of SMOKE) {
+      const n = L.tex.width;
+      const ox = ((Math.round(t * L.vx + Math.sin(t * 0.6) * L.wob) % n) + n) % n;
+      const oy = ((Math.round(t * L.vy + Math.cos(t * 0.45) * L.wob) % n) + n) % n;
+      for (let y = -oy; y < BOARD_PX; y += n) for (let x = -ox; x < BOARD_PX; x += n) smokeCtx.drawImage(L.tex, x, y);
+    }
+    // 2. Cut it to the rounded, breathing outline.
+    const d = maskImg.data, N = BOARD_PX;
+    const wx = Math.floor(t * 4), wy = Math.floor(t * 2.5);
+    for (let y = 0; y < N; y++) {
+      const wrow = ((y + wy) % WOB_N) * WOB_N;
+      for (let x = 0; x < N; x++) {
+        const i = y * N + x, v = fld[i];
+        let a;
+        if (v <= 0.25) a = 0;
+        else if (v >= 0.75) a = 255;
+        else {
+          const e = v + wobble[wrow + ((x + wx) % WOB_N)] * 0.3;
+          a = (e - 0.42) / 0.16 >= BAYER[(y & 3) * 4 + (x & 3)] ? 255 : 0;
+        }
+        d[i * 4 + 3] = a;
+      }
+    }
+    maskCtx.putImageData(maskImg, 0, 0);
+    smokeCtx.globalCompositeOperation = "destination-in";
+    smokeCtx.drawImage(maskCv, 0, 0);
+    smokeCtx.globalCompositeOperation = "source-over";
+    ctx.drawImage(smokeCv, 0, 0);
+  }
+
+  // ----- Bot thinking bubble -----
+  function drawThinking(now) {
+    const t = REDUCED ? 0 : now / 1000;
+    const k = findKing(board, "b");
+    let ax, ay;
+    if (k && !fogged(k[0], k[1])) { const [sr, sc] = toScreen(k[0], k[1]); ax = sc * S + 12; ay = sr * S + 2; }
+    else { ax = 4 * S; ay = 2; } // king hidden in the smoke: think from the far edge
+    const bw = 22, bh = 12;
+    const bx = Math.max(-F + 1, Math.min(BOARD_PX + F - bw - 1, ax + 2));
+    const by = Math.max(-F + 1, ay - bh - 7) + Math.round(Math.sin(t * 4));
+    const ink = "#1a1626", paper = "#f4ecd6";
+    // trail of little thought puffs
+    const puff = (x, y, w) => { ctx.fillStyle = ink; ctx.fillRect(x - 1, y - 1, w + 2, w + 2); ctx.fillStyle = paper; ctx.fillRect(x, y, w, w); };
+    puff(ax, ay - 2, 1); puff(ax + 1, ay - 5, 2);
+    // rounded bubble
+    ctx.fillStyle = ink;
+    ctx.fillRect(bx + 1, by, bw - 2, bh); ctx.fillRect(bx, by + 1, bw, bh - 2);
+    ctx.fillStyle = paper;
+    ctx.fillRect(bx + 2, by + 1, bw - 4, bh - 2); ctx.fillRect(bx + 1, by + 2, bw - 2, bh - 4);
+    // three dots taking turns to hop
+    const active = Math.floor(t * 5) % 3;
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = i === active ? "#ff7a59" : "#8a82a6";
+      ctx.fillRect(bx + 5 + i * 5, by + 5 - (i === active ? 2 : 0), 2, 2);
+    }
+  }
+
   // ----- Animation state -----
   let anim = null, flash = null, rafId = 0;
   const particles = [];
@@ -631,14 +1126,19 @@
     const mover = prevBoard[m.fr] && prevBoard[m.fr][m.fc];
     if (!mover) return;
     const victim = prevBoard[m.tr][m.tc];
-    const gained = !!victim && victim.powers.some(x => !mover.powers.includes(x));
+    if (fogged(m.fr, m.fc)) {
+      // Moved out of the smoke: nothing to watch, but a visible victim still bursts.
+      if (victim && !fogged(m.tr, m.tc)) { anim = null; finishAnim(performance.now(), { victim, m, gained: false }); render(); }
+      return;
+    }
+    const gained = devour && !!victim && victim.powers.some(x => !mover.powers.includes(x));
     if (REDUCED) { if (gained) flash = { r: m.tr, c: m.tc, start: performance.now(), dur: 300 }; render(); return; }
     const dist = Math.hypot(m.tr - m.fr, m.tc - m.fc);
     anim = { mover, victim, gained, m, start: performance.now(), dur: 150 + dist * 45 };
     render();
   }
-  function finishAnim(now) {
-    const a = anim; anim = null;
+  function finishAnim(now, given) {
+    const a = given || anim; anim = null;
     if (a.victim) {
       const [sr, sc] = toScreen(a.m.tr, a.m.tc);
       const pal = PAL[a.victim.color];
@@ -657,23 +1157,22 @@
     rafId = 0;
     const dt = Math.min(0.05, (now - (lastFrame || now)) / 1000); lastFrame = now;
     draw(now, dt);
-    if (anim || particles.length || flash || (selected && !REDUCED)) rafId = requestAnimationFrame(frame);
+    if (anim || particles.length || flash || (selected && !REDUCED) || ((viewer() || curtain || thinking) && !REDUCED)) rafId = requestAnimationFrame(frame);
     else lastFrame = 0;
   }
 
   function draw(now, dt) {
     ctx.imageSmoothingEnabled = false;
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      ctx.fillStyle = (r + c) % 2 ? SQ_DARK : SQ_LIGHT;
-      ctx.fillRect(c * S, r * S, S, S);
-    }
+    ctx.drawImage(boardBackground(flipped()), 0, 0);
+    ctx.save();
+    ctx.translate(F, F);
     const fillSq = (r, c, color) => { const [sr, sc] = toScreen(r, c); ctx.fillStyle = color; ctx.fillRect(sc * S, sr * S, S, S); };
     if (lastMove) {
-      fillSq(lastMove.fr, lastMove.fc, "rgba(255,224,102,0.35)");
-      fillSq(lastMove.tr, lastMove.tc, "rgba(255,224,102,0.35)");
+      if (!fogged(lastMove.fr, lastMove.fc)) fillSq(lastMove.fr, lastMove.fc, "rgba(255,224,102,0.35)");
+      if (!fogged(lastMove.tr, lastMove.tc)) fillSq(lastMove.tr, lastMove.tc, "rgba(255,224,102,0.35)");
     }
     const k = findKing(board, turn);
-    if (k && !gameOver && inCheck(board, turn)) fillSq(k[0], k[1], "#e0303a");
+    if (!fog && k && !gameOver && inCheck(board, turn)) fillSq(k[0], k[1], "#e0303a");
 
     // Selected square: pulsing glow and a marching double border.
     const pulse = REDUCED ? 1 : (Math.sin(now / 140) + 1) / 2;
@@ -693,6 +1192,7 @@
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
       const p = board[r][c]; if (!p) continue;
       if (anim && r === anim.m.tr && c === anim.m.tc) continue; // drawn in flight below
+      if (fogged(r, c)) continue;
       const [sr, sc] = toScreen(r, c);
       let x = sc * S, y = sr * S;
       if (selected && selected[0] === r && selected[1] === c && !REDUCED) {
@@ -706,20 +1206,6 @@
         const t = (now - flash.start) / flash.dur;
         if (t >= 1) flash = null;
         else { ctx.globalAlpha = (1 - t) * 0.9; ctx.drawImage(spriteFor(p, true), x, y); ctx.globalAlpha = 1; }
-      }
-    }
-
-    for (const m of legal) {
-      const [sr, sc] = toScreen(m.tr, m.tc);
-      const x = sc * S, y = sr * S;
-      if (board[m.tr][m.tc]) {
-        ctx.fillStyle = "#3fd0a0";
-        const o = Math.round(pulse);
-        for (const [dx, dy] of [[0,0],[S-4,0],[0,S-4],[S-4,S-4]]) ctx.fillRect(x + dx + (dx ? -o : o), y + dy + (dy ? -o : o), 4, 4);
-      } else {
-        const sz = 4 + Math.round(pulse) * 2, off = (S - sz) / 2;
-        ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(x + off, y + off, sz, sz);
-        ctx.fillStyle = "#3fd0a0"; ctx.fillRect(x + off + 1, y + off + 1, sz - 2, sz - 2);
       }
     }
 
@@ -739,12 +1225,30 @@
       if (t >= 1) finishAnim(now);
     }
 
+    drawSmoke(now);
+
+    for (const m of legal) {
+      const [sr, sc] = toScreen(m.tr, m.tc);
+      const x = sc * S, y = sr * S;
+      if (board[m.tr][m.tc] && !fogged(m.tr, m.tc)) {
+        ctx.fillStyle = "#3fd0a0";
+        const o = Math.round(pulse);
+        for (const [dx, dy] of [[0,0],[S-4,0],[0,S-4],[S-4,S-4]]) ctx.fillRect(x + dx + (dx ? -o : o), y + dy + (dy ? -o : o), 4, 4);
+      } else {
+        const sz = 4 + Math.round(pulse) * 2, off = (S - sz) / 2;
+        ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(x + off, y + off, sz, sz);
+        ctx.fillStyle = "#3fd0a0"; ctx.fillRect(x + off + 1, y + off + 1, sz - 2, sz - 2);
+      }
+    }
+
     for (let i = particles.length - 1; i >= 0; i--) {
       const q = particles[i];
       q.vy += 160 * dt; q.x += q.vx * dt; q.y += q.vy * dt;
       if (now - q.born > q.life) { particles.splice(i, 1); continue; }
       ctx.fillStyle = q.col; ctx.fillRect(Math.round(q.x), Math.round(q.y), 2, 2);
     }
+    if (thinking && mode === "local") drawThinking(now);
+    ctx.restore();
   }
 
   // ---------- UI ----------
@@ -765,39 +1269,50 @@
     box.append(t, s);
   }
 
+  function note(text) {
+    const box = $("info"); box.replaceChildren();
+    const d = document.createElement("div"); d.textContent = text; box.append(d);
+  }
+  function addDots() {
+    const dots = document.createElement("span"); dots.className = "dots"; dots.setAttribute("aria-hidden", "true");
+    dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
+    $("status").firstChild.append(dots);
+  }
   function setStatus(main, sub, subErr) {
     const el = $("status"); el.replaceChildren();
     const a = document.createElement("div"); a.textContent = main; el.append(a);
     if (sub) { const b = document.createElement("div"); b.textContent = sub; b.style.color = subErr ? "var(--bad)" : "var(--muted)"; el.append(b); }
   }
 
-  let renderPlayersToken = 0;
-  async function renderPlayers() {
+  function renderPlayers() {
     const d = online.data, el = $("players");
-    if (!d) { el.replaceChildren(); return; }
-    const token = ++renderPlayersToken;
-    const ids = [d.white, d.black].filter(Boolean);
-    let ps = {};
-    try { ps = user && ids.length ? await user.profiles(ids) : {}; } catch (_) {}
-    if (token !== renderPlayersToken) return;
     el.replaceChildren();
-    for (const [color, id, label] of [["w", d.white, "White"], ["b", d.black, "Black"]]) {
+    if (!d) return;
+    const me = myColor();
+    for (const color of ["w", "b"]) {
       const chip = document.createElement("div"); chip.className = "chip"; chip.style.background = PAL[color].fill;
       const name = document.createElement("div");
-      if (!id) { name.textContent = `${label}: waiting...`; name.className = "muted"; }
-      else {
-        const n = (ps[id] && ps[id].name) || (label === "White" ? "Player 1" : "Player 2");
-        name.textContent = `${label}: ${n}${id === myId ? " (you)" : ""}${d.turn === color && d.status === "playing" ? "  <" : ""}`;
-      }
+      const isHost = d.hostColor === color;
+      let who;
+      if (me === color) who = "You";
+      else if (online.seat === "spectator") who = isHost ? "Host" : "Guest";
+      else if (online.seat === "host" ? online.connected : online.connected) who = "Friend";
+      else who = online.seat === "host" ? "waiting..." : "Host (offline)";
+      name.textContent = `${colorName(color)}: ${who}${d.turn === color && d.status === "playing" ? "  <" : ""}`;
+      if (who.endsWith("...") || who.includes("offline")) name.className = "muted";
       el.append(chip, name);
     }
   }
 
   function updateUI() {
     const isOnline = mode === "online";
-    $("onlineHome").hidden = isOnline;
+    $("setup").hidden = isOnline;
     $("onlineGame").hidden = !isOnline;
-    $("localBox").hidden = isOnline;
+    $("localBox").hidden = isOnline || !history.length;
+    $("devourNote").hidden = devour;
+    $("fogNote").hidden = !fog;
+    $("curtain").hidden = !curtain;
+    $("curtainText").textContent = `PASS TO ${colorName(turn).toUpperCase()}`;
     $("log").textContent = "";
     (logLines && logLines.length ? logLines : ["No moves yet."]).forEach((l, i) => {
       if (i) $("log").append(document.createElement("br"));
@@ -805,32 +1320,32 @@
     });
 
     if (!isOnline) {
-      if (gameOver) setStatus(resultText);
-      else if (thinking) setStatus("CPU is chewing...");
-      else setStatus(`${turn === "w" ? "White" : "Black"} to move`, inCheck(board, turn) ? "CHECK!" : "", true);
-      $("cpu").textContent = `CPU: ${cpuOn ? "ON" : "OFF"}`;
-      $("cpu").classList.toggle("on", cpuOn);
+      const tagline = (cpuOn ? `vs ${BOT[botLevel].name} bot` : "Same screen") + ` - Devour ${devour ? "ON" : "OFF"}` + (fog ? " - Fog" : "");
+      if (gameOver) setStatus(resultText, tagline);
+      else if (thinking) { setStatus(fog ? "Something stirs in the smoke" : "Bot is thinking", tagline); addDots(); }
+      else if (!fog && inCheck(board, turn)) setStatus(`${colorName(turn)} to move`, "CHECK!", true);
+      else setStatus(cpuOn && turn === "w" ? "Your move (White)" : `${colorName(turn)} to move`, tagline);
       return;
     }
 
     const d = online.data;
     $("gameCode").textContent = (online.code || "").toUpperCase();
+    $("shareLink").value = online.code ? gameLink(online.code) : "";
     const me = myColor();
-    $("sit").hidden = !(d && d.status === "waiting" && !d.black && myId && d.white !== myId && !online.readOnly);
+    $("shareBox").hidden = online.seat !== "host";
     $("resign").hidden = !(d && me && d.status === "playing");
-    $("rematch").hidden = !(d && me && d.status === "over" && d.white && d.black);
-    $("shareHint").hidden = !(d && d.status === "waiting");
+    $("rematch").hidden = !(d && me && d.status === "over");
     renderPlayers();
 
-    if (!d) { setStatus("Online game", online.loaded ? "" : "Loading..."); return; }
+    if (!d) { setStatus("Online game", "Connecting..."); return; }
     if (d.status === "waiting") {
-      setStatus("Waiting for a friend", me ? "Share the code. You play White." : "Take the Black seat to play.");
+      setStatus("Waiting for a friend", (online.seat === "host" ? "Send them the link below. " : "") + `Devour ${devour ? "ON" : "OFF"}` + (fog ? " - Fog" : ""));
     } else if (d.status === "over") {
       setStatus(resultText || "Game over");
     } else {
-      const who = turn === "w" ? "White" : "Black";
+      const who = colorName(turn);
       const main = me ? (turn === me ? "Your move" : `Waiting for ${who}...`) : `${who} to move`;
-      const check = inCheck(board, turn) ? "CHECK!" : (me ? "" : "You're watching.");
+      const check = !fog && inCheck(board, turn) ? "CHECK!" : (online.seat === "spectator" ? "You're watching." : `Devour ${devour ? "ON" : "OFF"}` + (fog ? " - Fog" : ""));
       setStatus(main, check, check === "CHECK!");
     }
   }
@@ -851,46 +1366,73 @@
 
   function canAct() {
     if (gameOver) return false;
-    if (mode === "local") return !thinking && !(cpuOn && turn === "b");
+    if (mode === "local") return !thinking && !curtain && !(cpuOn && turn === "b");
     const d = online.data;
-    return !!d && d.status === "playing" && !online.busy && !online.readOnly && myColor() === turn;
+    if (!d || d.status !== "playing" || myColor() !== turn) return false;
+    return online.seat === "host" || online.connected;
   }
 
   cv.addEventListener("click", (e) => {
-    const rect = cv.getBoundingClientRect();
-    let c = Math.floor((e.clientX - rect.left) / rect.width * 8);
-    let r = Math.floor((e.clientY - rect.top) / rect.height * 8);
+    const px = e.offsetX / cv.clientWidth * W - F, py = e.offsetY / cv.clientHeight * W - F;
+    let c = Math.floor(px / S), r = Math.floor(py / S);
     if (!inside(r, c)) return;
     if (flipped()) { r = 7 - r; c = 7 - c; }
-    const p = board[r][c];
+    if (curtain) return;
+    const p = fogged(r, c) ? null : board[r][c];
     const m = legal.find(m => m.tr === r && m.tc === c);
     if (m && canAct()) { mode === "local" ? localMove(m) : onlineMove(m); return; }
     if (p) describePiece(p);
-    if (p && p.color === turn && canAct()) { selected = [r, c]; legal = legalMovesFrom(board, r, c); }
+    else if (fogged(r, c)) note("Smoke hides this square. Move a piece onto it, or through it, to clear it.");
+    if (p && p.color === turn && canAct()) {
+      selected = [r, c];
+      legal = fog ? pseudoMoves(viewBoard(board, turn, seen), r, c) : legalMovesFrom(board, r, c);
+    }
     else { selected = null; legal = []; }
     render();
   });
 
-  $("new").onclick = () => { if (!thinking) newLocalGame(); };
   $("undo").onclick = () => {
     if (thinking || !history.length) return;
     let h = history.pop();
     if (cpuOn && h.turn === "b" && history.length) h = history.pop();
-    ({ board, turn, lastMove, logLines } = h);
-    gameOver = false; resultText = ""; selected = null; legal = [];
+    ({ board, turn, lastMove, logLines, seen } = h);
+    gameOver = false; resultText = ""; selected = null; legal = []; curtain = false;
     render(); updateUI();
   };
-  $("cpu").onclick = () => {
-    cpuOn = !cpuOn; updateUI();
-    if (cpuOn && turn === "b" && !gameOver && !thinking) scheduleCpu();
+  function saveSettings() { try { localStorage.setItem("dc-settings", JSON.stringify(settings)); } catch (_) {} }
+  function renderSettings() {
+    for (const b of document.querySelectorAll("[data-opp]")) b.setAttribute("aria-pressed", String(b.dataset.opp === settings.opp));
+    for (const b of document.querySelectorAll("[data-level]")) b.setAttribute("aria-pressed", String(+b.dataset.level === settings.level));
+    $("levelField").hidden = settings.opp !== "bot";
+    $("devourToggle").setAttribute("aria-checked", String(settings.devour));
+    $("devourLabel").textContent = settings.devour ? "ON" : "OFF";
+    $("devourHint").textContent = settings.devour ? "Captures absorb the victim's powers." : "Classic chess captures.";
+    $("start").textContent = settings.opp === "online" ? "CREATE ONLINE GAME" : "START GAME";
+    $("fogToggle").setAttribute("aria-checked", String(settings.fog));
+    $("fogLabel").textContent = settings.fog ? "ON" : "OFF";
+    $("fogHint").textContent = settings.fog ? "Smoke hides squares your team hasn't stepped on. Capture the king to win." : "Everyone sees the whole board.";
+  }
+  for (const b of document.querySelectorAll("[data-opp]")) b.onclick = () => { settings.opp = b.dataset.opp; saveSettings(); renderSettings(); };
+  for (const b of document.querySelectorAll("[data-level]")) b.onclick = () => { settings.level = +b.dataset.level; saveSettings(); renderSettings(); };
+  $("devourToggle").onclick = () => { settings.devour = !settings.devour; saveSettings(); renderSettings(); };
+  $("fogToggle").onclick = () => { settings.fog = !settings.fog; saveSettings(); renderSettings(); };
+  $("curtainBtn").onclick = () => { curtain = false; render(); updateUI(); };
+  $("start").onclick = () => {
+    if (settings.opp === "online") { if (typeof Peer !== "undefined") createGame(); return; }
+    thinking = false; newLocalGame();
   };
-  $("create").onclick = createGame;
   $("join").onclick = () => openGame($("joinCode").value);
   $("joinCode").addEventListener("keydown", (e) => { if (e.key === "Enter") openGame($("joinCode").value); });
-  $("sit").onclick = takeSeat;
   $("resign").onclick = resign;
   $("rematch").onclick = rematch;
+  $("reconnect").onclick = () => { setMsg("gameMsg", "Connecting to the game..."); connectToHost(); };
   $("leave").onclick = () => leaveGame(true);
+  $("copyLink").onclick = () => {
+    const input = $("shareLink");
+    const done = () => { $("copyLink").textContent = "COPIED"; setTimeout(() => $("copyLink").textContent = "COPY LINK", 1500); };
+    const fallback = () => { input.focus(); input.select(); try { if (document.execCommand("copy")) done(); } catch (_) {} };
+    if (navigator.clipboard) navigator.clipboard.writeText(input.value).then(done, fallback); else fallback();
+  };
 
   function hashCode() {
     const m = /^#g-([a-z0-9]{6})$/i.exec(location.hash || "");
@@ -898,7 +1440,7 @@
   }
   window.addEventListener("hashchange", () => {
     const code = hashCode();
-    if (code && db && code !== online.code) openGame(code);
+    if (code && code !== online.code) openGame(code);
   });
 
   // ---------- Sound ----------
@@ -915,33 +1457,15 @@
   }
 
   // ---------- Boot ----------
+  renderSettings();
   newLocalGame();
-  $("create").disabled = true; $("join").disabled = true;
-  setMsg("onlineMsg", "Connecting...");
-
-  (async () => {
-    const use = window.claude && window.claude.use;
-    if (!use) { setMsg("onlineMsg", "Online play works on the published page. You can still play the CPU here."); return; }
-    [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
-    myId = user ? await user.id() : null;
-    if (!db || !myId) {
-      db = db && myId ? db : null;
-      setMsg("onlineMsg", "Sign in to claude.ai to play online. You can still play the CPU here.");
-      return;
-    }
-    let canWrite = null;
-    try { canWrite = await user.can("data.write"); } catch (_) {}
-    if (canWrite === false) {
-      online.readOnly = true;
-      setMsg("onlineMsg", "You have view-only access, so you can watch games but not play. Ask the owner for Contributor access.");
-      $("join").disabled = false;
-    } else {
-      $("create").disabled = false; $("join").disabled = false;
-      setMsg("onlineMsg", "");
-    }
-    loadMyGames();
+  if (typeof Peer === "undefined") {
+    $("oppOnline").disabled = true; $("join").disabled = true;
+    if (settings.opp === "online") { settings.opp = "bot"; renderSettings(); }
+    setMsg("onlineMsg", "Online play works in the GitHub Pages version. Here you can play the bot or a friend on the same screen.", true);
+  } else {
     const code = hashCode();
     if (code) openGame(code);
-  })();
+  }
 })();
 </script>

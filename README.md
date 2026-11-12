@@ -22,4 +22,4 @@ Some strict school or work networks block direct browser connections. If a frien
 ## Files
 
 - `index.html`: the game, for GitHub Pages or any static host.
-- `artifact.html`: an older build (without the setup panel, bots levels or new board) published as a claude.ai artifact, where online play goes through the artifact's shared storage (only people in the owner's organization can make moves there).
+- `artifact.html`: the claude.ai copy, built from `index.html` by `tools/build_artifact.py`. It has everything except online play (claude.ai pages can't connect browsers directly).
