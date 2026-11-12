@@ -48,7 +48,11 @@
   .boardwrap { position: relative; }
   #curtain { position: absolute; inset: 4px; display: flex; align-items: center; justify-content: center; padding: 16px; }
   .curtainCard { background: var(--panel); border: 3px solid var(--edge); box-shadow: 4px 4px 0 var(--edge); padding: 16px; display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center; }
-  #curtainText { font-size: 14px; color: var(--accent); }
+  #curtainText, #promoTitle { font-size: 12px; color: var(--accent); }
+  .overlay { position: absolute; inset: 4px; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .promoRow { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .promoRow button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; font-size: 8px; }
+  .promoRow canvas { width: 48px; height: 48px; image-rendering: pixelated; background: #d9a066; border: 2px solid var(--edge); }
   .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .side.left { grid-area: left; }
   .side.right { grid-area: right; }
@@ -112,6 +116,13 @@
 <div class="wrap">
   <div class="boardcol"><div class="boardwrap">
     <canvas id="board" width="184" height="184" aria-label="Chess board"></canvas>
+    <div id="promo" class="overlay" hidden>
+      <div class="curtainCard">
+        <div id="promoTitle">PROMOTE YOUR PAWN</div>
+        <div class="promoRow" id="promoRow"></div>
+        <button id="promoCancel">CANCEL</button>
+      </div>
+    </div>
     <div id="curtain" hidden>
       <div class="curtainCard">
         <div id="curtainText">PASS TO BLACK</div>
@@ -150,6 +161,11 @@
         <div class="label">FOG OF WAR</div>
         <button id="fogToggle" class="toggle" role="switch" aria-checked="false"><span class="track"><span class="knob"></span></span><span id="fogLabel">OFF</span></button>
         <div class="muted" id="fogHint"></div>
+      </div>
+      <div class="field" id="kingField">
+        <div class="label">KING CAN BE CAPTURED</div>
+        <button id="kingToggle" class="toggle" role="switch" aria-checked="false"><span class="track"><span class="knob"></span></span><span id="kingLabel">OFF</span></button>
+        <div class="muted" id="kingHint"></div>
       </div>
       <button id="start" class="primary big">START GAME</button>
       <hr class="divider">
@@ -192,7 +208,7 @@
       <p>Checkmate wins as usual. Pawns promote to queens. No castling or en passant.</p>
       <p>Pawn eats knight? It can now hop like a knight. Eaten pieces fuse onto the eater in their own colors:</p>
       <div class="legend" id="legend"></div>
-      <p id="fogNote" hidden><b>Fog of war is ON:</b> smoke hides every square your team hasn't stood on or passed through. There is no check, so capture the enemy king to win. A piece that runs into a hidden enemy stops and captures it.</p>
+      <p id="fogNote" hidden><b>Fog of war is ON:</b> smoke hides every square your team hasn't stood on or passed through, for you and your opponent alike. A piece that runs into a hidden enemy stops and captures it. Haze swirling at a piece's feet means the other side can't see it. <span id="kingNote"></span></p>
       <p id="devourNote" hidden><b>Devour is OFF</b> for this game: captures work like normal chess.</p>
     </div>
     <div class="box" id="log"></div>
@@ -223,6 +239,7 @@
   };
   const NAMES = { P: "Pawn", N: "Knight", B: "Bishop", R: "Rook", Q: "Queen", K: "King" };
   const POWER_COLOR = { P: "#9be36b", N: "#ffb347", B: "#59c1ff", R: "#ff5e7a", Q: "#c98bff", K: "#ffe066" };
+  const isPromotion = (b, m) => { const p = b[m.fr][m.fc]; return !!p && p.type === "P" && (m.tr === 0 || m.tr === 7); };
   const VALUE = { P: 1, N: 3, B: 3, R: 5, Q: 9, K: 0 };
   const PAL = {
     w: { fill: "#f4ecd6", shade: "#c9bc98", hi: "#fffdf6", line: "#1b1424" },
@@ -299,8 +316,10 @@
     mover.moved = true;
     nb[m.tr][m.tc] = mover; nb[m.fr][m.fc] = null;
     if (mover.type === "P" && (m.tr === 0 || m.tr === 7)) {
-      mover.type = "Q";
-      if (!mover.powers.includes("Q")) mover.powers.push("Q");
+      // The pawn becomes the chosen piece; powers it ate stay with it.
+      const to = "QRBN".includes(m.promo) && m.promo ? m.promo : "Q";
+      mover.type = to;
+      mover.powers = [to, ...mover.powers.slice(1).filter(x => x !== to)];
     }
     return nb;
   }
@@ -343,6 +362,7 @@
   // seen[color] is a 64-char string of 0/1: squares that team has stood on or
   // passed through. Everything else is smoke for that team.
   let fog = false, seen = null, curtain = false;
+  let kingCap = false; // fog only: true = no check, capturing the king wins
   function initSeen(b) {
     const s = { w: Array(64).fill("0"), b: Array(64).fill("0") };
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (b[r][c]) s[b[r][c].color][r * 8 + c] = "1";
@@ -367,28 +387,51 @@
     return b.map((row, r) => row.map((p, c) => p && p.color !== color && !isSeen(sn, color, r, c) ? null : p));
   }
   // A move planned without seeing into the smoke: if it runs into a hidden
-  // enemy on the way, it stops there and captures it.
-  function resolveMove(b, m) {
+  // enemy on the way, it stops there and captures it. When kings are
+  // protected, bumping into a hidden king stops the piece just short of it.
+  function resolveMove(b, m, protectKings) {
     const mover = b[m.fr][m.fc];
+    let prev = null;
     for (const [r, c] of pathSquares(m)) {
       const t = b[r][c];
-      if (t && t.color !== mover.color) return { fr: m.fr, fc: m.fc, tr: r, tc: c, ambush: r !== m.tr || c !== m.tc };
+      if (t && t.color !== mover.color) {
+        if (protectKings && t.type === "K") return prev ? { fr: m.fr, fc: m.fc, tr: prev[0], tc: prev[1], promo: m.promo, bumped: true } : null;
+        return { fr: m.fr, fc: m.fc, tr: r, tc: c, promo: m.promo, ambush: r !== m.tr || c !== m.tc };
+      }
+      prev = [r, c];
     }
-    return { fr: m.fr, fc: m.fc, tr: m.tr, tc: m.tc };
+    return { fr: m.fr, fc: m.fc, tr: m.tr, tc: m.tc, promo: m.promo };
+  }
+  // Moves a team may plan in the fog: anything its view allows. With kings
+  // protected, a move is refused if (as it would really play out) it leaves
+  // your own king attacked, the same safety rule as normal chess.
+  function fogLegalFrom(b, sn, color, r, c, kc) {
+    const planned = pseudoMoves(viewBoard(b, color, sn), r, c);
+    if (kc) return planned;
+    return planned.filter(m => { const rm = resolveMove(b, m, true); return rm && !inCheck(applyMove(b, rm), color); });
+  }
+  function fogAllLegal(b, sn, color, kc) {
+    const out = [];
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++)
+      if (b[r][c] && b[r][c].color === color) out.push(...fogLegalFrom(b, sn, color, r, c, kc));
+    return out;
   }
   // Plays a move under the game's rules and reports the result.
-  function playMove(b, sn, m, fogOn) {
-    const rm = fogOn ? resolveMove(b, m) : m;
+  function playMove(b, sn, m, fogOn, kc) {
+    const rm = fogOn ? (resolveMove(b, m, !kc) || m) : m;
     const mover = b[rm.fr][rm.fc];
     const info = describeMove(b, rm);
     const nb = applyMove(b, rm);
     const next = other(mover.color);
+    const nsn = fogOn ? markSeen(sn, mover.color, pathSquares(rm)) : sn;
     let over = false, result = "";
-    if (fogOn) {
+    if (fogOn && kc) {
       if (!findKing(nb, next)) { over = true; result = `${colorName(mover.color)} captured the king! ${colorName(mover.color)} wins.`; }
       else if (!pseudoAll(nb, next).length) { over = true; result = "No moves left. It's a draw."; }
+    } else if (fogOn) {
+      if (!fogAllLegal(nb, nsn, next, false).length) { over = true; result = endText(nb, next); }
     } else if (!allLegal(nb, next).length) { over = true; result = endText(nb, next); }
-    return { m: rm, board: nb, seen: fogOn ? markSeen(sn, mover.color, pathSquares(rm)) : sn, info, over, result };
+    return { m: rm, board: nb, seen: nsn, info, over, result };
   }
   const colorName = (c) => c === "w" ? "White" : "Black";
 
@@ -439,9 +482,10 @@
     2: { name: "Medium", depth: 2, noise: 0.3, randomMove: 0 },
     3: { name: "Hard", depth: 3, noise: 0.05, randomMove: 0 },
   };
-  function botMove(b, color, level, fogMode) {
+  // b is the board as this bot knows it; rootMoves (optional) are the moves it may play.
+  function botMove(b, color, level, rootMoves) {
     const cfg = BOT[level] || BOT[2];
-    let moves = orderMoves(b, fogMode ? pseudoAll(b, color) : allLegal(b, color));
+    let moves = orderMoves(b, rootMoves || allLegal(b, color));
     if (!moves.length) return null;
     if (Math.random() < cfg.randomMove) return moves[Math.floor(Math.random() * moves.length)];
     // Search one ply deeper at a time; if thinking runs long, play the best
@@ -474,7 +518,7 @@
   let board, turn, lastMove, logLines, gameOver = false, resultText = "";
   let history = [], selected = null, legal = [], cpuOn = true, thinking = false;
   // Choices in the NEW GAME panel; they take effect when a game starts.
-  const settings = { opp: "bot", level: 2, devour: true, fog: false };
+  const settings = { opp: "bot", level: 2, devour: true, fog: false, kingCap: false };
   try { Object.assign(settings, JSON.parse(localStorage.getItem("dc-settings")) || {}); } catch (_) {}
   let botLevel = settings.level;
 
@@ -483,7 +527,8 @@
   function describeMove(b, m) {
     const mover = b[m.fr][m.fc], victim = b[m.tr][m.tc];
     let line = `${mover.color === "w" ? "W" : "B"} ${NAMES[mover.type]} ${sqName(m.fr, m.fc)}-${sqName(m.tr, m.tc)}`;
-    const gained = victim && devour ? victim.powers.filter(p => !mover.powers.includes(p)) : [];
+    const promotedTo = mover.type === "P" && (m.tr === 0 || m.tr === 7) ? (m.promo && "QRBN".includes(m.promo) ? m.promo : "Q") : null;
+    const gained = victim && devour ? victim.powers.filter(p => !mover.powers.includes(p) && p !== promotedTo) : [];
     if (fog) { // the log is shared, so only say what both sides could know
       const C = colorName(mover.color);
       line = victim ? `${C} ate ${colorName(victim.color)}'s ${NAMES[victim.type]} on ${sqName(m.tr, m.tc)}` : `${C} moved`;
@@ -491,6 +536,7 @@
       line += ` eats ${NAMES[victim.type]}`;
       if (gained.length) line += ` +${gained.map(g => NAMES[g]).join("+")}`;
     }
+    if (promotedTo && !fog) line += `, becomes a ${NAMES[promotedTo]}`;
     return { line, captured: !!victim, gained: gained.length > 0 };
   }
   function endText(b, toMove) {
@@ -503,7 +549,8 @@
 
   // ---------- Local mode ----------
   function newLocalGame() {
-    devour = settings.devour; fog = settings.fog; cpuOn = settings.opp === "bot"; botLevel = settings.level;
+    devour = settings.devour; fog = settings.fog; kingCap = settings.fog && settings.kingCap; cpuOn = settings.opp === "bot"; botLevel = settings.level;
+    morph = null; closePromo();
     anim = null; flash = null; curtain = false;
     board = startBoard(); seen = initSeen(board); turn = "w"; history = []; selected = null; legal = [];
     lastMove = null; gameOver = false; resultText = ""; logLines = [];
@@ -512,14 +559,15 @@
   function localMove(m) {
     history.push({ board: clone(board), turn, lastMove, logLines: [...logLines], seen });
     const humanMove = !(cpuOn && turn === "b");
-    const res = playMove(board, seen, m, fog);
-    startMoveAnim(board, res.m);
+    const res = playMove(board, seen, m, fog, kingCap);
+    startMoveAnim(board, res.m, res.board);
     board = res.board; seen = res.seen;
     moveSound(res.info);
     logLines.unshift(res.info.line);
     lastMove = res.m; turn = other(turn); selected = null; legal = [];
     if (res.over) { gameOver = true; resultText = res.result; }
     if (res.m.ambush && humanMove) note("Ambush! Your piece ran into something hidden in the smoke and ate it.");
+    if (res.m.bumped && humanMove) note("Your piece bumped into the enemy king hiding in the smoke and stopped.");
     if (fog && !cpuOn && !gameOver) curtain = true;
     render(); updateUI();
     if (!gameOver && cpuOn && turn === "b") scheduleCpu();
@@ -531,7 +579,8 @@
     setTimeout(() => {
       if (mode !== "local" || board !== started) { thinking = false; updateUI(); return; }
       const t0 = performance.now();
-      const m = botMove(fog ? viewBoard(board, "b", seen) : board, "b", botLevel, fog);
+      // In the fog the bot plans from what its own pieces have uncovered, like you.
+      const m = fog ? botMove(viewBoard(board, "b", seen), "b", botLevel, fogAllLegal(board, seen, "b", kingCap)) : botMove(board, "b", botLevel);
       const ponder = 700 + Math.random() * 500 + botLevel * 100;
       setTimeout(() => {
         if (mode !== "local" || board !== started) { thinking = false; updateUI(); return; }
@@ -559,9 +608,9 @@
     if (online.seat === "guest") return other(d.hostColor);
     return null;
   };
-  function freshState(hostColor = "w", dv = true, fg = false) {
+  function freshState(hostColor = "w", dv = true, fg = false, kc = false) {
     const b = startBoard();
-    return { v: 1, board: flatten(b), turn: "w", lastMove: null, log: [], status: "waiting", result: "", ply: 0, hostColor, devour: dv, fog: fg, seen: initSeen(b) };
+    return { v: 1, board: flatten(b), turn: "w", lastMove: null, log: [], status: "waiting", result: "", ply: 0, hostColor, devour: dv, fog: fg, kingCap: fg && kc, seen: initSeen(b) };
   }
   function newCode() {
     const abc = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -582,8 +631,8 @@
   function applyState(st) {
     const prev = online.data;
     online.data = st;
-    devour = st.devour !== false; fog = !!st.fog;
-    if (prev && st.ply === prev.ply + 1 && st.lastMove) startMoveAnim(board, st.lastMove);
+    devour = st.devour !== false; fog = !!st.fog; kingCap = !!st.kingCap;
+    if (prev && st.ply === prev.ply + 1 && st.lastMove) startMoveAnim(board, st.lastMove, unflatten(st.board));
     seen = st.seen || initSeen(unflatten(st.board));
     board = unflatten(st.board);
     turn = st.turn; lastMove = st.lastMove || null; logLines = [...(st.log || [])];
@@ -593,7 +642,7 @@
   }
   function makeMoveState(st, m) {
     const b = unflatten(st.board);
-    const res = playMove(b, st.seen || initSeen(b), m, !!st.fog);
+    const res = playMove(b, st.seen || initSeen(b), m, !!st.fog, !!st.kingCap);
     const rm = res.m;
     return { info: res.info, ambush: !!rm.ambush, state: {
       ...st, board: flatten(res.board), turn: other(st.turn), seen: res.seen,
@@ -614,7 +663,7 @@
     mode = "online"; online.code = code; online.seat = "host";
     const saved = !fresh && store.get("dc-host-" + code);
     setHash(code);
-    applyState(saved && saved.v === 1 ? saved : freshState("w", settings.devour, settings.fog));
+    applyState(saved && saved.v === 1 ? saved : freshState("w", settings.devour, settings.fog, settings.kingCap));
     store.set("dc-host-" + code, online.data);
     startHostPeer();
   }
@@ -669,15 +718,16 @@
       if (st.status !== "playing" || st.turn !== gc || msg.ply !== st.ply || !inside(m.fr, m.fc) || !inside(m.tr, m.tc)) return resync();
       const b = unflatten(st.board);
       if (!b[m.fr][m.fc] || b[m.fr][m.fc].color !== gc) return resync();
-      const options = st.fog ? pseudoMoves(viewBoard(b, gc, st.seen), m.fr, m.fc) : legalMovesFrom(b, m.fr, m.fc);
-      const ok = options.find(x => x.tr === m.tr && x.tc === m.tc);
+      const options = st.fog ? fogLegalFrom(b, st.seen, gc, m.fr, m.fc, !!st.kingCap) : legalMovesFrom(b, m.fr, m.fc);
+      let ok = options.find(x => x.tr === m.tr && x.tc === m.tc);
       if (!ok) return resync();
+      if ("QRBN".includes(m.promo) && m.promo) ok = { ...ok, promo: m.promo };
       const r = makeMoveState(st, ok);
       moveSound(r.info); hostCommit(r.state);
     } else if (msg.type === "resign" && st.status === "playing") {
       hostCommit({ ...st, status: "over", result: `${colorName(gc)} resigned. ${colorName(st.hostColor)} wins.` });
     } else if (msg.type === "rematch" && st.status === "over") {
-      hostCommit({ ...freshState(other(st.hostColor), st.devour !== false, !!st.fog), status: "playing" });
+      hostCommit({ ...freshState(other(st.hostColor), st.devour !== false, !!st.fog, !!st.kingCap), status: "playing" });
     }
   }
 
@@ -749,7 +799,7 @@
     moveSound(r.info);
     if (r.ambush) note("Ambush! Your piece ran into something hidden in the smoke and ate it.");
     if (online.seat === "host") hostCommit(r.state);
-    else if (sendToHost({ type: "move", m: { fr: m.fr, fc: m.fc, tr: m.tr, tc: m.tc }, ply: st.ply })) applyState(r.state);
+    else if (sendToHost({ type: "move", m: { fr: m.fr, fc: m.fc, tr: m.tr, tc: m.tc, promo: m.promo }, ply: st.ply })) applyState(r.state);
   }
   function resign() {
     const st = online.data, me = myColor();
@@ -759,7 +809,7 @@
   }
   function rematch() {
     const st = online.data; if (!st || !myColor() || st.status !== "over") return;
-    if (online.seat === "host") hostCommit({ ...freshState(other(st.hostColor), st.devour !== false, !!st.fog), status: online.connected ? "playing" : "waiting" });
+    if (online.seat === "host") hostCommit({ ...freshState(other(st.hostColor), st.devour !== false, !!st.fog, !!st.kingCap), status: online.connected ? "playing" : "waiting" });
     else sendToHost({ type: "rematch" });
   }
   function leaveGame(toLocal = true) {
@@ -1101,6 +1151,34 @@
     ctx.drawImage(smokeCv, 0, 0);
   }
 
+  // ----- Haze at the feet of your pieces the other side can't see -----
+  function hiddenFromFoe(r, c, p) {
+    const v = viewer();
+    return !!v && !curtain && p.color === v && !isSeen(seen, other(v), r, c);
+  }
+  function drawHaze(x, y, now, front) {
+    const t = REDUCED ? 0 : now / 1000;
+    const cx = x + 10, cy = y + 16;
+    if (!front) {
+      // a low cloud bank the piece stands in
+      ctx.fillStyle = "rgba(160,156,180,0.55)";
+      ctx.fillRect(x + 2, y + 15, 16, 4); ctx.fillRect(x + 4, y + 14, 12, 1); ctx.fillRect(x + 4, y + 19, 12, 1);
+    }
+    for (let i = 0; i < 14; i++) {
+      const ang = t * 1.6 + (i / 14) * Math.PI * 2;
+      const depth = Math.sin(ang);
+      if ((depth > 0) !== front) continue;
+      const lift = Math.round(Math.sin(t * 2.3 + i) * 1.5) - (i % 4 === 0 ? 2 : 0);
+      const px = Math.round(cx + Math.cos(ang) * 9), py = Math.round(cy + depth * 3 + lift);
+      ctx.fillStyle = front ? "rgba(236,233,245,0.9)" : "rgba(128,124,150,0.85)";
+      ctx.fillRect(px, py, 2, i % 3 ? 1 : 2);
+    }
+    if (front) { // a wisp curling up now and then
+      const w = (t * 0.7) % 1, wx = Math.round(cx + 6 - w * 4 + Math.sin(w * 6) * 2), wy = Math.round(cy - w * 9);
+      ctx.fillStyle = `rgba(236,233,245,${0.8 * (1 - w)})`; ctx.fillRect(wx, wy, 1, 2);
+    }
+  }
+
   // ----- Bot thinking bubble -----
   function drawThinking(now) {
     const t = REDUCED ? 0 : now / 1000;
@@ -1129,21 +1207,24 @@
   }
 
   // ----- Animation state -----
-  let anim = null, flash = null, rafId = 0;
+  let anim = null, flash = null, morph = null, rafId = 0;
   const particles = [];
-  function startMoveAnim(prevBoard, m) {
+  function startMoveAnim(prevBoard, m, nextBoard) {
     const mover = prevBoard[m.fr] && prevBoard[m.fr][m.fc];
     if (!mover) return;
     const victim = prevBoard[m.tr][m.tc];
+    const after = nextBoard && nextBoard[m.tr][m.tc];
+    const promo = after && mover.type === "P" && after.type !== "P"
+      ? { from: { color: after.color, type: "P", powers: ["P", ...after.powers.slice(1).filter(x => x !== "P")] }, to: after } : null;
     if (fogged(m.fr, m.fc)) {
       // Moved out of the smoke: nothing to watch, but a visible victim still bursts.
       if (victim && !fogged(m.tr, m.tc)) { anim = null; finishAnim(performance.now(), { victim, m, gained: false }); render(); }
       return;
     }
     const gained = devour && !!victim && victim.powers.some(x => !mover.powers.includes(x));
-    if (REDUCED) { if (gained) flash = { r: m.tr, c: m.tc, start: performance.now(), dur: 300 }; render(); return; }
+    if (REDUCED) { if (gained || promo) flash = { r: m.tr, c: m.tc, start: performance.now(), dur: 300 }; render(); return; }
     const dist = Math.hypot(m.tr - m.fr, m.tc - m.fc);
-    anim = { mover, victim, gained, m, start: performance.now(), dur: 150 + dist * 45 };
+    anim = { mover, victim, gained, promo, m, start: performance.now(), dur: 150 + dist * 45 };
     render();
   }
   function finishAnim(now, given) {
@@ -1157,7 +1238,51 @@
           col: [pal.fill, pal.shade, pal.line, "#ffe066"][i % 4], born: now, life: 350 + Math.random() * 250 });
       }
     }
-    if (a.gained) flash = { r: a.m.tr, c: a.m.tc, start: now, dur: 450 };
+    if (a.promo) morph = { r: a.m.tr, c: a.m.tc, ...makeMorph(a.promo.from, a.promo.to), start: now, dur: 1100 };
+    else if (a.gained) flash = { r: a.m.tr, c: a.m.tc, start: now, dur: 450 };
+  }
+  // Pawn-to-piece melt: the pawn's pixels slump into goo from the bottom up
+  // while the new shape rises out of it, wobbling, then a bright pulse.
+  const morphCv = document.createElement("canvas"); morphCv.width = morphCv.height = S;
+  const morphCtx = morphCv.getContext("2d");
+  function makeMorph(fromP, toP) {
+    const px = (img) => img.getContext("2d").getImageData(0, 0, S, S).data;
+    const order = new Float32Array(S * S), rand = rng(5);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) order[y * S + x] = 0.65 * (1 - y / S) + 0.35 * rand();
+    return { a: px(spriteFor(fromP)), b: px(spriteFor(toP)), order, toP };
+  }
+  function drawMorph(mp, now, x, y) {
+    const t = Math.min(1, (now - mp.start) / mp.dur);
+    const img = morphCtx.createImageData(S, S), d = img.data;
+    const melt = Math.min(1, t * 1.6);          // how much of the pawn has turned to goo
+    const rise = Math.max(0, (t - 0.2) / 0.7);  // how much of the new piece has formed
+    const goo = PAL[mp.toP.color];
+    for (let yy = 0; yy < S; yy++) {
+      const sway = t < 0.85 ? Math.round(Math.sin(yy * 0.9 + now / 60) * (1 - t) * 1.5) : 0;
+      for (let xx = 0; xx < S; xx++) {
+        const i = yy * S + xx, o = mp.order[i], sx = Math.min(S - 1, Math.max(0, xx - sway)), j = (yy * S + sx) * 4;
+        let src = null;
+        if (rise > o && mp.b[j + 3]) src = [mp.b[j], mp.b[j + 1], mp.b[j + 2]];
+        else if (melt <= o && mp.a[j + 3]) src = [mp.a[j], mp.a[j + 1], mp.a[j + 2]];
+        else if ((mp.a[j + 3] || mp.b[j + 3]) && rise <= o && melt > o) {
+          // goo: a dithered blob of the piece's own colours
+          const hex = (xx + yy) % 2 ? goo.fill : goo.shade;
+          src = [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+        }
+        if (src) { d[i * 4] = src[0]; d[i * 4 + 1] = src[1]; d[i * 4 + 2] = src[2]; d[i * 4 + 3] = 255; }
+      }
+    }
+    morphCtx.putImageData(img, 0, 0);
+    const squash = t < 0.3 ? Math.round(t / 0.3 * 2) : t < 0.8 ? 2 - Math.round((t - 0.3) / 0.5 * 2) : 0;
+    ctx.drawImage(morphCv, 0, 0, S, S, x, y + squash, S, S - squash);
+    if (t > 0.8) { ctx.globalAlpha = (1 - t) / 0.2 * 0.85; ctx.drawImage(spriteFor(mp.toP, true), x, y); ctx.globalAlpha = 1; }
+    if (t >= 1) {
+      morph = null;
+      for (let i = 0; i < 12; i++) {
+        const ang = (i / 12) * Math.PI * 2;
+        particles.push({ x: x + 10, y: y + 10, vx: Math.cos(ang) * 35, vy: Math.sin(ang) * 35 - 15, col: i % 2 ? "#ffe066" : "#ffffff", born: now, life: 400 });
+      }
+    }
   }
 
   function render() { if (!rafId) rafId = requestAnimationFrame(frame); }
@@ -1166,7 +1291,7 @@
     rafId = 0;
     const dt = Math.min(0.05, (now - (lastFrame || now)) / 1000); lastFrame = now;
     draw(now, dt);
-    if (anim || particles.length || flash || (selected && !REDUCED) || ((viewer() || curtain || thinking) && !REDUCED)) rafId = requestAnimationFrame(frame);
+    if (anim || particles.length || flash || morph || (selected && !REDUCED) || ((viewer() || curtain || thinking) && !REDUCED)) rafId = requestAnimationFrame(frame);
     else lastFrame = 0;
   }
 
@@ -1181,7 +1306,7 @@
       if (!fogged(lastMove.tr, lastMove.tc)) fillSq(lastMove.tr, lastMove.tc, "rgba(255,224,102,0.35)");
     }
     const k = findKing(board, turn);
-    if (!fog && k && !gameOver && inCheck(board, turn)) fillSq(k[0], k[1], "#e0303a");
+    if (showCheck() && k) fillSq(k[0], k[1], "#e0303a");
 
     // Selected square: pulsing glow and a marching double border.
     const pulse = REDUCED ? 1 : (Math.sin(now / 140) + 1) / 2;
@@ -1210,7 +1335,10 @@
         ctx.fillRect(x + 6 + Math.floor(hop / 2), y + 17, 8 - hop, 2);
         y -= hop;
       }
+      if (hiddenFromFoe(r, c, p)) drawHaze(x, y, now, false);
+      if (morph && morph.r === r && morph.c === c) { drawMorph(morph, now, x, y); continue; }
       ctx.drawImage(spriteFor(p), x, y);
+      if (hiddenFromFoe(r, c, p)) drawHaze(x, y, now, true);
       if (flash && flash.r === r && flash.c === c) {
         const t = (now - flash.start) / flash.dur;
         if (t >= 1) flash = null;
@@ -1278,6 +1406,12 @@
     box.append(t, s);
   }
 
+  // In the fog only the side in check is told (it can't see who is attacking).
+  function showCheck() {
+    if (gameOver || (fog && kingCap)) return false;
+    if (fog && viewer() !== turn) return false;
+    return inCheck(board, turn);
+  }
   function note(text) {
     const box = $("info"); box.replaceChildren();
     const d = document.createElement("div"); d.textContent = text; box.append(d);
@@ -1320,6 +1454,7 @@
     $("localBox").hidden = isOnline || !history.length;
     $("devourNote").hidden = devour;
     $("fogNote").hidden = !fog;
+    $("kingNote").textContent = kingCap ? "There is no check: capture the enemy king to win." : "Kings are protected: you can't make a move that leaves your king attacked, and checkmate wins.";
     $("curtain").hidden = !curtain;
     $("curtainText").textContent = `PASS TO ${colorName(turn).toUpperCase()}`;
     $("log").textContent = "";
@@ -1332,7 +1467,7 @@
       const tagline = (cpuOn ? `vs ${BOT[botLevel].name} bot` : "Same screen") + ` - Devour ${devour ? "ON" : "OFF"}` + (fog ? " - Fog" : "");
       if (gameOver) setStatus(resultText, tagline);
       else if (thinking) { setStatus(fog ? "Something stirs in the smoke" : "Bot is thinking", tagline); addDots(); }
-      else if (!fog && inCheck(board, turn)) setStatus(`${colorName(turn)} to move`, "CHECK!", true);
+      else if (showCheck()) setStatus(`${colorName(turn)} to move`, fog ? "CHECK! Something in the smoke is attacking your king." : "CHECK!", true);
       else setStatus(cpuOn && turn === "w" ? "Your move (White)" : `${colorName(turn)} to move`, tagline);
       return;
     }
@@ -1354,7 +1489,7 @@
     } else {
       const who = colorName(turn);
       const main = me ? (turn === me ? "Your move" : `Waiting for ${who}...`) : `${who} to move`;
-      const check = !fog && inCheck(board, turn) ? "CHECK!" : (online.seat === "spectator" ? "You're watching." : `Devour ${devour ? "ON" : "OFF"}` + (fog ? " - Fog" : ""));
+      const check = showCheck() ? "CHECK!" : (online.seat === "spectator" ? "You're watching." : `Devour ${devour ? "ON" : "OFF"}` + (fog ? " - Fog" : ""));
       setStatus(main, check, check === "CHECK!");
     }
   }
@@ -1389,23 +1524,43 @@
     if (curtain) return;
     const p = fogged(r, c) ? null : board[r][c];
     const m = legal.find(m => m.tr === r && m.tc === c);
-    if (m && canAct()) { mode === "local" ? localMove(m) : onlineMove(m); return; }
+    if (m && canAct()) { if (isPromotion(board, m)) openPromo(m); else doMove(m); return; }
     if (p) describePiece(p);
     else if (fogged(r, c)) note("Smoke hides this square. Move a piece onto it, or through it, to clear it.");
     if (p && p.color === turn && canAct()) {
       selected = [r, c];
-      legal = fog ? pseudoMoves(viewBoard(board, turn, seen), r, c) : legalMovesFrom(board, r, c);
+      legal = fog ? fogLegalFrom(board, seen, turn, r, c, kingCap) : legalMovesFrom(board, r, c);
     }
     else { selected = null; legal = []; }
     render();
   });
 
+  function doMove(m) { mode === "local" ? localMove(m) : onlineMove(m); }
+  let pendingPromo = null;
+  function openPromo(m) {
+    pendingPromo = m;
+    const pawn = board[m.fr][m.fc], row = $("promoRow");
+    row.replaceChildren();
+    for (const t of ["Q", "R", "B", "N"]) {
+      const btn = document.createElement("button");
+      const c = document.createElement("canvas"); c.width = S; c.height = S;
+      c.getContext("2d").drawImage(spriteFor({ color: pawn.color, type: t, powers: [t, ...pawn.powers.slice(1).filter(x => x !== t)] }), 0, 0);
+      const label = document.createElement("span"); label.textContent = NAMES[t].toUpperCase();
+      btn.append(c, label);
+      btn.onclick = () => { const mv = { ...pendingPromo, promo: t }; closePromo(); doMove(mv); };
+      row.append(btn);
+    }
+    $("promo").hidden = false;
+    row.firstChild.focus();
+  }
+  function closePromo() { pendingPromo = null; $("promo").hidden = true; }
+  $("promoCancel").onclick = () => { closePromo(); selected = null; legal = []; render(); };
   $("undo").onclick = () => {
     if (thinking || !history.length) return;
     let h = history.pop();
     if (cpuOn && h.turn === "b" && history.length) h = history.pop();
     ({ board, turn, lastMove, logLines, seen } = h);
-    gameOver = false; resultText = ""; selected = null; legal = []; curtain = false;
+    gameOver = false; resultText = ""; selected = null; legal = []; curtain = false; morph = null; closePromo();
     render(); updateUI();
   };
   function saveSettings() { try { localStorage.setItem("dc-settings", JSON.stringify(settings)); } catch (_) {} }
@@ -1419,12 +1574,17 @@
     $("start").textContent = settings.opp === "online" ? "CREATE ONLINE GAME" : "START GAME";
     $("fogToggle").setAttribute("aria-checked", String(settings.fog));
     $("fogLabel").textContent = settings.fog ? "ON" : "OFF";
-    $("fogHint").textContent = settings.fog ? "Smoke hides squares your team hasn't stepped on. Capture the king to win." : "Everyone sees the whole board.";
+    $("fogHint").textContent = settings.fog ? "Smoke hides squares your team hasn't stepped on." : "Everyone sees the whole board.";
+    $("kingField").hidden = !settings.fog;
+    $("kingToggle").setAttribute("aria-checked", String(settings.kingCap));
+    $("kingLabel").textContent = settings.kingCap ? "ON" : "OFF";
+    $("kingHint").textContent = settings.kingCap ? "No check in the smoke. Capture the king to win." : "Kings are protected: check and checkmate still apply.";
   }
   for (const b of document.querySelectorAll("[data-opp]")) b.onclick = () => { settings.opp = b.dataset.opp; saveSettings(); renderSettings(); };
   for (const b of document.querySelectorAll("[data-level]")) b.onclick = () => { settings.level = +b.dataset.level; saveSettings(); renderSettings(); };
   $("devourToggle").onclick = () => { settings.devour = !settings.devour; saveSettings(); renderSettings(); };
   $("fogToggle").onclick = () => { settings.fog = !settings.fog; saveSettings(); renderSettings(); };
+  $("kingToggle").onclick = () => { settings.kingCap = !settings.kingCap; saveSettings(); renderSettings(); };
   $("curtainBtn").onclick = () => { curtain = false; render(); updateUI(); };
   $("start").onclick = () => {
     if (settings.opp === "online") { if (typeof Peer !== "undefined") createGame(); return; }
