@@ -167,6 +167,27 @@
   @keyframes dothop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
   @media (prefers-reduced-motion: reduce) { .knob { transition: none; } .dots i { animation: none; } }
   .games { display: flex; flex-direction: column; gap: 6px; }
+  .powers { display: flex; flex-direction: column; gap: 6px; }
+  .powers button { display: flex; align-items: center; gap: 8px; text-align: left; }
+  .powers button[aria-pressed="true"] { background: var(--accent); color: var(--edge); }
+  .powers canvas { width: 40px; height: 40px; image-rendering: pixelated; flex: none; }
+  .powers .count { margin-left: auto; color: #ffe066; }
+  .taunts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .taunts button { padding-inline: 2px; font-size: 9px; }
+  #bubbles { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: visible; }
+  .bubble { position: absolute; transform: translate(-50%, -100%); background: #f4ecd6; color: #1a1626; border: 3px solid #1a1626;
+    padding: 4px 8px; font-size: clamp(9px, 1.7vw, 13px); white-space: nowrap; box-shadow: 3px 3px 0 rgba(0,0,0,.4); animation: bubblePop 2.6s steps(16) both; }
+  .bubble::after { content: ""; position: absolute; left: 50%; bottom: -8px; width: 8px; height: 8px; background: inherit;
+    border-right: 3px solid #1a1626; border-bottom: 3px solid #1a1626; transform: translateX(-50%) rotate(45deg); }
+  .bubble.b { background: #2b2140; color: #ffe0f0; border-color: #ff7a59; }
+  .bubble.b::after { border-color: #ff7a59; }
+  .bubble.below { transform: translate(-50%, 0); animation-name: bubblePopBelow; }
+  .bubble.below::after { bottom: auto; top: -8px; transform: translateX(-50%) rotate(-135deg); }
+  @keyframes bubblePop { 0% { transform: translate(-50%, -100%) scale(.2); opacity: 0; } 8% { transform: translate(-50%, -100%) scale(1.15); opacity: 1; }
+    14% { transform: translate(-50%, -100%) scale(1); } 85% { opacity: 1; } 100% { transform: translate(-50%, -125%); opacity: 0; } }
+  @keyframes bubblePopBelow { 0% { transform: translate(-50%, 0) scale(.2); opacity: 0; } 8% { transform: translate(-50%, 0) scale(1.15); opacity: 1; }
+    14% { transform: translate(-50%, 0) scale(1); } 85% { opacity: 1; } 100% { transform: translate(-50%, 15%); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .bubble, .bubble.below { animation: none; } }
   .games button { text-align: left; }
 </style>
 <script src="vendor/peerjs.min.js"></script>
@@ -186,6 +207,7 @@
       </div>
     </div>
     <div id="toast" class="toast" hidden role="status"></div>
+    <div id="bubbles" aria-live="polite"></div>
     <div id="endBanner" class="endBanner" hidden role="status">
       <div id="endTitle"></div>
       <div id="endSub" class="muted"></div>
@@ -204,6 +226,10 @@
   </div></div>
   <div class="side left">
     <div class="box" id="status"></div>
+    <div class="box" id="tauntBox" hidden>
+      <h2>TAUNT</h2>
+      <div class="taunts" id="tauntBtns"></div>
+    </div>
 
     <div class="box" id="setup">
       <h2>NEW GAME</h2>
@@ -307,6 +333,11 @@
     </div>
   </div>
   <div class="side right">
+    <div class="box" id="powerBox" hidden>
+      <h2>POWERS</h2>
+      <div class="powers" id="powerBtns"></div>
+      <div class="muted" id="powerHint"></div>
+    </div>
     <div class="box" id="info">Click a piece to see its powers.</div>
     <div class="box rules">
       <p><b>The twist:</b> a piece that captures <b>absorbs</b> every power of its victim and can move like all of them.</p>
@@ -315,7 +346,7 @@
       <p>Pawn eats knight? It can now hop like a knight. Eaten pieces fuse onto the eater in their own colors:</p>
       <div class="legend" id="legend"></div>
       <p id="fogNote" hidden><b>Fog of war is ON:</b> smoke hides every square your team hasn't stood on or passed through, for you and your opponent alike. A piece that runs into a hidden enemy stops and captures it. Haze swirling at a piece's feet means the other side can't see it. <span id="kingNote"></span></p>
-      <p id="boxNote" hidden><b>Mystery boxes:</b> every few moves a crate falls. Balloon crates drift down over 3 moves (watch the shadow); plain crates crash down at once and crush whatever is there, except kings. Finish a move on a crate to open it: <b>teleport</b> to a random square, take an <b>extra turn</b>, <b>change</b> into a different piece, or become a secret <b>jester</b> (only you see its hat; whoever eats it dies).</p>
+      <p id="boxNote" hidden><b>Mystery boxes:</b> every few moves a treasure chest falls. Balloon chests drift down over 3 moves (watch the shadow); plain chests crash down at once and crush whatever is there, except kings. Finish a move on a chest to open it: save a <b>teleport</b> (that piece can later jump to any empty square), save a <b>fireball</b> (drop it anywhere: it destroys every piece in a 3x3 square except kings), take an <b>extra turn</b>, <b>change</b> into a different piece, or become a secret <b>jester</b> (only you see its hat; whoever eats it dies). Using a saved power takes your turn.</p>
       <p id="devourNote" hidden><b>Devour is OFF</b> for this game: captures work like normal chess.</p>
     </div>
     <div class="box" id="log"></div>
@@ -571,22 +602,76 @@
     }
     return { board: nb, spews };
   }
-  function outcome(nb, nsn, next, fogOn, kc, moverColor) {
+  function outcome(nb, nsn, next, fogOn, kc, moverColor, bx) {
     if (!findKing(nb, moverColor)) return { over: true, stall: false, result: `${colorName(moverColor)}'s king ate a jester and died! ${colorName(other(moverColor))} wins.` };
     if (fogOn && kc) {
       if (!findKing(nb, other(moverColor))) return { over: true, stall: false, result: `${colorName(moverColor)} captured the king! ${colorName(moverColor)} wins.` };
-      if (!pseudoAll(nb, next).length) return { over: true, stall: true, result: "No moves left. It's a draw." };
+      if (!pseudoAll(nb, next).length && !powerMoves(nb, nsn, next, fogOn, kc, bx).length) return { over: true, stall: true, result: "No moves left. It's a draw." };
       return { over: false };
     }
     const moves = fogOn ? fogAllLegal(nb, nsn, next, false) : allLegal(nb, next);
+    if (!moves.length && powerMoves(nb, nsn, next, fogOn, kc, bx).length) return { over: false }; // a saved power can still save you
     if (!moves.length) return { over: true, stall: !inCheck(nb, next), result: endText(nb, next) };
     return { over: false };
   }
   // ----- Mystery boxes -----
   // bx = { on, list, nextAt, seed, ply }. Everything random comes from a seed
   // plus the move number, so the host and guest compute the same crates.
-  const BOX_EFFECTS = { teleport: "TELEPORT!", extra: "EXTRA TURN!", change: "CHANGED PIECE!", jester: "JESTER!" };
-  function freshBoxes(on, seed) { return on ? { on: true, list: [], nextAt: 3 + (seed % 3), seed, ply: 0 } : null; }
+  const BOX_EFFECTS = { teleport: "TELEPORT SAVED!", fireball: "FIREBALL SAVED!", extra: "EXTRA TURN!", change: "CHANGED PIECE!", jester: "JESTER!" };
+  function freshBoxes(on, seed) { return on ? { on: true, list: [], nextAt: 3 + (seed % 3), seed, ply: 0, fire: { w: 0, b: 0 } } : null; }
+  const fireOf = (bx, color) => (bx && bx.fire && bx.fire[color]) || 0;
+  // ----- Saved powers -----
+  // A teleport rides on the piece that opened it (p.tp); fireballs belong to
+  // the player (bx.fire). Using one takes your whole turn.
+  const blastSquares = (r, c) => { const out = []; for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (inside(r + dr, c + dc)) out.push([r + dr, c + dc]); return out; };
+  function applyPower(b, m) {
+    const nb = clone(b);
+    if (m.power === "tp") {
+      const p = nb[m.fr][m.fc];
+      p.tp = (p.tp || 1) - 1; if (!p.tp) delete p.tp;
+      p.moved = true; nb[m.tr][m.tc] = p; nb[m.fr][m.fc] = null;
+    } else for (const [r, c] of blastSquares(m.tr, m.tc)) if (nb[r][c] && nb[r][c].type !== "K") nb[r][c] = null; // kings shrug it off
+    return nb;
+  }
+  const boxAt = (bx, r, c) => !!bx && bx.list.some(x => x.r === r && x.c === c);
+  function teleportTargets(b, sn, fr, fc, fogOn, kc, bx) {
+    const p = b[fr][fc]; if (!p || !p.tp) return [];
+    const out = [];
+    for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++) {
+      if (b[r][c] || boxAt(bx, r, c) || (fogOn && !isSeen(sn, p.color, r, c))) continue;
+      if (p.type === "P" && (r === 0 || r === BN - 1)) continue;
+      const m = { power: "tp", fr, fc, tr: r, tc: c };
+      if (!(fogOn && kc) && inCheck(applyPower(b, m), p.color)) continue;
+      out.push(m);
+    }
+    return out;
+  }
+  function fireTargets(b, color, fogOn, kc, bx) {
+    if (!fireOf(bx, color)) return [];
+    const out = [];
+    for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++) {
+      const m = { power: "fire", color, fr: r, fc: c, tr: r, tc: c };
+      if (!(fogOn && kc) && inCheck(applyPower(b, m), color)) continue;
+      out.push(m);
+    }
+    return out;
+  }
+  function powerMoves(b, sn, color, fogOn, kc, bx) {
+    if (!bx || !bx.on) return [];
+    const out = [];
+    for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++) if (b[r][c] && b[r][c].color === color && b[r][c].tp) out.push(...teleportTargets(b, sn, r, c, fogOn, kc, bx));
+    return out.concat(fireTargets(b, color, fogOn, kc, bx));
+  }
+  // Checks a power move sent by a player; returns the clean move or null.
+  function powerLegal(b, sn, color, m, fogOn, kc, bx) {
+    if (!m || !inside(m.tr, m.tc)) return null;
+    if (m.power === "tp") {
+      if (!inside(m.fr, m.fc) || !b[m.fr][m.fc] || b[m.fr][m.fc].color !== color) return null;
+      return teleportTargets(b, sn, m.fr, m.fc, fogOn, kc, bx).find(x => x.tr === m.tr && x.tc === m.tc) || null;
+    }
+    if (m.power === "fire") return fireTargets(b, color, fogOn, kc, bx).find(x => x.tr === m.tr && x.tc === m.tc) || null;
+    return null;
+  }
   function shuffle(a, rand) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
   function runBoxes(b, sn, rm, color, bx, protectKings, fogOn, moverDied) {
     const rand = rng((bx.seed | 0) + bx.ply * 7919 + 13);
@@ -599,21 +684,12 @@
     if (bi >= 0) {
       list.splice(bi, 1);
       const p = b[rm.tr][rm.tc];
-      const options = ["teleport", "extra", "change", "jester"].filter(o => !(o === "change" && p.type === "K"));
+      const options = ["teleport", "fireball", "extra", "change", "jester"].filter(o => !(o === "change" && p.type === "K"));
       const effect = options[Math.floor(rand() * options.length)];
       fx.opened = { r: rm.tr, c: rm.tc, effect, color };
-      if (effect === "teleport") {
-        const spots = [];
-        for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++)
-          if (!b[r][c] && !hasBox(r, c) && !(p.type === "P" && (r === 0 || r === BN - 1))) spots.push([r, c]);
-        for (const [r, c] of shuffle(spots, rand)) {
-          const tb = clone(b); tb[r][c] = tb[rm.tr][rm.tc]; tb[rm.tr][rm.tc] = null;
-          if (protectKings && inCheck(tb, color)) continue;
-          b = tb; fx.opened.to = [r, c];
-          if (fogOn) sn = markSeen(sn, color, [[r, c]]);
-          break;
-        }
-      } else if (effect === "extra") extraTurn = true;
+      if (effect === "teleport") { b = clone(b); b[rm.tr][rm.tc].tp = (b[rm.tr][rm.tc].tp || 0) + 1; }
+      else if (effect === "fireball") { const f = bx.fire || { w: 0, b: 0 }; bx = { ...bx, fire: { ...f, [color]: (f[color] || 0) + 1 } }; }
+      else if (effect === "extra") extraTurn = true;
       else if (effect === "change") {
         const types = ["Q", "R", "B", "N", "P"].filter(t => t !== p.type && !(t === "P" && (rm.tr === 0 || rm.tr === BN - 1)));
         const to = types[Math.floor(rand() * types.length)];
@@ -656,26 +732,47 @@
 
   // Plays a move under the game's rules and reports the result.
   function playMove(b, sn, m, fogOn, kc, bx) {
+    if (m.power) return playPower(b, sn, m, fogOn, kc, bx);
     const rm = fogOn ? (resolveMove(b, m, !kc) || m) : m;
     const mover = b[rm.fr][rm.fc];
     const info = describeMove(b, rm);
     let nb = applyMove(b, rm);
     let nsn = fogOn ? markSeen(sn, mover.color, pathSquares(rm)) : sn;
     const jesterKill = !!(b[rm.tr][rm.tc] && b[rm.tr][rm.tc].jester);
+    return finishTurn(b, nb, nsn, rm, mover.color, info, jesterKill, fogOn, kc, bx);
+  }
+  function playPower(b, sn, m, fogOn, kc, bx) {
+    const color = m.power === "tp" ? b[m.fr][m.fc].color : m.color, C = colorName(color);
+    let nb = applyPower(b, m), nsn = sn, line;
+    const killed = [];
+    if (m.power === "tp") {
+      const p = b[m.fr][m.fc];
+      line = fogOn ? `${C} used a teleport!` : `${C}'s ${NAMES[p.type]} teleported ${sqName(m.fr, m.fc)}-${sqName(m.tr, m.tc)}!`;
+    } else {
+      for (const [r, c] of blastSquares(m.tr, m.tc)) if (b[r][c] && !nb[r][c]) killed.push({ r, c, piece: b[r][c] });
+      if (fogOn) nsn = markSeen(nsn, color, blastSquares(m.tr, m.tc)); // the blast lights up the smoke
+      bx = { ...bx, fire: { ...bx.fire, [color]: fireOf(bx, color) - 1 } };
+      line = `${C} dropped a FIREBALL on ${sqName(m.tr, m.tc)}` + (killed.length ? `, destroying ${killed.length} piece${killed.length > 1 ? "s" : ""}!` : "!");
+    }
+    const rm = { ...m, killed };
+    return finishTurn(b, nb, nsn, rm, color, { line, captured: killed.length > 0, gained: false, power: true }, false, fogOn, kc, bx);
+  }
+  function finishTurn(b, nb, nsn, rm, moverColor, info, jesterKill, fogOn, kc, bx) {
+    const mover = { color: moverColor, type: rm.power ? "" : b[rm.fr][rm.fc].type };
     let boxFx = null, extraTurn = false, bxOut = bx || null;
     if (bx && bx.on) {
-      const r = runBoxes(nb, nsn, rm, mover.color, bx, !(fogOn && kc), fogOn, jesterKill);
+      const r = runBoxes(nb, nsn, rm.power ? { tr: -1, tc: -1 } : rm, mover.color, bx, !(fogOn && kc), fogOn, jesterKill);
       nb = r.board; nsn = r.seen; boxFx = r.fx; extraTurn = r.extraTurn; bxOut = r.bx;
     }
     const next = extraTurn ? mover.color : other(mover.color);
-    let oc = outcome(nb, nsn, next, fogOn, kc, mover.color);
+    let oc = outcome(nb, nsn, next, fogOn, kc, mover.color, bxOut);
     let feast = null;
     const kingsOnly = onlyKings(nb);
     if ((oc.stall || kingsOnly) && kingsHaveEaten(nb)) {
       feast = kingsFeast(nb, next);
       nb = feast.board;
       if (fogOn) for (const x of feast.spews) nsn = markSeen(nsn, x.color, [[x.tr, x.tc]]);
-      oc = outcome(nb, nsn, next, fogOn, kc, mover.color);
+      oc = outcome(nb, nsn, next, fogOn, kc, mover.color, bxOut);
       if (!oc.over && onlyKings(nb)) oc = { over: true, result: "Only the kings are left. It's a draw." };
     } else if (kingsOnly && !oc.over) oc = { over: true, result: "Only the kings are left. It's a draw." };
     const logs = [info.line];
@@ -683,8 +780,8 @@
     if (boxFx) {
       if (boxFx.opened) logs.unshift(`${colorName(mover.color)} opened a mystery box!`);
       if (boxFx.spawned) logs.unshift(boxFx.spawned.kind === "crash"
-        ? `A crate crashed down on ${sqName(boxFx.spawned.r, boxFx.spawned.c)}` + (boxFx.crushed ? `, crushing ${colorName(boxFx.crushed.piece.color)}'s ${NAMES[boxFx.crushed.piece.type]}!` : "!")
-        : `A balloon crate is drifting down toward ${sqName(boxFx.spawned.r, boxFx.spawned.c)}.`);
+        ? `A chest crashed down on ${sqName(boxFx.spawned.r, boxFx.spawned.c)}` + (boxFx.crushed ? `, crushing ${colorName(boxFx.crushed.piece.color)}'s ${NAMES[boxFx.crushed.piece.type]}!` : "!")
+        : `A balloon chest is drifting down toward ${sqName(boxFx.spawned.r, boxFx.spawned.c)}.`);
     }
     if (feast && feast.spews.length) {
       const parts = ["w", "b"].map(c => [c, feast.spews.filter(x => x.color === c).length]).filter(x => x[1])
@@ -748,7 +845,8 @@
     const cfg = BOT[level] || BOT[2];
     let moves = orderMoves(b, rootMoves || allLegal(b, color));
     if (!moves.length) return null;
-    if (Math.random() < cfg.randomMove) return moves[Math.floor(Math.random() * moves.length)];
+    const plain = moves.filter(m => !m.power);
+    if (plain.length && Math.random() < cfg.randomMove) return plain[Math.floor(Math.random() * plain.length)];
     // Search one ply deeper at a time; if thinking runs long, play the best
     // move from the deepest search that finished.
     let pick = moves[0];
@@ -759,7 +857,8 @@
         let best = -Infinity, bestMove = moves[0], alpha = -Infinity;
         const scored = [];
         for (const m of moves) {
-          const sc = -search(applyMove(b, m), other(color), depth - 1, -Infinity, -alpha + cfg.noise) + Math.random() * cfg.noise;
+          const sc = -search(m.power ? applyPower(b, m) : applyMove(b, m), other(color), depth - 1, -Infinity, -alpha + cfg.noise) + Math.random() * cfg.noise
+            - (m.power ? 0.6 : 0); // only spend a saved power when it is clearly worth it
           scored.push([sc, m]);
           if (sc > best) { best = sc; bestMove = m; }
           if (best - cfg.noise > alpha) alpha = best - cfg.noise;
@@ -805,6 +904,7 @@
     return inCheck(b, toMove) ? `CHECKMATE! ${toMove === "w" ? "Black" : "White"} wins.` : "STALEMATE. It's a draw.";
   }
   function moveSound(info) {
+    if (info.power) return; // powers bring their own sounds
     sfxSafe(() => info.captured ? SFX.capture(info.gained) : SFX.move());
   }
 
@@ -815,6 +915,7 @@
     morph = null; closePromo();
     anim = null; flash = null; feastFx = null; curtain = false; clearEnd();
     board = startBoard(); seen = initSeen(board); turn = "w"; history = []; selected = null; legal = [];
+    aim = null; premove = null; preSel = null; preTargets = []; fireFx = null; clearBubbles();
     bxState = freshBoxes(settings.boxes, Math.floor(Math.random() * 1e9)); boxFxState = null; openFx = null; crashFx = null;
     lastMove = null; gameOver = false; resultText = ""; logLines = [];
     render(); updateUI();
@@ -822,11 +923,13 @@
   function localMove(m) {
     history.push({ board: clone(board), turn, lastMove, logLines: [...logLines], seen, bxState });
     const humanMove = !(cpuOn && turn === "b");
+    aim = null;
     const res = playMove(board, seen, m, fog, kingCap, bxState);
     startMoveAnim(board, res.m, res.board, res.feast, res.boxFx, res.jesterKill);
     board = res.board; seen = res.seen; bxState = res.bx;
     moveSound(res.info);
     logLines.unshift(...res.logs);
+    if (res.m.power && humanMove && res.m.power === "fire") note(`Fireball! ${res.m.killed.length ? res.m.killed.length + " piece" + (res.m.killed.length > 1 ? "s" : "") + " destroyed." : "Nothing was hit."}`);
     const moverColor = turn;
     lastMove = res.m; turn = res.nextTurn; selected = null; legal = [];
     if (res.over) { gameOver = true; resultText = res.result; triggerEnd(anim ? anim.dur + 150 : 150); }
@@ -835,7 +938,10 @@
     if (fog && !cpuOn && !gameOver && turn !== moverColor) { curtain = true; sfxSafe(SFX.whoosh); }
     render(); updateUI();
     if (!curtain && showCheck()) setTimeout(() => sfxSafe(SFX.check), 250);
-    if (!gameOver && cpuOn && turn === "b") scheduleCpu((res.feast && !REDUCED ? 2000 : 0) + (res.boxFx && (res.boxFx.opened || res.boxFx.spawned) && !REDUCED ? 900 : 0));
+    if (cpuOn) botTauntAfter(moverColor, res);
+    if (!gameOver && cpuOn && turn === "w" && premove) setTimeout(tryPremove, (anim ? anim.dur : 0) + (fireFx ? FIRE_FALL : 0) + 120);
+    if (gameOver) { premove = null; preSel = null; }
+    if (!gameOver && cpuOn && turn === "b") scheduleCpu((fireFx ? FIRE_FALL + 300 : 0) + (res.feast && !REDUCED ? 2000 : 0) + (res.boxFx && (res.boxFx.opened || res.boxFx.spawned) && !REDUCED ? 900 : 0));
   }
   function scheduleCpu(extraDelay = 0) {
     thinking = true; updateUI(); render();
@@ -848,8 +954,9 @@
       // In the fog the bot plans from what its own pieces have uncovered, like you.
       // The bot knows about its own jesters, not yours.
       const noFoeJesters = (bd) => bd.map(row => row.map(p => p && p.jester && p.color !== "b" ? { ...p, jester: false } : p));
-      const m = fog ? botMove(noFoeJesters(viewBoard(board, "b", seen)), "b", botLevel, fogAllLegal(board, seen, "b", kingCap))
-        : botMove(noFoeJesters(board), "b", botLevel, allLegal(board, "b"));
+      const pw = powerMoves(board, seen, "b", fog, kingCap, bxState);
+      const m = fog ? botMove(noFoeJesters(viewBoard(board, "b", seen)), "b", botLevel, fogAllLegal(board, seen, "b", kingCap).concat(pw))
+        : botMove(noFoeJesters(board), "b", botLevel, allLegal(board, "b").concat(pw));
       const ponder = 700 + Math.random() * 500 + botLevel * 100;
       setTimeout(() => {
         if (mode !== "local" || board !== started) { thinking = false; updateUI(); return; }
@@ -913,8 +1020,11 @@
     gameOver = st.status === "over"; resultText = st.result || "";
     if (st.status !== "over") { if (endFx) clearEnd(); }
     else if (prev && prev.status !== "over") triggerEnd(anim ? anim.dur + 150 : 150);
-    if (!prev || prev.ply !== st.ply) { selected = null; legal = []; }
+    if (!prev || prev.ply !== st.ply) { selected = null; legal = []; aim = null; }
+    if (st.status !== "playing") { premove = null; preSel = null; }
     render(); updateUI();
+    if (premove && st.status === "playing" && st.turn === myColor() && prev && prev.turn !== st.turn)
+      setTimeout(tryPremove, (anim ? anim.dur : 0) + (fireFx ? FIRE_FALL : 0) + 120);
     if (prev && prev.ply !== st.ply && showCheck()) setTimeout(() => sfxSafe(SFX.check), 250);
   }
   function makeMoveState(st, m) {
@@ -923,7 +1033,8 @@
     const rm = res.m;
     return { info: res.info, ambush: !!rm.ambush, state: {
       ...st, board: flatten(res.board), turn: res.nextTurn, seen: res.seen, boxes: res.bx,
-      lastMove: { fr: rm.fr, fc: rm.fc, tr: rm.tr, tc: rm.tc, captured: res.info.captured, feast: res.feast, box: res.boxFx, jk: res.jesterKill },
+      lastMove: { fr: rm.fr, fc: rm.fc, tr: rm.tr, tc: rm.tc, captured: res.info.captured, feast: res.feast, box: res.boxFx, jk: res.jesterKill,
+        ...(rm.power ? { power: rm.power, color: rm.color, killed: rm.killed } : {}) },
       log: [...res.logs, ...(st.log || [])].slice(0, 80),
       status: res.over ? "over" : "playing", result: res.result, ply: st.ply + 1,
     } };
@@ -993,7 +1104,13 @@
     if (msg.type === "chat") return hostReceiveChat(conn, msg);
     const st = online.data, gc = other(st.hostColor);
     const resync = () => { try { conn.send({ type: "state", state: st }); } catch (_) {} };
-    if (msg.type === "move") {
+    if (msg.type === "taunt") return hostReceiveTaunt(conn, msg);
+    if (msg.type === "move" && msg.m && (msg.m.power === "tp" || msg.m.power === "fire")) {
+      if (st.status !== "playing" || st.turn !== gc || msg.ply !== st.ply) return resync();
+      const ok = powerLegal(unflatten(st.board), st.seen, gc, { ...msg.m, color: gc }, !!st.fog, !!st.kingCap, st.boxes);
+      if (!ok) return resync();
+      hostCommit(makeMoveState(st, ok).state);
+    } else if (msg.type === "move") {
       const m = msg.m || {};
       if (st.status !== "playing" || st.turn !== gc || msg.ply !== st.ply || !inside(m.fr, m.fc) || !inside(m.tr, m.tc)) return resync();
       const b = unflatten(st.board);
@@ -1055,6 +1172,7 @@
         online.chat = msg.list.filter(m => m && (m.from === "w" || m.from === "b" || m.from === "sys")).map(m => ({ from: m.from, text: cleanText(m.text) })).slice(-CHAT_MAX);
         renderChat();
       }
+      if (msg.type === "taunt" && TAUNTS[msg.id] && (msg.from === "w" || msg.from === "b")) showTaunt(msg.from, msg.id);
       if (msg.type === "chat" && msg.msg && (msg.msg.from === "w" || msg.msg.from === "b")) addChat({ from: msg.msg.from, text: cleanText(msg.msg.text) });
       if (msg.type === "state" && msg.state && Array.isArray(msg.state.board) && msg.state.board.length === (msg.state.n || 8) ** 2) {
         const prev = online.data;
@@ -1147,7 +1265,7 @@
     moveSound(r.info);
     if (r.ambush) { note("Ambush! Your piece ran into something hidden in the smoke and ate it."); sfxSafe(SFX.ambush); }
     if (online.seat === "host") hostCommit(r.state);
-    else if (sendToHost({ type: "move", m: { fr: m.fr, fc: m.fc, tr: m.tr, tc: m.tc, promo: m.promo }, ply: st.ply })) applyState(r.state);
+    else if (sendToHost({ type: "move", m: { fr: m.fr, fc: m.fc, tr: m.tr, tc: m.tc, promo: m.promo, power: m.power }, ply: st.ply })) applyState(r.state);
   }
   function resign() {
     const st = online.data, me = myColor();
@@ -1162,6 +1280,7 @@
   }
   function leaveGame(toLocal = true) {
     if (online.peer) { try { online.peer.destroy(); } catch (_) {} }
+    premove = null; preSel = null; aim = null; clearBubbles();
     Object.assign(online, { code: null, seat: null, data: null, peer: null, conns: [], guestConn: null, hostConn: null, connected: false, ready: false, retries: 0, chat: [] });
     renderChat();
     $("reconnect").hidden = true;
@@ -1519,16 +1638,30 @@
   // ----- Mystery crates -----
   const BALLOON_COLS = ["#ff5e7a", "#59c1ff", "#ffe066"];
   const QMARK = ["## ", "  #", " # ", "   ", " # "];
-  function drawCrate(x, y, now) {
-    const X = x + 3, Y = y + 6;
-    ctx.fillStyle = "#2b1a0e"; ctx.fillRect(X, Y, 14, 13);
-    ctx.fillStyle = "#b57a3c"; ctx.fillRect(X + 1, Y + 1, 12, 11);
-    ctx.fillStyle = "#d39a5a"; ctx.fillRect(X + 1, Y + 1, 12, 2);
-    ctx.fillStyle = "#8a5626"; ctx.fillRect(X + 1, Y + 6, 12, 1); ctx.fillRect(X + 1, Y + 11, 12, 1); ctx.fillRect(X + 1, Y + 3, 1, 9); ctx.fillRect(X + 12, Y + 3, 1, 9);
-    ctx.fillStyle = "#ffe066";
-    QMARK.forEach((row, i) => { for (let j = 0; j < 3; j++) if (row[j] === "#") ctx.fillRect(X + 6 + j - 1, Y + 4 + i, 1, 1); });
-    const g = Math.floor(now / 90) % 40; // a glint sweeps across now and then
-    if (g < 12) { ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fillRect(X + 1 + g, Y + 1, 1, 1); if (g > 0) ctx.fillRect(X + g, Y + 2, 1, 1); }
+  // A little treasure chest: domed lid, plank body, iron bands, gold lock.
+  const CHEST = ["  gLLLLLLLLg  ", " gLHHHHHHHHLg ", "gLLLLLLLLLLLLg", "gllllgGGgllllg", "BBBBBGGGGBBBBB",
+    "gDDDDGKKGDDDDg", "gddddGGKGddddg", "gDDDDgGGgDDDDg", "gddddddddddddg", "gDDDDDDDDDDDDg", "BBBBBBBBBBBBBB"];
+  const CHEST_OPEN = ["  gllllllllg  ", " gllllllllllg ", "gBBBBBBBBBBBBg", "gYYYYYYYYYYYYg", ...CHEST.slice(4)];
+  const CHEST_COL = { L: "#c98a4a", H: "#e8b578", l: "#8f5a2c", D: "#a8692f", d: "#87521f", B: "#3e3446", G: "#ffd34d", g: "#c8921e", K: "#1a1626", Y: "#fff3a0" };
+  function pixSprite(rows, cols) {
+    const h = rows.length, w = rows[0].length, cv = document.createElement("canvas"); cv.width = w + 2; cv.height = h + 2;
+    const g = cv.getContext("2d"), on = (x, y) => y >= 0 && y < h && x >= 0 && x < w && rows[y][x] !== " ";
+    g.fillStyle = "#1a1626";
+    for (let y = -1; y <= h; y++) for (let x = -1; x <= w; x++)
+      if (!on(x, y) && (on(x + 1, y) || on(x - 1, y) || on(x, y + 1) || on(x, y - 1))) g.fillRect(x + 1, y + 1, 1, 1);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (on(x, y)) { g.fillStyle = cols[rows[y][x]]; g.fillRect(x + 1, y + 1, 1, 1); }
+    return cv;
+  }
+  let chestImg = null, chestOpenImg = null;
+  function drawCrate(x, y, now, open) {
+    if (!chestImg) { chestImg = pixSprite(CHEST, CHEST_COL); chestOpenImg = pixSprite(CHEST_OPEN, CHEST_COL); }
+    const X = x + 2, Y = y + 6;
+    ctx.drawImage(open ? chestOpenImg : chestImg, X, Y);
+    if (open) return;
+    const g = Math.floor(now / 90) % 40; // a glint sweeps across the lid now and then
+    if (g < 12) { ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.fillRect(X + 2 + g, Y + 2, 1, 1); if (g > 0) ctx.fillRect(X + 1 + g, Y + 3, 1, 1); }
+    const tw = Math.floor(now / 140) % 24; // the lock twinkles
+    if (tw < 3) { ctx.fillStyle = "#ffffff"; ctx.fillRect(X + 9, Y + 5, 1, 1); }
   }
   // Round, shaded pixel balloons: an ellipse lit from the upper left, with a soft
   // specular glint, a darker rim, a tied knot and an outline. Built once per colour.
@@ -1585,6 +1718,10 @@
       }
       if (crashFx && !crashFx.hit && crashFx.r === x.r && crashFx.c === x.c) continue;
       drawCrate(sc * S, sr * S, now);
+    }
+    if (openFx && now - openFx.start < 800 && !fogged(openFx.r, openFx.c)) {
+      const [sr, sc] = toScreen(openFx.r, openFx.c);
+      ctx.globalAlpha = Math.max(0, 1 - (now - openFx.start) / 800); drawCrate(sc * S, sr * S, now, true); ctx.globalAlpha = 1;
     }
   }
   function drawSkyCrates(now, dt) {
@@ -1820,11 +1957,12 @@
           particles.push({ x: sc * S + 10, y: sr * S + 8, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 20, col: i % 3 ? "#ffe066" : "#b57a3c", born: now, life: 550 }); }
       }
       sfxSafe(SFX.boxOpen);
-      if (o.effect === "teleport" && o.to) {
-        for (const [r, c] of [[o.r, o.c], o.to]) { if (fogged(r, c)) continue; const [sr, sc] = toScreen(r, c);
-          for (let i = 0; i < 14; i++) { const a = i / 14 * 6.28; particles.push({ x: sc * S + 10 + Math.cos(a) * 9, y: sr * S + 10 + Math.sin(a) * 9, vx: -Math.sin(a) * 40, vy: Math.cos(a) * 40 - 10, col: i % 2 ? "#c98bff" : "#59c1ff", born: now, life: 500 }); } }
-        setTimeout(() => sfxSafe(SFX.teleport), 150);
+      if ((o.effect === "teleport" || o.effect === "fireball") && !fogged(o.r, o.c)) {
+        const [sr, sc] = toScreen(o.r, o.c), cols = o.effect === "teleport" ? ["#9fe8ff", "#c98bff", "#ffffff"] : ["#ffe066", "#ff9f3a", "#ff5e3a"];
+        for (let i = 0; i < 14; i++) { const a = i / 14 * 6.28; particles.push({ x: sc * S + 10 + Math.cos(a) * 9, y: sr * S + 10 + Math.sin(a) * 9, vx: -Math.sin(a) * 40, vy: Math.cos(a) * 40 - 30, col: cols[i % 3], born: now, life: 550 }); }
       }
+      if (o.effect === "teleport") setTimeout(() => sfxSafe(SFX.extra), 150);
+      if (o.effect === "fireball") setTimeout(() => sfxSafe(SFX.fireSaved), 150);
       if (o.effect === "change" && o.from && !fogged(o.r, o.c)) {
         morph = { r: o.r, c: o.c, ...makeMorph(o.from, o.to2), start: now, dur: 1100 }; setTimeout(() => sfxSafe(SFX.promote), 120);
       }
@@ -1896,6 +2034,7 @@
     pendingFeast = feast && feast.length ? feast : null;
     pendingBox = boxFx || jesterKill ? { fx: boxFx, jk: jesterKill, m, mover: prevBoard[m.fr] && prevBoard[m.fr][m.fc] } : null;
     feastFx = null;
+    if (m.power) { startPowerAnim(m); return; }
     const mover = prevBoard[m.fr] && prevBoard[m.fr][m.fc];
     if (!mover) return;
     const victim = prevBoard[m.tr][m.tc];
@@ -1914,6 +2053,66 @@
     const dist = Math.hypot(m.tr - m.fr, m.tc - m.fc);
     anim = { mover, victim, gained, promo, m, start: performance.now(), dur: 150 + dist * 45 };
     render();
+  }
+  // Teleports blink across the board; fireballs streak down and explode.
+  let fireFx = null;
+  const FIRE_FALL = 480, FIRE_BOOM = 650;
+  function swirl(r, c, now, cols) {
+    const [sr, sc] = toScreen(r, c);
+    for (let i = 0; i < 16; i++) { const a = i / 16 * 6.28; particles.push({ x: sc * S + 10 + Math.cos(a) * 9, y: sr * S + 10 + Math.sin(a) * 9, vx: -Math.sin(a) * 45, vy: Math.cos(a) * 45 - 15, col: cols[i % cols.length], born: now, life: 520 }); }
+  }
+  function flushPending() { if (pendingFeast) { startFeast(pendingFeast); pendingFeast = null; } flushBox(); }
+  function startPowerAnim(m) {
+    anim = null;
+    const now = performance.now();
+    if (m.power === "tp") {
+      for (const [r, c] of [[m.fr, m.fc], [m.tr, m.tc]]) if (!fogged(r, c)) swirl(r, c, now, ["#9fe8ff", "#c98bff", "#ffffff"]);
+      if (!fogged(m.tr, m.tc)) flash = { r: m.tr, c: m.tc, start: now, dur: 500 };
+      sfxSafe(SFX.teleport);
+      flushPending();
+    } else if (REDUCED) {
+      sfxSafe(SFX.explode); flushPending();
+    } else {
+      fireFx = { r: m.tr, c: m.tc, killed: m.killed || [], start: now, hit: false };
+      sfxSafe(SFX.fireball);
+    }
+    render();
+  }
+  function drawFireballAt(x, y, now) {
+    for (let dy = -5; dy <= 5; dy++) for (let dx = -5; dx <= 5; dx++) {
+      const d = dx * dx + dy * dy + (Math.sin(now / 40 + dx * 2 + dy) > 0.6 ? 3 : 0);
+      if (d > 26) continue;
+      ctx.fillStyle = d <= 4 ? "#fffbe0" : d <= 10 ? "#ffe066" : d <= 18 ? "#ff9f3a" : "#e0402a";
+      ctx.fillRect(Math.round(x) + dx, Math.round(y) + dy, 1, 1);
+    }
+  }
+  function drawFire(now) {
+    const f = fireFx, t = now - f.start, [sr, sc] = toScreen(f.r, f.c), tx = sc * S + 10, ty = sr * S + 10;
+    if (t < FIRE_FALL) {
+      const k = t / FIRE_FALL, e = k * k, sx = tx + 60, sy = -F - 24;
+      const x = sx + (tx - sx) * e, y = sy + (ty - sy) * e;
+      for (let i = 0; i < 2; i++) particles.push({ x: x + (Math.random() - 0.5) * 6, y: y + (Math.random() - 0.5) * 6, vx: 30 + Math.random() * 30, vy: -40 - Math.random() * 30, col: ["#ffe066", "#ff9f3a", "#ff5e3a", "#7a6a6a"][Math.floor(Math.random() * 4)], born: now, life: 260 });
+      ctx.fillStyle = "rgba(255,120,40,0.25)"; // the target glows as it comes in
+      ctx.fillRect(tx - 30, ty - 30, 60, 60);
+      drawFireballAt(x, y, now);
+      return;
+    }
+    if (!f.hit) {
+      f.hit = true; f.hitAt = now; sfxSafe(SFX.explode);
+      for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28, v = 30 + Math.random() * 70;
+        particles.push({ x: tx, y: ty, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 30, col: ["#fffbe0", "#ffe066", "#ff9f3a", "#ff5e3a", "#5a4a4a"][i % 5], born: now, life: 500 + Math.random() * 300 }); }
+      for (const k of f.killed) { if (fogged(k.r, k.c)) continue; const [kr, kc] = toScreen(k.r, k.c), pal = PAL[k.piece.color];
+        for (let i = 0; i < 12; i++) { const a = Math.random() * 6.28; particles.push({ x: kc * S + 10, y: kr * S + 10, vx: Math.cos(a) * 40, vy: Math.sin(a) * 30 - 30, col: [pal.fill, pal.shade, "#2a2020", "#ff9f3a"][i % 4], born: now, life: 650 }); } }
+      flushPending();
+    }
+    const k = (now - f.hitAt) / FIRE_BOOM;
+    if (k >= 1) { fireFx = null; return; }
+    ctx.fillStyle = `rgba(255,${Math.round(200 - k * 120)},60,${0.55 * (1 - k)})`;
+    ctx.fillRect(tx - 30, ty - 30, 60, 60);
+    const rad = 6 + k * 34;
+    ctx.fillStyle = k < 0.5 ? "#fffbe0" : "#ff9f3a";
+    for (let i = 0; i < 40; i++) { const a = i / 40 * 6.28; ctx.fillRect(Math.round(tx + Math.cos(a) * rad), Math.round(ty + Math.sin(a) * rad), 2, 2); }
+    if (k < 0.35) drawFireballAt(tx, ty, now);
   }
   function finishAnim(now, given) {
     const a = given || anim; anim = null;
@@ -1981,7 +2180,7 @@
     rafId = 0;
     const dt = Math.min(0.05, (now - (lastFrame || now)) / 1000); lastFrame = now;
     draw(now, dt);
-    if (anim || particles.length || flash || morph || feastFx || crashFx || openFx || balloonsAway.length || (bxState && bxState.list.length && !REDUCED) || (endFx && now - endFx.start < END_LIVE) || (selected && !REDUCED) || ((viewer() || curtain || thinking) && !REDUCED)) rafId = requestAnimationFrame(frame);
+    if (anim || particles.length || flash || morph || feastFx || crashFx || openFx || fireFx || aim || preSel || premove || tauntFx || balloonsAway.length || (bxState && bxState.list.length && !REDUCED) || (endFx && now - endFx.start < END_LIVE) || (selected && !REDUCED) || ((viewer() || curtain || thinking) && !REDUCED)) rafId = requestAnimationFrame(frame);
     else lastFrame = 0;
   }
 
@@ -1991,6 +2190,7 @@
     ctx.save();
     let shake = [0, 0];
     if (crashFx && crashFx.hit && now - crashFx.hitAt < 320) { const k = 1 - (now - crashFx.hitAt) / 320; shake = [Math.round((Math.random() - 0.5) * 4 * k), Math.round((Math.random() - 0.5) * 4 * k)]; }
+    if (fireFx && fireFx.hit && now - fireFx.hitAt < 420) { const k = 1 - (now - fireFx.hitAt) / 420; shake = [Math.round((Math.random() - 0.5) * 6 * k), Math.round((Math.random() - 0.5) * 6 * k)]; }
     ctx.translate(F + shake[0], F + shake[1]);
     const fillSq = (r, c, color) => { const [sr, sc] = toScreen(r, c); ctx.fillStyle = color; ctx.fillRect(sc * S, sr * S, S, S); };
     if (lastMove) {
@@ -2016,6 +2216,7 @@
     }
 
     if (bxState) drawGroundCrates(now);
+    if (fireFx && !fireFx.hit) for (const k of fireFx.killed) if (!fogged(k.r, k.c)) { const [sr, sc] = toScreen(k.r, k.c); ctx.drawImage(spriteFor(k.piece), sc * S, sr * S); }
     if (crashFx && !crashFx.hit && crashFx.crushed && !fogged(crashFx.r, crashFx.c)) { const [sr, sc] = toScreen(crashFx.r, crashFx.c); ctx.drawImage(spriteFor(crashFx.crushed.piece), sc * S, sr * S); }
     for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++) {
       const p = board[r][c]; if (!p) continue;
@@ -2043,7 +2244,13 @@
       }
       if (hiddenFromFoe(r, c, p)) drawHaze(x, y, now, false);
       if (morph && morph.r === r && morph.c === c) { drawMorph(morph, now, x, y); continue; }
+      if (tauntFx && p.type === "K" && p.color === tauntFx.color && !REDUCED) {
+        const t = (now - tauntFx.start) / 1400;
+        if (t < 1) { y -= Math.round(Math.abs(Math.sin(t * Math.PI * 4)) * 4 * (1 - t)); x += Math.round(Math.sin(t * Math.PI * 8) * (1 - t)); }
+        else tauntFx = null;
+      }
       ctx.drawImage(spriteFor(p), x, y);
+      if (p.tp) drawTpStar(x + 15, y + 3, now);
       if (p.jester && p.color === privViewer()) drawJesterHat(x, y, now);
       if (hiddenFromFoe(r, c, p)) drawHaze(x, y, now, true);
       if (flash && flash.r === r && flash.c === c) {
@@ -2072,6 +2279,8 @@
     if (feastFx) drawFeast(now);
     drawSmoke(now);
     if (bxState || crashFx || balloonsAway.length) drawSkyCrates(now, dt);
+    if (fireFx) drawFire(now);
+    drawAim(now, pulse);
 
     for (const m of legal) {
       const [sr, sc] = toScreen(m.tr, m.tc);
@@ -2114,6 +2323,7 @@
       });
     }
     box.append(t, s);
+    if (p.tp) { const t = document.createElement("div"); t.style.color = "#8fe3ff"; t.textContent = "Holds a teleport (blue star): press TELEPORT under POWERS to jump to any empty square."; box.append(t); }
     if (p.jester && p.color === privViewer()) {
       const j = document.createElement("div"); j.style.color = "#c98bff"; j.textContent = "Jester: whoever eats this piece dies. Only you can see the hat."; box.append(j);
     }
@@ -2160,7 +2370,8 @@
     }
   }
 
-  function updateUI() {
+  function updateUI() { updateUIMain(); renderPowers(); renderTaunts(); }
+  function updateUIMain() {
     syncAudio();
     const isOnline = mode === "online";
     if (!isOnline) { document.body.classList.remove("focus"); $("chatBox").hidden = true; }
@@ -2230,6 +2441,262 @@
     }
   })();
 
+  // ----- Saved powers: buttons and aiming -----
+  let aim = null; // { kind: "tp", from, targets } or { kind: "fire", targets, hover }
+  function powerSide() { if (mode === "online") return myColor(); return cpuOn ? "w" : (curtain ? null : turn); }
+  const tpHolders = (color) => { const out = []; for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++) { const p = board[r][c]; if (p && p.color === color && p.tp) out.push([r, c]); } return out; };
+  function drawTpStar(x, y, now) {
+    const big = REDUCED || Math.floor(now / 260) % 3 !== 0;
+    ctx.fillStyle = "#1a1626"; ctx.fillRect(x - 2, y - 1, 5, 3); ctx.fillRect(x - 1, y - 2, 3, 5);
+    ctx.fillStyle = "#8fe3ff"; ctx.fillRect(x - 1, y, 3, 1); ctx.fillRect(x, y - 1, 1, 3);
+    if (big) { ctx.fillRect(x - 2, y, 1, 1); ctx.fillRect(x + 2, y, 1, 1); ctx.fillRect(x, y - 2, 1, 1); ctx.fillRect(x, y + 2, 1, 1); }
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(x, y, 1, 1);
+  }
+  function powerIcon(kind) {
+    const c = document.createElement("canvas"); c.width = c.height = 20;
+    const g = c.getContext("2d"), px = (x, y, col) => { g.fillStyle = col; g.fillRect(x, y, 1, 1); };
+    if (kind === "tp") { // a swirling portal with a little light blue star to its right
+      for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) {
+        const dx = (x + 0.5 - 8) / 6.5, dy = (y + 0.5 - 11) / 7.5, d = dx * dx + dy * dy;
+        if (d > 1.15) continue;
+        if (d > 0.9) px(x, y, "#1a1626");
+        else if (d > 0.6) px(x, y, (Math.atan2(dy, dx) * 3 + d * 6) % 2 > 1 ? "#c98bff" : "#8a5ce0");
+        else px(x, y, (Math.atan2(dy, dx) * 2 + d * 9) % 2 > 1 ? "#3a2a6a" : "#59c1ff");
+      }
+      px(8, 11, "#ffffff");
+      for (const [x, y, col] of [[16, 1, "#1a1626"], [15, 2, "#1a1626"], [17, 2, "#1a1626"], [14, 3, "#1a1626"], [18, 3, "#1a1626"], [15, 4, "#1a1626"], [17, 4, "#1a1626"], [16, 5, "#1a1626"],
+        [16, 2, "#8fe3ff"], [15, 3, "#8fe3ff"], [17, 3, "#8fe3ff"], [16, 4, "#8fe3ff"], [16, 3, "#ffffff"], [13, 3, "#8fe3ff"], [19, 3, "#8fe3ff"], [16, 0, "#8fe3ff"], [16, 6, "#8fe3ff"]]) px(x, y, col);
+    } else { // a fireball with a flaming tail
+      for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) {
+        const dx = x + 0.5 - 8, dy = y + 0.5 - 12, d = dx * dx + dy * dy;
+        const tail = x > 8 && y < 12 && Math.abs((x - 8) + (y - 12)) < 4 - (x - 8) * 0.25 && x < 19;
+        if (d <= 30) px(x, y, d <= 5 ? "#fffbe0" : d <= 13 ? "#ffe066" : d <= 22 ? "#ff9f3a" : "#e0402a");
+        else if (tail) px(x, y, (x + y) % 3 ? "#ff9f3a" : "#ffe066");
+        else if (d <= 42) px(x, y, "#1a1626");
+      }
+    }
+    return c;
+  }
+  function renderPowers() {
+    const box = $("powerBox"), me = powerSide();
+    const show = !!bxState && !!board;
+    box.hidden = !show;
+    // Online focus mode hides the right column, so the powers move under the game buttons.
+    const focus = document.body.classList.contains("focus");
+    if (focus && box.parentElement !== document.querySelector(".side.left")) $("onlineGame").after(box);
+    if (!focus && box.parentElement !== document.querySelector(".side.right")) document.querySelector(".side.right").prepend(box);
+    if (!show) return;
+    const btns = $("powerBtns"); btns.replaceChildren();
+    const hint = [];
+    if (me) {
+      const tps = tpHolders(me).reduce((n, [r, c]) => n + board[r][c].tp, 0), fires = fireOf(bxState, me);
+      for (const [kind, n, label] of [["tp", tps, "TELEPORT"], ["fire", fires, "FIREBALL"]]) {
+        if (!n) continue;
+        const b = document.createElement("button");
+        const t = document.createElement("span"); t.textContent = label;
+        const cnt = document.createElement("span"); cnt.className = "count"; cnt.textContent = "x" + n;
+        b.append(powerIcon(kind), t, cnt);
+        b.setAttribute("aria-pressed", String(!!aim && aim.kind === kind));
+        b.disabled = !canAct() || turn !== me;
+        b.title = kind === "tp" ? "Teleport the starred piece to any empty square (uses your turn)" : "Drop a fireball: destroys every piece in a 3x3 square except kings (uses your turn)";
+        b.onclick = () => startAim(kind);
+        btns.append(b);
+      }
+      if (!btns.children.length) hint.push("Open chests to save teleports and fireballs.");
+    }
+    const foe = me ? other(me) : null;
+    for (const col of foe ? [foe] : ["w", "b"]) {
+      const t = tpHolders(col).length, f = fireOf(bxState, col);
+      if (t || f) hint.push(`${colorName(col)} holds ${[t ? t + " teleport" + (t > 1 ? "s" : "") : "", f ? f + " fireball" + (f > 1 ? "s" : "") : ""].filter(Boolean).join(" and ")}.`);
+    }
+    $("powerHint").textContent = hint.join(" ");
+  }
+  function startAim(kind) {
+    if (!canAct() || powerSide() !== turn) return;
+    if (aim && aim.kind === kind) { aim = null; note("Cancelled."); render(); updateUI(); return; }
+    selected = null; legal = [];
+    if (kind === "tp") {
+      const holders = tpHolders(turn); if (!holders.length) return;
+      aim = { kind, from: null, targets: [] };
+      if (holders.length === 1) setTpFrom(holders[0]);
+      else note("Click the piece with the blue star that you want to teleport.");
+    } else {
+      aim = { kind, targets: fireTargets(board, turn, fog, kingCap, bxState), hover: null };
+      note("Pick a square for the fireball. It destroys every piece in the 3x3 around it, yours too, but not kings. Esc cancels.");
+    }
+    sfxSafe(SFX.select); render(); updateUI();
+  }
+  function setTpFrom(sq) {
+    aim.from = sq; aim.targets = teleportTargets(board, seen, sq[0], sq[1], fog, kingCap, bxState);
+    note(aim.targets.length ? "Click a glowing square to teleport there. Esc cancels." : "There's no safe empty square to teleport to right now.");
+  }
+  function aimClick(r, c) {
+    if (!canAct()) { aim = null; render(); updateUI(); return; }
+    if (aim.kind === "tp") {
+      const t = aim.from && aim.targets.find(x => x.tr === r && x.tc === c);
+      if (t) { aim = null; doMove(t); return; }
+      const p = board[r][c];
+      if (p && p.color === turn && p.tp) { setTpFrom([r, c]); render(); return; }
+    } else {
+      const t = aim.targets.find(x => x.tr === r && x.tc === c);
+      // With a mouse the preview follows the pointer; on touch, the first tap aims and the second fires.
+      if (t && aim.hover && aim.hover[0] === r && aim.hover[1] === c) { aim = null; doMove(t); return; }
+      if (t || !aim.hover || aim.hover[0] !== r || aim.hover[1] !== c) {
+        aim.hover = [r, c];
+        if (!t) note("That blast would leave your king in check. Pick another square.");
+        else note("Tap the same square again to drop the fireball.");
+        render(); return;
+      }
+    }
+    aim = null; note("Cancelled."); render(); updateUI();
+  }
+  cv.addEventListener("mousemove", (e) => {
+    if (!aim || aim.kind !== "fire") return;
+    let c = Math.floor((e.offsetX / cv.clientWidth * W - F) / S), r = Math.floor((e.offsetY / cv.clientHeight * W - F) / S);
+    if (!inside(r, c)) { aim.hover = null; return; }
+    if (flipped()) { r = BN - 1 - r; c = BN - 1 - c; }
+    aim.hover = [r, c]; render();
+  });
+  function drawAim(now, pulse) {
+    const box = (r, c, col) => { const [sr, sc] = toScreen(r, c); ctx.fillStyle = col; ctx.fillRect(sc * S, sr * S, S, S); };
+    const border = (r, c, col) => { const [sr, sc] = toScreen(r, c), x = sc * S, y = sr * S; ctx.fillStyle = col; ctx.fillRect(x, y, S, 2); ctx.fillRect(x, y + S - 2, S, 2); ctx.fillRect(x, y, 2, S); ctx.fillRect(x + S - 2, y, 2, S); };
+    // premove: the planned move in orange
+    if (premove) { box(premove.fr, premove.fc, "rgba(255,122,89,0.45)"); box(premove.tr, premove.tc, "rgba(255,122,89,0.6)"); }
+    if (preSel) {
+      border(preSel[0], preSel[1], "#ff7a59");
+      for (const m of preTargets) { const [sr, sc] = toScreen(m.tr, m.tc); ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(sc * S + 7, sr * S + 7, 6, 6); ctx.fillStyle = "#ff7a59"; ctx.fillRect(sc * S + 8, sr * S + 8, 4, 4); }
+    }
+    if (!aim) return;
+    if (aim.kind === "tp") {
+      if (!aim.from) { for (const [r, c] of tpHolders(turn)) border(r, c, pulse > 0.5 ? "#8fe3ff" : "#59c1ff"); return; }
+      box(aim.from[0], aim.from[1], `rgba(143,227,255,${0.25 + 0.25 * pulse})`); border(aim.from[0], aim.from[1], "#8fe3ff");
+      for (const m of aim.targets) { const [sr, sc] = toScreen(m.tr, m.tc); drawTpStar(sc * S + 10, sr * S + 10, now + (m.tr * 7 + m.tc * 13) * 40); }
+      return;
+    }
+    if (!aim.hover) return;
+    const ok = aim.targets.some(x => x.tr === aim.hover[0] && x.tc === aim.hover[1]);
+    for (const [r, c] of blastSquares(aim.hover[0], aim.hover[1])) box(r, c, ok ? `rgba(255,${90 + Math.round(60 * pulse)},40,${0.35 + 0.2 * pulse})` : "rgba(120,120,130,0.45)");
+    const [sr, sc] = toScreen(aim.hover[0], aim.hover[1]), x = sc * S + 10, y = sr * S + 10;
+    ctx.fillStyle = ok ? "#fffbe0" : "#cccccc"; // crosshair
+    ctx.fillRect(x - 6, y, 4, 1); ctx.fillRect(x + 3, y, 4, 1); ctx.fillRect(x, y - 6, 1, 4); ctx.fillRect(x, y + 3, 1, 4);
+  }
+
+  // ----- Premove: plan your next move while the other side is thinking -----
+  let premove = null, preSel = null, preTargets = [];
+  function canPremove() {
+    if (gameOver || curtain || feastFx) return false;
+    const me = mode === "online" ? myColor() : (cpuOn ? "w" : null);
+    if (!me) return false;
+    if (mode === "online" && (!online.data || online.data.status !== "playing")) return false;
+    return turn !== me;
+  }
+  function premoveTargets(r, c) {
+    const me = board[r][c].color;
+    // Your own pieces might be captured before your turn, so their squares count too.
+    const b = (fog ? viewBoard(board, me, seen) : board).map(row => row.map(p => p && p.color === me && p.type !== "K" ? { color: other(me), type: "P", powers: ["P"] } : p));
+    b[r][c] = board[r][c];
+    return pseudoMoves(b, r, c);
+  }
+  function premoveClick(r, c) {
+    const me = mode === "online" ? myColor() : "w";
+    const t = preSel && preTargets.find(x => x.tr === r && x.tc === c);
+    if (t) {
+      premove = { fr: t.fr, fc: t.fc, tr: t.tr, tc: t.tc }; preSel = null; preTargets = [];
+      sfxSafe(SFX.select); note("Premove set: it plays the moment it's your turn, if it's still allowed. Click anywhere to cancel.");
+      render(); return;
+    }
+    const p = fogged(r, c) ? null : board[r][c];
+    if (premove) { premove = null; note("Premove cancelled."); sfxSafe(SFX.deselect); }
+    if (p && p.color === me) { preSel = [r, c]; preTargets = premoveTargets(r, c); describePiece(p); sfxSafe(SFX.select); }
+    else { preSel = null; preTargets = []; if (p) describePiece(p); }
+    render();
+  }
+  function tryPremove() {
+    if (!premove) return;
+    if (!canAct()) { if (!gameOver && !canPremove()) setTimeout(tryPremove, 200); else if (gameOver) premove = null; return; }
+    const pm = premove; premove = null; preSel = null; preTargets = [];
+    const p = board[pm.fr][pm.fc];
+    const opts = p && p.color === turn ? (fog ? fogLegalFrom(board, seen, turn, pm.fr, pm.fc, kingCap) : legalMovesFrom(board, pm.fr, pm.fc)) : [];
+    const m = opts.find(x => x.tr === pm.tr && x.tc === pm.tc);
+    if (!m) { note("Premove cancelled: that move isn't possible any more."); render(); return; }
+    note("Premove played.");
+    doMove(isPromotion(board, m) ? { ...m, promo: "Q" } : m);
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (aim || premove || preSel) { aim = null; premove = null; preSel = null; preTargets = []; note("Cancelled."); render(); updateUI(); }
+  });
+
+  // ----- Taunts -----
+  const TAUNTS = { laugh: "HA HA HA!", easy: "TOO EASY!", yum: "YUM YUM!", oops: "OOPS!", bring: "BRING IT!", zzz: "ZZZ..." };
+  let tauntFx = null, lastTauntAt = 0, botTauntAt = 0;
+  function tauntSide() { if (mode === "online") return myColor(); return cpuOn ? "w" : (curtain ? null : turn); }
+  function renderTaunts() {
+    const box = $("tauntBox"), d = online.data;
+    box.hidden = !board || (mode === "online" ? !(d && myColor() && d.status !== "waiting") : false);
+    const btns = $("tauntBtns");
+    if (!btns.children.length) for (const [id, text] of Object.entries(TAUNTS)) {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = text; b.onclick = () => sendTaunt(id); btns.append(b);
+    }
+    const can = mode !== "online" || online.connected;
+    for (const b of btns.children) b.disabled = !can;
+  }
+  function clearBubbles() { const l = $("bubbles"); if (l) l.replaceChildren(); tauntFx = null; }
+  function showTaunt(color, id) {
+    if (!TAUNTS[id]) return;
+    const layer = $("bubbles");
+    for (const old of layer.querySelectorAll(".bubble." + color)) old.remove();
+    const k = findKing(board, color);
+    let sr, sc;
+    if (k && !fogged(k[0], k[1])) [sr, sc] = toScreen(k[0], k[1]);
+    else { const bottom = flipped() ? "b" : "w"; sr = color === bottom ? BN - 1 : 0; sc = BN / 2 - 0.5; }
+    const el = document.createElement("div");
+    el.className = "bubble " + color + (sr < 1 ? " below" : "");
+    el.textContent = TAUNTS[id];
+    el.style.left = Math.min(86, Math.max(14, (F + sc * S + S / 2) / W * 100)) + "%";
+    el.style.top = ((F + (sr < 1 ? (sr + 1) * S + 2 : sr * S - 1)) / W * 100) + "%";
+    layer.append(el);
+    setTimeout(() => el.remove(), 2600);
+    tauntFx = { color, start: performance.now() };
+    sfxSafe(SFX["t_" + id]);
+    render();
+  }
+  function sendTaunt(id) {
+    const now = Date.now(); if (now - lastTauntAt < 1200) return; lastTauntAt = now;
+    const from = tauntSide(); if (!from) return;
+    showTaunt(from, id);
+    if (mode === "online") { if (online.seat === "host") broadcastTaunt(from, id, null); else sendToHost({ type: "taunt", id }); }
+    else if (cpuOn && from === "w") botTaunt("taunted");
+  }
+  function broadcastTaunt(from, id, except) {
+    for (const c of online.conns) if (c.open && c !== except) { try { c.send({ type: "taunt", id, from }); } catch (_) {} }
+  }
+  let guestTauntAt = 0;
+  function hostReceiveTaunt(conn, msg) {
+    const now = Date.now(); if (now - guestTauntAt < 1000 || !TAUNTS[msg.id]) return; guestTauntAt = now;
+    const from = other(online.data.hostColor);
+    showTaunt(from, msg.id); broadcastTaunt(from, msg.id, conn);
+  }
+  // The bot talks back now and then.
+  function botTaunt(kind) {
+    if (mode !== "local" || !cpuOn) return;
+    const pools = { capture: ["yum", "laugh", "easy"], lost: ["oops", "bring"], taunted: ["bring", "laugh", "zzz", "easy"], check: ["easy", "laugh"], win: ["easy", "laugh"], lose: ["oops"], power: ["laugh", "bring"] };
+    const chance = { capture: 0.35, lost: 0.25, taunted: 0.7, check: 0.3, win: 1, lose: 1, power: 0.7 }[kind];
+    const now = Date.now();
+    if ((now - botTauntAt < 6000 && kind !== "win" && kind !== "lose") || Math.random() > chance) return;
+    botTauntAt = now;
+    const pick = pools[kind][Math.floor(Math.random() * pools[kind].length)], started = board;
+    setTimeout(() => { if (mode === "local" && cpuOn && (board === started || gameOver)) showTaunt("b", pick); }, kind === "taunted" ? 900 : 750);
+  }
+  function botTauntAfter(moverColor, res) {
+    if (res.over) { const w = /(White|Black) wins/.exec(res.result || ""); if (w) botTaunt(w[1] === "Black" ? "win" : "lose"); return; }
+    if (moverColor === "b") {
+      if (res.m.power) botTaunt("power");
+      else if (res.info.captured) botTaunt("capture");
+      else if (inCheck(board, "w")) botTaunt("check");
+    } else if (res.info.captured) botTaunt("lost");
+  }
+
   function canAct() {
     if (gameOver) return false;
     if (feastFx) return false;
@@ -2245,6 +2712,8 @@
     if (!inside(r, c)) return;
     if (flipped()) { r = BN - 1 - r; c = BN - 1 - c; }
     if (curtain) return;
+    if (aim) return aimClick(r, c);
+    if (!canAct() && canPremove()) return premoveClick(r, c);
     const p = fogged(r, c) ? null : board[r][c];
     const m = legal.find(m => m.tr === r && m.tc === c);
     if (m && canAct()) { if (isPromotion(board, m)) openPromo(m); else doMove(m); return; }
@@ -2294,6 +2763,7 @@
     if (cpuOn && h.turn === "b" && history.length) h = history.pop();
     ({ board, turn, lastMove, logLines, seen, bxState } = h);
     gameOver = false; resultText = ""; selected = null; legal = []; curtain = false; morph = null; closePromo(); clearEnd();
+    aim = null; premove = null; preSel = null; preTargets = [];
     render(); updateUI();
   };
   function saveSettings() { try { localStorage.setItem("dc-settings", JSON.stringify(settings)); } catch (_) {} }
@@ -2311,7 +2781,7 @@
     $("kingField").hidden = !settings.fog;
     $("boxToggle").setAttribute("aria-checked", String(settings.boxes));
     $("boxLabel").textContent = settings.boxes ? "ON" : "OFF";
-    $("boxHint").textContent = settings.boxes ? "Crates fall every few moves. Land on one to open it." : "No crates.";
+    $("boxHint").textContent = settings.boxes ? "Treasure chests fall every few moves. Land on one to open it." : "No chests.";
     $("xxlToggle").setAttribute("aria-checked", String(settings.xxl));
     $("xxlLabel").textContent = settings.xxl ? "ON" : "OFF";
     $("xxlHint").textContent = settings.xxl ? "16 x 16 board: two sets side by side, one king each, plus a row of rooks, knights and bishops." : "Normal 8 x 8 board.";
@@ -2466,6 +2936,19 @@
     extra() { [659, 784, 988, 1319].forEach((f, i) => tone({ f, at: i * 0.07, dur: 0.1, vol: 0.06 })); },
     jester() { for (let i = 0; i < 6; i++) tone({ type: "triangle", f: [1568, 1760, 2093][i % 3], at: i * 0.06, dur: 0.12, vol: 0.06 }); },
     jesterKill() { [[784, 0], [740, 0.12], [698, 0.24], [523, 0.4]].forEach(([f, at]) => tone({ f, at, dur: 0.14, vol: 0.06, vib: 10 })); noise({ at: 0.4, type: "lowpass", freq: 600, dur: 0.3, vol: 0.3 }); },
+    fireSaved() { tone({ type: "sawtooth", f: 200, f2: 600, dur: 0.25, vol: 0.05 }); noise({ type: "lowpass", freq: 800, f2: 2400, dur: 0.3, vol: 0.2 }); },
+    fireball() { noise({ type: "lowpass", freq: 300, f2: 2600, dur: 0.48, vol: 0.32 }); tone({ type: "sawtooth", f: 260, f2: 90, dur: 0.48, vol: 0.05, vib: 15 }); },
+    explode() {
+      tone({ type: "sine", f: 95, f2: 30, dur: 0.6, vol: 0.5 }); noise({ type: "lowpass", freq: 1800, f2: 90, dur: 0.8, vol: 0.6 });
+      for (let i = 0; i < 7; i++) noise({ at: 0.08 + i * 0.06 + Math.random() * 0.03, type: "highpass", freq: 2500, dur: 0.03, vol: 0.12 });
+    },
+    t_laugh() { for (let i = 0; i < 4; i++) { tone({ type: "square", f: 640 - i * 45, f2: 520 - i * 45, at: i * 0.13, dur: 0.09, vol: 0.04, vib: 14 }); noise({ at: i * 0.13, type: "bandpass", freq: 1400, q: 3, dur: 0.07, vol: 0.12 }); } },
+    t_easy() { tone({ type: "sine", f: 900, f2: 1400, dur: 0.14, vol: 0.08 }); tone({ type: "sine", f: 1400, f2: 700, at: 0.18, dur: 0.3, vol: 0.08 }); },
+    t_yum() { [0, 0.2].forEach(at => { tone({ type: "triangle", f: 200, f2: 320, at, dur: 0.1, vol: 0.14 }); noise({ at: at + 0.08, type: "lowpass", freq: 500, dur: 0.06, vol: 0.2 }); }); },
+    t_oops() { tone({ type: "sine", f: 720, f2: 560, dur: 0.12, vol: 0.1 }); tone({ type: "sine", f: 520, f2: 300, at: 0.17, dur: 0.3, vol: 0.1, vib: 6 }); },
+    t_bring() { noise({ type: "lowpass", freq: 180, dur: 0.12, vol: 0.5 }); noise({ at: 0.14, type: "lowpass", freq: 180, dur: 0.12, vol: 0.5 });
+      [110, 165, 220].forEach(f => tone({ type: "sawtooth", f, at: 0.28, dur: 0.35, vol: 0.04 })); },
+    t_zzz() { noise({ type: "lowpass", freq: 250, f2: 900, dur: 0.6, vol: 0.25 }); noise({ at: 0.7, type: "lowpass", freq: 250, f2: 900, dur: 0.6, vol: 0.2 }); },
     chat() { tone({ type: "triangle", f: 988, dur: 0.08, vol: 0.08 }); tone({ type: "triangle", f: 1319, at: 0.08, dur: 0.12, vol: 0.08 }); },
   };
   const sfxSafe = (fn) => { try { if (settings.sfx && !settings.muted) fn(); } catch (_) {} };
