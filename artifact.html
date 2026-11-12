@@ -1521,16 +1521,50 @@
     const g = Math.floor(now / 90) % 40; // a glint sweeps across now and then
     if (g < 12) { ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fillRect(X + 1 + g, Y + 1, 1, 1); if (g > 0) ctx.fillRect(X + g, Y + 2, 1, 1); }
   }
+  // Round, shaded pixel balloons: an ellipse lit from the upper left, with a soft
+  // specular glint, a darker rim, a tied knot and an outline. Built once per colour.
+  const balloonSprites = {};
+  function mixHex(a, b, t) {
+    const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+    return "rgb(" + pa.map((v, i) => Math.round(v + (pb[i] - v) * t)).join(",") + ")";
+  }
+  function balloonSprite(col) {
+    if (balloonSprites[col]) return balloonSprites[col];
+    const W = 10, H = 13, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const g = cv.getContext("2d"), on = new Set(), px = (x, y, c) => { g.fillStyle = c; g.fillRect(x, y, 1, 1); on.add(x + "," + y); };
+    const tones = [mixHex(col, "#1a1030", 0.55), mixHex(col, "#1a1030", 0.28), col, mixHex(col, "#ffffff", 0.3)];
+    const cx = 4, cy = 4.3, rx = 4.05, ry = 4.75, L = [-0.55, -0.62, 0.56];
+    for (let y = 0; y < 10; y++) for (let x = 0; x < 8; x++) {
+      const nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry * (y > cy ? 0.92 : 1), r2 = nx * nx + ny * ny;
+      if (r2 > 1) continue;
+      const nz = Math.sqrt(1 - r2), lit = nx * L[0] + ny * L[1] + nz * L[2];
+      px(x + 1, y + 1, tones[lit > 0.78 ? 3 : lit > 0.42 ? 2 : lit > 0.1 ? 1 : 0]);
+    }
+    px(3, 2, "#ffffff"); px(2, 3, "#ffffff"); px(3, 3, "rgba(255,255,255,0.6)"); px(4, 2, "rgba(255,255,255,0.45)");
+    px(4, 10, tones[1]); px(5, 10, tones[1]); px(4, 11, tones[0]); px(5, 11, tones[0]); px(3, 11, tones[0]); px(6, 11, tones[0]);
+    g.fillStyle = "#1a1626";
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (on.has(x + "," + y)) continue;
+      if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => on.has((x + dx) + "," + (y + dy)))) g.fillRect(x, y, 1, 1);
+    }
+    return (balloonSprites[col] = cv);
+  }
+  // A balloon whose knot hangs at (kx, ky), with a gently curving string down to (tx, ty).
+  function drawBalloon(kx, ky, col, tx, ty, wave) {
+    if (tx != null) {
+      ctx.fillStyle = "rgba(232,226,208,0.9)";
+      const steps = Math.max(2, Math.abs(ty - ky) + Math.abs(tx - kx));
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps, bend = Math.sin(t * Math.PI) * wave;
+        ctx.fillRect(Math.round(kx + (tx - kx) * t + bend), Math.round(ky + (ty - ky) * t), 1, 1);
+      }
+    }
+    ctx.drawImage(balloonSprite(col), Math.round(kx) - 5, Math.round(ky) - 12);
+  }
   function drawBalloons(x, y, now, t) {
-    const sway = Math.round(Math.sin(now / 400 + t) * 1.5);
-    const tops = [[x + 4 + sway, y - 7], [x + 10 + sway, y - 11], [x + 16 + sway, y - 7]];
-    ctx.fillStyle = "#e8e2d0";
-    for (const [bx, by] of tops) { const steps = Math.max(1, (y + 6) - (by + 6)); for (let i = 0; i < steps; i++) ctx.fillRect(Math.round(bx + 1 + ((x + 10) - (bx + 1)) * i / steps), by + 6 + i, 1, 1); }
-    tops.forEach(([bx, by], i) => {
-      ctx.fillStyle = "#1a1626"; ctx.fillRect(bx - 1, by, 5, 6); ctx.fillRect(bx, by - 1, 3, 8);
-      ctx.fillStyle = BALLOON_COLS[i]; ctx.fillRect(bx, by, 3, 6); ctx.fillRect(bx - 1 + 1, by + 1, 3, 4);
-      ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fillRect(bx, by + 1, 1, 1);
-    });
+    const sw = i => Math.sin(now / 420 + t + i * 1.7);
+    const knots = [[x + 3 + sw(0) * 1.5, y - 6 + sw(0) * 0.6], [x + 10 + sw(1) * 1.5, y - 10 + sw(1) * 0.6], [x + 17 + sw(2) * 1.5, y - 6 + sw(2) * 0.6]];
+    for (const i of [1, 0, 2]) drawBalloon(knots[i][0], knots[i][1], BALLOON_COLS[i], x + 8 + i * 2, y + 6, sw(i + 3) * 1.2);
   }
   function drawGroundCrates(now) {
     for (const x of bxState.list) {
@@ -1550,7 +1584,7 @@
       const [sr, sc] = toScreen(x.r, x.c);
       const left = Math.max(0.3, x.landsAt - bxState.ply);
       let y = sr * S - left * S * 0.75 + Math.round(Math.sin(now / 500 + x.r) * 1.5);
-      y = Math.max(-F + 12, y);
+      y = Math.max(-F + 22, y);
       drawBalloons(sc * S, y, now, x.c);
       drawCrate(sc * S, y, now);
     }
@@ -1573,8 +1607,7 @@
       if (t > 1.6) { balloonsAway.splice(i, 1); continue; }
       const x = Math.round(b.x + Math.sin(t * 4 + i) * 3), y = Math.round(b.y - t * 45);
       ctx.globalAlpha = Math.max(0, 1 - t / 1.6);
-      ctx.fillStyle = "#1a1626"; ctx.fillRect(x - 1, y, 5, 6); ctx.fillStyle = b.col; ctx.fillRect(x, y, 3, 6);
-      ctx.fillStyle = "#e8e2d0"; ctx.fillRect(x + 1, y + 6, 1, 3);
+      drawBalloon(x, y, b.col, x - Math.sin(t * 4 + i) * 2, y + 7, Math.sin(t * 6 + i) * 1.5);
       ctx.globalAlpha = 1;
     }
     if (openFx && now - openFx.start > 900) openFx = null;
@@ -1795,7 +1828,7 @@
     for (const l of fx.landed || []) {
       if (fogged(l.r, l.c)) continue;
       const [sr, sc] = toScreen(l.r, l.c);
-      for (let i = 0; i < 3; i++) balloonsAway.push({ x: sc * S + 4 + i * 6, y: sr * S - 10 - (i === 1 ? 3 : 0), col: BALLOON_COLS[i], start: now });
+      for (let i = 0; i < 3; i++) balloonsAway.push({ x: sc * S + 3 + i * 7, y: sr * S + 6 - (i === 1 ? 10 : 6), col: BALLOON_COLS[i], start: now });
       sfxSafe(SFX.pop);
     }
     if (fx.spawned) {
