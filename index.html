@@ -60,7 +60,8 @@
   .code { font-size: 16px; color: var(--ok); letter-spacing: 3px; user-select: all; }
   .players { display: grid; grid-template-columns: 14px 1fr; gap: 6px 8px; align-items: center; }
   .chip { width: 14px; height: 14px; border: 2px solid var(--edge); }
-  .legend { display: grid; grid-template-columns: 12px 1fr; gap: 6px 8px; align-items: center; }
+  .legend { display: grid; grid-template-columns: 40px 1fr; gap: 8px 10px; align-items: center; }
+  .legend canvas.mini { width: 40px; height: 40px; image-rendering: pixelated; border: 2px solid var(--edge); }
   .sw { width: 12px; height: 12px; border: 2px solid var(--edge); }
   #status { min-height: 3.6em; }
   #log { max-height: 140px; overflow-y: auto; color: var(--muted); }
@@ -77,7 +78,7 @@
 <h1>DEVOUR CHESS</h1>
 <p class="tag">You are what you eat.</p>
 <div class="wrap">
-  <div class="boardcol"><canvas id="board" width="128" height="128" aria-label="Chess board"></canvas></div>
+  <div class="boardcol"><canvas id="board" width="160" height="160" aria-label="Chess board"></canvas></div>
   <div class="side">
     <div class="box" id="status"></div>
 
@@ -123,8 +124,8 @@
     <div class="box" id="info">Click a piece to see its powers.</div>
     <div class="box rules">
       <p><b>The twist:</b> a piece that captures <b>absorbs</b> every power of its victim and can move like all of them.</p>
-      <p>Pawn eats knight? It can now hop like a knight. Colored pips under a piece show what it has eaten.</p>
       <p>Checkmate wins as usual. Pawns promote to queens. No castling or en passant.</p>
+      <p>Pawn eats knight? It can now hop like a knight. Eaten pieces fuse onto the eater in their own colors:</p>
       <div class="legend" id="legend"></div>
     </div>
     <div class="box" id="log"></div>
@@ -133,21 +134,32 @@
 
 <script>
 (() => {
-  // ---------- Pixel sprites (silhouettes; outline is generated) ----------
+  // ---------- Pixel sprites (16x16 silhouettes; outline and shading are generated) ----------
+  // x = body, h = highlight, d = dark detail line
   const SPRITES = {
-    P: ["            ","            ","     xx     ","    xxxx    ","    xxxx    ","     xx     ","    xxxx    ","     xx     ","    xxxx    ","   xxxxxx   ","  xxxxxxxx  ","            "],
-    R: ["            ","  xx xx xx  ","  xxxxxxxx  ","   xxxxxx   ","   xxxxxx   ","   xxxxxx   ","   xxxxxx   ","   xxxxxx   ","  xxxxxxxx  "," xxxxxxxxxx "," xxxxxxxxxx ","            "],
-    N: ["            ","     xx     ","    xxxxx   ","   xxexxxx  ","  xxxxxxxx  "," xxxxxxxxx  "," xxx  xxxx  ","     xxxxx  ","    xxxxxx  ","  xxxxxxxx  "," xxxxxxxxxx ","            "],
-    B: ["            ","     xx     ","    xxxx    ","   xxx xx   ","   xx xxx   ","   xxxxxx   ","    xxxx    ","     xx     ","    xxxx    ","   xxxxxx   ","  xxxxxxxx  ","            "],
-    Q: ["            "," x  x  x  x "," x  x  x  x "," xx xxxx xx ","  xxxxxxxx  ","  xxxxxxxx  ","   xxxxxx   ","    xxxx    ","   xxxxxx   ","  xxxxxxxx  "," xxxxxxxxxx ","            "],
-    K: ["            ","     xx     ","    xxxx    ","     xx     ","  xx xx xx  "," xxxxxxxxxx "," xxxxxxxxxx ","  xxxxxxxx  ","   xxxxxx   ","  xxxxxxxx  "," xxxxxxxxxx ","            "],
+    P: ["                ","                ","                ","      xxxx      ","     xhxxxx     ","     xhxxxx     ","      xxxx      ","     dddddd     ","      xhxx      ","      xhxx      ","     xhxxxx     ","    xhxxxxxx    ","   dddddddddd   ","   xhxxxxxxxx   ","   dddddddddd   ","                "],
+    R: ["                ","  xxx xxxx xxx  ","  xhx xhxx xxx  ","  xhxxxhxxxxxx  ","  dddddddddddd  ","   xhxxxxxxxx   ","   xhxxdxxxxx   ","   xhxxxxxxxx   ","   xhxxxxdxxx   ","   xhxxxxxxxx   ","   xhxxdxxxxx   ","  dddddddddddd  ","  xhxxxxxxxxxx  "," xhxxxxxxxxxxxx "," dddddddddddddd ","                "],
+    N: ["                ","       xx       ","      xxxx      ","     xxxxxxx    ","    xxdxxxxxx   ","   xxxxxxxxxdx  ","  xxxxxxxxxxxx  ","  xdxxxxhxxxdx  ","  xxx   hxxxxx  ","       xhxxxdx  ","      xhxxxxxx  ","     xhxxxxxxx  ","    dddddddddd  ","   xhxxxxxxxxxx ","   dddddddddddd ","                "],
+    B: ["                ","       xx       ","      xxxx      ","     xhxxdx     ","     xhxdxx     ","     xhdxxx     ","     xhxxxx     ","      xxxx      ","     dddddd     ","      xhxx      ","      xhxx      ","     xhxxxx     ","   dddddddddd   ","   xhxxxxxxxx   ","   dddddddddd   ","                "],
+    Q: ["                ","  x   x  x   x  ","  x  xx  xx  x  ","  xx xxxxxx xx  ","   xxxhxxxxxx   ","   dddddddddd   ","    xhxxxxxx    ","     xhxxxx     ","     xhxxxx     ","      xhxx      ","     xhxxxx     ","    dddddddd    ","   xhxxxxxxxx   ","  xhxxxxxxxxxx  ","  dddddddddddd  ","                "],
+    K: ["                ","       xx       ","      xxxx      ","       xx       ","   xxx xx xxx   ","  xxhxxxxxxxxx  ","  xhxxxdxxxxxx  ","  dddddddddddd  ","   xhxxxxxxxx   ","    xhxxxxxx    ","    xhxxxxxx    ","   dddddddddd   ","   xhxxxxxxxx   ","  xhxxxxxxxxxx  ","  dddddddddddd  ","                "],
+  };
+  // What a piece grows when it eats each type: drawn in the victim's colors and
+  // fused to the body with a dithered seam. Coordinates are in the 20x20 square.
+  const MELDS = {
+    N: { x: 1, y: 5, dir: 1, rows: [" xx   ","xxxx  ","xdxxxx","xxxxxx","  xxxx","   xxx","    xx"], label: "horse head" },
+    P: { x: 1, y: 13, dir: 1, rows: [" xx ","xxxx","xxxx"," xx ","dddd"], label: "pawn knob" },
+    R: { x: 14, y: 6, dir: -1, rows: ["x x x","xxxxx","xxxxx","xdxxx","xxxxx","xxxdx","xxxxx"], label: "tower wall" },
+    B: { x: 3, y: 1, dir: 0, rows: ["  x  "," xxx ","xxdxx","xdxxx"," xxx "], label: "mitre" },
+    Q: { x: 12, y: 1, dir: 0, rows: ["x  x x","xx xxx","xxxxxx"," xxxx "], label: "crown spikes" },
+    K: { x: 8, y: 0, dir: 0, rows: [" xx ","xxxx"," xx "," xx "], label: "cross" },
   };
   const NAMES = { P: "Pawn", N: "Knight", B: "Bishop", R: "Rook", Q: "Queen", K: "King" };
   const POWER_COLOR = { P: "#9be36b", N: "#ffb347", B: "#59c1ff", R: "#ff5e7a", Q: "#c98bff", K: "#ffe066" };
   const VALUE = { P: 1, N: 3, B: 3, R: 5, Q: 9, K: 0 };
   const PAL = {
-    w: { fill: "#f4ecd6", shade: "#c9bc98", line: "#1b1424" },
-    b: { fill: "#4b3a66", shade: "#33264a", line: "#0b0712" },
+    w: { fill: "#f4ecd6", shade: "#c9bc98", hi: "#fffdf6", line: "#1b1424" },
+    b: { fill: "#4b3a66", shade: "#33264a", hi: "#6f5a96", line: "#0b0712" },
   };
   const SQ_LIGHT = "#d9a066", SQ_DARK = "#8f5a3c";
   const $ = (id) => document.getElementById(id);
@@ -331,6 +343,7 @@
   function localMove(m) {
     history.push({ board: clone(board), turn, lastMove, logLines: [...logLines] });
     const info = describeMove(board, m);
+    startMoveAnim(board, m);
     board = applyMove(board, m);
     moveSound(info);
     logLines.unshift(info.line);
@@ -390,6 +403,7 @@
   function applyState(st) {
     const prev = online.data;
     online.data = st;
+    if (prev && st.ply === prev.ply + 1 && st.lastMove) startMoveAnim(board, st.lastMove);
     board = unflatten(st.board);
     turn = st.turn; lastMove = st.lastMove || null; logLines = [...(st.log || [])];
     gameOver = st.status === "over"; resultText = st.result || "";
@@ -585,24 +599,131 @@
   // ---------- Rendering ----------
   const cv = $("board");
   const ctx = cv.getContext("2d");
-  const S = 16;
+  const S = 20;
+  const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   const flipped = () => mode === "online" && myColor() === "b";
   const toScreen = (r, c) => flipped() ? [7 - r, 7 - c] : [r, c];
 
-  function drawSprite(type, color, x, y) {
-    const rows = SPRITES[type], pal = PAL[color];
-    const filled = (i, j) => i >= 0 && i < 12 && j >= 0 && j < 12 && rows[i][j] !== " ";
-    for (let i = 0; i < 12; i++) for (let j = 0; j < 12; j++) {
-      const ch = rows[i][j];
-      let col = null;
-      if (ch === "x") col = (!filled(i, j + 1) || !filled(i + 1, j)) ? pal.shade : pal.fill;
-      else if (ch === "e") col = pal.line;
-      else if (filled(i - 1, j) || filled(i + 1, j) || filled(i, j - 1) || filled(i, j + 1)) col = pal.line;
-      if (col) { ctx.fillStyle = col; ctx.fillRect(x + j, y + i, 1, 1); }
+  // Builds one piece (with everything it has eaten) as a 20x20 pixel image.
+  const spriteCache = new Map();
+  function spriteFor(p, white = false) {
+    const key = (white ? "!" : "") + p.color + p.type + p.powers.join("");
+    let img = spriteCache.get(key);
+    if (!img) { img = buildSprite(p, white); spriteCache.set(key, img); }
+    return img;
+  }
+  function buildSprite(p, white) {
+    const own = PAL[p.color], foe = PAL[other(p.color)];
+    const grid = Array.from({ length: S }, () => Array(S).fill(null));
+    const ok = (y, x) => y >= 0 && y < S && x >= 0 && x < S;
+    const rows = SPRITES[p.type];
+    for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++)
+      if (rows[i][j] !== " ") grid[i + 2][j + 2] = { pal: own, ch: rows[i][j], base: true };
+    const extra = p.powers.filter(x => x !== p.type);
+    extra.forEach((pw, k) => {
+      const md = MELDS[pw];
+      md.rows.forEach((row, i) => {
+        for (let j = 0; j < row.length; j++) {
+          const y = md.y + i, x = md.x + j;
+          if (row[j] !== " " && ok(y, x) && !grid[y][x]) grid[y][x] = { pal: foe, ch: row[j], meld: true };
+        }
+      });
+      // Grow a gooey bridge from the new part to the body so they read as one piece.
+      const reach = (sy, sx, dy, dx) => {
+        const path = [];
+        for (let s = 1; s <= 6; s++) {
+          const y = sy + dy * s, x = sx + dx * s;
+          if (!ok(y, x)) return;
+          if (grid[y][x] && !grid[y][x].meld) break;
+          if (grid[y][x]) return;
+          path.push([y, x]);
+          if (s === 6) return;
+        }
+        for (const [y, x] of path) grid[y][x] = { goo: true };
+      };
+      if (md.dir) {
+        md.rows.forEach((row, i) => {
+          const xs = [...row].map((ch, j) => ch !== " " ? j : -1).filter(j => j >= 0);
+          if (!xs.length) return;
+          const j = md.dir > 0 ? Math.max(...xs) : Math.min(...xs);
+          reach(md.y + i, md.x + j, 0, md.dir);
+        });
+      } else {
+        for (let j = 0; j < md.rows[0].length; j++) {
+          let last = -1;
+          md.rows.forEach((row, i) => { if (row[j] !== " ") last = i; });
+          if (last >= 0) reach(md.y + last, md.x + j, 1, 0);
+        }
+      }
+    });
+    // The victim's color seeps into the body around each join.
+    const fused = (y, x) => ok(y, x) && grid[y][x] && (grid[y][x].goo || (grid[y][x].meld && !grid[y][x].vein));
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const g = grid[y][x];
+      if (!g || !g.base || g.ch !== "x" || (x * 3 + y) % 4 !== 0) continue;
+      let near = false;
+      for (let a = -2; a <= 2 && !near; a++) for (let b = -2; b <= 2 && !near; b++) near = fused(y + a, x + b);
+      if (near) grid[y][x] = { pal: foe, ch: "x", meld: true, vein: true };
     }
+    const filled = (y, x) => ok(y, x) && !!grid[y][x];
+    const nearBase = (y, x) => [[1,0],[-1,0],[0,1],[0,-1]].some(([a, b]) => ok(y + a, x + b) && grid[y + a][x + b] && grid[y + a][x + b].base);
+    const c = document.createElement("canvas"); c.width = S; c.height = S;
+    const g2 = c.getContext("2d");
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const g = grid[y][x];
+      let col = null;
+      if (g) {
+        const edge = !filled(y, x + 1) || !filled(y + 1, x);
+        let pal = g.goo ? ((x + y) % 2 ? own : foe) : g.pal;
+        if (g.meld && !g.vein && nearBase(y, x) && (x + y) % 2 === 0) pal = own; // dithered seam
+        if (g.ch === "d") col = pal.line;
+        else if (g.ch === "h") col = pal.hi;
+        else col = edge ? pal.shade : pal.fill;
+      } else if (filled(y - 1, x) || filled(y + 1, x) || filled(y, x - 1) || filled(y, x + 1)) col = own.line;
+      if (col) { g2.fillStyle = white && g ? "#ffffff" : col; g2.fillRect(x, y, 1, 1); }
+    }
+    return c;
   }
 
-  function render() {
+  // ----- Animation state -----
+  let anim = null, flash = null, rafId = 0;
+  const particles = [];
+  function startMoveAnim(prevBoard, m) {
+    const mover = prevBoard[m.fr] && prevBoard[m.fr][m.fc];
+    if (!mover) return;
+    const victim = prevBoard[m.tr][m.tc];
+    const gained = !!victim && victim.powers.some(x => !mover.powers.includes(x));
+    if (REDUCED) { if (gained) flash = { r: m.tr, c: m.tc, start: performance.now(), dur: 300 }; render(); return; }
+    const dist = Math.hypot(m.tr - m.fr, m.tc - m.fc);
+    anim = { mover, victim, gained, m, start: performance.now(), dur: 150 + dist * 45 };
+    render();
+  }
+  function finishAnim(now) {
+    const a = anim; anim = null;
+    if (a.victim) {
+      const [sr, sc] = toScreen(a.m.tr, a.m.tc);
+      const pal = PAL[a.victim.color];
+      for (let i = 0; i < 14; i++) {
+        const ang = Math.random() * Math.PI * 2, sp = 20 + Math.random() * 40;
+        particles.push({ x: sc * S + 10, y: sr * S + 10, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 25,
+          col: [pal.fill, pal.shade, pal.line, "#ffe066"][i % 4], born: now, life: 350 + Math.random() * 250 });
+      }
+    }
+    if (a.gained) flash = { r: a.m.tr, c: a.m.tc, start: now, dur: 450 };
+  }
+
+  function render() { if (!rafId) rafId = requestAnimationFrame(frame); }
+  let lastFrame = 0;
+  function frame(now) {
+    rafId = 0;
+    const dt = Math.min(0.05, (now - (lastFrame || now)) / 1000); lastFrame = now;
+    draw(now, dt);
+    if (anim || particles.length || flash || (selected && !REDUCED)) rafId = requestAnimationFrame(frame);
+    else lastFrame = 0;
+  }
+
+  function draw(now, dt) {
+    ctx.imageSmoothingEnabled = false;
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
       ctx.fillStyle = (r + c) % 2 ? SQ_DARK : SQ_LIGHT;
       ctx.fillRect(c * S, r * S, S, S);
@@ -614,30 +735,76 @@
     }
     const k = findKing(board, turn);
     if (k && !gameOver && inCheck(board, turn)) fillSq(k[0], k[1], "#e0303a");
+
+    // Selected square: pulsing glow and a marching double border.
+    const pulse = REDUCED ? 1 : (Math.sin(now / 140) + 1) / 2;
     if (selected) {
       const [sr, sc] = toScreen(selected[0], selected[1]);
+      const x = sc * S, y = sr * S;
+      ctx.fillStyle = `rgba(63,208,160,${0.25 + 0.3 * pulse})`; ctx.fillRect(x, y, S, S);
       ctx.fillStyle = "#3fd0a0";
-      ctx.fillRect(sc * S, sr * S, S, 1); ctx.fillRect(sc * S, sr * S + S - 1, S, 1);
-      ctx.fillRect(sc * S, sr * S, 1, S); ctx.fillRect(sc * S + S - 1, sr * S, 1, S);
+      ctx.fillRect(x, y, S, 2); ctx.fillRect(x, y + S - 2, S, 2); ctx.fillRect(x, y, 2, S); ctx.fillRect(x + S - 2, y, 2, S);
+      ctx.fillStyle = "#ffffff";
+      const L = 5;
+      for (const [cx, cy, dx, dy] of [[x, y, 1, 1], [x + S - 1, y, -1, 1], [x, y + S - 1, 1, -1], [x + S - 1, y + S - 1, -1, -1]]) {
+        ctx.fillRect(Math.min(cx, cx + dx * (L - 1)), cy, L, 1); ctx.fillRect(cx, Math.min(cy, cy + dy * (L - 1)), 1, L);
+      }
     }
+
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
       const p = board[r][c]; if (!p) continue;
+      if (anim && r === anim.m.tr && c === anim.m.tc) continue; // drawn in flight below
       const [sr, sc] = toScreen(r, c);
-      drawSprite(p.type, p.color, sc * S + 2, sr * S + 1);
-      const extra = p.powers.filter(x => x !== p.type);
-      if (extra.length) { ctx.fillStyle = "#000"; ctx.fillRect(sc * S, sr * S + 13, extra.length * 3 + 1, 3); }
-      extra.forEach((pw, i) => { ctx.fillStyle = POWER_COLOR[pw]; ctx.fillRect(sc * S + 1 + i * 3, sr * S + 14, 2, 2); });
+      let x = sc * S, y = sr * S;
+      if (selected && selected[0] === r && selected[1] === c && !REDUCED) {
+        const hop = Math.round(Math.abs(Math.sin(now / 160)) * 4);
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.fillRect(x + 6 + Math.floor(hop / 2), y + 17, 8 - hop, 2);
+        y -= hop;
+      }
+      ctx.drawImage(spriteFor(p), x, y);
+      if (flash && flash.r === r && flash.c === c) {
+        const t = (now - flash.start) / flash.dur;
+        if (t >= 1) flash = null;
+        else { ctx.globalAlpha = (1 - t) * 0.9; ctx.drawImage(spriteFor(p, true), x, y); ctx.globalAlpha = 1; }
+      }
     }
+
     for (const m of legal) {
       const [sr, sc] = toScreen(m.tr, m.tc);
       const x = sc * S, y = sr * S;
       if (board[m.tr][m.tc]) {
         ctx.fillStyle = "#3fd0a0";
-        for (const [dx, dy] of [[0,0],[S-3,0],[0,S-3],[S-3,S-3]]) ctx.fillRect(x + dx, y + dy, 3, 3);
+        const o = Math.round(pulse);
+        for (const [dx, dy] of [[0,0],[S-4,0],[0,S-4],[S-4,S-4]]) ctx.fillRect(x + dx + (dx ? -o : o), y + dy + (dy ? -o : o), 4, 4);
       } else {
-        ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(x + 6, y + 6, 4, 4);
-        ctx.fillStyle = "#3fd0a0"; ctx.fillRect(x + 7, y + 7, 2, 2);
+        const sz = 4 + Math.round(pulse) * 2, off = (S - sz) / 2;
+        ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(x + off, y + off, sz, sz);
+        ctx.fillStyle = "#3fd0a0"; ctx.fillRect(x + off + 1, y + off + 1, sz - 2, sz - 2);
       }
+    }
+
+    if (anim) {
+      const a = anim, t = Math.min(1, (now - a.start) / a.dur);
+      const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      const [fr, fc] = toScreen(a.m.fr, a.m.fc), [tr, tc] = toScreen(a.m.tr, a.m.tc);
+      if (a.victim) {
+        const shake = t > 0.6 ? Math.round((Math.random() - 0.5) * 2) : 0;
+        ctx.drawImage(spriteFor(a.victim), tc * S + shake, tr * S);
+      }
+      const x = Math.round(fc * S + (tc - fc) * S * e);
+      const y = Math.round(fr * S + (tr - fr) * S * e - Math.sin(Math.PI * t) * 6);
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.fillRect(Math.round(fc * S + (tc - fc) * S * e) + 5, Math.round(fr * S + (tr - fr) * S * e) + 17, 10, 2);
+      ctx.drawImage(spriteFor(a.mover), x, y);
+      if (t >= 1) finishAnim(now);
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const q = particles[i];
+      q.vy += 160 * dt; q.x += q.vx * dt; q.y += q.vy * dt;
+      if (now - q.born > q.life) { particles.splice(i, 1); continue; }
+      ctx.fillStyle = q.col; ctx.fillRect(Math.round(q.x), Math.round(q.y), 2, 2);
     }
   }
 
@@ -727,8 +894,19 @@
     }
   }
 
-  $("legend").innerHTML = Object.keys(NAMES).map(k =>
-    `<div class="sw" style="background:${POWER_COLOR[k]}"></div><div>${NAMES[k]} power</div>`).join("");
+  (function buildLegend() {
+    const box = $("legend"); box.replaceChildren();
+    for (const t of ["N", "R", "B", "Q", "K", "P"]) {
+      const base = t === "P" ? "R" : "P";
+      const c = document.createElement("canvas"); c.width = S; c.height = S; c.className = "mini";
+      const g = c.getContext("2d");
+      g.fillStyle = SQ_LIGHT; g.fillRect(0, 0, S, S);
+      g.drawImage(spriteFor({ color: "w", type: base, powers: [base, t], moved: false }), 0, 0);
+      const label = document.createElement("div");
+      label.textContent = `Ate a ${NAMES[t].toLowerCase()}: grows a ${MELDS[t].label}`;
+      box.append(c, label);
+    }
+  })();
 
   function canAct() {
     if (gameOver) return false;
