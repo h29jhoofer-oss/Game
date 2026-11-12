@@ -12,6 +12,7 @@ Open `index.html` in a browser, or host the folder on GitHub Pages. No build ste
 - The **XXL board** switch plays on 16 x 16: two sets side by side with one king each (the spare king is a queen), a second row of rooks, knights and bishops, and a row of pawns.
 - **Kings' feast:** when a game would stall into a draw (only kings left, or a player stuck but not in check), any king that has eaten pieces shakes and spits them back out as its own pieces.
 - **Sound:** all effects and the background music are synthesised in the browser (no audio files). An original chiptune loop plays, with a slower, darker version and wind in fog games. The SOUND panel has music and effects switches and a volume slider; press M to mute.
+- **Mystery boxes** switch: every few moves a crate falls. Balloon crates drift down over 3 moves (a shadow shows where); plain crates crash down at once and crush whatever is there (never a king). Finish a move on a crate to open it: teleport, extra turn, change into another piece, or become a secret jester (only its owner sees the hat; whoever eats it dies, even a king).
 - Pawns that reach the far side let you pick a queen, rook, bishop or knight, and melt into their new shape.
 - Click a piece, then a highlighted square to move. Pieces that eat grow the features of their victims.
 - Online: **CREATE ONLINE GAME** gives you a link. Anyone who opens it can play you as Black, no account needed. Later visitors watch. Keep your page open while you play: your browser hosts the game. A friend's code can also be typed into **JOIN**.

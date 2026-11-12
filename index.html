@@ -72,6 +72,13 @@
   }
   @keyframes titlePulse { 50% { transform: scale(1.12); } }
   @media (prefers-reduced-motion: reduce) { .endBanner.show, .endBanner.lose.show, .endBanner.win.show #endTitle { animation: none; } }
+  .toast { position: absolute; left: 50%; top: 9%; transform: translateX(-50%); z-index: 3; pointer-events: none;
+    background: var(--panel); border: 3px solid var(--edge); box-shadow: 4px 4px 0 var(--edge); padding: 8px 12px;
+    color: #ffe066; font-size: 11px; text-align: center; white-space: nowrap; }
+  .toast.show { animation: toastPop 1.9s steps(12) both; }
+  @keyframes toastPop { 0% { transform: translate(-50%, -30px) scale(.6); opacity: 0; } 12% { transform: translate(-50%, 0) scale(1.1); opacity: 1; }
+    20% { transform: translate(-50%, 0) scale(1); } 85% { opacity: 1; } 100% { transform: translate(-50%, -10px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .toast.show { animation: none; } }
   .overlay { position: absolute; inset: 4px; display: flex; align-items: center; justify-content: center; padding: 16px; }
   .promoRow { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   .promoRow button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; font-size: 8px; }
@@ -178,6 +185,7 @@
         <button id="promoCancel">CANCEL</button>
       </div>
     </div>
+    <div id="toast" class="toast" hidden role="status"></div>
     <div id="endBanner" class="endBanner" hidden role="status">
       <div id="endTitle"></div>
       <div id="endSub" class="muted"></div>
@@ -229,6 +237,11 @@
         <div class="label">XXL BOARD</div>
         <button id="xxlToggle" class="toggle" role="switch" aria-checked="false"><span class="track"><span class="knob"></span></span><span id="xxlLabel">OFF</span></button>
         <div class="muted" id="xxlHint"></div>
+      </div>
+      <div class="field">
+        <div class="label">MYSTERY BOXES</div>
+        <button id="boxToggle" class="toggle" role="switch" aria-checked="false"><span class="track"><span class="knob"></span></span><span id="boxLabel">OFF</span></button>
+        <div class="muted" id="boxHint"></div>
       </div>
       <div class="field" id="kingField">
         <div class="label">KING CAN BE CAPTURED</div>
@@ -302,6 +315,7 @@
       <p>Pawn eats knight? It can now hop like a knight. Eaten pieces fuse onto the eater in their own colors:</p>
       <div class="legend" id="legend"></div>
       <p id="fogNote" hidden><b>Fog of war is ON:</b> smoke hides every square your team hasn't stood on or passed through, for you and your opponent alike. A piece that runs into a hidden enemy stops and captures it. Haze swirling at a piece's feet means the other side can't see it. <span id="kingNote"></span></p>
+      <p id="boxNote" hidden><b>Mystery boxes:</b> every few moves a crate falls. Balloon crates drift down over 3 moves (watch the shadow); plain crates crash down at once and crush whatever is there, except kings. Finish a move on a crate to open it: <b>teleport</b> to a random square, take an <b>extra turn</b>, <b>change</b> into a different piece, or become a secret <b>jester</b> (only you see its hat; whoever eats it dies).</p>
       <p id="devourNote" hidden><b>Devour is OFF</b> for this game: captures work like normal chess.</p>
     </div>
     <div class="box" id="log"></div>
@@ -406,9 +420,12 @@
     return [...out.values()];
   }
 
-  function applyMove(b, m) {
+  // noJester: used when checking whether a move is legal, so a hidden jester
+  // never shows up as a refused move.
+  function applyMove(b, m, noJester) {
     const nb = clone(b);
     const mover = nb[m.fr][m.fc], victim = nb[m.tr][m.tc];
+    if (victim && victim.jester && !noJester) { nb[m.fr][m.fc] = null; nb[m.tr][m.tc] = null; return nb; } // the eater dies too
     if (victim && devour) for (const pw of victim.powers) if (!mover.powers.includes(pw)) mover.powers.push(pw);
     // Keep a record of every piece swallowed (and what those had swallowed) for the kings' feast.
     if (victim) mover.ate = [...(mover.ate || []), ...(victim.type === "K" ? [] : [victim.type]), ...(victim.ate || [])].slice(0, 60);
@@ -442,7 +459,7 @@
   }
   function legalMovesFrom(b, r, c) {
     const p = b[r][c];
-    return pseudoMoves(b, r, c).filter(m => !inCheck(applyMove(b, m), p.color));
+    return pseudoMoves(b, r, c).filter(m => !(b[m.tr][m.tc] && b[m.tr][m.tc].type === "K") && !inCheck(applyMove(b, m, true), p.color));
   }
   function allLegal(b, color) {
     const out = [];
@@ -507,7 +524,7 @@
   function fogLegalFrom(b, sn, color, r, c, kc) {
     const planned = pseudoMoves(viewBoard(b, color, sn), r, c);
     if (kc) return planned;
-    return planned.filter(m => { const rm = resolveMove(b, m, true); return rm && !inCheck(applyMove(b, rm), color); });
+    return planned.filter(m => { const rm = resolveMove(b, m, true); return rm && !(b[rm.tr][rm.tc] && b[rm.tr][rm.tc].type === "K") && !inCheck(applyMove(b, rm, true), color); });
   }
   function fogAllLegal(b, sn, color, kc) {
     const out = [];
@@ -555,8 +572,9 @@
     return { board: nb, spews };
   }
   function outcome(nb, nsn, next, fogOn, kc, moverColor) {
+    if (!findKing(nb, moverColor)) return { over: true, stall: false, result: `${colorName(moverColor)}'s king ate a jester and died! ${colorName(other(moverColor))} wins.` };
     if (fogOn && kc) {
-      if (!findKing(nb, next)) return { over: true, stall: false, result: `${colorName(moverColor)} captured the king! ${colorName(moverColor)} wins.` };
+      if (!findKing(nb, other(moverColor))) return { over: true, stall: false, result: `${colorName(moverColor)} captured the king! ${colorName(moverColor)} wins.` };
       if (!pseudoAll(nb, next).length) return { over: true, stall: true, result: "No moves left. It's a draw." };
       return { over: false };
     }
@@ -564,14 +582,92 @@
     if (!moves.length) return { over: true, stall: !inCheck(nb, next), result: endText(nb, next) };
     return { over: false };
   }
+  // ----- Mystery boxes -----
+  // bx = { on, list, nextAt, seed, ply }. Everything random comes from a seed
+  // plus the move number, so the host and guest compute the same crates.
+  const BOX_EFFECTS = { teleport: "TELEPORT!", extra: "EXTRA TURN!", change: "CHANGED PIECE!", jester: "JESTER!" };
+  function freshBoxes(on, seed) { return on ? { on: true, list: [], nextAt: 3 + (seed % 3), seed, ply: 0 } : null; }
+  function shuffle(a, rand) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function runBoxes(b, sn, rm, color, bx, protectKings, fogOn, moverDied) {
+    const rand = rng((bx.seed | 0) + bx.ply * 7919 + 13);
+    const list = bx.list.map(x => ({ ...x })), ply = bx.ply + 1;
+    const fx = { opened: null, landed: [], spawned: null, crushed: null };
+    let extraTurn = false;
+    const hasBox = (r, c) => list.some(x => x.r === r && x.c === c);
+    // 1. Open a crate the piece finished its move on.
+    const bi = moverDied ? -1 : list.findIndex(x => x.landed && x.r === rm.tr && x.c === rm.tc);
+    if (bi >= 0) {
+      list.splice(bi, 1);
+      const p = b[rm.tr][rm.tc];
+      const options = ["teleport", "extra", "change", "jester"].filter(o => !(o === "change" && p.type === "K"));
+      const effect = options[Math.floor(rand() * options.length)];
+      fx.opened = { r: rm.tr, c: rm.tc, effect, color };
+      if (effect === "teleport") {
+        const spots = [];
+        for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++)
+          if (!b[r][c] && !hasBox(r, c) && !(p.type === "P" && (r === 0 || r === BN - 1))) spots.push([r, c]);
+        for (const [r, c] of shuffle(spots, rand)) {
+          const tb = clone(b); tb[r][c] = tb[rm.tr][rm.tc]; tb[rm.tr][rm.tc] = null;
+          if (protectKings && inCheck(tb, color)) continue;
+          b = tb; fx.opened.to = [r, c];
+          if (fogOn) sn = markSeen(sn, color, [[r, c]]);
+          break;
+        }
+      } else if (effect === "extra") extraTurn = true;
+      else if (effect === "change") {
+        const types = ["Q", "R", "B", "N", "P"].filter(t => t !== p.type && !(t === "P" && (rm.tr === 0 || rm.tr === BN - 1)));
+        const to = types[Math.floor(rand() * types.length)];
+        b = clone(b);
+        const q = b[rm.tr][rm.tc];
+        fx.opened.from = { color: q.color, type: q.type, powers: [...q.powers] };
+        q.type = to; q.powers = [to, ...q.powers.slice(1).filter(x => x !== to)];
+        fx.opened.to2 = { color: q.color, type: q.type, powers: [...q.powers] };
+      } else { b = clone(b); b[rm.tr][rm.tc].jester = true; }
+    }
+    // 2. Balloon crates touch down (or keep hovering while the square is busy).
+    for (const x of list) if (!x.landed && x.landsAt <= ply) {
+      if (!b[x.r][x.c]) { x.landed = true; fx.landed.push({ r: x.r, c: x.c }); } else x.landsAt = ply + 1;
+    }
+    // 3. Maybe drop a new crate.
+    let nextAt = bx.nextAt;
+    if (ply >= nextAt) {
+      if (list.length < 3) {
+        const crash = rand() < 0.5, cand = [];
+        for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++) {
+          if (hasBox(r, c)) continue;
+          const p = b[r][c];
+          if (crash ? (!p || p.type !== "K") : !p) cand.push([r, c]);
+        }
+        for (const [r, c] of shuffle(cand, rand)) {
+          if (crash && b[r][c]) {
+            const tb = clone(b); tb[r][c] = null;
+            if (protectKings && inCheck(tb, color)) continue; // never expose the mover's king
+            fx.crushed = { r, c, piece: b[r][c] }; b = tb;
+          }
+          list.push(crash ? { r, c, landed: true, kind: "crash" } : { r, c, landed: false, landsAt: ply + 3, kind: "balloon" });
+          fx.spawned = { r, c, kind: crash ? "crash" : "balloon" };
+          break;
+        }
+      }
+      nextAt = ply + 5 + Math.floor(rand() * 4);
+    }
+    return { board: b, seen: sn, fx, extraTurn, bx: { ...bx, list, nextAt, ply } };
+  }
+
   // Plays a move under the game's rules and reports the result.
-  function playMove(b, sn, m, fogOn, kc) {
+  function playMove(b, sn, m, fogOn, kc, bx) {
     const rm = fogOn ? (resolveMove(b, m, !kc) || m) : m;
     const mover = b[rm.fr][rm.fc];
     const info = describeMove(b, rm);
     let nb = applyMove(b, rm);
-    const next = other(mover.color);
     let nsn = fogOn ? markSeen(sn, mover.color, pathSquares(rm)) : sn;
+    const jesterKill = !!(b[rm.tr][rm.tc] && b[rm.tr][rm.tc].jester);
+    let boxFx = null, extraTurn = false, bxOut = bx || null;
+    if (bx && bx.on) {
+      const r = runBoxes(nb, nsn, rm, mover.color, bx, !(fogOn && kc), fogOn, jesterKill);
+      nb = r.board; nsn = r.seen; boxFx = r.fx; extraTurn = r.extraTurn; bxOut = r.bx;
+    }
+    const next = extraTurn ? mover.color : other(mover.color);
     let oc = outcome(nb, nsn, next, fogOn, kc, mover.color);
     let feast = null;
     const kingsOnly = onlyKings(nb);
@@ -583,12 +679,20 @@
       if (!oc.over && onlyKings(nb)) oc = { over: true, result: "Only the kings are left. It's a draw." };
     } else if (kingsOnly && !oc.over) oc = { over: true, result: "Only the kings are left. It's a draw." };
     const logs = [info.line];
+    if (jesterKill) logs.unshift(`JESTER! ${colorName(mover.color)}'s ${NAMES[mover.type]} ate a jester and died.`);
+    if (boxFx) {
+      if (boxFx.opened) logs.unshift(`${colorName(mover.color)} opened a mystery box!`);
+      if (boxFx.spawned) logs.unshift(boxFx.spawned.kind === "crash"
+        ? `A crate crashed down on ${sqName(boxFx.spawned.r, boxFx.spawned.c)}` + (boxFx.crushed ? `, crushing ${colorName(boxFx.crushed.piece.color)}'s ${NAMES[boxFx.crushed.piece.type]}!` : "!")
+        : `A balloon crate is drifting down toward ${sqName(boxFx.spawned.r, boxFx.spawned.c)}.`);
+    }
     if (feast && feast.spews.length) {
       const parts = ["w", "b"].map(c => [c, feast.spews.filter(x => x.color === c).length]).filter(x => x[1])
         .map(([c, n]) => `${colorName(c)}'s king spits out ${n} piece${n > 1 ? "s" : ""}`);
       logs.unshift(`KINGS' FEAST! ${parts.join(", ")}.`);
     }
-    return { m: rm, board: nb, seen: nsn, info, logs, feast: feast ? feast.spews : null, over: !!oc.over, result: oc.result || "" };
+    return { m: rm, board: nb, seen: nsn, info, logs, feast: feast ? feast.spews : null, over: !!oc.over, result: oc.result || "",
+      nextTurn: next, bx: bxOut, boxFx, jesterKill };
   }
   const colorName = (c) => c === "w" ? "White" : "Black";
 
@@ -675,9 +779,10 @@
   let board, turn, lastMove, logLines, gameOver = false, resultText = "";
   let history = [], selected = null, legal = [], cpuOn = true, thinking = false;
   // Choices in the NEW GAME panel; they take effect when a game starts.
-  const settings = { opp: "bot", level: 2, devour: true, fog: false, kingCap: false, xxl: false, music: true, sfx: true, volume: 70, muted: false };
+  const settings = { opp: "bot", level: 2, devour: true, fog: false, kingCap: false, xxl: false, boxes: false, music: true, sfx: true, volume: 70, muted: false };
   try { Object.assign(settings, JSON.parse(localStorage.getItem("dc-settings")) || {}); } catch (_) {}
   let botLevel = settings.level;
+  let bxState = null; // mystery boxes for the game on the board
 
   const FILES = "abcdefghijklmnop";
   const sqName = (r, c) => FILES[c] + (BN - r);
@@ -710,25 +815,27 @@
     morph = null; closePromo();
     anim = null; flash = null; feastFx = null; curtain = false; clearEnd();
     board = startBoard(); seen = initSeen(board); turn = "w"; history = []; selected = null; legal = [];
+    bxState = freshBoxes(settings.boxes, Math.floor(Math.random() * 1e9)); boxFxState = null; openFx = null; crashFx = null;
     lastMove = null; gameOver = false; resultText = ""; logLines = [];
     render(); updateUI();
   }
   function localMove(m) {
-    history.push({ board: clone(board), turn, lastMove, logLines: [...logLines], seen });
+    history.push({ board: clone(board), turn, lastMove, logLines: [...logLines], seen, bxState });
     const humanMove = !(cpuOn && turn === "b");
-    const res = playMove(board, seen, m, fog, kingCap);
-    startMoveAnim(board, res.m, res.board, res.feast);
-    board = res.board; seen = res.seen;
+    const res = playMove(board, seen, m, fog, kingCap, bxState);
+    startMoveAnim(board, res.m, res.board, res.feast, res.boxFx, res.jesterKill);
+    board = res.board; seen = res.seen; bxState = res.bx;
     moveSound(res.info);
     logLines.unshift(...res.logs);
-    lastMove = res.m; turn = other(turn); selected = null; legal = [];
+    const moverColor = turn;
+    lastMove = res.m; turn = res.nextTurn; selected = null; legal = [];
     if (res.over) { gameOver = true; resultText = res.result; triggerEnd(anim ? anim.dur + 150 : 150); }
     if (res.m.ambush && humanMove) { note("Ambush! Your piece ran into something hidden in the smoke and ate it."); sfxSafe(SFX.ambush); }
     if (res.m.bumped && humanMove) { note("Your piece bumped into the enemy king hiding in the smoke and stopped."); sfxSafe(SFX.bump); }
-    if (fog && !cpuOn && !gameOver) { curtain = true; sfxSafe(SFX.whoosh); }
+    if (fog && !cpuOn && !gameOver && turn !== moverColor) { curtain = true; sfxSafe(SFX.whoosh); }
     render(); updateUI();
     if (!curtain && showCheck()) setTimeout(() => sfxSafe(SFX.check), 250);
-    if (!gameOver && cpuOn && turn === "b") scheduleCpu(res.feast && !REDUCED ? 2000 : 0);
+    if (!gameOver && cpuOn && turn === "b") scheduleCpu((res.feast && !REDUCED ? 2000 : 0) + (res.boxFx && (res.boxFx.opened || res.boxFx.spawned) && !REDUCED ? 900 : 0));
   }
   function scheduleCpu(extraDelay = 0) {
     thinking = true; updateUI(); render();
@@ -739,7 +846,10 @@
       if (mode !== "local" || board !== started) { thinking = false; updateUI(); return; }
       const t0 = performance.now();
       // In the fog the bot plans from what its own pieces have uncovered, like you.
-      const m = fog ? botMove(viewBoard(board, "b", seen), "b", botLevel, fogAllLegal(board, seen, "b", kingCap)) : botMove(board, "b", botLevel);
+      // The bot knows about its own jesters, not yours.
+      const noFoeJesters = (bd) => bd.map(row => row.map(p => p && p.jester && p.color !== "b" ? { ...p, jester: false } : p));
+      const m = fog ? botMove(noFoeJesters(viewBoard(board, "b", seen)), "b", botLevel, fogAllLegal(board, seen, "b", kingCap))
+        : botMove(noFoeJesters(board), "b", botLevel, allLegal(board, "b"));
       const ponder = 700 + Math.random() * 500 + botLevel * 100;
       setTimeout(() => {
         if (mode !== "local" || board !== started) { thinking = false; updateUI(); return; }
@@ -767,10 +877,11 @@
     if (online.seat === "guest") return other(d.hostColor);
     return null;
   };
-  function freshState(hostColor = "w", dv = true, fg = false, kc = false, n = 8) {
+  function freshState(hostColor = "w", dv = true, fg = false, kc = false, n = 8, bxOn = false) {
     setBoardSize(n);
     const b = startBoard();
-    return { v: 1, n, board: flatten(b), turn: "w", lastMove: null, log: [], status: "waiting", result: "", ply: 0, hostColor, devour: dv, fog: fg, kingCap: fg && kc, seen: initSeen(b) };
+    return { v: 1, n, board: flatten(b), turn: "w", lastMove: null, log: [], status: "waiting", result: "", ply: 0, hostColor, devour: dv, fog: fg, kingCap: fg && kc, seen: initSeen(b),
+      boxes: freshBoxes(bxOn, Math.floor(Math.random() * 1e9)) };
   }
   function newCode() {
     const abc = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -793,7 +904,9 @@
     online.data = st;
     if ((st.n || 8) !== BN) { setBoardSize(st.n || 8); board = unflatten(st.board); }
     devour = st.devour !== false; fog = !!st.fog; kingCap = !!st.kingCap;
-    if (prev && st.ply === prev.ply + 1 && st.lastMove) startMoveAnim(board, st.lastMove, unflatten(st.board), st.lastMove.feast);
+    if (prev && st.ply === prev.ply + 1 && st.lastMove) startMoveAnim(board, st.lastMove, unflatten(st.board), st.lastMove.feast, st.lastMove.box, st.lastMove.jk);
+    else if (!prev || st.ply !== prev.ply) { openFx = null; crashFx = null; }
+    bxState = st.boxes || null;
     seen = st.seen || initSeen(unflatten(st.board));
     board = unflatten(st.board);
     turn = st.turn; lastMove = st.lastMove || null; logLines = [...(st.log || [])];
@@ -806,11 +919,11 @@
   }
   function makeMoveState(st, m) {
     const b = unflatten(st.board);
-    const res = playMove(b, st.seen || initSeen(b), m, !!st.fog, !!st.kingCap);
+    const res = playMove(b, st.seen || initSeen(b), m, !!st.fog, !!st.kingCap, st.boxes ? { ...st.boxes, ply: st.ply } : null);
     const rm = res.m;
     return { info: res.info, ambush: !!rm.ambush, state: {
-      ...st, board: flatten(res.board), turn: other(st.turn), seen: res.seen,
-      lastMove: { fr: rm.fr, fc: rm.fc, tr: rm.tr, tc: rm.tc, captured: res.info.captured, feast: res.feast },
+      ...st, board: flatten(res.board), turn: res.nextTurn, seen: res.seen, boxes: res.bx,
+      lastMove: { fr: rm.fr, fc: rm.fc, tr: rm.tr, tc: rm.tc, captured: res.info.captured, feast: res.feast, box: res.boxFx, jk: res.jesterKill },
       log: [...res.logs, ...(st.log || [])].slice(0, 80),
       status: res.over ? "over" : "playing", result: res.result, ply: st.ply + 1,
     } };
@@ -827,7 +940,7 @@
     mode = "online"; online.code = code; online.seat = "host";
     const saved = !fresh && store.get("dc-host-" + code);
     setHash(code);
-    applyState(saved && saved.v === 1 ? saved : freshState("w", settings.devour, settings.fog, settings.kingCap, settings.xxl ? 16 : 8));
+    applyState(saved && saved.v === 1 ? saved : freshState("w", settings.devour, settings.fog, settings.kingCap, settings.xxl ? 16 : 8, settings.boxes));
     store.set("dc-host-" + code, online.data);
     startHostPeer();
   }
@@ -894,7 +1007,7 @@
     } else if (msg.type === "resign" && st.status === "playing") {
       hostCommit({ ...st, status: "over", result: `${colorName(gc)} resigned. ${colorName(st.hostColor)} wins.` });
     } else if (msg.type === "rematch" && st.status === "over") {
-      hostCommit({ ...freshState(other(st.hostColor), st.devour !== false, !!st.fog, !!st.kingCap, st.n || 8), status: "playing" });
+      hostCommit({ ...freshState(other(st.hostColor), st.devour !== false, !!st.fog, !!st.kingCap, st.n || 8, !!st.boxes), status: "playing" });
     }
   }
 
@@ -1044,7 +1157,7 @@
   }
   function rematch() {
     const st = online.data; if (!st || !myColor() || st.status !== "over") return;
-    if (online.seat === "host") hostCommit({ ...freshState(other(st.hostColor), st.devour !== false, !!st.fog, !!st.kingCap, st.n || 8), status: online.connected ? "playing" : "waiting" });
+    if (online.seat === "host") hostCommit({ ...freshState(other(st.hostColor), st.devour !== false, !!st.fog, !!st.kingCap, st.n || 8, !!st.boxes), status: online.connected ? "playing" : "waiting" });
     else sendToHost({ type: "rematch" });
   }
   function leaveGame(toLocal = true) {
@@ -1403,6 +1516,89 @@
     ctx.drawImage(smokeCv, 0, 0);
   }
 
+  // ----- Mystery crates -----
+  const BALLOON_COLS = ["#ff5e7a", "#59c1ff", "#ffe066"];
+  const QMARK = ["## ", "  #", " # ", "   ", " # "];
+  function drawCrate(x, y, now) {
+    const X = x + 3, Y = y + 6;
+    ctx.fillStyle = "#2b1a0e"; ctx.fillRect(X, Y, 14, 13);
+    ctx.fillStyle = "#b57a3c"; ctx.fillRect(X + 1, Y + 1, 12, 11);
+    ctx.fillStyle = "#d39a5a"; ctx.fillRect(X + 1, Y + 1, 12, 2);
+    ctx.fillStyle = "#8a5626"; ctx.fillRect(X + 1, Y + 6, 12, 1); ctx.fillRect(X + 1, Y + 11, 12, 1); ctx.fillRect(X + 1, Y + 3, 1, 9); ctx.fillRect(X + 12, Y + 3, 1, 9);
+    ctx.fillStyle = "#ffe066";
+    QMARK.forEach((row, i) => { for (let j = 0; j < 3; j++) if (row[j] === "#") ctx.fillRect(X + 6 + j - 1, Y + 4 + i, 1, 1); });
+    const g = Math.floor(now / 90) % 40; // a glint sweeps across now and then
+    if (g < 12) { ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fillRect(X + 1 + g, Y + 1, 1, 1); if (g > 0) ctx.fillRect(X + g, Y + 2, 1, 1); }
+  }
+  function drawBalloons(x, y, now, t) {
+    const sway = Math.round(Math.sin(now / 400 + t) * 1.5);
+    const tops = [[x + 4 + sway, y - 7], [x + 10 + sway, y - 11], [x + 16 + sway, y - 7]];
+    ctx.fillStyle = "#e8e2d0";
+    for (const [bx, by] of tops) { const steps = Math.max(1, (y + 6) - (by + 6)); for (let i = 0; i < steps; i++) ctx.fillRect(Math.round(bx + 1 + ((x + 10) - (bx + 1)) * i / steps), by + 6 + i, 1, 1); }
+    tops.forEach(([bx, by], i) => {
+      ctx.fillStyle = "#1a1626"; ctx.fillRect(bx - 1, by, 5, 6); ctx.fillRect(bx, by - 1, 3, 8);
+      ctx.fillStyle = BALLOON_COLS[i]; ctx.fillRect(bx, by, 3, 6); ctx.fillRect(bx - 1 + 1, by + 1, 3, 4);
+      ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fillRect(bx, by + 1, 1, 1);
+    });
+  }
+  function drawGroundCrates(now) {
+    for (const x of bxState.list) {
+      const [sr, sc] = toScreen(x.r, x.c);
+      if (!x.landed) { // shadow of a crate on its way down
+        const left = Math.max(0, x.landsAt - bxState.ply), w = 14 - left * 3;
+        ctx.fillStyle = `rgba(0,0,0,${0.18 + (3 - left) * 0.08})`; ctx.fillRect(sc * S + 10 - w / 2, sr * S + 16, w, 3);
+        continue;
+      }
+      if (crashFx && !crashFx.hit && crashFx.r === x.r && crashFx.c === x.c) continue;
+      drawCrate(sc * S, sr * S, now);
+    }
+  }
+  function drawSkyCrates(now, dt) {
+    if (bxState) for (const x of bxState.list) {
+      if (x.landed) continue;
+      const [sr, sc] = toScreen(x.r, x.c);
+      const left = Math.max(0.3, x.landsAt - bxState.ply);
+      let y = sr * S - left * S * 0.75 + Math.round(Math.sin(now / 500 + x.r) * 1.5);
+      y = Math.max(-F + 12, y);
+      drawBalloons(sc * S, y, now, x.c);
+      drawCrate(sc * S, y, now);
+    }
+    if (crashFx) {
+      const t = now - crashFx.start, [sr, sc] = toScreen(crashFx.r, crashFx.c), FALL = 280;
+      if (t < FALL) {
+        const y = Math.round(-F - 20 + (sr * S + F + 20) * Math.pow(t / FALL, 2));
+        ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(sc * S + 5, y - 10, 1, 8); ctx.fillRect(sc * S + 14, y - 14, 1, 10);
+        drawCrate(sc * S, y, now);
+      } else if (!crashFx.hit) {
+        crashFx.hit = true; crashFx.hitAt = now; sfxSafe(SFX.crash);
+        for (let i = 0; i < 18; i++) { const a = Math.PI + Math.random() * Math.PI, v = 25 + Math.random() * 40;
+          particles.push({ x: sc * S + 10, y: sr * S + 18, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.5, col: i % 2 ? "#c9b48a" : "#8a7a5a", born: now, life: 500 }); }
+        if (crashFx.crushed) { const pal = PAL[crashFx.crushed.piece.color];
+          for (let i = 0; i < 12; i++) { const a = Math.random() * 6.28; particles.push({ x: sc * S + 10, y: sr * S + 14, vx: Math.cos(a) * 45, vy: Math.sin(a) * 30 - 25, col: [pal.fill, pal.shade, pal.line][i % 3], born: now, life: 600 }); } }
+      } else if (t > FALL + 400) crashFx = null;
+    }
+    for (let i = balloonsAway.length - 1; i >= 0; i--) {
+      const b = balloonsAway[i], t = (now - b.start) / 1000;
+      if (t > 1.6) { balloonsAway.splice(i, 1); continue; }
+      const x = Math.round(b.x + Math.sin(t * 4 + i) * 3), y = Math.round(b.y - t * 45);
+      ctx.globalAlpha = Math.max(0, 1 - t / 1.6);
+      ctx.fillStyle = "#1a1626"; ctx.fillRect(x - 1, y, 5, 6); ctx.fillStyle = b.col; ctx.fillRect(x, y, 3, 6);
+      ctx.fillStyle = "#e8e2d0"; ctx.fillRect(x + 1, y + 6, 1, 3);
+      ctx.globalAlpha = 1;
+    }
+    if (openFx && now - openFx.start > 900) openFx = null;
+  }
+  // A two-pointed jester's cap with bells, only drawn for its owner.
+  const HAT = ["y          y", "pp        gg", " ppp    ggg ", "  ppppgggg  ", "  pppggggg  ", "  oooooooo  "];
+  function drawJesterHat(x, y, now) {
+    const bob = REDUCED ? 0 : Math.round(Math.sin(now / 300));
+    const col = { y: "#ffe066", p: "#c98bff", g: "#3fd0a0", o: "#ff7a59" };
+    HAT.forEach((row, i) => { for (let j = 0; j < row.length; j++) { const ch = row[j]; if (ch === " ") continue;
+      ctx.fillStyle = "#1a1626"; ctx.fillRect(x + 4 + j, y - 2 + i + bob + 1, 1, 1); } });
+    HAT.forEach((row, i) => { for (let j = 0; j < row.length; j++) { const ch = row[j]; if (ch === " ") continue;
+      ctx.fillStyle = col[ch]; ctx.fillRect(x + 4 + j, y - 2 + i + bob, 1, 1); } });
+  }
+
   // ----- Kings' feast: pieces arc out of each king to their new squares -----
   function drawFeast(now) {
     const fx = feastFx, t = (now - fx.start - FEAST_SHAKE) / FEAST_FLY;
@@ -1562,6 +1758,61 @@
 
   // ----- Animation state -----
   let anim = null, flash = null, morph = null, feastFx = null, pendingFeast = null, endFx = null, rafId = 0;
+  let pendingBox = null, openFx = null, crashFx = null, boxFxState = null;
+  const balloonsAway = [];
+  // Who may see jester hats and private box results on this screen.
+  function privViewer() { if (mode === "online") return myColor(); return cpuOn ? "w" : (curtain ? null : turn); }
+  function toast(text) {
+    const t = $("toast"); t.textContent = text; t.hidden = false; t.classList.remove("show"); void t.offsetWidth; t.classList.add("show");
+    clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.hidden = true; }, 1900);
+  }
+  // Plays the crate part of a move once the piece has landed.
+  function flushBox() {
+    const pb = pendingBox; pendingBox = null;
+    if (!pb) return;
+    const now = performance.now(), fx = pb.fx;
+    if (pb.jk && !fogged(pb.m.tr, pb.m.tc)) {
+      const [sr, sc] = toScreen(pb.m.tr, pb.m.tc), pal = PAL[pb.mover ? pb.mover.color : "w"];
+      for (let i = 0; i < 20; i++) { const a = Math.random() * 6.28, v = 20 + Math.random() * 45;
+        particles.push({ x: sc * S + 10, y: sr * S + 10, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 30, col: ["#c98bff", "#3fd0a0", "#ffe066", pal.fill][i % 4], born: now, life: 600 }); }
+      toast("JESTER! THE EATER DIES"); sfxSafe(SFX.jesterKill);
+    }
+    if (!fx) return;
+    if (fx.opened) {
+      const o = fx.opened, mine = mode === "local" && !cpuOn ? true : o.color === privViewer(); // same screen: the opener is at the keyboard
+      openFx = { ...o, start: now };
+      if (!fogged(o.r, o.c)) {
+        const [sr, sc] = toScreen(o.r, o.c);
+        for (let i = 0; i < 16; i++) { const a = -Math.PI * Math.random(), v = 25 + Math.random() * 40;
+          particles.push({ x: sc * S + 10, y: sr * S + 8, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 20, col: i % 3 ? "#ffe066" : "#b57a3c", born: now, life: 550 }); }
+      }
+      sfxSafe(SFX.boxOpen);
+      if (o.effect === "teleport" && o.to) {
+        for (const [r, c] of [[o.r, o.c], o.to]) { if (fogged(r, c)) continue; const [sr, sc] = toScreen(r, c);
+          for (let i = 0; i < 14; i++) { const a = i / 14 * 6.28; particles.push({ x: sc * S + 10 + Math.cos(a) * 9, y: sr * S + 10 + Math.sin(a) * 9, vx: -Math.sin(a) * 40, vy: Math.cos(a) * 40 - 10, col: i % 2 ? "#c98bff" : "#59c1ff", born: now, life: 500 }); } }
+        setTimeout(() => sfxSafe(SFX.teleport), 150);
+      }
+      if (o.effect === "change" && o.from && !fogged(o.r, o.c)) {
+        morph = { r: o.r, c: o.c, ...makeMorph(o.from, o.to2), start: now, dur: 1100 }; setTimeout(() => sfxSafe(SFX.promote), 120);
+      }
+      if (o.effect === "extra") setTimeout(() => sfxSafe(SFX.extra), 150);
+      if (o.effect === "jester" && mine) setTimeout(() => sfxSafe(SFX.jester), 150);
+      // Everyone can see teleports, changes and extra turns; only the opener learns about a jester.
+      if (mine) toast("MYSTERY BOX: " + BOX_EFFECTS[o.effect]);
+      else toast(o.effect === "jester" ? "A MYSTERY BOX WAS OPENED" : "MYSTERY BOX: " + BOX_EFFECTS[o.effect]);
+    }
+    for (const l of fx.landed || []) {
+      if (fogged(l.r, l.c)) continue;
+      const [sr, sc] = toScreen(l.r, l.c);
+      for (let i = 0; i < 3; i++) balloonsAway.push({ x: sc * S + 4 + i * 6, y: sr * S - 10 - (i === 1 ? 3 : 0), col: BALLOON_COLS[i], start: now });
+      sfxSafe(SFX.pop);
+    }
+    if (fx.spawned) {
+      if (fx.spawned.kind === "crash") { crashFx = { r: fx.spawned.r, c: fx.spawned.c, crushed: fx.crushed, start: now, hit: false }; sfxSafe(SFX.whistle); }
+      else sfxSafe(SFX.balloon);
+    }
+    render();
+  }
   const END_LIVE = 6000; // how long the ending keeps animating
 
   // ----- End of game: who won, from whose point of view -----
@@ -1608,8 +1859,9 @@
     render();
   }
   const particles = [];
-  function startMoveAnim(prevBoard, m, nextBoard, feast) {
+  function startMoveAnim(prevBoard, m, nextBoard, feast, boxFx, jesterKill) {
     pendingFeast = feast && feast.length ? feast : null;
+    pendingBox = boxFx || jesterKill ? { fx: boxFx, jk: jesterKill, m, mover: prevBoard[m.fr] && prevBoard[m.fr][m.fc] } : null;
     feastFx = null;
     const mover = prevBoard[m.fr] && prevBoard[m.fr][m.fc];
     if (!mover) return;
@@ -1621,10 +1873,11 @@
       // Moved out of the smoke: nothing to watch, but a visible victim still bursts.
       if (victim && !fogged(m.tr, m.tc)) { anim = null; finishAnim(performance.now(), { victim, m, gained: false }); render(); }
       else if (pendingFeast) { startFeast(pendingFeast); pendingFeast = null; }
+      flushBox();
       return;
     }
     const gained = devour && !!victim && victim.powers.some(x => !mover.powers.includes(x));
-    if (REDUCED) { if (gained || promo) flash = { r: m.tr, c: m.tc, start: performance.now(), dur: 300 }; pendingFeast = null; render(); return; }
+    if (REDUCED) { if (gained || promo) flash = { r: m.tr, c: m.tc, start: performance.now(), dur: 300 }; pendingFeast = null; flushBox(); render(); return; }
     const dist = Math.hypot(m.tr - m.fr, m.tc - m.fc);
     anim = { mover, victim, gained, promo, m, start: performance.now(), dur: 150 + dist * 45 };
     render();
@@ -1641,6 +1894,7 @@
       }
     }
     if (pendingFeast) { startFeast(pendingFeast); pendingFeast = null; }
+    flushBox();
     if (a.promo) { morph = { r: a.m.tr, c: a.m.tc, ...makeMorph(a.promo.from, a.promo.to), start: now, dur: 1100 }; sfxSafe(SFX.promote); }
     else if (a.gained) flash = { r: a.m.tr, c: a.m.tc, start: now, dur: 450 };
   }
@@ -1694,7 +1948,7 @@
     rafId = 0;
     const dt = Math.min(0.05, (now - (lastFrame || now)) / 1000); lastFrame = now;
     draw(now, dt);
-    if (anim || particles.length || flash || morph || feastFx || (endFx && now - endFx.start < END_LIVE) || (selected && !REDUCED) || ((viewer() || curtain || thinking) && !REDUCED)) rafId = requestAnimationFrame(frame);
+    if (anim || particles.length || flash || morph || feastFx || crashFx || openFx || balloonsAway.length || (bxState && bxState.list.length && !REDUCED) || (endFx && now - endFx.start < END_LIVE) || (selected && !REDUCED) || ((viewer() || curtain || thinking) && !REDUCED)) rafId = requestAnimationFrame(frame);
     else lastFrame = 0;
   }
 
@@ -1702,7 +1956,9 @@
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(boardBackground(flipped()), 0, 0);
     ctx.save();
-    ctx.translate(F, F);
+    let shake = [0, 0];
+    if (crashFx && crashFx.hit && now - crashFx.hitAt < 320) { const k = 1 - (now - crashFx.hitAt) / 320; shake = [Math.round((Math.random() - 0.5) * 4 * k), Math.round((Math.random() - 0.5) * 4 * k)]; }
+    ctx.translate(F + shake[0], F + shake[1]);
     const fillSq = (r, c, color) => { const [sr, sc] = toScreen(r, c); ctx.fillStyle = color; ctx.fillRect(sc * S, sr * S, S, S); };
     if (lastMove) {
       if (!fogged(lastMove.fr, lastMove.fc)) fillSq(lastMove.fr, lastMove.fc, "rgba(255,224,102,0.35)");
@@ -1726,6 +1982,8 @@
       }
     }
 
+    if (bxState) drawGroundCrates(now);
+    if (crashFx && !crashFx.hit && crashFx.crushed && !fogged(crashFx.r, crashFx.c)) { const [sr, sc] = toScreen(crashFx.r, crashFx.c); ctx.drawImage(spriteFor(crashFx.crushed.piece), sc * S, sr * S); }
     for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++) {
       const p = board[r][c]; if (!p) continue;
       if (anim && r === anim.m.tr && c === anim.m.tc) continue; // drawn in flight below
@@ -1753,6 +2011,7 @@
       if (hiddenFromFoe(r, c, p)) drawHaze(x, y, now, false);
       if (morph && morph.r === r && morph.c === c) { drawMorph(morph, now, x, y); continue; }
       ctx.drawImage(spriteFor(p), x, y);
+      if (p.jester && p.color === privViewer()) drawJesterHat(x, y, now);
       if (hiddenFromFoe(r, c, p)) drawHaze(x, y, now, true);
       if (flash && flash.r === r && flash.c === c) {
         const t = (now - flash.start) / flash.dur;
@@ -1779,6 +2038,7 @@
 
     if (feastFx) drawFeast(now);
     drawSmoke(now);
+    if (bxState || crashFx || balloonsAway.length) drawSkyCrates(now, dt);
 
     for (const m of legal) {
       const [sr, sc] = toScreen(m.tr, m.tc);
@@ -1821,6 +2081,9 @@
       });
     }
     box.append(t, s);
+    if (p.jester && p.color === privViewer()) {
+      const j = document.createElement("div"); j.style.color = "#c98bff"; j.textContent = "Jester: whoever eats this piece dies. Only you can see the hat."; box.append(j);
+    }
   }
 
   // In the fog only the side in check is told (it can't see who is attacking).
@@ -1872,6 +2135,7 @@
     $("onlineGame").hidden = !isOnline;
     $("localBox").hidden = isOnline || !history.length;
     $("devourNote").hidden = devour;
+    $("boxNote").hidden = !bxState;
     $("fogNote").hidden = !fog;
     $("kingNote").textContent = kingCap ? "There is no check: capture the enemy king to win." : "Kings are protected: you can't make a move that leaves your king attacked, and checkmate wins.";
     $("curtain").hidden = !curtain;
@@ -1883,7 +2147,7 @@
     });
 
     if (!isOnline) {
-      const tagline = (cpuOn ? `vs ${BOT[botLevel].name} bot` : "Same screen") + ` - Devour ${devour ? "ON" : "OFF"}` + (fog ? " - Fog" : "") + (BN === 16 ? " - XXL" : "");
+      const tagline = (cpuOn ? `vs ${BOT[botLevel].name} bot` : "Same screen") + ` - Devour ${devour ? "ON" : "OFF"}` + (fog ? " - Fog" : "") + (BN === 16 ? " - XXL" : "") + (bxState ? " - Boxes" : "");
       if (gameOver) setStatus(resultText, tagline);
       else if (thinking) { setStatus(fog ? "Something stirs in the smoke" : "Bot is thinking", tagline); addDots(); }
       else if (showCheck()) setStatus(`${colorName(turn)} to move`, fog ? "CHECK! Something in the smoke is attacking your king." : "CHECK!", true);
@@ -1995,7 +2259,7 @@
     if (thinking || !history.length) return;
     let h = history.pop();
     if (cpuOn && h.turn === "b" && history.length) h = history.pop();
-    ({ board, turn, lastMove, logLines, seen } = h);
+    ({ board, turn, lastMove, logLines, seen, bxState } = h);
     gameOver = false; resultText = ""; selected = null; legal = []; curtain = false; morph = null; closePromo(); clearEnd();
     render(); updateUI();
   };
@@ -2012,6 +2276,9 @@
     $("fogLabel").textContent = settings.fog ? "ON" : "OFF";
     $("fogHint").textContent = settings.fog ? "Smoke hides squares your team hasn't stepped on." : "Everyone sees the whole board.";
     $("kingField").hidden = !settings.fog;
+    $("boxToggle").setAttribute("aria-checked", String(settings.boxes));
+    $("boxLabel").textContent = settings.boxes ? "ON" : "OFF";
+    $("boxHint").textContent = settings.boxes ? "Crates fall every few moves. Land on one to open it." : "No crates.";
     $("xxlToggle").setAttribute("aria-checked", String(settings.xxl));
     $("xxlLabel").textContent = settings.xxl ? "ON" : "OFF";
     $("xxlHint").textContent = settings.xxl ? "16 x 16 board: two sets side by side, one king each, plus a row of rooks, knights and bishops." : "Normal 8 x 8 board.";
@@ -2024,6 +2291,7 @@
   $("devourToggle").onclick = () => { settings.devour = !settings.devour; saveSettings(); renderSettings(); };
   $("fogToggle").onclick = () => { settings.fog = !settings.fog; saveSettings(); renderSettings(); };
   $("xxlToggle").onclick = () => { settings.xxl = !settings.xxl; saveSettings(); renderSettings(); };
+  $("boxToggle").onclick = () => { settings.boxes = !settings.boxes; saveSettings(); renderSettings(); };
   $("kingToggle").onclick = () => { settings.kingCap = !settings.kingCap; saveSettings(); renderSettings(); };
   $("curtainBtn").onclick = () => { curtain = false; sfxSafe(SFX.whoosh); render(); updateUI(); if (showCheck()) setTimeout(() => sfxSafe(SFX.check), 250); };
   $("start").onclick = () => {
@@ -2156,6 +2424,15 @@
     whoosh() { noise({ freq: 400, f2: 3000, q: 0.7, dur: 0.35, vol: 0.18 }); },
     join() { tone({ f: 523, dur: 0.1, vol: 0.06 }); tone({ f: 784, at: 0.1, dur: 0.14, vol: 0.06 }); },
     tick() { noise({ freq: 4500, q: 4, dur: 0.02, vol: 0.06 }); },
+    whistle() { tone({ type: "sine", f: 1800, f2: 500, dur: 0.28, vol: 0.06 }); },
+    crash() { tone({ type: "sine", f: 110, f2: 38, dur: 0.3, vol: 0.4 }); noise({ type: "lowpass", freq: 900, f2: 150, dur: 0.45, vol: 0.45 }); for (let i = 0; i < 4; i++) noise({ at: 0.05 + i * 0.05, freq: 2400, dur: 0.03, vol: 0.12 }); },
+    balloon() { [523, 659, 784].forEach((f, i) => tone({ type: "triangle", f, at: i * 0.09, dur: 0.18, vol: 0.06, vib: 8 })); },
+    pop() { for (let i = 0; i < 3; i++) noise({ at: i * 0.07, freq: 2200, dur: 0.03, vol: 0.2 }); },
+    boxOpen() { noise({ freq: 1200, dur: 0.06, vol: 0.25 }); [1046, 1318, 1568].forEach((f, i) => tone({ type: "triangle", f, at: 0.06 + i * 0.05, dur: 0.12, vol: 0.07 })); },
+    teleport() { tone({ type: "sine", f: 300, f2: 2400, dur: 0.25, vol: 0.08, vib: 40 }); tone({ type: "sine", f: 2400, f2: 400, at: 0.25, dur: 0.25, vol: 0.06 }); },
+    extra() { [659, 784, 988, 1319].forEach((f, i) => tone({ f, at: i * 0.07, dur: 0.1, vol: 0.06 })); },
+    jester() { for (let i = 0; i < 6; i++) tone({ type: "triangle", f: [1568, 1760, 2093][i % 3], at: i * 0.06, dur: 0.12, vol: 0.06 }); },
+    jesterKill() { [[784, 0], [740, 0.12], [698, 0.24], [523, 0.4]].forEach(([f, at]) => tone({ f, at, dur: 0.14, vol: 0.06, vib: 10 })); noise({ at: 0.4, type: "lowpass", freq: 600, dur: 0.3, vol: 0.3 }); },
     chat() { tone({ type: "triangle", f: 988, dur: 0.08, vol: 0.08 }); tone({ type: "triangle", f: 1319, at: 0.08, dur: 0.12, vol: 0.08 }); },
   };
   const sfxSafe = (fn) => { try { if (settings.sfx && !settings.muted) fn(); } catch (_) {} };
