@@ -153,6 +153,11 @@
         <button id="fogToggle" class="toggle" role="switch" aria-checked="false"><span class="track"><span class="knob"></span></span><span id="fogLabel">OFF</span></button>
         <div class="muted" id="fogHint"></div>
       </div>
+      <div class="field">
+        <div class="label">XXL BOARD</div>
+        <button id="xxlToggle" class="toggle" role="switch" aria-checked="false"><span class="track"><span class="knob"></span></span><span id="xxlLabel">OFF</span></button>
+        <div class="muted" id="xxlHint"></div>
+      </div>
       <div class="field" id="kingField">
         <div class="label">KING CAN BE CAPTURED</div>
         <button id="kingToggle" class="toggle" role="switch" aria-checked="false"><span class="track"><span class="knob"></span></span><span id="kingLabel">OFF</span></button>
@@ -196,7 +201,8 @@
     <div class="box" id="info">Click a piece to see its powers.</div>
     <div class="box rules">
       <p><b>The twist:</b> a piece that captures <b>absorbs</b> every power of its victim and can move like all of them.</p>
-      <p>Checkmate wins as usual. Pawns promote to queens. No castling or en passant.</p>
+      <p>Checkmate wins as usual. Pawns that reach the far side become the piece you choose. No castling or en passant.</p>
+      <p><b>Kings' feast:</b> if the game would end in a draw because only kings are left, or a player is stuck without being in check, any king that has eaten pieces shakes and spits them all back out as its own pieces.</p>
       <p>Pawn eats knight? It can now hop like a knight. Eaten pieces fuse onto the eater in their own colors:</p>
       <div class="legend" id="legend"></div>
       <p id="fogNote" hidden><b>Fog of war is ON:</b> smoke hides every square your team hasn't stood on or passed through, for you and your opponent alike. A piece that runs into a hidden enemy stops and captures it. Haze swirling at a piece's feet means the other side can't see it. <span id="kingNote"></span></p>
@@ -230,7 +236,7 @@
   };
   const NAMES = { P: "Pawn", N: "Knight", B: "Bishop", R: "Rook", Q: "Queen", K: "King" };
   const POWER_COLOR = { P: "#9be36b", N: "#ffb347", B: "#59c1ff", R: "#ff5e7a", Q: "#c98bff", K: "#ffe066" };
-  const isPromotion = (b, m) => { const p = b[m.fr][m.fc]; return !!p && p.type === "P" && (m.tr === 0 || m.tr === 7); };
+  const isPromotion = (b, m) => { const p = b[m.fr][m.fc]; return !!p && p.type === "P" && (m.tr === 0 || m.tr === BN - 1); };
   const VALUE = { P: 1, N: 3, B: 3, R: 5, Q: 9, K: 0 };
   const PAL = {
     w: { fill: "#f4ecd6", shade: "#c9bc98", hi: "#fffdf6", line: "#1b1424" },
@@ -240,25 +246,29 @@
   const $ = (id) => document.getElementById(id);
 
   // ---------- Rules ----------
-  const piece = (color, type) => ({ color, type, powers: [type], moved: false });
+  let BN = 8, MID = 3.5; // board size (8 or 16 for XXL) and its centre
+  const piece = (color, type) => ({ color, type, powers: [type], moved: false, ate: [] });
+  // XXL (16x16): two chess sets side by side with one king (the spare king is a
+  // queen), a second row of rooks, knights and bishops, then pawns.
+  const XXL_BACK = "RNBQKBNRRNBQQBNR", XXL_SECOND = "RNBNBNBNBNBNBNBR";
   function startBoard() {
-    const b = Array.from({ length: 8 }, () => Array(8).fill(null));
-    const back = "RNBQKBNR";
-    for (let c = 0; c < 8; c++) {
-      b[0][c] = piece("b", back[c]); b[1][c] = piece("b", "P");
-      b[6][c] = piece("w", "P");     b[7][c] = piece("w", back[c]);
-    }
+    const b = Array.from({ length: BN }, () => Array(BN).fill(null));
+    const rows = BN === 16 ? [XXL_BACK, XXL_SECOND] : ["RNBQKBNR"];
+    rows.forEach((row, i) => {
+      for (let c = 0; c < BN; c++) { b[i][c] = piece("b", row[c]); b[BN - 1 - i][c] = piece("w", row[c]); }
+    });
+    for (let c = 0; c < BN; c++) { b[rows.length][c] = piece("b", "P"); b[BN - 1 - rows.length][c] = piece("w", "P"); }
     return b;
   }
-  const clone = (b) => b.map(row => row.map(p => p ? { ...p, powers: [...p.powers] } : null));
-  const inside = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+  const clone = (b) => b.map(row => row.map(p => p ? { ...p, powers: [...p.powers], ate: p.ate ? [...p.ate] : [] } : null));
+  const inside = (r, c) => r >= 0 && r < BN && c >= 0 && c < BN;
   const other = (col) => col === "w" ? "b" : "w";
   let devour = true; // the rule in force for the game on the board
 
   function pseudoMoves(b, r, c) {
     const p = b[r][c]; if (!p) return [];
     const out = new Map();
-    const add = (tr, tc) => out.set(tr * 8 + tc, { fr: r, fc: c, tr, tc });
+    const add = (tr, tc) => out.set(tr * BN + tc, { fr: r, fc: c, tr, tc });
     const slide = (dirs) => {
       for (const [dr, dc] of dirs) {
         let tr = r + dr, tc = c + dc;
@@ -304,9 +314,11 @@
     const nb = clone(b);
     const mover = nb[m.fr][m.fc], victim = nb[m.tr][m.tc];
     if (victim && devour) for (const pw of victim.powers) if (!mover.powers.includes(pw)) mover.powers.push(pw);
+    // Keep a record of every piece swallowed (and what those had swallowed) for the kings' feast.
+    if (victim) mover.ate = [...(mover.ate || []), ...(victim.type === "K" ? [] : [victim.type]), ...(victim.ate || [])].slice(0, 60);
     mover.moved = true;
     nb[m.tr][m.tc] = mover; nb[m.fr][m.fc] = null;
-    if (mover.type === "P" && (m.tr === 0 || m.tr === 7)) {
+    if (mover.type === "P" && (m.tr === 0 || m.tr === BN - 1)) {
       // The pawn becomes the chosen piece; powers it ate stay with it.
       const to = "QRBN".includes(m.promo) && m.promo ? m.promo : "Q";
       mover.type = to;
@@ -316,13 +328,13 @@
   }
 
   function findKing(b, color) {
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++) {
       const p = b[r][c]; if (p && p.color === color && p.type === "K") return [r, c];
     }
     return null;
   }
   function attacked(b, r, c, byColor) {
-    for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) {
+    for (let i = 0; i < BN; i++) for (let j = 0; j < BN; j++) {
       const p = b[i][j];
       if (p && p.color === byColor && pseudoMoves(b, i, j).some(m => m.tr === r && m.tc === c)) return true;
     }
@@ -338,13 +350,13 @@
   }
   function allLegal(b, color) {
     const out = [];
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++)
+    for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++)
       if (b[r][c] && b[r][c].color === color) out.push(...legalMovesFrom(b, r, c));
     return out;
   }
   function pseudoAll(b, color) {
     const out = [];
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++)
+    for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++)
       if (b[r][c] && b[r][c].color === color) out.push(...pseudoMoves(b, r, c));
     return out;
   }
@@ -355,14 +367,14 @@
   let fog = false, seen = null, curtain = false;
   let kingCap = false; // fog only: true = no check, capturing the king wins
   function initSeen(b) {
-    const s = { w: Array(64).fill("0"), b: Array(64).fill("0") };
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (b[r][c]) s[b[r][c].color][r * 8 + c] = "1";
+    const s = { w: Array(BN * BN).fill("0"), b: Array(BN * BN).fill("0") };
+    for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++) if (b[r][c]) s[b[r][c].color][r * BN + c] = "1";
     return { w: s.w.join(""), b: s.b.join("") };
   }
-  const isSeen = (sn, color, r, c) => !!sn && sn[color][r * 8 + c] === "1";
+  const isSeen = (sn, color, r, c) => !!sn && sn[color][r * BN + c] === "1";
   function markSeen(sn, color, squares) {
     const a = sn[color].split("");
-    for (const [r, c] of squares) a[r * 8 + c] = "1";
+    for (const [r, c] of squares) a[r * BN + c] = "1";
     return { ...sn, [color]: a.join("") };
   }
   // Squares a move travels over, ending on its target (knight hops only touch the target).
@@ -403,26 +415,84 @@
   }
   function fogAllLegal(b, sn, color, kc) {
     const out = [];
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++)
+    for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++)
       if (b[r][c] && b[r][c].color === color) out.push(...fogLegalFrom(b, sn, color, r, c, kc));
     return out;
+  }
+  // ----- Kings' feast -----
+  // When the game would stall into a draw (only kings left, or no moves but
+  // not in check), any king that has eaten pieces shakes and coughs them
+  // back up onto nearby squares as its own pieces.
+  const onlyKings = (b) => b.every(row => row.every(p => !p || p.type === "K"));
+  const kingsHaveEaten = (b) => ["w", "b"].some(col => { const k = findKing(b, col); return k && (b[k[0]][k[1]].ate || []).length > 0; });
+  function kingsFeast(b, toMove) {
+    const nb = clone(b), spews = [];
+    for (const col of ["w", "b"]) {
+      const k = findKing(nb, col); if (!k) continue;
+      const [kr, kc] = k, king = nb[kr][kc];
+      const list = (king.ate || []).filter(t => t !== "K");
+      if (!list.length) continue;
+      nb[kr][kc] = { ...king, powers: ["K"], ate: [] };
+      const foeKing = findKing(nb, other(col));
+      const squares = [];
+      for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++)
+        if (!nb[r][c]) squares.push([Math.max(Math.abs(r - kr), Math.abs(c - kc)), Math.abs(r - kr) + Math.abs(c - kc), r, c]);
+      squares.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3]);
+      for (const t of list) {
+        for (const [, , r, c] of squares) {
+          if (nb[r][c] || (t === "P" && (r === 0 || r === BN - 1))) continue;
+          nb[r][c] = { color: col, type: t, powers: [t], moved: true, ate: [] };
+          // Never land a piece already attacking the other king.
+          if (foeKing && pseudoMoves(nb, r, c).some(m => m.tr === foeKing[0] && m.tc === foeKing[1])) { nb[r][c] = null; continue; }
+          spews.push({ fr: kr, fc: kc, tr: r, tc: c, color: col, type: t });
+          break;
+        }
+      }
+    }
+    // The side that just moved must not be left with its king hanging.
+    const waiting = other(toMove);
+    while (inCheck(nb, waiting)) {
+      const i = spews.map(x => x.color).lastIndexOf(toMove);
+      if (i < 0) break;
+      const [x] = spews.splice(i, 1); nb[x.tr][x.tc] = null;
+    }
+    return { board: nb, spews };
+  }
+  function outcome(nb, nsn, next, fogOn, kc, moverColor) {
+    if (fogOn && kc) {
+      if (!findKing(nb, next)) return { over: true, stall: false, result: `${colorName(moverColor)} captured the king! ${colorName(moverColor)} wins.` };
+      if (!pseudoAll(nb, next).length) return { over: true, stall: true, result: "No moves left. It's a draw." };
+      return { over: false };
+    }
+    const moves = fogOn ? fogAllLegal(nb, nsn, next, false) : allLegal(nb, next);
+    if (!moves.length) return { over: true, stall: !inCheck(nb, next), result: endText(nb, next) };
+    return { over: false };
   }
   // Plays a move under the game's rules and reports the result.
   function playMove(b, sn, m, fogOn, kc) {
     const rm = fogOn ? (resolveMove(b, m, !kc) || m) : m;
     const mover = b[rm.fr][rm.fc];
     const info = describeMove(b, rm);
-    const nb = applyMove(b, rm);
+    let nb = applyMove(b, rm);
     const next = other(mover.color);
-    const nsn = fogOn ? markSeen(sn, mover.color, pathSquares(rm)) : sn;
-    let over = false, result = "";
-    if (fogOn && kc) {
-      if (!findKing(nb, next)) { over = true; result = `${colorName(mover.color)} captured the king! ${colorName(mover.color)} wins.`; }
-      else if (!pseudoAll(nb, next).length) { over = true; result = "No moves left. It's a draw."; }
-    } else if (fogOn) {
-      if (!fogAllLegal(nb, nsn, next, false).length) { over = true; result = endText(nb, next); }
-    } else if (!allLegal(nb, next).length) { over = true; result = endText(nb, next); }
-    return { m: rm, board: nb, seen: nsn, info, over, result };
+    let nsn = fogOn ? markSeen(sn, mover.color, pathSquares(rm)) : sn;
+    let oc = outcome(nb, nsn, next, fogOn, kc, mover.color);
+    let feast = null;
+    const kingsOnly = onlyKings(nb);
+    if ((oc.stall || kingsOnly) && kingsHaveEaten(nb)) {
+      feast = kingsFeast(nb, next);
+      nb = feast.board;
+      if (fogOn) for (const x of feast.spews) nsn = markSeen(nsn, x.color, [[x.tr, x.tc]]);
+      oc = outcome(nb, nsn, next, fogOn, kc, mover.color);
+      if (!oc.over && onlyKings(nb)) oc = { over: true, result: "Only the kings are left. It's a draw." };
+    } else if (kingsOnly && !oc.over) oc = { over: true, result: "Only the kings are left. It's a draw." };
+    const logs = [info.line];
+    if (feast && feast.spews.length) {
+      const parts = ["w", "b"].map(c => [c, feast.spews.filter(x => x.color === c).length]).filter(x => x[1])
+        .map(([c, n]) => `${colorName(c)}'s king spits out ${n} piece${n > 1 ? "s" : ""}`);
+      logs.unshift(`KINGS' FEAST! ${parts.join(", ")}.`);
+    }
+    return { m: rm, board: nb, seen: nsn, info, logs, feast: feast ? feast.spews : null, over: !!oc.over, result: oc.result || "" };
   }
   const colorName = (c) => c === "w" ? "White" : "Black";
 
@@ -434,9 +504,9 @@
   }
   function evaluate(b, color) {
     let s = 0;
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++) {
       const p = b[r][c]; if (!p) continue;
-      let v = pieceValue(p) + (3.5 - Math.abs(3.5 - c)) * 0.03 + (3.5 - Math.abs(3.5 - r)) * 0.03;
+      let v = pieceValue(p) + (MID - Math.abs(MID - c)) * 0.03 + (MID - Math.abs(MID - r)) * 0.03;
       s += p.color === color ? v : -v;
     }
     return s;
@@ -509,16 +579,16 @@
   let board, turn, lastMove, logLines, gameOver = false, resultText = "";
   let history = [], selected = null, legal = [], cpuOn = true, thinking = false;
   // Choices in the NEW GAME panel; they take effect when a game starts.
-  const settings = { opp: "bot", level: 2, devour: true, fog: false, kingCap: false };
+  const settings = { opp: "bot", level: 2, devour: true, fog: false, kingCap: false, xxl: false };
   try { Object.assign(settings, JSON.parse(localStorage.getItem("dc-settings")) || {}); } catch (_) {}
   let botLevel = settings.level;
 
-  const FILES = "abcdefgh";
-  const sqName = (r, c) => FILES[c] + (8 - r);
+  const FILES = "abcdefghijklmnop";
+  const sqName = (r, c) => FILES[c] + (BN - r);
   function describeMove(b, m) {
     const mover = b[m.fr][m.fc], victim = b[m.tr][m.tc];
     let line = `${mover.color === "w" ? "W" : "B"} ${NAMES[mover.type]} ${sqName(m.fr, m.fc)}-${sqName(m.tr, m.tc)}`;
-    const promotedTo = mover.type === "P" && (m.tr === 0 || m.tr === 7) ? (m.promo && "QRBN".includes(m.promo) ? m.promo : "Q") : null;
+    const promotedTo = mover.type === "P" && (m.tr === 0 || m.tr === BN - 1) ? (m.promo && "QRBN".includes(m.promo) ? m.promo : "Q") : null;
     const gained = victim && devour ? victim.powers.filter(p => !mover.powers.includes(p) && p !== promotedTo) : [];
     if (fog) { // the log is shared, so only say what both sides could know
       const C = colorName(mover.color);
@@ -540,9 +610,10 @@
 
   // ---------- Local mode ----------
   function newLocalGame() {
+    setBoardSize(settings.xxl ? 16 : 8);
     devour = settings.devour; fog = settings.fog; kingCap = settings.fog && settings.kingCap; cpuOn = settings.opp === "bot"; botLevel = settings.level;
     morph = null; closePromo();
-    anim = null; flash = null; curtain = false;
+    anim = null; flash = null; feastFx = null; curtain = false;
     board = startBoard(); seen = initSeen(board); turn = "w"; history = []; selected = null; legal = [];
     lastMove = null; gameOver = false; resultText = ""; logLines = [];
     render(); updateUI();
@@ -551,19 +622,19 @@
     history.push({ board: clone(board), turn, lastMove, logLines: [...logLines], seen });
     const humanMove = !(cpuOn && turn === "b");
     const res = playMove(board, seen, m, fog, kingCap);
-    startMoveAnim(board, res.m, res.board);
+    startMoveAnim(board, res.m, res.board, res.feast);
     board = res.board; seen = res.seen;
     moveSound(res.info);
-    logLines.unshift(res.info.line);
+    logLines.unshift(...res.logs);
     lastMove = res.m; turn = other(turn); selected = null; legal = [];
     if (res.over) { gameOver = true; resultText = res.result; }
     if (res.m.ambush && humanMove) note("Ambush! Your piece ran into something hidden in the smoke and ate it.");
     if (res.m.bumped && humanMove) note("Your piece bumped into the enemy king hiding in the smoke and stopped.");
     if (fog && !cpuOn && !gameOver) curtain = true;
     render(); updateUI();
-    if (!gameOver && cpuOn && turn === "b") scheduleCpu();
+    if (!gameOver && cpuOn && turn === "b") scheduleCpu(res.feast && !REDUCED ? 2000 : 0);
   }
-  function scheduleCpu() {
+  function scheduleCpu(extraDelay = 0) {
     thinking = true; updateUI(); render();
     const started = board;
     // Let the player's move animation play before the bot starts thinking.
@@ -578,7 +649,7 @@
         thinking = false;
         if (m) localMove(m); else updateUI();
       }, Math.max(0, ponder - (performance.now() - t0)));
-    }, 300);
+    }, 300 + extraDelay);
   }
 
   // ---------- Online mode (peer-to-peer) ----------
@@ -592,16 +663,17 @@
     conns: [], guestConn: null, hostConn: null, connected: false, ready: false, retries: 0,
   };
   const flatten = (b) => b.flat();
-  const unflatten = (arr) => Array.from({ length: 8 }, (_, r) => arr.slice(r * 8, r * 8 + 8).map(p => p ? { ...p, powers: [...p.powers] } : null));
+  const unflatten = (arr) => Array.from({ length: BN }, (_, r) => arr.slice(r * BN, r * BN + BN).map(p => p ? { ...p, powers: [...p.powers] } : null));
   const myColor = () => {
     const d = online.data; if (mode !== "online" || !d) return null;
     if (online.seat === "host") return d.hostColor;
     if (online.seat === "guest") return other(d.hostColor);
     return null;
   };
-  function freshState(hostColor = "w", dv = true, fg = false, kc = false) {
+  function freshState(hostColor = "w", dv = true, fg = false, kc = false, n = 8) {
+    setBoardSize(n);
     const b = startBoard();
-    return { v: 1, board: flatten(b), turn: "w", lastMove: null, log: [], status: "waiting", result: "", ply: 0, hostColor, devour: dv, fog: fg, kingCap: fg && kc, seen: initSeen(b) };
+    return { v: 1, n, board: flatten(b), turn: "w", lastMove: null, log: [], status: "waiting", result: "", ply: 0, hostColor, devour: dv, fog: fg, kingCap: fg && kc, seen: initSeen(b) };
   }
   function newCode() {
     const abc = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -622,8 +694,9 @@
   function applyState(st) {
     const prev = online.data;
     online.data = st;
+    if ((st.n || 8) !== BN) { setBoardSize(st.n || 8); board = unflatten(st.board); }
     devour = st.devour !== false; fog = !!st.fog; kingCap = !!st.kingCap;
-    if (prev && st.ply === prev.ply + 1 && st.lastMove) startMoveAnim(board, st.lastMove, unflatten(st.board));
+    if (prev && st.ply === prev.ply + 1 && st.lastMove) startMoveAnim(board, st.lastMove, unflatten(st.board), st.lastMove.feast);
     seen = st.seen || initSeen(unflatten(st.board));
     board = unflatten(st.board);
     turn = st.turn; lastMove = st.lastMove || null; logLines = [...(st.log || [])];
@@ -637,8 +710,8 @@
     const rm = res.m;
     return { info: res.info, ambush: !!rm.ambush, state: {
       ...st, board: flatten(res.board), turn: other(st.turn), seen: res.seen,
-      lastMove: { fr: rm.fr, fc: rm.fc, tr: rm.tr, tc: rm.tc, captured: res.info.captured },
-      log: [res.info.line, ...(st.log || [])].slice(0, 80),
+      lastMove: { fr: rm.fr, fc: rm.fc, tr: rm.tr, tc: rm.tc, captured: res.info.captured, feast: res.feast },
+      log: [...res.logs, ...(st.log || [])].slice(0, 80),
       status: res.over ? "over" : "playing", result: res.result, ply: st.ply + 1,
     } };
   }
@@ -654,7 +727,7 @@
     mode = "online"; online.code = code; online.seat = "host";
     const saved = !fresh && store.get("dc-host-" + code);
     setHash(code);
-    applyState(saved && saved.v === 1 ? saved : freshState("w", settings.devour, settings.fog, settings.kingCap));
+    applyState(saved && saved.v === 1 ? saved : freshState("w", settings.devour, settings.fog, settings.kingCap, settings.xxl ? 16 : 8));
     store.set("dc-host-" + code, online.data);
     startHostPeer();
   }
@@ -718,7 +791,7 @@
     } else if (msg.type === "resign" && st.status === "playing") {
       hostCommit({ ...st, status: "over", result: `${colorName(gc)} resigned. ${colorName(st.hostColor)} wins.` });
     } else if (msg.type === "rematch" && st.status === "over") {
-      hostCommit({ ...freshState(other(st.hostColor), st.devour !== false, !!st.fog, !!st.kingCap), status: "playing" });
+      hostCommit({ ...freshState(other(st.hostColor), st.devour !== false, !!st.fog, !!st.kingCap, st.n || 8), status: "playing" });
     }
   }
 
@@ -728,6 +801,7 @@
     mode = "online"; online.code = code; online.seat = null;
     setHash(code);
     setMsg("gameMsg", "Connecting to the game...");
+    setBoardSize(8);
     board = startBoard(); turn = "w"; lastMove = null; logLines = []; gameOver = false; fog = false; seen = null; curtain = false;
     render(); updateUI();
     const peer = new Peer(PEER_OPTS); online.peer = peer;
@@ -761,7 +835,7 @@
     conn.on("data", (msg) => {
       if (!msg || typeof msg !== "object" || online.hostConn !== conn) return;
       if (msg.type === "welcome") { online.seat = msg.seat === "guest" ? "guest" : "spectator"; updateUI(); }
-      if (msg.type === "state" && msg.state && Array.isArray(msg.state.board) && msg.state.board.length === 64) {
+      if (msg.type === "state" && msg.state && Array.isArray(msg.state.board) && msg.state.board.length === (msg.state.n || 8) ** 2) {
         const prev = online.data;
         if (prev && msg.state.ply > prev.ply && msg.state.lastMove && other(msg.state.turn) !== myColor())
           blip(msg.state.lastMove.captured ? 660 : 300, 0.08);
@@ -800,7 +874,7 @@
   }
   function rematch() {
     const st = online.data; if (!st || !myColor() || st.status !== "over") return;
-    if (online.seat === "host") hostCommit({ ...freshState(other(st.hostColor), st.devour !== false, !!st.fog, !!st.kingCap), status: online.connected ? "playing" : "waiting" });
+    if (online.seat === "host") hostCommit({ ...freshState(other(st.hostColor), st.devour !== false, !!st.fog, !!st.kingCap, st.n || 8), status: online.connected ? "playing" : "waiting" });
     else sendToHost({ type: "rematch" });
   }
   function leaveGame(toLocal = true) {
@@ -821,7 +895,8 @@
   // ---------- Rendering ----------
   const cv = $("board");
   const ctx = cv.getContext("2d");
-  const S = 20, F = 12, W = 8 * S + 2 * F; // square size, frame width, canvas size
+  const S = 20, F = 12; // square size, frame width
+  let W = BN * S + 2 * F; // canvas size
   const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   const flipped = () => mode === "online" ? myColor() === "b" : (fog && !cpuOn && turn === "b");
   // Whose eyes the board is drawn through (null = see everything).
@@ -831,7 +906,7 @@
     return cpuOn ? "w" : turn;
   }
   const fogged = (r, c) => { if (curtain) return true; const v = viewer(); return !!v && !isSeen(seen, v, r, c); };
-  const toScreen = (r, c) => flipped() ? [7 - r, 7 - c] : [r, c];
+  const toScreen = (r, c) => flipped() ? [BN - 1 - r, BN - 1 - c] : [r, c];
 
   // Builds one piece (with everything it has eaten) as a 20x20 pixel image.
   const spriteCache = new Map();
@@ -922,6 +997,10 @@
     1: [" # ","## "," # "," # ","###"], 2: ["## ","  #"," # ","#  ","###"], 3: ["## ","  #"," # ","  #","## "],
     4: ["# #","# #","###","  #","  #"], 5: ["###","#  ","## ","  #","## "], 6: [" ##","#  ","## ","# #"," # "],
     7: ["###","  #"," # "," # "," # "], 8: [" # ","# #"," # ","# #"," # "],
+    9: [" # ","# #"," ##","  #","## "], 0: [" # ","# #","# #","# #"," # "],
+    i: [" # ","   ","## "," # ","###"], j: ["  #","   ","  #","# #"," # "], k: ["#  ","# #","## ","# #","# #"],
+    l: ["## "," # "," # "," # ","###"], m: ["   ","# #","###","# #","# #"], n: ["   ","## ","# #","# #","# #"],
+    o: ["   "," # ","# #","# #"," # "], p: ["   ","## ","# #","## ","#  "],
   };
   const WOOD = {
     light: { base: "#d9a066", grainA: "#cf955b", grainB: "#e3ad74", hi: "#ecc08c", lo: "#b98048" },
@@ -962,7 +1041,8 @@
   }
   const bgCache = {};
   function boardBackground(flip) {
-    if (bgCache[flip]) return bgCache[flip];
+    const key = flip + "-" + BN;
+    if (bgCache[key]) return bgCache[key];
     const c = document.createElement("canvas"); c.width = W; c.height = W;
     const g = c.getContext("2d");
     const fr = WOOD.frame, rand = rng(1337);
@@ -984,21 +1064,22 @@
       g.fillStyle = fr.lip; g.fillRect(cx, cy, 1, 1);
     }
     // Inner lip around the playing surface: dark shadow line, then a gold inlay.
-    g.fillStyle = fr.groove; g.fillRect(F - 2, F - 2, 8 * S + 4, 2); g.fillRect(F - 2, F - 2, 2, 8 * S + 4);
-    g.fillRect(F - 2, F + 8 * S, 8 * S + 4, 2); g.fillRect(F + 8 * S, F - 2, 2, 8 * S + 4);
-    g.fillStyle = "#c8963e"; g.fillRect(F - 1, F - 1, 8 * S + 2, 1); g.fillRect(F - 1, F - 1, 1, 8 * S + 2);
-    g.fillStyle = "#7a5520"; g.fillRect(F - 1, F + 8 * S, 8 * S + 2, 1); g.fillRect(F + 8 * S, F - 1, 1, 8 * S + 2);
+    g.fillStyle = fr.groove; g.fillRect(F - 2, F - 2, BN * S + 4, 2); g.fillRect(F - 2, F - 2, 2, BN * S + 4);
+    g.fillRect(F - 2, F + BN * S, BN * S + 4, 2); g.fillRect(F + BN * S, F - 2, 2, BN * S + 4);
+    g.fillStyle = "#c8963e"; g.fillRect(F - 1, F - 1, BN * S + 2, 1); g.fillRect(F - 1, F - 1, 1, BN * S + 2);
+    g.fillStyle = "#7a5520"; g.fillRect(F - 1, F + BN * S, BN * S + 2, 1); g.fillRect(F + BN * S, F - 1, 1, BN * S + 2);
     // Coordinates carved into the frame.
-    for (let i = 0; i < 8; i++) {
-      const file = "abcdefgh"[flip ? 7 - i : i], rank = String(flip ? i + 1 : 8 - i);
+    for (let i = 0; i < BN; i++) {
+      const file = FILES[flip ? BN - 1 - i : i], rank = String(flip ? i + 1 : BN - i);
+      const rx = Math.floor((F - (rank.length * 4 - 1)) / 2);
       engraveText(g, file, F + i * S + 8, W - F + 4);
       engraveText(g, file, F + i * S + 8, 3);
-      engraveText(g, rank, 4, F + i * S + 7);
-      engraveText(g, rank, W - F + 4, F + i * S + 7);
+      engraveText(g, rank, rx, F + i * S + 7);
+      engraveText(g, rank, W - F + rx, F + i * S + 7);
     }
     // Parquet squares: light maple with grain one way, dark walnut the other, each with a small bevel.
     const sr = rng(7);
-    for (let r = 0; r < 8; r++) for (let col = 0; col < 8; col++) {
+    for (let r = 0; r < BN; r++) for (let col = 0; col < BN; col++) {
       const dark = (r + col) % 2 === 1, wood = dark ? WOOD.dark : WOOD.light;
       const x = F + col * S, y = F + r * S;
       grain(g, x, y, S, S, wood, dark, sr);
@@ -1008,7 +1089,7 @@
         g.fillStyle = wood.lo; g.fillRect(x + 3, y + 2, 1, 1); g.fillRect(x + 2, y + 3, 1, 1); g.fillRect(x + 4, y + 3, 1, 1); g.fillRect(x + 3, y + 4, 1, 1);
       }
     }
-    bgCache[flip] = c;
+    bgCache[key] = c;
     return c;
   }
 
@@ -1045,14 +1126,23 @@
   // The smoke's outline comes from a blurred map of the fogged squares, so its
   // corners round off where it meets cleared ground. A drifting noise field
   // nudges that outline and a 4x4 dither keeps the soft edge pixel-crisp.
-  const BOARD_PX = 8 * S;
+  let BOARD_PX = BN * S;
   const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
   const smokeCv = document.createElement("canvas"); smokeCv.width = smokeCv.height = BOARD_PX;
   const smokeCtx = smokeCv.getContext("2d");
   const maskCv = document.createElement("canvas"); maskCv.width = maskCv.height = BOARD_PX;
   const maskCtx = maskCv.getContext("2d");
-  const maskImg = maskCtx.createImageData(BOARD_PX, BOARD_PX);
-  for (let i = 0; i < maskImg.data.length; i += 4) maskImg.data[i] = maskImg.data[i + 1] = maskImg.data[i + 2] = 255;
+  let maskImg = null;
+  // Switches between the 8x8 and 16x16 boards: resizes the canvas and the smoke buffers.
+  function setBoardSize(n) {
+    if (n === BN && maskImg) return;
+    BN = n; MID = (n - 1) / 2; W = n * S + 2 * F; BOARD_PX = n * S;
+    cv.width = cv.height = W;
+    smokeCv.width = smokeCv.height = maskCv.width = maskCv.height = BOARD_PX;
+    maskImg = maskCtx.createImageData(BOARD_PX, BOARD_PX);
+    for (let i = 0; i < maskImg.data.length; i += 4) maskImg.data[i] = maskImg.data[i + 1] = maskImg.data[i + 2] = 255;
+    fieldKey = ""; selected = null; legal = [];
+  }
   const WOB_N = 64;
   const wobble = (() => {
     const rand = rng(99), cells = 8, cs = WOB_N / cells;
@@ -1084,18 +1174,18 @@
       }
     }
   }
-  let fieldKey = "", field = null;
+  var fieldKey = "", field = null;
   function fogField(cells) {
-    const key = cells.map(([r, c]) => r * 8 + c).join(",");
+    const key = cells.map(([r, c]) => r * BN + c).join(",");
     if (key === fieldKey) return field;
     const N = BOARD_PX, a = new Float32Array(N * N);
     for (const [sr, sc] of cells) for (let y = sr * S; y < sr * S + S; y++) a.fill(1, y * N + sc * S, y * N + sc * S + S);
-    const isFog = new Uint8Array(64);
-    for (const [sr, sc] of cells) isFog[sr * 8 + sc] = 1;
+    const isFog = new Uint8Array(BN * BN);
+    for (const [sr, sc] of cells) isFog[sr * BN + sc] = 1;
     boxBlur(a, N, 4); boxBlur(a, N, 4);
     // Smoke may only curl a few pixels onto cleared squares, so their pieces stay in view.
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      if (isFog[Math.floor(y / S) * 8 + Math.floor(x / S)]) continue;
+      if (isFog[Math.floor(y / S) * BN + Math.floor(x / S)]) continue;
       const lx = x % S, ly = y % S;
       if (Math.min(lx, ly, S - 1 - lx, S - 1 - ly) > 2) a[y * N + x] = 0;
     }
@@ -1104,7 +1194,7 @@
   }
   function drawSmoke(now) {
     const cells = [];
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (fogged(r, c)) cells.push(toScreen(r, c));
+    for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++) if (fogged(r, c)) cells.push(toScreen(r, c));
     if (!cells.length) return;
     const fld = fogField(cells);
     const t = REDUCED ? 0 : now / 1000;
@@ -1142,6 +1232,37 @@
     ctx.drawImage(smokeCv, 0, 0);
   }
 
+  // ----- Kings' feast: pieces arc out of each king to their new squares -----
+  function drawFeast(now) {
+    const fx = feastFx, t = (now - fx.start - FEAST_SHAKE) / FEAST_FLY;
+    if (t < 0) return;
+    if (!fx.burst) {
+      fx.burst = true; blip(520, 0.12); setTimeout(() => blip(330, 0.15), 120);
+      for (const [kr, kc] of fx.kings) {
+        if (fogged(kr, kc)) continue;
+        const [sr, sc] = toScreen(kr, kc);
+        for (let i = 0; i < 18; i++) {
+          const ang = Math.random() * Math.PI * 2, sp = 30 + Math.random() * 50;
+          particles.push({ x: sc * S + 10, y: sr * S + 8, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 40,
+            col: ["#9be36b", "#c8e86b", "#ffe066", "#ffffff"][i % 4], born: now, life: 400 + Math.random() * 300 });
+        }
+      }
+    }
+    if (t >= 1) { feastFx = null; return; }
+    fx.spews.forEach((x, i) => {
+      const lt = Math.min(1, Math.max(0, t * 1.4 - (i % 6) * 0.06));
+      if (lt <= 0 || fogged(x.tr, x.tc)) return;
+      const [fr, fc] = toScreen(x.fr, x.fc), [tr, tc] = toScreen(x.tr, x.tc);
+      const e = 1 - Math.pow(1 - lt, 2);
+      const px = Math.round(fc * S + (tc - fc) * S * e);
+      const arc = Math.min(12, 6 + Math.hypot(tr - fr, tc - fc) * 3);
+      const py = Math.round(fr * S + (tr - fr) * S * e - Math.sin(Math.PI * lt) * arc);
+      const p = { color: x.color, type: x.type, powers: [x.type] };
+      ctx.drawImage(spriteFor(p), px, py);
+      if (lt < 1) { ctx.globalAlpha = 0.6 * (1 - lt); ctx.drawImage(spriteFor(p, true), px, py); ctx.globalAlpha = 1; }
+    });
+  }
+
   // ----- Haze at the feet of your pieces the other side can't see -----
   function hiddenFromFoe(r, c, p) {
     const v = viewer();
@@ -1176,7 +1297,7 @@
     const k = findKing(board, "b");
     let ax, ay;
     if (k && !fogged(k[0], k[1])) { const [sr, sc] = toScreen(k[0], k[1]); ax = sc * S + 12; ay = sr * S + 2; }
-    else { ax = 4 * S; ay = 2; } // king hidden in the smoke: think from the far edge
+    else { ax = (BN / 2) * S; ay = 2; } // king hidden in the smoke: think from the far edge
     const bw = 22, bh = 12;
     const bx = Math.max(-F + 1, Math.min(BOARD_PX + F - bw - 1, ax + 2));
     const by = Math.max(-F + 1, ay - bh - 7) + Math.round(Math.sin(t * 4));
@@ -1198,9 +1319,20 @@
   }
 
   // ----- Animation state -----
-  let anim = null, flash = null, morph = null, rafId = 0;
+  let anim = null, flash = null, morph = null, feastFx = null, pendingFeast = null, rafId = 0;
+  const FEAST_SHAKE = 1000, FEAST_FLY = 650;
+  function startFeast(spews) {
+    if (!spews || !spews.length || REDUCED) return;
+    const kings = [];
+    for (const x of spews) if (!kings.some(k => k[0] === x.fr && k[1] === x.fc)) kings.push([x.fr, x.fc]);
+    feastFx = { spews, kings, start: performance.now(), burst: false };
+    blip(140, 0.25);
+    render();
+  }
   const particles = [];
-  function startMoveAnim(prevBoard, m, nextBoard) {
+  function startMoveAnim(prevBoard, m, nextBoard, feast) {
+    pendingFeast = feast && feast.length ? feast : null;
+    feastFx = null;
     const mover = prevBoard[m.fr] && prevBoard[m.fr][m.fc];
     if (!mover) return;
     const victim = prevBoard[m.tr][m.tc];
@@ -1210,10 +1342,11 @@
     if (fogged(m.fr, m.fc)) {
       // Moved out of the smoke: nothing to watch, but a visible victim still bursts.
       if (victim && !fogged(m.tr, m.tc)) { anim = null; finishAnim(performance.now(), { victim, m, gained: false }); render(); }
+      else if (pendingFeast) { startFeast(pendingFeast); pendingFeast = null; }
       return;
     }
     const gained = devour && !!victim && victim.powers.some(x => !mover.powers.includes(x));
-    if (REDUCED) { if (gained || promo) flash = { r: m.tr, c: m.tc, start: performance.now(), dur: 300 }; render(); return; }
+    if (REDUCED) { if (gained || promo) flash = { r: m.tr, c: m.tc, start: performance.now(), dur: 300 }; pendingFeast = null; render(); return; }
     const dist = Math.hypot(m.tr - m.fr, m.tc - m.fc);
     anim = { mover, victim, gained, promo, m, start: performance.now(), dur: 150 + dist * 45 };
     render();
@@ -1229,6 +1362,7 @@
           col: [pal.fill, pal.shade, pal.line, "#ffe066"][i % 4], born: now, life: 350 + Math.random() * 250 });
       }
     }
+    if (pendingFeast) { startFeast(pendingFeast); pendingFeast = null; }
     if (a.promo) morph = { r: a.m.tr, c: a.m.tc, ...makeMorph(a.promo.from, a.promo.to), start: now, dur: 1100 };
     else if (a.gained) flash = { r: a.m.tr, c: a.m.tc, start: now, dur: 450 };
   }
@@ -1282,7 +1416,7 @@
     rafId = 0;
     const dt = Math.min(0.05, (now - (lastFrame || now)) / 1000); lastFrame = now;
     draw(now, dt);
-    if (anim || particles.length || flash || morph || (selected && !REDUCED) || ((viewer() || curtain || thinking) && !REDUCED)) rafId = requestAnimationFrame(frame);
+    if (anim || particles.length || flash || morph || feastFx || (selected && !REDUCED) || ((viewer() || curtain || thinking) && !REDUCED)) rafId = requestAnimationFrame(frame);
     else lastFrame = 0;
   }
 
@@ -1314,12 +1448,23 @@
       }
     }
 
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++) {
       const p = board[r][c]; if (!p) continue;
       if (anim && r === anim.m.tr && c === anim.m.tc) continue; // drawn in flight below
       if (fogged(r, c)) continue;
+      if (feastFx && feastFx.spews.some(x => x.tr === r && x.tc === c)) continue; // still inside a king
       const [sr, sc] = toScreen(r, c);
       let x = sc * S, y = sr * S;
+      if (feastFx && feastFx.kings.some(k => k[0] === r && k[1] === c)) {
+        const t = (now - feastFx.start) / FEAST_SHAKE;
+        if (t < 1) {
+          const amp = 1 + Math.round(t * 2);
+          x += Math.round((Math.random() - 0.5) * 2 * amp); y += Math.round((Math.random() - 0.5) * amp) - (t > 0.8 ? 2 : 0);
+          ctx.drawImage(spriteFor(p), x, y);
+          ctx.globalAlpha = 0.25 + 0.35 * Math.abs(Math.sin(now / 50)); ctx.drawImage(spriteFor(p, true), x, y); ctx.globalAlpha = 1;
+          continue;
+        }
+      }
       if (selected && selected[0] === r && selected[1] === c && !REDUCED) {
         const hop = Math.round(Math.abs(Math.sin(now / 160)) * 4);
         ctx.fillStyle = "rgba(0,0,0,0.35)";
@@ -1353,6 +1498,7 @@
       if (t >= 1) finishAnim(now);
     }
 
+    if (feastFx) drawFeast(now);
     drawSmoke(now);
 
     for (const m of legal) {
@@ -1455,7 +1601,7 @@
     });
 
     if (!isOnline) {
-      const tagline = (cpuOn ? `vs ${BOT[botLevel].name} bot` : "Same screen") + ` - Devour ${devour ? "ON" : "OFF"}` + (fog ? " - Fog" : "");
+      const tagline = (cpuOn ? `vs ${BOT[botLevel].name} bot` : "Same screen") + ` - Devour ${devour ? "ON" : "OFF"}` + (fog ? " - Fog" : "") + (BN === 16 ? " - XXL" : "");
       if (gameOver) setStatus(resultText, tagline);
       else if (thinking) { setStatus(fog ? "Something stirs in the smoke" : "Bot is thinking", tagline); addDots(); }
       else if (showCheck()) setStatus(`${colorName(turn)} to move`, fog ? "CHECK! Something in the smoke is attacking your king." : "CHECK!", true);
@@ -1501,6 +1647,7 @@
 
   function canAct() {
     if (gameOver) return false;
+    if (feastFx) return false;
     if (mode === "local") return !thinking && !curtain && !(cpuOn && turn === "b");
     const d = online.data;
     if (!d || d.status !== "playing" || myColor() !== turn) return false;
@@ -1511,7 +1658,7 @@
     const px = e.offsetX / cv.clientWidth * W - F, py = e.offsetY / cv.clientHeight * W - F;
     let c = Math.floor(px / S), r = Math.floor(py / S);
     if (!inside(r, c)) return;
-    if (flipped()) { r = 7 - r; c = 7 - c; }
+    if (flipped()) { r = BN - 1 - r; c = BN - 1 - c; }
     if (curtain) return;
     const p = fogged(r, c) ? null : board[r][c];
     const m = legal.find(m => m.tr === r && m.tc === c);
@@ -1567,6 +1714,9 @@
     $("fogLabel").textContent = settings.fog ? "ON" : "OFF";
     $("fogHint").textContent = settings.fog ? "Smoke hides squares your team hasn't stepped on." : "Everyone sees the whole board.";
     $("kingField").hidden = !settings.fog;
+    $("xxlToggle").setAttribute("aria-checked", String(settings.xxl));
+    $("xxlLabel").textContent = settings.xxl ? "ON" : "OFF";
+    $("xxlHint").textContent = settings.xxl ? "16 x 16 board: two sets side by side, one king each, plus a row of rooks, knights and bishops." : "Normal 8 x 8 board.";
     $("kingToggle").setAttribute("aria-checked", String(settings.kingCap));
     $("kingLabel").textContent = settings.kingCap ? "ON" : "OFF";
     $("kingHint").textContent = settings.kingCap ? "No check in the smoke. Capture the king to win." : "Kings are protected: check and checkmate still apply.";
@@ -1575,6 +1725,7 @@
   for (const b of document.querySelectorAll("[data-level]")) b.onclick = () => { settings.level = +b.dataset.level; saveSettings(); renderSettings(); };
   $("devourToggle").onclick = () => { settings.devour = !settings.devour; saveSettings(); renderSettings(); };
   $("fogToggle").onclick = () => { settings.fog = !settings.fog; saveSettings(); renderSettings(); };
+  $("xxlToggle").onclick = () => { settings.xxl = !settings.xxl; saveSettings(); renderSettings(); };
   $("kingToggle").onclick = () => { settings.kingCap = !settings.kingCap; saveSettings(); renderSettings(); };
   $("curtainBtn").onclick = () => { curtain = false; render(); updateUI(); };
   $("start").onclick = () => {
