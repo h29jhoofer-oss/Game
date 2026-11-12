@@ -6,10 +6,10 @@ A pixel-art chess game with a twist: **you are what you eat.** When a piece capt
 
 Open `index.html` in a browser, or host the folder on GitHub Pages. No build step.
 
-- Click a piece, then a highlighted square to move.
-- Colored pips under a piece show the powers it has absorbed.
-- **CREATE GAME** starts an online game and gives you a link. Anyone who opens it can play you as Black, no account needed. Later visitors watch. Keep your page open while you play: your browser hosts the game.
-- **PLAY HERE** gives you the CPU (plays Black) or two-player hotseat on one screen.
+- Pick a game in the **NEW GAME** panel: play a **bot** (Easy, Medium or Hard), a **friend online**, or a friend on the **same screen**. Then press **START GAME**.
+- The **Devour rule** switch turns the twist on or off. Off is classic chess captures.
+- Click a piece, then a highlighted square to move. Pieces that eat grow the features of their victims.
+- Online: **CREATE ONLINE GAME** gives you a link. Anyone who opens it can play you as Black, no account needed. Later visitors watch. Keep your page open while you play: your browser hosts the game. A friend's code can also be typed into **JOIN**.
 - Checkmate wins. Pawns promote to queens. No castling or en passant.
 
 ## How online play works
@@ -21,4 +21,4 @@ Some strict school or work networks block direct browser connections. If a frien
 ## Files
 
 - `index.html`: the game, for GitHub Pages or any static host.
-- `artifact.html`: an older build published as a claude.ai artifact, where online play goes through the artifact's shared storage (only people in the owner's organization can make moves there).
+- `artifact.html`: an older build (without the setup panel, bots levels or new board) published as a claude.ai artifact, where online play goes through the artifact's shared storage (only people in the owner's organization can make moves there).

@@ -35,14 +35,24 @@
   }
   h1 { font-size: 18px; margin: 8px 0 4px; color: var(--accent); text-shadow: 3px 3px 0 var(--edge); letter-spacing: 1px; text-align: center; }
   .tag { color: var(--muted); margin: 0 0 16px; text-align: center; }
-  .wrap { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; align-items: flex-start; width: 100%; max-width: 860px; }
-  .boardcol { flex: 1 1 400px; max-width: 560px; min-width: 0; }
+  /* Phone: board, then controls, then info. Tablet: board left, panels right. Desktop: controls | board | info. */
+  .wrap { display: grid; gap: 16px; width: 100%; max-width: 1180px; justify-content: center;
+    grid-template-columns: minmax(0, 560px); grid-template-areas: "board" "left" "right"; align-items: start; }
+  @media (min-width: 760px) {
+    .wrap { grid-template-columns: minmax(0, 560px) minmax(240px, 290px); grid-template-areas: "board left" "board right"; grid-template-rows: auto 1fr; }
+  }
+  @media (min-width: 1100px) {
+    .wrap { grid-template-columns: 260px minmax(0, 580px) 280px; grid-template-areas: "left board right"; grid-template-rows: auto; }
+  }
+  .boardcol { grid-area: board; min-width: 0; }
+  .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .side.left { grid-area: left; }
+  .side.right { grid-area: right; }
   canvas#board {
     width: 100%; max-width: 100%; height: auto; aspect-ratio: 1; display: block;
     image-rendering: pixelated; image-rendering: crisp-edges;
     border: 4px solid var(--edge); box-shadow: 6px 6px 0 var(--edge); cursor: pointer;
   }
-  .side { flex: 1 1 260px; max-width: 560px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
   .box { background: var(--panel); border: 3px solid var(--edge); box-shadow: 4px 4px 0 var(--edge); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
   .box h2 { font-size: 10px; margin: 0; color: var(--accent); letter-spacing: 1px; }
   .muted { color: var(--muted); }
@@ -68,6 +78,19 @@
   .rules p { margin: 0; color: var(--muted); }
   .rules b { color: var(--ink); font-weight: normal; }
   .err { color: var(--bad); }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .label { color: var(--muted); font-size: 8px; letter-spacing: 1px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button { flex: 1 1 auto; padding: 8px 6px; }
+  .seg button[aria-pressed="true"] { background: var(--ok); color: var(--bg); }
+  .toggle { display: inline-flex; align-items: center; gap: 10px; align-self: flex-start; }
+  .track { width: 34px; height: 18px; background: var(--bg); border: 3px solid var(--edge); position: relative; display: inline-block; }
+  .knob { position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; background: var(--muted); transition: left .12s; }
+  .toggle[aria-checked="true"] .track { background: var(--ok); }
+  .toggle[aria-checked="true"] .knob { left: 19px; background: var(--ink); }
+  button.big { padding: 12px 10px; font-size: 12px; }
+  .divider { border: 0; border-top: 3px dashed var(--raised); margin: 4px 0; width: 100%; }
+  @media (prefers-reduced-motion: reduce) { .knob { transition: none; } }
   .games { display: flex; flex-direction: column; gap: 6px; }
   .games button { text-align: left; }
 </style>
@@ -78,13 +101,36 @@
 <h1>DEVOUR CHESS</h1>
 <p class="tag">You are what you eat.</p>
 <div class="wrap">
-  <div class="boardcol"><canvas id="board" width="160" height="160" aria-label="Chess board"></canvas></div>
-  <div class="side">
+  <div class="boardcol"><canvas id="board" width="184" height="184" aria-label="Chess board"></canvas></div>
+  <div class="side left">
     <div class="box" id="status"></div>
 
-    <div class="box" id="onlineHome">
-      <h2>PLAY A FRIEND</h2>
-      <div class="row"><button id="create" class="primary">CREATE GAME</button></div>
+    <div class="box" id="setup">
+      <h2>NEW GAME</h2>
+      <div class="field">
+        <div class="label">OPPONENT</div>
+        <div class="seg" role="group" aria-label="Opponent">
+          <button id="oppBot" data-opp="bot">BOT</button>
+          <button id="oppOnline" data-opp="online">FRIEND ONLINE</button>
+          <button id="oppLocal" data-opp="local">SAME SCREEN</button>
+        </div>
+      </div>
+      <div class="field" id="levelField">
+        <div class="label">BOT SKILL</div>
+        <div class="seg" role="group" aria-label="Bot skill">
+          <button id="lvl1" data-level="1">EASY</button>
+          <button id="lvl2" data-level="2">MEDIUM</button>
+          <button id="lvl3" data-level="3">HARD</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="label">DEVOUR RULE</div>
+        <button id="devourToggle" class="toggle" role="switch" aria-checked="true"><span class="track"><span class="knob"></span></span><span id="devourLabel">ON</span></button>
+        <div class="muted" id="devourHint"></div>
+      </div>
+      <button id="start" class="primary big">START GAME</button>
+      <hr class="divider">
+      <div class="label">HAVE A CODE FROM A FRIEND?</div>
       <div class="row">
         <input id="joinCode" maxlength="6" placeholder="CODE" aria-label="Game code" autocomplete="off">
         <button id="join">JOIN</button>
@@ -113,20 +159,17 @@
     </div>
 
     <div class="box" id="localBox">
-      <h2>PLAY HERE</h2>
-      <div class="row">
-        <button id="new">NEW</button>
-        <button id="undo">UNDO</button>
-        <button id="cpu">CPU: ON</button>
-      </div>
+      <div class="row"><button id="undo">UNDO MOVE</button></div>
     </div>
-
+  </div>
+  <div class="side right">
     <div class="box" id="info">Click a piece to see its powers.</div>
     <div class="box rules">
       <p><b>The twist:</b> a piece that captures <b>absorbs</b> every power of its victim and can move like all of them.</p>
       <p>Checkmate wins as usual. Pawns promote to queens. No castling or en passant.</p>
       <p>Pawn eats knight? It can now hop like a knight. Eaten pieces fuse onto the eater in their own colors:</p>
       <div class="legend" id="legend"></div>
+      <p id="devourNote" hidden><b>Devour is OFF</b> for this game: captures work like normal chess.</p>
     </div>
     <div class="box" id="log"></div>
   </div>
@@ -178,6 +221,7 @@
   const clone = (b) => b.map(row => row.map(p => p ? { ...p, powers: [...p.powers] } : null));
   const inside = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
   const other = (col) => col === "w" ? "b" : "w";
+  let devour = true; // the rule in force for the game on the board
 
   function pseudoMoves(b, r, c) {
     const p = b[r][c]; if (!p) return [];
@@ -227,7 +271,7 @@
   function applyMove(b, m) {
     const nb = clone(b);
     const mover = nb[m.fr][m.fc], victim = nb[m.tr][m.tc];
-    if (victim) for (const pw of victim.powers) if (!mover.powers.includes(pw)) mover.powers.push(pw);
+    if (victim && devour) for (const pw of victim.powers) if (!mover.powers.includes(pw)) mover.powers.push(pw);
     mover.moved = true;
     nb[m.tr][m.tc] = mover; nb[m.fr][m.fc] = null;
     if (mover.type === "P" && (m.tr === 0 || m.tr === 7)) {
@@ -286,25 +330,60 @@
     }
     return s;
   }
-  function cpuMove(b, color) {
-    const moves = allLegal(b, color);
-    if (!moves.length) return null;
-    let best = -Infinity, choices = [];
+  // Captures first (biggest victim first) so alpha-beta prunes more.
+  function orderMoves(b, moves) {
+    const val = (m) => { const v = b[m.tr][m.tc]; return v ? (v.type === "K" ? 100 : pieceValue(v)) : 0; };
+    return moves.map(m => [val(m), m]).sort((x, y) => y[0] - x[0]).map(x => x[1]);
+  }
+  // Negamax with alpha-beta. Inner nodes use pseudo-legal moves: leaving your
+  // king en prise just loses it on the next ply, which scores as a loss.
+  let deadline = Infinity;
+  const TIMEOUT = {};
+  function search(b, color, depth, alpha, beta) {
+    if (performance.now() > deadline) throw TIMEOUT;
+    if (!findKing(b, color)) return -100000 - depth;
+    if (depth === 0) return evaluate(b, color);
+    const moves = orderMoves(b, pseudoAll(b, color));
+    if (!moves.length) return 0;
+    let best = -Infinity;
     for (const m of moves) {
-      const nb = applyMove(b, m);
-      let worst = Infinity;
-      const replies = pseudoAll(nb, other(color));
-      if (!replies.length) worst = evaluate(nb, color);
-      for (const rm of replies) {
-        const nb2 = applyMove(nb, rm);
-        const score = findKing(nb2, color) ? evaluate(nb2, color) : -1e6;
-        if (score < worst) worst = score;
-      }
-      const s = worst + Math.random() * 0.05;
-      if (s > best + 1e-9) { best = s; choices = [m]; }
-      else if (Math.abs(s - best) < 1e-9) choices.push(m);
+      const sc = -search(applyMove(b, m), other(color), depth - 1, -beta, -alpha);
+      if (sc > best) best = sc;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break;
     }
-    return choices[Math.floor(Math.random() * choices.length)];
+    return best;
+  }
+  const BOT = {
+    1: { name: "Easy", depth: 1, noise: 2.5, randomMove: 0.3 },
+    2: { name: "Medium", depth: 2, noise: 0.3, randomMove: 0 },
+    3: { name: "Hard", depth: 3, noise: 0.05, randomMove: 0 },
+  };
+  function botMove(b, color, level) {
+    const cfg = BOT[level] || BOT[2];
+    let moves = orderMoves(b, allLegal(b, color));
+    if (!moves.length) return null;
+    if (Math.random() < cfg.randomMove) return moves[Math.floor(Math.random() * moves.length)];
+    // Search one ply deeper at a time; if thinking runs long, play the best
+    // move from the deepest search that finished.
+    let pick = moves[0];
+    deadline = performance.now() + 2500;
+    try {
+      for (let depth = 1; depth <= cfg.depth; depth++) {
+        let best = -Infinity, bestMove = moves[0], alpha = -Infinity;
+        const scored = [];
+        for (const m of moves) {
+          const sc = -search(applyMove(b, m), other(color), depth - 1, -Infinity, -alpha + cfg.noise) + Math.random() * cfg.noise;
+          scored.push([sc, m]);
+          if (sc > best) { best = sc; bestMove = m; }
+          if (best - cfg.noise > alpha) alpha = best - cfg.noise;
+        }
+        pick = bestMove;
+        moves = scored.sort((x, y) => y[0] - x[0]).map(x => x[1]); // best first for the next pass
+      }
+    } catch (e) { if (e !== TIMEOUT) throw e; }
+    deadline = Infinity;
+    return pick;
   }
 
   // ---------- Shared state ----------
@@ -313,13 +392,17 @@
   let mode = "local";
   let board, turn, lastMove, logLines, gameOver = false, resultText = "";
   let history = [], selected = null, legal = [], cpuOn = true, thinking = false;
+  // Choices in the NEW GAME panel; they take effect when a game starts.
+  const settings = { opp: "bot", level: 2, devour: true };
+  try { Object.assign(settings, JSON.parse(localStorage.getItem("dc-settings")) || {}); } catch (_) {}
+  let botLevel = settings.level;
 
   const FILES = "abcdefgh";
   const sqName = (r, c) => FILES[c] + (8 - r);
   function describeMove(b, m) {
     const mover = b[m.fr][m.fc], victim = b[m.tr][m.tc];
     let line = `${mover.color === "w" ? "W" : "B"} ${NAMES[mover.type]} ${sqName(m.fr, m.fc)}-${sqName(m.tr, m.tc)}`;
-    const gained = victim ? victim.powers.filter(p => !mover.powers.includes(p)) : [];
+    const gained = victim && devour ? victim.powers.filter(p => !mover.powers.includes(p)) : [];
     if (victim) {
       line += ` eats ${NAMES[victim.type]}`;
       if (gained.length) line += ` +${gained.map(g => NAMES[g]).join("+")}`;
@@ -336,6 +419,8 @@
 
   // ---------- Local mode ----------
   function newLocalGame() {
+    devour = settings.devour; cpuOn = settings.opp === "bot"; botLevel = settings.level;
+    anim = null; flash = null;
     board = startBoard(); turn = "w"; history = []; selected = null; legal = [];
     lastMove = null; gameOver = false; resultText = ""; logLines = [];
     render(); updateUI();
@@ -354,12 +439,18 @@
   }
   function scheduleCpu() {
     thinking = true; updateUI();
+    const started = board;
+    // Let the player's move animation play before the bot starts thinking.
     setTimeout(() => {
-      if (mode !== "local") { thinking = false; return; }
-      const m = cpuMove(board, "b");
-      thinking = false;
-      if (m) localMove(m); else updateUI();
-    }, 350);
+      if (mode !== "local" || board !== started) { thinking = false; updateUI(); return; }
+      const t0 = performance.now();
+      const m = botMove(board, "b", botLevel);
+      setTimeout(() => {
+        if (mode !== "local" || board !== started) { thinking = false; updateUI(); return; }
+        thinking = false;
+        if (m) localMove(m); else updateUI();
+      }, Math.max(0, 450 - (performance.now() - t0)));
+    }, 380);
   }
 
   // ---------- Online mode (peer-to-peer) ----------
@@ -381,8 +472,8 @@
     if (online.seat === "guest") return other(d.hostColor);
     return null;
   };
-  function freshState(hostColor = "w") {
-    return { v: 1, board: flatten(startBoard()), turn: "w", lastMove: null, log: [], status: "waiting", result: "", ply: 0, hostColor };
+  function freshState(hostColor = "w", dv = true) {
+    return { v: 1, board: flatten(startBoard()), turn: "w", lastMove: null, log: [], status: "waiting", result: "", ply: 0, hostColor, devour: dv };
   }
   function newCode() {
     const abc = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -403,6 +494,7 @@
   function applyState(st) {
     const prev = online.data;
     online.data = st;
+    devour = st.devour !== false;
     if (prev && st.ply === prev.ply + 1 && st.lastMove) startMoveAnim(board, st.lastMove);
     board = unflatten(st.board);
     turn = st.turn; lastMove = st.lastMove || null; logLines = [...(st.log || [])];
@@ -435,7 +527,7 @@
     mode = "online"; online.code = code; online.seat = "host";
     const saved = !fresh && store.get("dc-host-" + code);
     setHash(code);
-    applyState(saved && saved.v === 1 ? saved : freshState("w"));
+    applyState(saved && saved.v === 1 ? saved : freshState("w", settings.devour));
     store.set("dc-host-" + code, online.data);
     startHostPeer();
   }
@@ -497,7 +589,7 @@
     } else if (msg.type === "resign" && st.status === "playing") {
       hostCommit({ ...st, status: "over", result: `${colorName(gc)} resigned. ${colorName(st.hostColor)} wins.` });
     } else if (msg.type === "rematch" && st.status === "over") {
-      hostCommit({ ...freshState(other(st.hostColor)), status: "playing" });
+      hostCommit({ ...freshState(other(st.hostColor), st.devour !== false), status: "playing" });
     }
   }
 
@@ -578,7 +670,7 @@
   }
   function rematch() {
     const st = online.data; if (!st || !myColor() || st.status !== "over") return;
-    if (online.seat === "host") hostCommit({ ...freshState(other(st.hostColor)), status: online.connected ? "playing" : "waiting" });
+    if (online.seat === "host") hostCommit({ ...freshState(other(st.hostColor), st.devour !== false), status: online.connected ? "playing" : "waiting" });
     else sendToHost({ type: "rematch" });
   }
   function leaveGame(toLocal = true) {
@@ -599,7 +691,7 @@
   // ---------- Rendering ----------
   const cv = $("board");
   const ctx = cv.getContext("2d");
-  const S = 20;
+  const S = 20, F = 12, W = 8 * S + 2 * F; // square size, frame width, canvas size
   const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   const flipped = () => mode === "online" && myColor() === "b";
   const toScreen = (r, c) => flipped() ? [7 - r, 7 - c] : [r, c];
@@ -685,6 +777,104 @@
     return c;
   }
 
+  // ----- Board background (pre-rendered once per orientation) -----
+  const GLYPHS = {
+    a: ["   "," ##","# #","# #"," ##"], b: ["#  ","## ","# #","# #","## "], c: ["   "," ##","#  ","#  "," ##"],
+    d: ["  #"," ##","# #","# #"," ##"], e: ["   "," # ","###","#  "," ##"], f: [" ##","#  ","## ","#  ","#  "],
+    g: [" ##","# #"," ##","  #","## "], h: ["#  ","## ","# #","# #","# #"],
+    1: [" # ","## "," # "," # ","###"], 2: ["## ","  #"," # ","#  ","###"], 3: ["## ","  #"," # ","  #","## "],
+    4: ["# #","# #","###","  #","  #"], 5: ["###","#  ","## ","  #","## "], 6: [" ##","#  ","## ","# #"," # "],
+    7: ["###","  #"," # "," # "," # "], 8: [" # ","# #"," # ","# #"," # "],
+  };
+  const WOOD = {
+    light: { base: "#d9a066", grainA: "#cf955b", grainB: "#e3ad74", hi: "#ecc08c", lo: "#b98048" },
+    dark: { base: "#8f5a3c", grainA: "#7f4e33", grainB: "#9c6546", hi: "#a8714f", lo: "#6c4129" },
+    frame: { base: "#4a2c18", grainA: "#3f2513", grainB: "#55331d", hi: "#7a4f2e", lo: "#24140a", groove: "#1a0e06", lip: "#8f6038" },
+  };
+  function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  // Wood grain: wavy streaks along one axis.
+  function grain(g, x, y, w, h, wood, vertical, rand) {
+    g.fillStyle = wood.base; g.fillRect(x, y, w, h);
+    const len = vertical ? h : w, across = vertical ? w : h;
+    for (let k = 0; k < across; k++) {
+      if (rand() < 0.45) continue;
+      const col = rand() < 0.5 ? wood.grainA : wood.grainB;
+      let pos = 0, wob = 0;
+      while (pos < len) {
+        const run = 2 + Math.floor(rand() * 7);
+        g.fillStyle = col;
+        const kk = Math.max(0, Math.min(across - 1, k + wob));
+        if (vertical) g.fillRect(x + kk, y + pos, 1, Math.min(run, len - pos));
+        else g.fillRect(x + pos, y + kk, Math.min(run, len - pos), 1);
+        pos += run + (rand() < 0.3 ? 2 : 0);
+        if (rand() < 0.15) wob += rand() < 0.5 ? -1 : 1;
+      }
+    }
+  }
+  // Inlaid text: a gold letter set into a dark carved cut.
+  function engraveText(g, text, x, y) {
+    for (const [pass, col, d] of [[0, WOOD.frame.groove, 1], [1, "#d9a552", 0]]) {
+      g.fillStyle = col;
+      let cx = x;
+      for (const ch of text) {
+        const gl = GLYPHS[ch];
+        gl.forEach((row, i) => { for (let j = 0; j < 3; j++) if (row[j] === "#") g.fillRect(cx + j + d, y + i + d, 1, 1); });
+        cx += 4;
+      }
+    }
+  }
+  const bgCache = {};
+  function boardBackground(flip) {
+    if (bgCache[flip]) return bgCache[flip];
+    const c = document.createElement("canvas"); c.width = W; c.height = W;
+    const g = c.getContext("2d");
+    const fr = WOOD.frame, rand = rng(1337);
+    // Frame: four planks with mitred grain, raised outer bevel, carved groove.
+    grain(g, 0, 0, W, F, fr, false, rand); grain(g, 0, W - F, W, F, fr, false, rand);
+    grain(g, 0, F, F, W - 2 * F, fr, true, rand); grain(g, W - F, F, F, W - 2 * F, fr, true, rand);
+    for (let i = 0; i < F; i++) { g.fillStyle = fr.lo; g.fillRect(i, W - 1 - i, 1, 1); g.fillRect(W - 1 - i, i, 1, 1); } // mitre joints
+    g.fillStyle = fr.hi; g.fillRect(0, 0, W, 1); g.fillRect(0, 0, 1, W);
+    g.fillStyle = fr.lo; g.fillRect(0, W - 1, W, 1); g.fillRect(W - 1, 0, 1, W);
+    const groove = (o) => {
+      g.fillStyle = fr.groove; g.fillRect(o, o, W - 2 * o, 1); g.fillRect(o, o, 1, W - 2 * o);
+      g.fillRect(o, W - 1 - o, W - 2 * o, 1); g.fillRect(W - 1 - o, o, 1, W - 2 * o);
+      g.fillStyle = fr.lip; g.fillRect(o + 1, o + 1, W - 2 * o - 2, 1); g.fillRect(o + 1, o + 1, 1, W - 2 * o - 2);
+    };
+    groove(2);
+    // Corner rosettes.
+    for (const [cx, cy] of [[5, 5], [W - 6, 5], [5, W - 6], [W - 6, W - 6]]) {
+      g.fillStyle = fr.groove; g.fillRect(cx - 1, cy, 3, 1); g.fillRect(cx, cy - 1, 1, 3);
+      g.fillStyle = fr.lip; g.fillRect(cx, cy, 1, 1);
+    }
+    // Inner lip around the playing surface: dark shadow line, then a gold inlay.
+    g.fillStyle = fr.groove; g.fillRect(F - 2, F - 2, 8 * S + 4, 2); g.fillRect(F - 2, F - 2, 2, 8 * S + 4);
+    g.fillRect(F - 2, F + 8 * S, 8 * S + 4, 2); g.fillRect(F + 8 * S, F - 2, 2, 8 * S + 4);
+    g.fillStyle = "#c8963e"; g.fillRect(F - 1, F - 1, 8 * S + 2, 1); g.fillRect(F - 1, F - 1, 1, 8 * S + 2);
+    g.fillStyle = "#7a5520"; g.fillRect(F - 1, F + 8 * S, 8 * S + 2, 1); g.fillRect(F + 8 * S, F - 1, 1, 8 * S + 2);
+    // Coordinates carved into the frame.
+    for (let i = 0; i < 8; i++) {
+      const file = "abcdefgh"[flip ? 7 - i : i], rank = String(flip ? i + 1 : 8 - i);
+      engraveText(g, file, F + i * S + 8, W - F + 4);
+      engraveText(g, file, F + i * S + 8, 3);
+      engraveText(g, rank, 4, F + i * S + 7);
+      engraveText(g, rank, W - F + 4, F + i * S + 7);
+    }
+    // Parquet squares: light maple with grain one way, dark walnut the other, each with a small bevel.
+    const sr = rng(7);
+    for (let r = 0; r < 8; r++) for (let col = 0; col < 8; col++) {
+      const dark = (r + col) % 2 === 1, wood = dark ? WOOD.dark : WOOD.light;
+      const x = F + col * S, y = F + r * S;
+      grain(g, x, y, S, S, wood, dark, sr);
+      g.fillStyle = wood.hi; g.fillRect(x, y, S, 1); g.fillRect(x, y, 1, S);
+      g.fillStyle = wood.lo; g.fillRect(x, y + S - 1, S, 1); g.fillRect(x + S - 1, y, 1, S);
+      if (!dark) { // a tiny inlaid diamond in each light square's corner
+        g.fillStyle = wood.lo; g.fillRect(x + 3, y + 2, 1, 1); g.fillRect(x + 2, y + 3, 1, 1); g.fillRect(x + 4, y + 3, 1, 1); g.fillRect(x + 3, y + 4, 1, 1);
+      }
+    }
+    bgCache[flip] = c;
+    return c;
+  }
+
   // ----- Animation state -----
   let anim = null, flash = null, rafId = 0;
   const particles = [];
@@ -692,7 +882,7 @@
     const mover = prevBoard[m.fr] && prevBoard[m.fr][m.fc];
     if (!mover) return;
     const victim = prevBoard[m.tr][m.tc];
-    const gained = !!victim && victim.powers.some(x => !mover.powers.includes(x));
+    const gained = devour && !!victim && victim.powers.some(x => !mover.powers.includes(x));
     if (REDUCED) { if (gained) flash = { r: m.tr, c: m.tc, start: performance.now(), dur: 300 }; render(); return; }
     const dist = Math.hypot(m.tr - m.fr, m.tc - m.fc);
     anim = { mover, victim, gained, m, start: performance.now(), dur: 150 + dist * 45 };
@@ -724,10 +914,9 @@
 
   function draw(now, dt) {
     ctx.imageSmoothingEnabled = false;
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      ctx.fillStyle = (r + c) % 2 ? SQ_DARK : SQ_LIGHT;
-      ctx.fillRect(c * S, r * S, S, S);
-    }
+    ctx.drawImage(boardBackground(flipped()), 0, 0);
+    ctx.save();
+    ctx.translate(F, F);
     const fillSq = (r, c, color) => { const [sr, sc] = toScreen(r, c); ctx.fillStyle = color; ctx.fillRect(sc * S, sr * S, S, S); };
     if (lastMove) {
       fillSq(lastMove.fr, lastMove.fc, "rgba(255,224,102,0.35)");
@@ -806,6 +995,7 @@
       if (now - q.born > q.life) { particles.splice(i, 1); continue; }
       ctx.fillStyle = q.col; ctx.fillRect(Math.round(q.x), Math.round(q.y), 2, 2);
     }
+    ctx.restore();
   }
 
   // ---------- UI ----------
@@ -854,9 +1044,10 @@
 
   function updateUI() {
     const isOnline = mode === "online";
-    $("onlineHome").hidden = isOnline;
+    $("setup").hidden = isOnline;
     $("onlineGame").hidden = !isOnline;
-    $("localBox").hidden = isOnline;
+    $("localBox").hidden = isOnline || !history.length;
+    $("devourNote").hidden = devour;
     $("log").textContent = "";
     (logLines && logLines.length ? logLines : ["No moves yet."]).forEach((l, i) => {
       if (i) $("log").append(document.createElement("br"));
@@ -864,11 +1055,11 @@
     });
 
     if (!isOnline) {
-      if (gameOver) setStatus(resultText);
-      else if (thinking) setStatus("CPU is chewing...");
-      else setStatus(`${turn === "w" ? "White" : "Black"} to move`, inCheck(board, turn) ? "CHECK!" : "", true);
-      $("cpu").textContent = `CPU: ${cpuOn ? "ON" : "OFF"}`;
-      $("cpu").classList.toggle("on", cpuOn);
+      const tagline = (cpuOn ? `vs ${BOT[botLevel].name} bot` : "Same screen") + ` - Devour ${devour ? "ON" : "OFF"}`;
+      if (gameOver) setStatus(resultText, tagline);
+      else if (thinking) setStatus("Bot is chewing...", tagline);
+      else if (inCheck(board, turn)) setStatus(`${colorName(turn)} to move`, "CHECK!", true);
+      else setStatus(cpuOn && turn === "w" ? "Your move (White)" : `${colorName(turn)} to move`, tagline);
       return;
     }
 
@@ -883,13 +1074,13 @@
 
     if (!d) { setStatus("Online game", "Connecting..."); return; }
     if (d.status === "waiting") {
-      setStatus("Waiting for a friend", online.seat === "host" ? "Send them the link below." : "");
+      setStatus("Waiting for a friend", (online.seat === "host" ? "Send them the link below. " : "") + `Devour ${devour ? "ON" : "OFF"}`);
     } else if (d.status === "over") {
       setStatus(resultText || "Game over");
     } else {
       const who = colorName(turn);
       const main = me ? (turn === me ? "Your move" : `Waiting for ${who}...`) : `${who} to move`;
-      const check = inCheck(board, turn) ? "CHECK!" : (online.seat === "spectator" ? "You're watching." : "");
+      const check = inCheck(board, turn) ? "CHECK!" : (online.seat === "spectator" ? "You're watching." : `Devour ${devour ? "ON" : "OFF"}`);
       setStatus(main, check, check === "CHECK!");
     }
   }
@@ -917,9 +1108,8 @@
   }
 
   cv.addEventListener("click", (e) => {
-    const rect = cv.getBoundingClientRect();
-    let c = Math.floor((e.clientX - rect.left) / rect.width * 8);
-    let r = Math.floor((e.clientY - rect.top) / rect.height * 8);
+    const px = e.offsetX / cv.clientWidth * W - F, py = e.offsetY / cv.clientHeight * W - F;
+    let c = Math.floor(px / S), r = Math.floor(py / S);
     if (!inside(r, c)) return;
     if (flipped()) { r = 7 - r; c = 7 - c; }
     const p = board[r][c];
@@ -931,7 +1121,6 @@
     render();
   });
 
-  $("new").onclick = () => { if (!thinking) newLocalGame(); };
   $("undo").onclick = () => {
     if (thinking || !history.length) return;
     let h = history.pop();
@@ -940,11 +1129,23 @@
     gameOver = false; resultText = ""; selected = null; legal = [];
     render(); updateUI();
   };
-  $("cpu").onclick = () => {
-    cpuOn = !cpuOn; updateUI();
-    if (cpuOn && turn === "b" && !gameOver && !thinking) scheduleCpu();
+  function saveSettings() { try { localStorage.setItem("dc-settings", JSON.stringify(settings)); } catch (_) {} }
+  function renderSettings() {
+    for (const b of document.querySelectorAll("[data-opp]")) b.setAttribute("aria-pressed", String(b.dataset.opp === settings.opp));
+    for (const b of document.querySelectorAll("[data-level]")) b.setAttribute("aria-pressed", String(+b.dataset.level === settings.level));
+    $("levelField").hidden = settings.opp !== "bot";
+    $("devourToggle").setAttribute("aria-checked", String(settings.devour));
+    $("devourLabel").textContent = settings.devour ? "ON" : "OFF";
+    $("devourHint").textContent = settings.devour ? "Captures absorb the victim's powers." : "Classic chess captures.";
+    $("start").textContent = settings.opp === "online" ? "CREATE ONLINE GAME" : "START GAME";
+  }
+  for (const b of document.querySelectorAll("[data-opp]")) b.onclick = () => { settings.opp = b.dataset.opp; saveSettings(); renderSettings(); };
+  for (const b of document.querySelectorAll("[data-level]")) b.onclick = () => { settings.level = +b.dataset.level; saveSettings(); renderSettings(); };
+  $("devourToggle").onclick = () => { settings.devour = !settings.devour; saveSettings(); renderSettings(); };
+  $("start").onclick = () => {
+    if (settings.opp === "online") { if (typeof Peer !== "undefined") createGame(); return; }
+    thinking = false; newLocalGame();
   };
-  $("create").onclick = createGame;
   $("join").onclick = () => openGame($("joinCode").value);
   $("joinCode").addEventListener("keydown", (e) => { if (e.key === "Enter") openGame($("joinCode").value); });
   $("resign").onclick = resign;
@@ -981,10 +1182,12 @@
   }
 
   // ---------- Boot ----------
+  renderSettings();
   newLocalGame();
   if (typeof Peer === "undefined") {
-    $("create").disabled = true; $("join").disabled = true;
-    setMsg("onlineMsg", "Online play couldn't load. You can still play the CPU here.", true);
+    $("oppOnline").disabled = true; $("join").disabled = true;
+    if (settings.opp === "online") { settings.opp = "bot"; renderSettings(); }
+    setMsg("onlineMsg", "Online play couldn't load. You can still play the bot here.", true);
   } else {
     const code = hashCode();
     if (code) openGame(code);
