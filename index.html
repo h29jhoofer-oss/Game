@@ -121,6 +121,7 @@
   .toggle[aria-checked="true"] .knob { left: 19px; background: var(--ink); }
   button.big { padding: 12px 10px; font-size: 12px; }
   .divider { border: 0; border-top: 3px dashed var(--raised); margin: 4px 0; width: 100%; }
+  input[type="range"] { width: 100%; padding: 0; border: 0; background: transparent; accent-color: var(--ok); text-transform: none; }
   .dots { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
   .dots i { width: 4px; height: 4px; background: var(--accent); animation: dothop .9s steps(2, jump-none) infinite; }
   .dots i:nth-child(2) { animation-delay: .3s; }
@@ -235,6 +236,16 @@
 
     <div class="box" id="localBox">
       <div class="row"><button id="undo">UNDO MOVE</button></div>
+    </div>
+    <div class="box" id="soundBox">
+      <h2>SOUND</h2>
+      <div class="row">
+        <button id="musicToggle" class="toggle" role="switch" aria-checked="true"><span class="track"><span class="knob"></span></span><span>MUSIC</span></button>
+        <button id="sfxToggle" class="toggle" role="switch" aria-checked="true"><span class="track"><span class="knob"></span></span><span>EFFECTS</span></button>
+      </div>
+      <label class="field" for="volume"><span class="label">VOLUME <span id="volLabel"></span></span>
+        <input id="volume" type="range" min="0" max="100" step="5"></label>
+      <div class="muted" id="soundHint">Sound starts after your first click. Press M to mute.</div>
     </div>
   </div>
   <div class="side right">
@@ -619,7 +630,7 @@
   let board, turn, lastMove, logLines, gameOver = false, resultText = "";
   let history = [], selected = null, legal = [], cpuOn = true, thinking = false;
   // Choices in the NEW GAME panel; they take effect when a game starts.
-  const settings = { opp: "bot", level: 2, devour: true, fog: false, kingCap: false, xxl: false };
+  const settings = { opp: "bot", level: 2, devour: true, fog: false, kingCap: false, xxl: false, music: true, sfx: true, volume: 70, muted: false };
   try { Object.assign(settings, JSON.parse(localStorage.getItem("dc-settings")) || {}); } catch (_) {}
   let botLevel = settings.level;
 
@@ -644,8 +655,7 @@
     return inCheck(b, toMove) ? `CHECKMATE! ${toMove === "w" ? "Black" : "White"} wins.` : "STALEMATE. It's a draw.";
   }
   function moveSound(info) {
-    if (info.captured) { blip(info.gained ? 660 : 440, 0.12); if (info.gained) setTimeout(() => blip(880, 0.1), 90); }
-    else blip(260, 0.06);
+    sfxSafe(() => info.captured ? SFX.capture(info.gained) : SFX.move());
   }
 
   // ---------- Local mode ----------
@@ -668,14 +678,16 @@
     logLines.unshift(...res.logs);
     lastMove = res.m; turn = other(turn); selected = null; legal = [];
     if (res.over) { gameOver = true; resultText = res.result; triggerEnd(anim ? anim.dur + 150 : 150); }
-    if (res.m.ambush && humanMove) note("Ambush! Your piece ran into something hidden in the smoke and ate it.");
-    if (res.m.bumped && humanMove) note("Your piece bumped into the enemy king hiding in the smoke and stopped.");
-    if (fog && !cpuOn && !gameOver) curtain = true;
+    if (res.m.ambush && humanMove) { note("Ambush! Your piece ran into something hidden in the smoke and ate it."); sfxSafe(SFX.ambush); }
+    if (res.m.bumped && humanMove) { note("Your piece bumped into the enemy king hiding in the smoke and stopped."); sfxSafe(SFX.bump); }
+    if (fog && !cpuOn && !gameOver) { curtain = true; sfxSafe(SFX.whoosh); }
     render(); updateUI();
+    if (!curtain && showCheck()) setTimeout(() => sfxSafe(SFX.check), 250);
     if (!gameOver && cpuOn && turn === "b") scheduleCpu(res.feast && !REDUCED ? 2000 : 0);
   }
   function scheduleCpu(extraDelay = 0) {
     thinking = true; updateUI(); render();
+    const ticker = setInterval(() => { if (!thinking) clearInterval(ticker); else sfxSafe(SFX.tick); }, 320);
     const started = board;
     // Let the player's move animation play before the bot starts thinking.
     setTimeout(() => {
@@ -745,6 +757,7 @@
     else if (prev && prev.status !== "over") triggerEnd(anim ? anim.dur + 150 : 150);
     if (!prev || prev.ply !== st.ply) { selected = null; legal = []; }
     render(); updateUI();
+    if (prev && prev.ply !== st.ply && showCheck()) setTimeout(() => sfxSafe(SFX.check), 250);
   }
   function makeMoveState(st, m) {
     const b = unflatten(st.board);
@@ -786,7 +799,7 @@
         if (!online.guestConn || !online.guestConn.open) {
           online.guestConn = conn; seat = "guest"; online.connected = true;
           if (online.data.status === "waiting") online.data = { ...online.data, status: "playing" };
-          setMsg("gameMsg", "Your friend joined."); blip(520, 0.1); setTimeout(() => blip(780, 0.1), 100);
+          setMsg("gameMsg", "Your friend joined."); sfxSafe(SFX.join);
         }
         try { conn.send({ type: "welcome", seat }); } catch (_) {}
         hostCommit(online.data);
@@ -880,7 +893,7 @@
       if (msg.type === "state" && msg.state && Array.isArray(msg.state.board) && msg.state.board.length === (msg.state.n || 8) ** 2) {
         const prev = online.data;
         if (prev && msg.state.ply > prev.ply && msg.state.lastMove && other(msg.state.turn) !== myColor())
-          blip(msg.state.lastMove.captured ? 660 : 300, 0.08);
+          sfxSafe(() => msg.state.lastMove.captured ? SFX.capture(false) : SFX.move());
         applyState(msg.state);
       }
     });
@@ -904,7 +917,7 @@
     const st = online.data; if (!st) return;
     const r = makeMoveState(st, m);
     moveSound(r.info);
-    if (r.ambush) note("Ambush! Your piece ran into something hidden in the smoke and ate it.");
+    if (r.ambush) { note("Ambush! Your piece ran into something hidden in the smoke and ate it."); sfxSafe(SFX.ambush); }
     if (online.seat === "host") hostCommit(r.state);
     else if (sendToHost({ type: "move", m: { fr: m.fr, fc: m.fc, tr: m.tr, tc: m.tc, promo: m.promo }, ply: st.ply })) applyState(r.state);
   }
@@ -1279,7 +1292,7 @@
     const fx = feastFx, t = (now - fx.start - FEAST_SHAKE) / FEAST_FLY;
     if (t < 0) return;
     if (!fx.burst) {
-      fx.burst = true; blip(520, 0.12); setTimeout(() => blip(330, 0.15), 120);
+      fx.burst = true; sfxSafe(() => SFX.spit(fx.spews.length));
       for (const [kr, kc] of fx.kings) {
         if (fogged(kr, kc)) continue;
         const [sr, sc] = toScreen(kr, kc);
@@ -1329,6 +1342,7 @@
     }
     // the losing king
     if (fx.crumbled) return;
+    if (t > 700 && !fx.toppled) { fx.toppled = true; sfxSafe(SFX.topple); }
     const k = Math.min(1, t / 750);
     let ang = k * k * (Math.PI / 2);
     if (t > 750 && t < 950) ang -= Math.sin((t - 750) / 200 * Math.PI) * 0.18;
@@ -1339,7 +1353,7 @@
         particles.push({ x: x + 4 + Math.random() * 14, y: y + 12 + Math.random() * 6, vx: (Math.random() - 0.5) * 30, vy: -Math.random() * 25,
           col: [pal.fill, pal.shade, pal.line, "#6a6478"][i % 4], born: now, life: 700 + Math.random() * 500 });
       }
-      blip(110, 0.35);
+      sfxSafe(SFX.crumble);
       return;
     }
     drawRotated(img, x, y, ang, 15, 18);
@@ -1464,7 +1478,9 @@
     const notes = kind === "win" ? [[523, 0], [659, 110], [784, 220], [1046, 340], [784, 500], [1046, 600]]
       : kind === "lose" ? [[392, 0], [330, 260], [262, 520], [196, 820]]
       : [[440, 0], [554, 200], [440, 420]];
-    for (const [fq, at] of notes) setTimeout(() => blip(fq, kind === "lose" ? 0.3 : 0.14), at);
+    void notes;
+    duckMusic(kind === "lose" ? 5 : 4);
+    sfxSafe(SFX[kind]);
   }
   const FEAST_SHAKE = 1000, FEAST_FLY = 650;
   function startFeast(spews) {
@@ -1472,7 +1488,7 @@
     const kings = [];
     for (const x of spews) if (!kings.some(k => k[0] === x.fr && k[1] === x.fc)) kings.push([x.fr, x.fc]);
     feastFx = { spews, kings, start: performance.now(), burst: false };
-    blip(140, 0.25);
+    sfxSafe(SFX.feastRumble);
     render();
   }
   const particles = [];
@@ -1509,7 +1525,7 @@
       }
     }
     if (pendingFeast) { startFeast(pendingFeast); pendingFeast = null; }
-    if (a.promo) morph = { r: a.m.tr, c: a.m.tc, ...makeMorph(a.promo.from, a.promo.to), start: now, dur: 1100 };
+    if (a.promo) { morph = { r: a.m.tr, c: a.m.tc, ...makeMorph(a.promo.from, a.promo.to), start: now, dur: 1100 }; sfxSafe(SFX.promote); }
     else if (a.gained) flash = { r: a.m.tr, c: a.m.tc, start: now, dur: 450 };
   }
   // Pawn-to-piece melt: the pawn's pixels slump into goo from the bottom up
@@ -1733,6 +1749,7 @@
   }
 
   function updateUI() {
+    syncAudio();
     const isOnline = mode === "online";
     $("setup").hidden = isOnline;
     $("onlineGame").hidden = !isOnline;
@@ -1814,10 +1831,10 @@
     if (p) describePiece(p);
     else if (fogged(r, c)) note("Smoke hides this square. Move a piece onto it, or through it, to clear it.");
     if (p && p.color === turn && canAct()) {
-      selected = [r, c];
+      selected = [r, c]; sfxSafe(SFX.select);
       legal = fog ? fogLegalFrom(board, seen, turn, r, c, kingCap) : legalMovesFrom(board, r, c);
     }
-    else { selected = null; legal = []; }
+    else { if (selected) sfxSafe(SFX.deselect); selected = null; legal = []; }
     render();
   });
 
@@ -1880,7 +1897,7 @@
   $("fogToggle").onclick = () => { settings.fog = !settings.fog; saveSettings(); renderSettings(); };
   $("xxlToggle").onclick = () => { settings.xxl = !settings.xxl; saveSettings(); renderSettings(); };
   $("kingToggle").onclick = () => { settings.kingCap = !settings.kingCap; saveSettings(); renderSettings(); };
-  $("curtainBtn").onclick = () => { curtain = false; render(); updateUI(); };
+  $("curtainBtn").onclick = () => { curtain = false; sfxSafe(SFX.whoosh); render(); updateUI(); if (showCheck()) setTimeout(() => sfxSafe(SFX.check), 250); };
   $("start").onclick = () => {
     if (settings.opp === "online") { if (typeof Peer !== "undefined") createGame(); return; }
     thinking = false; newLocalGame();
@@ -1908,20 +1925,225 @@
   });
 
   // ---------- Sound ----------
-  let actx = null;
-  function blip(freq, dur) {
+  // Every sound and the music are synthesised with Web Audio: no audio files.
+  const audio = { ctx: null, master: null, sfx: null, music: null, noise: null, wind: null };
+  function ac() {
+    if (audio.ctx) return audio.ctx;
     try {
-      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-      const o = actx.createOscillator(), g = actx.createGain();
-      o.type = "square"; o.frequency.value = freq;
-      g.gain.setValueAtTime(0.06, actx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
-      o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + dur);
-    } catch (_) {}
+      const C = window.AudioContext || window.webkitAudioContext;
+      const c = new C();
+      audio.ctx = c;
+      audio.master = c.createGain(); audio.master.connect(c.destination);
+      audio.sfx = c.createGain(); audio.sfx.connect(audio.master);
+      audio.music = c.createGain(); audio.music.connect(audio.master);
+      const buf = c.createBuffer(1, c.sampleRate, c.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      audio.noise = buf;
+      applyVolumes();
+    } catch (_) { audio.ctx = null; }
+    return audio.ctx;
   }
+  function applyVolumes() {
+    const c = audio.ctx; if (!c) return;
+    const now = c.currentTime;
+    audio.master.gain.setTargetAtTime(settings.muted ? 0 : (settings.volume / 100) * 0.9, now, 0.03);
+    audio.sfx.gain.setTargetAtTime(settings.sfx ? 1 : 0, now, 0.03);
+    audio.music.gain.setTargetAtTime(settings.music ? 0.5 : 0, now, 0.25);
+  }
+  const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+  // A single enveloped oscillator note. `at` is seconds from now unless abs is set.
+  function tone({ type = "square", f, f2, at = 0, abs = false, dur = 0.1, vol = 0.1, attack = 0.004, bus = "sfx", vib = 0 }) {
+    const c = ac(); if (!c) return;
+    const t0 = abs ? at : c.currentTime + at;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    if (vib) { const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = 6; lg.gain.value = vib; l.connect(lg); lg.connect(o.frequency); l.start(t0); l.stop(t0 + dur + 0.05); }
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(audio[bus]); o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  // A burst of filtered noise (clacks, chomps, drums, rumbles).
+  function noise({ at = 0, abs = false, dur = 0.1, vol = 0.1, type = "bandpass", freq = 1000, f2, q = 1, bus = "sfx" }) {
+    const c = ac(); if (!c) return;
+    const t0 = abs ? at : c.currentTime + at;
+    const src = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain();
+    src.buffer = audio.noise; src.loop = true;
+    fl.type = type; fl.frequency.setValueAtTime(freq, t0); fl.Q.value = q;
+    if (f2) fl.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(fl); fl.connect(g); g.connect(audio[bus]);
+    src.start(t0, Math.random() * 0.5); src.stop(t0 + dur + 0.02);
+  }
+  const SFX = {
+    click() { tone({ f: 1400, dur: 0.025, vol: 0.03 }); },
+    select() { tone({ f: 660, f2: 1000, dur: 0.06, vol: 0.05 }); noise({ freq: 3000, dur: 0.02, vol: 0.05 }); },
+    deselect() { tone({ f: 420, f2: 260, dur: 0.07, vol: 0.04 }); },
+    move() { // a wooden clack
+      noise({ freq: 1700, q: 3, dur: 0.05, vol: 0.35 });
+      tone({ type: "sine", f: 190, f2: 85, dur: 0.1, vol: 0.25 });
+    },
+    capture(gained) { // a two-bite chomp, then a sparkle if powers were absorbed
+      noise({ freq: 900, q: 1.2, dur: 0.06, vol: 0.35 });
+      noise({ at: 0.08, freq: 650, q: 1.2, dur: 0.08, vol: 0.35 });
+      tone({ f: 320, f2: 70, dur: 0.2, vol: 0.06 });
+      if (gained) [784, 988, 1175, 1568].forEach((f, i) => tone({ type: "triangle", f, at: 0.17 + i * 0.055, dur: 0.14, vol: 0.09 }));
+    },
+    check() { [880, 698, 880].forEach((f, i) => tone({ f, at: i * 0.11, dur: 0.1, vol: 0.06 })); },
+    ambush() {
+      noise({ freq: 300, f2: 2400, q: 0.8, dur: 0.3, vol: 0.3 });
+      tone({ type: "sawtooth", f: 140, f2: 50, dur: 0.35, vol: 0.09 });
+    },
+    bump() { tone({ type: "sine", f: 120, f2: 60, dur: 0.15, vol: 0.25 }); noise({ type: "lowpass", freq: 400, dur: 0.1, vol: 0.2 }); },
+    promote() { // goo bubbling upward, then a chime as the new piece forms
+      tone({ type: "triangle", f: 180, f2: 820, dur: 0.85, vol: 0.09, vib: 25 });
+      for (let i = 0; i < 6; i++) tone({ type: "sine", f: 300 + i * 90, f2: 500 + i * 120, at: i * 0.12, dur: 0.06, vol: 0.06 });
+      [1046, 1318, 1568, 2093].forEach((f, i) => tone({ type: "triangle", f, at: 0.95 + i * 0.07, dur: 0.3, vol: 0.08 }));
+    },
+    feastRumble() {
+      noise({ type: "lowpass", freq: 160, f2: 420, dur: 1.0, vol: 0.45 });
+      tone({ type: "sawtooth", f: 55, f2: 82, dur: 1.0, vol: 0.06, vib: 6 });
+    },
+    spit(n) {
+      for (let i = 0; i < Math.min(n, 12); i++) {
+        tone({ f: 560 + (i % 4) * 70, f2: 170, at: i * 0.06, dur: 0.09, vol: 0.06 });
+        noise({ at: i * 0.06, freq: 2600, dur: 0.035, vol: 0.12 });
+      }
+    },
+    topple() { tone({ type: "sine", f: 150, f2: 55, dur: 0.22, vol: 0.3 }); noise({ type: "lowpass", freq: 600, dur: 0.15, vol: 0.25 }); },
+    crumble() { noise({ type: "lowpass", freq: 900, f2: 120, dur: 0.8, vol: 0.35 }); for (let i = 0; i < 6; i++) noise({ at: i * 0.07, freq: 3000 - i * 300, dur: 0.03, vol: 0.12 }); },
+    win() {
+      const mel = [[72, 0, 0.12], [76, 0.12, 0.12], [79, 0.24, 0.12], [84, 0.36, 0.36], [79, 0.74, 0.12], [84, 0.86, 0.6]];
+      mel.forEach(([n, at, d]) => { tone({ f: midi(n), at, dur: d + 0.05, vol: 0.07 }); tone({ type: "triangle", f: midi(n - 12), at, dur: d + 0.05, vol: 0.1 }); });
+      [0, 0.36, 0.74].forEach(at => noise({ at, freq: 1800, dur: 0.1, vol: 0.12 }));
+    },
+    lose() {
+      [[69, 0], [65, 0.32], [64, 0.64], [57, 0.96]].forEach(([n, at]) => tone({ type: "sawtooth", f: midi(n), f2: midi(n) * 0.97, at, dur: 0.5, vol: 0.05, vib: 4 }));
+      tone({ type: "triangle", f: midi(45), at: 0.96, dur: 1.4, vol: 0.12 });
+    },
+    draw() { [[72, 0], [74, 0.22], [72, 0.44], [74, 0.66]].forEach(([n, at]) => tone({ type: "triangle", f: midi(n), at, dur: 0.2, vol: 0.1 })); },
+    whoosh() { noise({ freq: 400, f2: 3000, q: 0.7, dur: 0.35, vol: 0.18 }); },
+    join() { tone({ f: 523, dur: 0.1, vol: 0.06 }); tone({ f: 784, at: 0.1, dur: 0.14, vol: 0.06 }); },
+    tick() { noise({ freq: 4500, q: 4, dur: 0.02, vol: 0.06 }); },
+  };
+  const sfxSafe = (fn) => { try { if (settings.sfx && !settings.muted) fn(); } catch (_) {} };
+  function blip(freq, dur) { sfxSafe(() => tone({ f: freq, dur, vol: 0.05 })); }
+
+  // ----- Background music: an original 8-bar chiptune loop in A minor -----
+  // Normal: pulse lead, square arpeggios, triangle bass and noise drums.
+  // Fog: slower, no drums, soft triangle arps and a sparse, lower lead.
+  const CHORDS = [ // [bass root, triad]
+    [45, [69, 72, 76]], [41, [65, 69, 72]], [48, [67, 72, 76]], [43, [67, 71, 74]],
+    [45, [69, 72, 76]], [41, [65, 69, 72]], [50, [65, 69, 74]], [40, [64, 68, 71]],
+  ];
+  const MELODY = [
+    [[0, 76, 4], [4, 74, 2], [6, 72, 2], [8, 71, 4], [12, 72, 4]],
+    [[0, 69, 6], [6, 72, 2], [8, 77, 4], [12, 76, 4]],
+    [[0, 79, 4], [4, 77, 2], [6, 76, 2], [8, 74, 4], [12, 72, 4]],
+    [[0, 74, 8], [8, 71, 4], [12, 67, 4]],
+    [[0, 76, 4], [4, 81, 4], [8, 79, 2], [10, 77, 2], [12, 76, 4]],
+    [[0, 77, 4], [4, 76, 2], [6, 74, 2], [8, 72, 8]],
+    [[0, 74, 4], [4, 77, 4], [8, 81, 4], [12, 79, 2], [14, 77, 2]],
+    [[0, 76, 8], [8, 80, 4], [12, 71, 4]],
+  ];
+  const music = { playing: false, step: 0, next: 0, timer: null, mood: "normal" };
+  function stepLen() { return 60 / (music.mood === "fog" ? 74 : 98) / 4; }
+  function playStep(s, at) {
+    const bar = s >> 4, st = s & 15, [root, triad] = CHORDS[bar], sl = stepLen();
+    const n = (o) => ({ abs: true, bus: "music", ...o });
+    if (music.mood === "fog") {
+      if (st === 0) tone(n({ type: "triangle", f: midi(root), at, dur: sl * 15, vol: 0.13, attack: 0.3 }));
+      if (st % 2 === 0) tone(n({ type: "triangle", f: midi(triad[(st >> 1) % 3] - 12), at, dur: sl * 2.5, vol: 0.05, attack: 0.02 }));
+      if (bar % 2 === 0) for (const [p, note, len] of MELODY[bar]) if (p === st) tone(n({ type: "triangle", f: midi(note - 12), at, dur: sl * len, vol: 0.07, attack: 0.05, vib: 3 }));
+      if (st === 0 && bar % 4 === 0) noise(n({ type: "lowpass", freq: 120, at, dur: 0.5, vol: 0.25 }));
+      return;
+    }
+    // bass
+    if (st === 0) tone(n({ type: "triangle", f: midi(root), at, dur: sl * 3, vol: 0.16 }));
+    if (st === 6) tone(n({ type: "triangle", f: midi(root), at, dur: sl, vol: 0.12 }));
+    if (st === 8) tone(n({ type: "triangle", f: midi(root + 12), at, dur: sl * 2, vol: 0.14 }));
+    if (st === 12) tone(n({ type: "triangle", f: midi(root + 7), at, dur: sl * 2, vol: 0.12 }));
+    // arpeggio
+    tone(n({ type: "square", f: midi(triad[[0, 1, 2, 1][st % 4]]), at, dur: sl * 0.9, vol: 0.018 }));
+    // lead
+    for (const [p, note, len] of MELODY[bar]) if (p === st) tone(n({ type: "square", f: midi(note), at, dur: sl * len * 0.95, vol: 0.035, vib: 4 }));
+    // drums
+    if (st === 0 || st === 8 || (st === 10 && bar % 2)) tone(n({ type: "sine", f: 140, f2: 42, at, dur: 0.14, vol: 0.3 }));
+    if (st === 4 || st === 12) noise(n({ freq: 1900, q: 0.9, at, dur: 0.11, vol: 0.1 }));
+    if (st % 2 === 0) noise(n({ type: "highpass", freq: 7000, at, dur: 0.03, vol: st % 4 === 2 ? 0.05 : 0.025 }));
+  }
+  function startMusic() {
+    const c = ac(); if (!c || music.playing) return;
+    music.playing = true; music.next = c.currentTime + 0.1;
+    music.timer = setInterval(() => {
+      while (music.next < c.currentTime + 0.15) {
+        playStep(music.step, music.next);
+        music.next += stepLen(); music.step = (music.step + 1) % 128;
+      }
+    }, 25);
+  }
+  function stopMusic() { clearInterval(music.timer); music.playing = false; }
+  function setMood(m) { music.mood = m; }
+  function duckMusic(seconds) {
+    const c = audio.ctx; if (!c || !settings.music) return;
+    const g = audio.music.gain, now = c.currentTime;
+    g.cancelScheduledValues(now); g.setTargetAtTime(0.06, now, 0.1); g.setTargetAtTime(0.5, now + seconds, 0.8);
+  }
+  // Fog wind: looping noise through a slowly swaying low-pass filter.
+  function setWind(on) {
+    const c = audio.ctx; if (!c) return;
+    if (on && !audio.wind) {
+      const src = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
+      src.buffer = audio.noise; src.loop = true;
+      fl.type = "lowpass"; fl.frequency.value = 420; fl.Q.value = 4;
+      lfo.frequency.value = 0.13; lg.gain.value = 260; lfo.connect(lg); lg.connect(fl.frequency);
+      g.gain.value = 0.0001; g.gain.setTargetAtTime(0.07, c.currentTime, 1);
+      src.connect(fl); fl.connect(g); g.connect(audio.sfx); src.start(); lfo.start();
+      audio.wind = { src, g, lfo };
+    } else if (!on && audio.wind) {
+      const w = audio.wind; audio.wind = null;
+      w.g.gain.setTargetAtTime(0.0001, c.currentTime, 0.4);
+      setTimeout(() => { try { w.src.stop(); w.lfo.stop(); } catch (_) {} }, 2000);
+    }
+  }
+  function syncAudio() {
+    if (!audio.ctx) return;
+    setMood(fog && !gameOver ? "fog" : "normal");
+    setWind(fog && !gameOver && mode !== "none");
+    if (settings.music && !music.playing) startMusic();
+  }
+  // Browsers only allow sound after the player interacts with the page.
+  function unlockAudio() {
+    const c = ac(); if (!c) return;
+    if (c.state === "suspended") c.resume();
+    syncAudio();
+  }
+  document.addEventListener("pointerdown", unlockAudio);
+  document.addEventListener("keydown", (e) => {
+    unlockAudio();
+    if ((e.key === "m" || e.key === "M") && !(e.target instanceof HTMLInputElement)) { settings.muted = !settings.muted; saveSettings(); renderSound(); applyVolumes(); }
+  });
+  document.addEventListener("visibilitychange", () => {
+    const c = audio.ctx; if (!c) return;
+    if (document.hidden) c.suspend(); else c.resume();
+  });
+  document.addEventListener("click", (e) => { if (e.target.closest("button") && !e.target.closest("#promoRow")) sfxSafe(SFX.click); });
+  function renderSound() {
+    $("musicToggle").setAttribute("aria-checked", String(settings.music));
+    $("sfxToggle").setAttribute("aria-checked", String(settings.sfx));
+    $("volume").value = settings.volume;
+    $("volLabel").textContent = settings.muted ? "(MUTED)" : settings.volume + "%";
+    $("soundHint").textContent = settings.muted ? "Muted. Press M to unmute." : "Press M to mute.";
+  }
+  $("musicToggle").onclick = () => { settings.music = !settings.music; saveSettings(); renderSound(); applyVolumes(); syncAudio(); };
+  $("sfxToggle").onclick = () => { settings.sfx = !settings.sfx; saveSettings(); renderSound(); applyVolumes(); };
+  $("volume").oninput = () => { settings.volume = +$("volume").value; settings.muted = false; saveSettings(); renderSound(); applyVolumes(); };
 
   // ---------- Boot ----------
-  renderSettings();
+  renderSettings(); renderSound();
   newLocalGame();
   if (typeof Peer === "undefined") {
     $("oppOnline").disabled = true; $("join").disabled = true;
