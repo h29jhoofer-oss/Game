@@ -44,6 +44,29 @@
   #curtain { position: absolute; inset: 4px; display: flex; align-items: center; justify-content: center; padding: 16px; }
   .curtainCard { background: var(--panel); border: 3px solid var(--edge); box-shadow: 4px 4px 0 var(--edge); padding: 16px; display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center; }
   #curtainText, #promoTitle { font-size: 12px; color: var(--accent); }
+  .endBanner { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: min(86%, 380px);
+    background: var(--panel); border: 3px solid var(--edge); box-shadow: 5px 5px 0 var(--edge); padding: 14px;
+    display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center; z-index: 2; }
+  .endBanner .row { justify-content: center; }
+  #endTitle { font-size: 22px; letter-spacing: 2px; text-shadow: 3px 3px 0 var(--edge); }
+  .endBanner.win #endTitle { color: #ffe066; }
+  .endBanner.lose #endTitle { color: var(--bad); }
+  .endBanner.draw #endTitle { color: #a9c7ff; }
+  .endBanner.show { animation: bannerDrop .7s steps(8) both; }
+  .endBanner.win.show #endTitle { animation: titlePulse .5s steps(2) 4 .7s; }
+  .endBanner.lose.show { animation: bannerSlump 1.1s steps(10) both; }
+  @keyframes bannerDrop {
+    0% { transform: translate(-50%, -260%) scale(.6); }
+    60% { transform: translate(-50%, -40%) scale(1.06); }
+    80% { transform: translate(-50%, -56%) scale(.98); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+  }
+  @keyframes bannerSlump {
+    0% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+  @keyframes titlePulse { 50% { transform: scale(1.12); } }
+  @media (prefers-reduced-motion: reduce) { .endBanner.show, .endBanner.lose.show, .endBanner.win.show #endTitle { animation: none; } }
   .overlay { position: absolute; inset: 4px; display: flex; align-items: center; justify-content: center; padding: 16px; }
   .promoRow { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   .promoRow button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; font-size: 8px; }
@@ -112,6 +135,14 @@
         <div id="promoTitle">PROMOTE YOUR PAWN</div>
         <div class="promoRow" id="promoRow"></div>
         <button id="promoCancel">CANCEL</button>
+      </div>
+    </div>
+    <div id="endBanner" class="endBanner" hidden role="status">
+      <div id="endTitle"></div>
+      <div id="endSub" class="muted"></div>
+      <div class="row">
+        <button id="endAgain" class="primary">PLAY AGAIN</button>
+        <button id="endClose">VIEW BOARD</button>
       </div>
     </div>
     <div id="curtain" hidden>
@@ -613,7 +644,7 @@
     setBoardSize(settings.xxl ? 16 : 8);
     devour = settings.devour; fog = settings.fog; kingCap = settings.fog && settings.kingCap; cpuOn = settings.opp === "bot"; botLevel = settings.level;
     morph = null; closePromo();
-    anim = null; flash = null; feastFx = null; curtain = false;
+    anim = null; flash = null; feastFx = null; curtain = false; clearEnd();
     board = startBoard(); seen = initSeen(board); turn = "w"; history = []; selected = null; legal = [];
     lastMove = null; gameOver = false; resultText = ""; logLines = [];
     render(); updateUI();
@@ -627,7 +658,7 @@
     moveSound(res.info);
     logLines.unshift(...res.logs);
     lastMove = res.m; turn = other(turn); selected = null; legal = [];
-    if (res.over) { gameOver = true; resultText = res.result; }
+    if (res.over) { gameOver = true; resultText = res.result; triggerEnd(anim ? anim.dur + 150 : 150); }
     if (res.m.ambush && humanMove) note("Ambush! Your piece ran into something hidden in the smoke and ate it.");
     if (res.m.bumped && humanMove) note("Your piece bumped into the enemy king hiding in the smoke and stopped.");
     if (fog && !cpuOn && !gameOver) curtain = true;
@@ -701,6 +732,8 @@
     board = unflatten(st.board);
     turn = st.turn; lastMove = st.lastMove || null; logLines = [...(st.log || [])];
     gameOver = st.status === "over"; resultText = st.result || "";
+    if (st.status !== "over") { if (endFx) clearEnd(); }
+    else if (prev && prev.status !== "over") triggerEnd(anim ? anim.dur + 150 : 150);
     if (!prev || prev.ply !== st.ply) { selected = null; legal = []; }
     render(); updateUI();
   }
@@ -1263,6 +1296,76 @@
     });
   }
 
+  // ----- End-of-game animations -----
+  function drawRotated(img, x, y, ang, px, py) {
+    ctx.save(); ctx.translate(x + px, y + py); ctx.rotate(ang); ctx.drawImage(img, -px, -py); ctx.restore();
+  }
+  // Kings act out the result: the loser topples (and crumbles if it's yours),
+  // the winner hops, and in a draw both sway side to side.
+  function drawEndKing(p, x, y, now) {
+    const fx = endFx, t = now - fx.start;
+    if (t < 0) { ctx.drawImage(spriteFor(p), x, y); return; }
+    const img = spriteFor(p);
+    if (fx.kind === "draw") {
+      const sway = t < 4500 ? Math.round(Math.sin(t / 260 + (p.color === "w" ? 0 : Math.PI)) * 2) : 0;
+      drawRotated(img, x, y, sway * 0.06, 10, 18);
+      return;
+    }
+    if (p.color === fx.winner) {
+      const hop = t < 3200 ? Math.round(Math.abs(Math.sin(t / 170)) * 5) : 0;
+      ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(x + 6 + Math.floor(hop / 2), y + 17, 8 - hop, 2);
+      ctx.drawImage(img, x, y - hop);
+      if (t < 3200 && Math.floor(t / 120) % 4 === 0) { ctx.globalAlpha = 0.5; ctx.drawImage(spriteFor(p, true), x, y - hop); ctx.globalAlpha = 1; }
+      return;
+    }
+    // the losing king
+    if (fx.crumbled) return;
+    const k = Math.min(1, t / 750);
+    let ang = k * k * (Math.PI / 2);
+    if (t > 750 && t < 950) ang -= Math.sin((t - 750) / 200 * Math.PI) * 0.18;
+    if (fx.kind === "lose" && t > 1500) {
+      fx.crumbled = true;
+      const pal = PAL[p.color];
+      for (let i = 0; i < 26; i++) {
+        particles.push({ x: x + 4 + Math.random() * 14, y: y + 12 + Math.random() * 6, vx: (Math.random() - 0.5) * 30, vy: -Math.random() * 25,
+          col: [pal.fill, pal.shade, pal.line, "#6a6478"][i % 4], born: now, life: 700 + Math.random() * 500 });
+      }
+      blip(110, 0.35);
+      return;
+    }
+    drawRotated(img, x, y, ang, 15, 18);
+  }
+  function drawEndFx(now, dt) {
+    const fx = endFx, t = now - fx.start;
+    if (t < 0) return;
+    if (!fx.sounded) { fx.sounded = true; endSound(fx.kind); }
+    const B = BOARD_PX;
+    if (fx.kind === "win") {
+      const pal = fx.winner === "w" ? ["#ffe066", "#ff7a59", "#3fd0a0", "#f4ecd6", "#59c1ff"] : ["#ffe066", "#c98bff", "#3fd0a0", "#6f5a96", "#ff5e7a"];
+      if (t < 2800 && !REDUCED) for (let i = 0; i < 3; i++) fx.confetti.push({ x: Math.random() * B, y: -F - Math.random() * 10, vy: 25 + Math.random() * 35, ph: Math.random() * 6, col: pal[Math.floor(Math.random() * pal.length)], w: Math.random() < 0.5 ? 2 : 1 });
+      for (const c of fx.confetti) {
+        c.y += c.vy * dt; c.ph += dt * 6;
+        const x = Math.round(c.x + Math.sin(c.ph) * 3);
+        ctx.fillStyle = c.col; ctx.fillRect(x, Math.round(c.y), Math.cos(c.ph) > 0 ? c.w : 1, 2);
+      }
+      fx.confetti = fx.confetti.filter(c => c.y < B + F);
+    } else if (fx.kind === "lose") {
+      ctx.fillStyle = `rgba(14,16,38,${Math.min(0.42, t / 1600 * 0.42)})`; ctx.fillRect(0, 0, B, B);
+      if (t < 4500 && !REDUCED) for (let i = 0; i < 2; i++) fx.drops.push({ x: Math.random() * B, y: -F, vy: 140 + Math.random() * 60 });
+      ctx.fillStyle = "rgba(150,180,230,0.6)";
+      for (const d of fx.drops) { d.y += d.vy * dt; ctx.fillRect(Math.round(d.x), Math.round(d.y), 1, 3); }
+      fx.drops = fx.drops.filter(d => d.y < B);
+    } else {
+      if (t < 3500 && !REDUCED && Math.random() < 0.5) fx.motes.push({ x: Math.random() * B, y: B, vy: 12 + Math.random() * 14, ph: Math.random() * 6 });
+      for (const m of fx.motes) {
+        m.y -= m.vy * dt; m.ph += dt * 3;
+        ctx.fillStyle = Math.sin(m.ph * 2) > 0 ? "rgba(214,228,255,0.85)" : "rgba(169,199,255,0.6)";
+        ctx.fillRect(Math.round(m.x + Math.sin(m.ph) * 2), Math.round(m.y), 1, 1);
+      }
+      fx.motes = fx.motes.filter(m => m.y > -F);
+    }
+  }
+
   // ----- Haze at the feet of your pieces the other side can't see -----
   function hiddenFromFoe(r, c, p) {
     const v = viewer();
@@ -1319,7 +1422,41 @@
   }
 
   // ----- Animation state -----
-  let anim = null, flash = null, morph = null, feastFx = null, pendingFeast = null, rafId = 0;
+  let anim = null, flash = null, morph = null, feastFx = null, pendingFeast = null, endFx = null, rafId = 0;
+  const END_LIVE = 6000; // how long the ending keeps animating
+
+  // ----- End of game: who won, from whose point of view -----
+  function humanSide() { return mode === "online" ? myColor() : (cpuOn ? "w" : null); }
+  function triggerEnd(delay = 0) {
+    if (!gameOver) return;
+    const w = /(White|Black) wins/.exec(resultText || "");
+    const winner = w ? (w[1] === "White" ? "w" : "b") : null;
+    const me = humanSide();
+    const kind = !winner ? "draw" : (!me || winner === me) ? "win" : "lose";
+    endFx = { kind, winner, me, start: performance.now() + delay, confetti: [], drops: [], motes: [], crumbled: false, sounded: false };
+    const title = kind === "draw" ? "DRAW" : kind === "lose" ? "DEFEAT" : me ? "VICTORY!" : `${colorName(winner).toUpperCase()} WINS!`;
+    clearTimeout(triggerEnd.timer);
+    triggerEnd.timer = setTimeout(() => {
+      const b = $("endBanner");
+      b.className = "endBanner " + kind;
+      $("endTitle").textContent = title;
+      $("endSub").textContent = resultText;
+      $("endAgain").hidden = mode === "online" && !myColor();
+      b.hidden = false;
+      void b.offsetWidth; b.classList.add("show");
+    }, delay + (kind === "lose" ? 900 : 350));
+    render();
+  }
+  function clearEnd() {
+    endFx = null; clearTimeout(triggerEnd.timer);
+    const b = $("endBanner"); b.hidden = true; b.className = "endBanner";
+  }
+  function endSound(kind) {
+    const notes = kind === "win" ? [[523, 0], [659, 110], [784, 220], [1046, 340], [784, 500], [1046, 600]]
+      : kind === "lose" ? [[392, 0], [330, 260], [262, 520], [196, 820]]
+      : [[440, 0], [554, 200], [440, 420]];
+    for (const [fq, at] of notes) setTimeout(() => blip(fq, kind === "lose" ? 0.3 : 0.14), at);
+  }
   const FEAST_SHAKE = 1000, FEAST_FLY = 650;
   function startFeast(spews) {
     if (!spews || !spews.length || REDUCED) return;
@@ -1416,7 +1553,7 @@
     rafId = 0;
     const dt = Math.min(0.05, (now - (lastFrame || now)) / 1000); lastFrame = now;
     draw(now, dt);
-    if (anim || particles.length || flash || morph || feastFx || (selected && !REDUCED) || ((viewer() || curtain || thinking) && !REDUCED)) rafId = requestAnimationFrame(frame);
+    if (anim || particles.length || flash || morph || feastFx || (endFx && now - endFx.start < END_LIVE) || (selected && !REDUCED) || ((viewer() || curtain || thinking) && !REDUCED)) rafId = requestAnimationFrame(frame);
     else lastFrame = 0;
   }
 
@@ -1455,6 +1592,7 @@
       if (feastFx && feastFx.spews.some(x => x.tr === r && x.tc === c)) continue; // still inside a king
       const [sr, sc] = toScreen(r, c);
       let x = sc * S, y = sr * S;
+      if (endFx && p.type === "K") { drawEndKing(p, x, y, now); continue; }
       if (feastFx && feastFx.kings.some(k => k[0] === r && k[1] === c)) {
         const t = (now - feastFx.start) / FEAST_SHAKE;
         if (t < 1) {
@@ -1521,6 +1659,7 @@
       if (now - q.born > q.life) { particles.splice(i, 1); continue; }
       ctx.fillStyle = q.col; ctx.fillRect(Math.round(q.x), Math.round(q.y), 2, 2);
     }
+    if (endFx) drawEndFx(now, dt);
     if (thinking && mode === "local") drawThinking(now);
     ctx.restore();
   }
@@ -1692,13 +1831,18 @@
     row.firstChild.focus();
   }
   function closePromo() { pendingPromo = null; $("promo").hidden = true; }
+  $("endClose").onclick = () => { $("endBanner").hidden = true; };
+  $("endAgain").onclick = () => {
+    $("endBanner").hidden = true;
+    if (mode === "online") rematch(); else { thinking = false; newLocalGame(); }
+  };
   $("promoCancel").onclick = () => { closePromo(); selected = null; legal = []; render(); };
   $("undo").onclick = () => {
     if (thinking || !history.length) return;
     let h = history.pop();
     if (cpuOn && h.turn === "b" && history.length) h = history.pop();
     ({ board, turn, lastMove, logLines, seen } = h);
-    gameOver = false; resultText = ""; selected = null; legal = []; curtain = false; morph = null; closePromo();
+    gameOver = false; resultText = ""; selected = null; legal = []; curtain = false; morph = null; closePromo(); clearEnd();
     render(); updateUI();
   };
   function saveSettings() { try { localStorage.setItem("dc-settings", JSON.stringify(settings)); } catch (_) {} }
