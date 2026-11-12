@@ -15,6 +15,7 @@ Open `index.html` in a browser, or host the folder on GitHub Pages. No build ste
 - Pawns that reach the far side let you pick a queen, rook, bishop or knight, and melt into their new shape.
 - Click a piece, then a highlighted square to move. Pieces that eat grow the features of their victims.
 - Online: **CREATE ONLINE GAME** gives you a link. Anyone who opens it can play you as Black, no account needed. Later visitors watch. Keep your page open while you play: your browser hosts the game. A friend's code can also be typed into **JOIN**.
+- Once an online game starts, the board fills the screen with the game buttons and a chat beside it (below it on phones). Players can type or use quick replies; spectators can read along.
 - Checkmate wins. Pawns promote to queens. No castling or en passant.
 
 ## How online play works

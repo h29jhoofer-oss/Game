@@ -117,6 +117,37 @@
   button.big { padding: 12px 10px; font-size: 12px; }
   .divider { border: 0; border-top: 3px dashed var(--raised); margin: 4px 0; width: 100%; }
   input[type="range"] { width: 100%; padding: 0; border: 0; background: transparent; accent-color: var(--ok); text-transform: none; }
+  /* Chat */
+  .chatLog { min-height: 140px; max-height: 260px; overflow-y: auto; background: var(--bg); border: 3px solid var(--edge);
+    padding: 8px; display: flex; flex-direction: column; gap: 6px; overflow-wrap: anywhere; }
+  .chatMsg { display: flex; gap: 6px; align-items: baseline; }
+  .chatMsg .chip { flex: none; width: 10px; height: 10px; transform: translateY(1px); }
+  .chatMsg .who { color: var(--accent); flex: none; }
+  .chatMsg.mine .who { color: var(--ok); }
+  .chatMsg.sys { color: var(--muted); }
+  .chatForm { display: flex; gap: 6px; }
+  .chatForm input { flex: 1 1 auto; min-width: 0; width: auto; text-transform: none; }
+  .quick { display: flex; gap: 6px; flex-wrap: wrap; }
+  .quick button { padding: 4px 8px; font-size: 8px; }
+  #chatBox.ping { animation: chatPing .6s steps(3); }
+  @keyframes chatPing { 50% { border-color: var(--ok); } }
+
+  /* Focus layout for online games: the board fills the screen, with the
+     game buttons and chat in a column beside it (below it on phones). */
+  body.focus { padding-block: 12px; }
+  body.focus h1, body.focus .tag, body.focus .side.right, body.focus #setup, body.focus #localBox,
+  body.focus #soundBox, body.focus #onlineGame h2, body.focus #onlineGame .codeLine, body.focus #shareBox { display: none !important; }
+  body.focus .wrap { max-width: none; grid-template-columns: min(calc(100vw - 370px), calc(100vh - 32px), calc(100dvh - 32px)) 310px;
+    grid-template-areas: "board left"; grid-template-rows: auto; justify-content: center; }
+  body.focus .side.left { height: min(calc(100vh - 32px), calc(100dvh - 32px)); }
+  body.focus #status { min-height: 0; }
+  body.focus #chatBox { flex: 1 1 auto; min-height: 0; }
+  body.focus .chatLog { flex: 1 1 auto; max-height: none; }
+  @media (max-width: 760px) {
+    body.focus .wrap { grid-template-columns: minmax(0, 1fr); grid-template-areas: "board" "left"; }
+    body.focus .side.left { height: auto; }
+    body.focus .chatLog { height: 34vh; }
+  }
   .dots { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
   .dots i { width: 4px; height: 4px; background: var(--accent); animation: dothop .9s steps(2, jump-none) infinite; }
   .dots i:nth-child(2) { animation-delay: .3s; }
@@ -207,7 +238,7 @@
 
     <div class="box" id="onlineGame" hidden>
       <h2>ONLINE GAME</h2>
-      <div>Code: <span class="code" id="gameCode"></span></div>
+      <div class="codeLine">Code: <span class="code" id="gameCode"></span></div>
       <div id="shareBox">
         <div class="muted">Send this link to a friend. Keep this page open while you play: your browser hosts the game.</div>
         <div class="row" style="margin-top:6px">
@@ -225,6 +256,20 @@
       <div id="gameMsg" class="muted"></div>
     </div>
 
+    <div class="box" id="chatBox" hidden>
+      <h2>CHAT</h2>
+      <div id="chatLog" class="chatLog" role="log" aria-live="polite"></div>
+      <div class="quick" id="quickChat">
+        <button type="button" data-say="GG!">GG</button>
+        <button type="button" data-say="Nice move!">NICE</button>
+        <button type="button" data-say="Oops...">OOPS</button>
+        <button type="button" data-say="Yum.">YUM</button>
+      </div>
+      <form id="chatForm" class="chatForm" autocomplete="off">
+        <input id="chatInput" maxlength="200" placeholder="Say something..." aria-label="Chat message">
+        <button id="chatSend" type="submit">SEND</button>
+      </form>
+    </div>
     <div class="box" id="localBox">
       <div class="row"><button id="undo">UNDO MOVE</button></div>
     </div>
@@ -792,7 +837,8 @@
           if (online.data.status === "waiting") online.data = { ...online.data, status: "playing" };
           setMsg("gameMsg", "Your friend joined."); sfxSafe(SFX.join);
         }
-        try { conn.send({ type: "welcome", seat }); } catch (_) {}
+        try { conn.send({ type: "welcome", seat }); conn.send({ type: "chat-history", list: online.chat.filter(m => m.from !== "sys") }); } catch (_) {}
+        if (seat === "guest") sysChat("Your friend joined.");
         hostCommit(online.data);
       });
       conn.on("data", (msg) => onHostMessage(conn, msg));
@@ -801,6 +847,7 @@
         if (conn === online.guestConn) {
           online.guestConn = null; online.connected = false;
           setMsg("gameMsg", "Your friend disconnected. They can open the link again to rejoin.");
+          sysChat("Your friend disconnected.");
           updateUI();
         }
       });
@@ -821,6 +868,7 @@
   }
   function onHostMessage(conn, msg) {
     if (!msg || typeof msg !== "object" || conn !== online.guestConn) return; // spectators can't act
+    if (msg.type === "chat") return hostReceiveChat(conn, msg);
     const st = online.data, gc = other(st.hostColor);
     const resync = () => { try { conn.send({ type: "state", state: st }); } catch (_) {} };
     if (msg.type === "move") {
@@ -881,6 +929,11 @@
     conn.on("data", (msg) => {
       if (!msg || typeof msg !== "object" || online.hostConn !== conn) return;
       if (msg.type === "welcome") { online.seat = msg.seat === "guest" ? "guest" : "spectator"; updateUI(); }
+      if (msg.type === "chat-history" && Array.isArray(msg.list)) {
+        online.chat = msg.list.filter(m => m && (m.from === "w" || m.from === "b" || m.from === "sys")).map(m => ({ from: m.from, text: cleanText(m.text) })).slice(-CHAT_MAX);
+        renderChat();
+      }
+      if (msg.type === "chat" && msg.msg && (msg.msg.from === "w" || msg.msg.from === "b")) addChat({ from: msg.msg.from, text: cleanText(msg.msg.text) });
       if (msg.type === "state" && msg.state && Array.isArray(msg.state.board) && msg.state.board.length === (msg.state.n || 8) ** 2) {
         const prev = online.data;
         if (prev && msg.state.ply > prev.ply && msg.state.lastMove && other(msg.state.turn) !== myColor())
@@ -893,6 +946,7 @@
       if (online.hostConn !== conn) return;
       online.connected = false;
       setMsg("gameMsg", "Lost the connection to the host. Press RECONNECT once they're back.", true);
+      sysChat("Connection lost.");
       $("reconnect").hidden = false;
       updateUI();
     });
@@ -901,6 +955,67 @@
     const c = online.hostConn;
     if (!c || !c.open) { setMsg("gameMsg", "Not connected to the host.", true); return false; }
     try { c.send(msg); return true; } catch (_) { return false; }
+  }
+
+  // ----- Chat -----
+  // Messages travel over the same peer connection as the moves. The host
+  // relays them to everyone and keeps a short history for anyone who joins
+  // or reconnects. Only the two players can send; spectators can read.
+  online.chat = [];
+  const CHAT_MAX = 120;
+  function cleanText(t) { return typeof t === "string" ? t.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 200) : ""; }
+  function addChat(entry, quiet) {
+    online.chat.push(entry);
+    if (online.chat.length > CHAT_MAX) online.chat.shift();
+    renderChat();
+    if (!quiet && entry.from !== "sys" && entry.from !== myColor()) {
+      sfxSafe(SFX.chat);
+      const box = $("chatBox"); box.classList.remove("ping"); void box.offsetWidth; box.classList.add("ping");
+    }
+  }
+  function sysChat(text) { addChat({ from: "sys", text }, true); }
+  function renderChat() {
+    const log = $("chatLog"), atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30;
+    log.replaceChildren();
+    if (!online.chat.length) {
+      const e = document.createElement("div"); e.className = "chatMsg sys";
+      e.textContent = "No messages yet. Say hi!"; log.append(e);
+    }
+    for (const m of online.chat) {
+      const row = document.createElement("div");
+      if (m.from === "sys") { row.className = "chatMsg sys"; row.textContent = m.text; log.append(row); continue; }
+      const mine = m.from === myColor();
+      row.className = "chatMsg" + (mine ? " mine" : "");
+      const chip = document.createElement("span"); chip.className = "chip"; chip.style.background = PAL[m.from].fill;
+      const who = document.createElement("span"); who.className = "who";
+      who.textContent = (mine ? "You" : online.seat === "spectator" ? colorName(m.from) : "Friend") + ":";
+      const text = document.createElement("span"); text.textContent = m.text;
+      row.append(chip, who, text);
+      log.append(row);
+    }
+    if (atBottom) log.scrollTop = log.scrollHeight;
+  }
+  function broadcastChat(entry, except) {
+    for (const c of online.conns) if (c.open && c !== except) { try { c.send({ type: "chat", msg: entry }); } catch (_) {} }
+  }
+  function sendChat(raw) {
+    const text = cleanText(raw), me = myColor();
+    if (!text || !me) return false;
+    const entry = { from: me, text };
+    if (online.seat === "host") { addChat(entry, true); broadcastChat(entry); }
+    else if (sendToHost({ type: "chat", text })) addChat(entry, true);
+    else return false;
+    return true;
+  }
+  const chatTimes = [];
+  function hostReceiveChat(conn, msg) {
+    const now = Date.now();
+    while (chatTimes.length && now - chatTimes[0] > 3000) chatTimes.shift();
+    if (chatTimes.length >= 6) return; // a little flood protection
+    const text = cleanText(msg.text); if (!text) return;
+    chatTimes.push(now);
+    const entry = { from: other(online.data.hostColor), text };
+    addChat(entry); broadcastChat(entry, conn);
   }
 
   // ----- Both sides -----
@@ -925,7 +1040,8 @@
   }
   function leaveGame(toLocal = true) {
     if (online.peer) { try { online.peer.destroy(); } catch (_) {} }
-    Object.assign(online, { code: null, seat: null, data: null, peer: null, conns: [], guestConn: null, hostConn: null, connected: false, ready: false, retries: 0 });
+    Object.assign(online, { code: null, seat: null, data: null, peer: null, conns: [], guestConn: null, hostConn: null, connected: false, ready: false, retries: 0, chat: [] });
+    renderChat();
     $("reconnect").hidden = true;
     if (toLocal) { mode = "local"; setHash(null); setMsg("gameMsg", ""); newLocalGame(); }
   }
@@ -1742,6 +1858,7 @@
   function updateUI() {
     syncAudio();
     const isOnline = mode === "online";
+    if (!isOnline) { document.body.classList.remove("focus"); $("chatBox").hidden = true; }
     $("setup").hidden = isOnline;
     $("onlineGame").hidden = !isOnline;
     $("localBox").hidden = isOnline || !history.length;
@@ -1767,6 +1884,12 @@
 
     const d = online.data;
     $("gameCode").textContent = (online.code || "").toUpperCase();
+    document.body.classList.toggle("focus", !!d && d.status !== "waiting");
+    $("chatBox").hidden = !d || d.status === "waiting";
+    const canChat = !!myColor() && (online.seat === "host" ? online.connected : online.connected);
+    $("chatInput").disabled = $("chatSend").disabled = !canChat;
+    for (const b of document.querySelectorAll("#quickChat button")) b.disabled = !canChat;
+    $("chatInput").placeholder = !myColor() ? "Spectators can read the chat" : canChat ? "Say something..." : "Waiting for the connection...";
     $("shareLink").value = online.code ? gameLink(online.code) : "";
     const me = myColor();
     $("shareBox").hidden = online.seat !== "host";
@@ -1848,6 +1971,11 @@
     row.firstChild.focus();
   }
   function closePromo() { pendingPromo = null; $("promo").hidden = true; }
+  $("chatForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (sendChat($("chatInput").value)) $("chatInput").value = "";
+  });
+  for (const b of document.querySelectorAll("#quickChat button")) b.onclick = () => sendChat(b.dataset.say);
   $("endClose").onclick = () => { $("endBanner").hidden = true; };
   $("endAgain").onclick = () => {
     $("endBanner").hidden = true;
@@ -2019,6 +2147,7 @@
     whoosh() { noise({ freq: 400, f2: 3000, q: 0.7, dur: 0.35, vol: 0.18 }); },
     join() { tone({ f: 523, dur: 0.1, vol: 0.06 }); tone({ f: 784, at: 0.1, dur: 0.14, vol: 0.06 }); },
     tick() { noise({ freq: 4500, q: 4, dur: 0.02, vol: 0.06 }); },
+    chat() { tone({ type: "triangle", f: 988, dur: 0.08, vol: 0.08 }); tone({ type: "triangle", f: 1319, at: 0.08, dur: 0.12, vol: 0.08 }); },
   };
   const sfxSafe = (fn) => { try { if (settings.sfx && !settings.muted) fn(); } catch (_) {} };
   function blip(freq, dur) { sfxSafe(() => tone({ f: freq, dur, vol: 0.05 })); }
