@@ -104,7 +104,7 @@
   .seatTag .nm { display: flex; align-items: center; gap: 4px; }
   .seatTag .nm i { width: 7px; height: 7px; border: 1px solid var(--edge); display: inline-block; }
   .seatTag .ch { color: var(--gold); display: flex; align-items: center; gap: 3px; }
-  .seatTag .ch::before { content: ""; width: 7px; height: 4px; background: #e0403a; border: 1px solid var(--edge); box-shadow: 0 -2px 0 -1px #4a7ae0; }
+  .seatTag .ch::before { content: none; }
   .seatTag.me { border-color: var(--ok); }
   .seatTag.turn { border-color: var(--gold); animation: turnGlow 1s steps(2) infinite; }
   .seatTag.gone { opacity: .5; }
@@ -154,7 +154,7 @@
   /* Online focus layout: the table fills the screen, with your moves and chat beside it. */
   body.focus { padding-block: 12px; }
   body.focus h1, body.focus .tag, body.focus .topnav, body.focus .side.right, body.focus #setup, body.focus #soundBox, body.focus #shareBox { display: none !important; }
-  body.focus .wrap { max-width: none; grid-template-columns: min(calc(100vw - 370px), calc((100dvh - 40px) * 1.23)) 310px;
+  body.focus .wrap { max-width: none; grid-template-columns: min(calc(100vw - 370px), calc((100dvh - 40px) * 1.26)) 310px;
     grid-template-areas: "board left"; grid-template-rows: auto; justify-content: center; }
   body.focus .side.left { max-height: calc(100dvh - 24px); overflow-y: auto; }
   body.focus #chatBox { flex: 1 1 auto; min-height: 0; }
@@ -171,7 +171,7 @@
 <p class="tag">Get close to 21. Don't go over.</p>
 <div class="wrap">
   <div class="boardcol"><div class="boardwrap">
-    <canvas id="table" width="1280" height="1040" aria-label="Blackjack table"></canvas>
+    <canvas id="table" width="960" height="760" aria-label="Blackjack table"></canvas>
     <div id="tags"></div>
     <div id="bubbles"></div>
     <div id="toast" class="toast" hidden role="status"></div>
@@ -183,7 +183,7 @@
       <div id="betUI">
         <div class="betLine">
           <button id="betDown" aria-label="Lower bet">-</button>
-          <div class="betAmt" id="betAmt">10</div>
+          <div class="betAmt" id="betAmt">$10</div>
           <button id="betUp" aria-label="Raise bet">+</button>
         </div>
         <div class="chipBtns" id="chipBtns"></div>
@@ -202,6 +202,7 @@
         <div class="keys">Keys: H hit, S stand, D double.</div>
       </div>
       <div id="waitUI" class="muted" hidden></div>
+      <button id="startOver" class="primary big" hidden>START OVER WITH $500</button>
     </div>
     <div class="box" id="setup">
       <h2>NEW TABLE</h2>
@@ -282,7 +283,7 @@
       <p>Number cards count their number, J Q K count 10, and an <b>ace</b> counts 1 or 11, whichever helps.</p>
       <p><b>HIT</b> takes a card. <b>STAND</b> keeps your hand. <b>DOUBLE</b> doubles your bet on your first two cards and takes exactly one more card.</p>
       <p>An ace plus a 10-value card is <b>blackjack</b> and pays 3 to 2. A win pays 1 to 1 and a tie (<b>push</b>) gives your bet back.</p>
-      <p>The dealer must hit until 17 and stands on every 17. Everyone starts with 200 chips; if you run out, the house lends you 200 more.</p>
+      <p>The dealer must hit until 17 and stands on every 17. Everyone starts with <b>$500</b>. Run out and you're done: bots leave the table, and you can start over.</p>
     </div>
     <div class="box" id="log"></div>
   </div>
@@ -324,7 +325,7 @@
   const handLabel = (cards) => { const h = handInfo(cards); return h.bj ? "BLACKJACK" : h.total > 21 ? "BUST " + h.total : (h.soft && h.total < 21 ? "SOFT " : "") + h.total; };
 
   // ---------- The table (run by the host's browser, or locally against bots) ----------
-  const START = 200, BET_MIN = 5, BET_MAX = 100, BET_TIME = 15000, TURN_TIME = 25000;
+  const START = 500, BET_MIN = 5, BET_MAX = 100, BET_TIME = 15000, TURN_TIME = 25000;
   const BOTS = [ // style: 0 careful, 1 steady, 2 bold
     { name: "PIP", style: 0 }, { name: "MOSS", style: 1 }, { name: "JUNIPER", style: 2 }, { name: "TOFFEE", style: 1 }, { name: "BRAMBLE", style: 0 },
   ];
@@ -355,9 +356,12 @@
     T.phase = "betting"; T.turn = null; T.dealer = { cards: [], hidden: true }; T.deadline = 0; T.betTimer = false;
     for (const s of T.seats) if (s.gone) s.goneRounds++;
     T.seats = T.seats.filter(s => !s.gone || s.goneRounds < 3);
+    // Broke bots get up and leave; broke people stay to watch.
+    for (const s of T.seats.filter(x => x.bot && x.chips < BET_MIN)) tlog(`${s.name} is out of money and leaves the table.`);
+    T.seats = T.seats.filter(s => !(s.bot && s.chips < BET_MIN));
     for (const s of T.seats) {
       s.cards = []; s.state = "out"; s.result = null; s.ready = false; s.doubled = false;
-      if (s.chips < BET_MIN) { s.chips += START; tlog(`${s.name} ran out of chips. The house lends them ${START} more.`); }
+      if (s.chips < BET_MIN) { s.bet = 0; if (!s.broke) { s.broke = true; tlog(`${s.name} is out of money.`); } continue; }
       s.bet = clamp(s.base, BET_MIN, Math.min(BET_MAX, s.chips));
     }
     commit();
@@ -373,12 +377,12 @@
   }
   function placeBet(id, amount) {
     const s = seatOf(id);
-    if (!s || T.phase !== "betting" || s.ready || s.gone) return;
+    if (!s || T.phase !== "betting" || s.ready || s.gone || s.chips < BET_MIN) return;
     s.bet = clamp(Math.round(+amount / 5) * 5 || BET_MIN, BET_MIN, Math.min(BET_MAX, s.chips));
     s.base = s.bet; s.ready = true;
     commit(); maybeDeal();
     // Online: once someone is ready, everyone else has a little while to bet.
-    if (T.kind === "online" && T.phase === "betting" && !T.betTimer && T.seats.some(x => !x.ready && !x.gone)) {
+    if (T.kind === "online" && T.phase === "betting" && !T.betTimer && T.seats.some(x => !x.ready && !x.gone && x.chips >= BET_MIN)) {
       T.betTimer = true; T.deadline = Date.now() + BET_TIME; const r = T.round;
       commit();
       later(BET_TIME, () => { if (T.phase === "betting" && T.round === r) dealRound(); });
@@ -386,7 +390,7 @@
   }
   function maybeDeal() {
     if (T.phase !== "betting") return;
-    const here = T.seats.filter(s => !s.gone);
+    const here = T.seats.filter(s => !s.gone && s.chips >= BET_MIN);
     if (here.length && here.every(s => s.ready)) later(400, () => dealRound());
   }
   function dealRound() {
@@ -440,7 +444,7 @@
       s.cards.push(T.shoe.pop());
       const h = handInfo(s.cards);
       if (h.total > 21) { s.state = "bust"; tlog(`${s.name} busts with ${h.total}.`); }
-      else if (a === "double") { s.state = "stand"; tlog(`${s.name} doubles down to ${s.bet} and gets ${h.total}.`); }
+      else if (a === "double") { s.state = "stand"; tlog(`${s.name} doubles down to $${s.bet} and gets ${h.total}.`); }
       else if (h.total === 21) s.state = "stand";
     }
     if (s.state === "play") { armTurn(s); commit(); return true; }
@@ -492,7 +496,7 @@
       else if (h.total === d.total) { kind = "push"; delta = 0; s.chips += s.bet; }
       else { kind = "lose"; delta = -s.bet; }
       s.result = { kind, delta };
-      parts.push(`${s.name} ${kind === "push" ? "pushes" : delta > 0 ? "+" + delta : delta}`);
+      parts.push(`${s.name} ${kind === "push" ? "pushes" : delta > 0 ? "+$" + delta : "-$" + -delta}`);
     }
     if (parts.length) tlog(parts.join(", ") + ".");
     T.phase = "done"; T.turn = null; T.deadline = 0; commit();
@@ -536,7 +540,7 @@
 
   // ---------- Drawing ----------
   const cv = $("table"), ctx = cv.getContext("2d");
-  const LW = 320, LH = 260, K = 4, F = 10;
+  const LW = 240, LH = 190, K = 4, F = 8;
   const WOOD = { base: "#4a2c18", grainA: "#3f2513", grainB: "#55331d", hi: "#7a4f2e", lo: "#24140a", groove: "#1a0e06", lip: "#8f6038" };
   const GLYPHS = {
     A: [" # ", "# #", "###", "# #", "# #"], B: ["## ", "# #", "## ", "# #", "## "], C: [" ##", "#  ", "#  ", "#  ", " ##"], D: ["## ", "# #", "# #", "# #", "## "],
@@ -622,14 +626,34 @@
     ctx.globalAlpha = 1;
   }
 
+  // A player's bankroll as a little pile of chip stacks beside their bet.
+  function drawPile(x, y, amount) {
+    if (amount <= 0) return;
+    const n = clamp(Math.round(amount / 45), 1, 15), cols = [CHIP_COLS[50], CHIP_COLS[25], CHIP_COLS[10]];
+    [[0, 0], [6, 2], [3, -3]].forEach(([dx, dy], k) => {
+      const h = Math.min(5, n - k * 5); if (h <= 0) return;
+      for (let i = 0; i < h; i++) {
+        const cx = Math.round(x + dx - 4), cy = Math.round(y + dy - i * 2);
+        ctx.fillStyle = "#000"; ctx.fillRect(cx, cy, 8, 3); ctx.fillRect(cx + 1, cy - 1, 6, 5);
+        ctx.fillStyle = cols[k]; ctx.fillRect(cx + 1, cy, 6, 3);
+        ctx.fillStyle = "#f4ecd6"; ctx.fillRect(cx + 3, cy, 1, 2);
+      }
+    });
+  }
+  // Tiny gold numbers painted on the felt.
+  const DIGITS = { $: [" ##", "## ", " # ", " ##", "## "], "+": ["   ", " # ", "###", " # ", "   "], "-": ["   ", "   ", "###", "   ", "   "] };
+  function digits(text, cx, y, col) {
+    const w = text.length * 4 - 1, x0 = Math.round(cx - w / 2);
+    for (let i = 0; i < text.length; i++) { const gl = GLYPHS[text[i]] || DIGITS[text[i]]; if (!gl) continue; mask(ctx, gl, x0 + i * 4 + 1, y + 1, "rgba(0,0,0,0.6)"); mask(ctx, gl, x0 + i * 4, y, col); }
+  }
   // Seat positions along the curve of the table; seat 0 (first to act) is on the right.
   function seatPos(i, n) {
-    const sp = n <= 1 ? 0 : Math.min(64, 250 / (n - 1));
-    const x = 160 + ((n - 1) / 2 - i) * sp;
-    const y = 180 - Math.pow((x - 160) / 125, 2) * 62;
+    const sp = n <= 1 ? 0 : Math.min(48, 180 / (n - 1));
+    const x = 120 + ((n - 1) / 2 - i) * sp;
+    const y = 132 - Math.pow((x - 120) / 95, 2) * 34;
     return { x, y };
   }
-  const DEALER = { x: 160, y: 44 }, SHOE = { x: 276, y: 24 }, DISCARD = { x: 36, y: 24 };
+  const DEALER = { x: 120, y: 34 }, SHOE = { x: 208, y: 21 }, DISCARD = { x: 30, y: 20 };
 
   const bgCache = {};
   function tableBg(n) {
@@ -646,7 +670,7 @@
     // felt with a soft dithered vignette
     const fr = rng(5);
     for (let y = F; y < LH - F; y++) for (let x = F; x < LW - F; x++) {
-      const dx = (x - 160) / 160, dy = (y - 130) / 130, v = dx * dx + dy * dy, n2 = fr();
+      const dx = (x - 120) / 120, dy = (y - 95) / 95, v = dx * dx + dy * dy, n2 = fr();
       g.fillStyle = v > 0.85 && n2 < (v - 0.85) * 2 ? "#244d39" : n2 < 0.1 ? "#2a5741" : n2 < 0.18 ? "#36694f" : "#2f6148";
       g.fillRect(x, y, 1, 1);
     }
@@ -654,26 +678,26 @@
     g.fillStyle = "#c8963e"; g.fillRect(F - 1, F - 1, LW - 2 * F + 2, 1); g.fillRect(F - 1, F - 1, 1, LH - 2 * F + 2);
     // gold lettering along the curve
     const arcText = (text, cy, depth, col) => {
-      const w = text.length * 4 - 1, x0 = 160 - w / 2;
+      const w = text.length * 4 - 1, x0 = 120 - w / 2;
       for (let i = 0; i < text.length; i++) {
         const gl = GLYPHS[text[i]]; if (!gl) continue;
         const x = Math.round(x0 + i * 4), y = Math.round(cy - Math.sin(((x + 1.5 - x0) / w) * Math.PI) * depth);
         mask(g, gl, x + 1, y + 1, "#1d3f2e"); mask(g, gl, x, y, col);
       }
     };
-    arcText("BLACKJACK PAYS 3 TO 2", 92, 5, "#e0b040");
-    arcText("DEALER STANDS ON ALL 17S", 102, 5, "#c8b48a");
+    arcText("BLACKJACK PAYS 3 TO 2", 64, 4, "#e0b040");
+    arcText("DEALER STANDS ON ALL 17S", 72, 4, "#c8b48a");
     // the curved line players' spots sit along, and their bet circles
     for (let i = 0; i < n; i++) {
       const p = seatPos(i, n);
       g.fillStyle = "rgba(255,255,255,0.12)";
-      ring(g, p.x, p.y + 25, 9);
-      g.fillStyle = "rgba(200,150,62,0.55)"; ring(g, p.x, p.y + 25, 8);
+      ring(g, p.x, p.y + 22, 9);
+      g.fillStyle = "rgba(200,150,62,0.55)"; ring(g, p.x, p.y + 22, 8);
     }
     // dealer's chip tray
-    g.fillStyle = "#1a0e06"; g.fillRect(124, F, 72, 9); g.fillStyle = "#3a2410"; g.fillRect(125, F, 70, 8);
+    g.fillStyle = "#1a0e06"; g.fillRect(84, F, 72, 9); g.fillStyle = "#3a2410"; g.fillRect(85, F, 70, 8);
     const trayCols = ["#8a4fd0", "#3fae5a", "#4a7ae0", "#e0403a", "#e0403a", "#4a7ae0", "#3fae5a", "#8a4fd0"];
-    trayCols.forEach((col, i) => { const x = 127 + i * 8.5; g.fillStyle = "#000"; g.fillRect(Math.round(x), F, 7, 7); g.fillStyle = col; g.fillRect(Math.round(x) + 1, F, 5, 6); g.fillStyle = "rgba(255,255,255,0.35)"; g.fillRect(Math.round(x) + 1, F + 1, 5, 1); g.fillRect(Math.round(x) + 1, F + 4, 5, 1); });
+    trayCols.forEach((col, i) => { const x = 87 + i * 8.5; g.fillStyle = "#000"; g.fillRect(Math.round(x), F, 7, 7); g.fillStyle = col; g.fillRect(Math.round(x) + 1, F, 5, 6); g.fillStyle = "rgba(255,255,255,0.35)"; g.fillRect(Math.round(x) + 1, F + 1, 5, 1); g.fillRect(Math.round(x) + 1, F + 4, 5, 1); });
     // shoe and discard holder
     g.fillStyle = "#000"; g.fillRect(SHOE.x - 14, SHOE.y - 11, 30, 23); grain(g, SHOE.x - 13, SHOE.y - 10, 28, 21, WOOD, false, rng(3));
     g.fillStyle = WOOD.lip; g.fillRect(SHOE.x - 13, SHOE.y - 10, 28, 1);
@@ -743,13 +767,14 @@
     if (view.turn) {
       const i = view.seats.findIndex(s => s.id === view.turn), p = seatPos(i, n), pulse = REDUCED ? 0.5 : (Math.sin(now / 180) + 1) / 2;
       ctx.fillStyle = `rgba(255,224,102,${0.1 + 0.12 * pulse})`;
-      ctx.fillRect(Math.round(p.x - 26), Math.round(p.y - 16), 52, 48);
+      ctx.fillRect(Math.round(p.x - 20), Math.round(p.y - 14), 40, 46);
     }
     // bets
     view.seats.forEach((s, i) => {
       const p = seatPos(i, n);
       const showBet = s.bet > 0 && ((view.phase === "betting" && s.ready) || ["dealing", "playing", "dealer"].includes(view.phase));
-      if (showBet) drawChipStack(p.x, p.y + 25, s.bet);
+      if (showBet) { drawChipStack(p.x, p.y + 22, s.bet); digits(String(s.bet), p.x, p.y + 27, "#ffe066"); }
+      drawPile(p.x + (p.x < 119 ? -15 : 15), p.y + 23, s.chips);
     });
     // cards
     const drawHand = (key) => {
@@ -826,13 +851,11 @@
       const dot = document.createElement("i"); dot.style.background = s.color;
       const label = document.createElement("span"); label.textContent = s.name + (s.gone ? " (AWAY)" : "");
       nm.append(dot, label);
-      const ch = document.createElement("div"); ch.className = "ch"; ch.textContent = s.chips; ch.title = s.chips + " chips";
+      const ch = document.createElement("div"); ch.className = "ch"; ch.textContent = "$" + s.chips;
       el.append(nm, ch);
-      const note = v.phase === "betting" && !s.ready ? "BETTING..." : v.phase !== "betting" && s.state === "out" ? "SITTING OUT" : "";
+      const note = s.chips < BET_MIN && s.state === "out" ? "BROKE" : v.phase === "betting" && !s.ready ? "BETTING..." : v.phase !== "betting" && s.state === "out" ? "SITTING OUT" : "";
       if (note) { const d = document.createElement("div"); d.className = "muted"; d.textContent = note; el.append(d); }
-      place(el, p.x, p.y + 43);
-      const showBet = s.bet > 0 && ((v.phase === "betting" && s.ready) || ["dealing", "playing", "dealer"].includes(v.phase));
-      if (showBet) { const b = tagEl("bet-" + s.id, "totalTag betTag"); b.textContent = s.bet; place(b, p.x + 17, p.y + 25); }
+      place(el, p.x, p.y + 41);
       if (s.cards.length) {
         const t = tagEl("total-" + s.id, "totalTag" + (s.state === "bust" ? " bust" : s.state === "bj" ? " bj" : ""));
         t.textContent = handLabel(s.cards);
@@ -840,7 +863,7 @@
       }
       if (s.result && v.phase === "done") {
         const r = tagEl("res-" + s.id, "resultTag " + s.result.kind);
-        r.textContent = s.result.kind === "push" ? "PUSH" : s.result.delta > 0 ? `+${s.result.delta}` : `${s.result.delta}`;
+        r.textContent = s.result.kind === "push" ? "PUSH" : s.result.delta > 0 ? `+$${s.result.delta}` : `-$${-s.result.delta}`;
         place(r, p.x, p.y + 2);
       }
     });
@@ -889,10 +912,10 @@
     renderTags(v); renderLog(v); updateUI(); render();
   }
   function settleFx(v, now) {
-    const n = v.seats.length, tray = [160, 16];
+    const n = v.seats.length, tray = [120, 13];
     v.seats.forEach((s, i) => {
       if (!s.result) return;
-      const p = seatPos(i, n), circ = [p.x, p.y + 25], home = [p.x, p.y + 40];
+      const p = seatPos(i, n), circ = [p.x, p.y + 22], home = [p.x + (p.x < 119 ? -15 : 15), p.y + 23];
       const r = s.result;
       if (r.kind === "lose") chipFx.push({ amount: s.bet, start: now, path: [[...circ, 0], [...circ, 350], [...tray, 900]] });
       else if (r.kind === "push") chipFx.push({ amount: s.bet, start: now, path: [[...circ, 0], [...circ, 700], [...home, 1200]] });
@@ -905,10 +928,11 @@
     const me = v.seats.find(s => s.id === mySeat);
     if (me && me.result) {
       const r = me.result;
-      if (r.kind === "bj") { toast(`BLACKJACK! +${r.delta}`); sfxSafe(SFX.blackjack); }
-      else if (r.kind === "win") { toast(`YOU WIN +${r.delta}`); sfxSafe(SFX.win); }
+      if (r.kind === "bj") { toast(`BLACKJACK! +$${r.delta}`); sfxSafe(SFX.blackjack); }
+      else if (r.kind === "win") { toast(`YOU WIN +$${r.delta}`); sfxSafe(SFX.win); }
       else if (r.kind === "push") { toast("PUSH", "push"); sfxSafe(SFX.push); }
-      else { toast(me.state === "bust" ? `BUST! ${r.delta}` : `DEALER WINS ${r.delta}`, "lose"); sfxSafe(SFX.lose); }
+      else { toast(me.state === "bust" ? `BUST! -$${-r.delta}` : `DEALER WINS -$${-r.delta}`, "lose"); sfxSafe(SFX.lose); }
+      if (me.chips < BET_MIN) setTimeout(() => toast("OUT OF MONEY", "lose"), 2100);
     } else sfxSafe(SFX.chips);
   }
   function renderLog(v) {
@@ -940,17 +964,21 @@
     if (isOnline) renderOnline();
     const v = view;
     const me = v && v.seats.find(s => s.id === mySeat);
-    $("betUI").hidden = $("playUI").hidden = $("waitUI").hidden = true;
+    $("betUI").hidden = $("playUI").hidden = $("waitUI").hidden = $("startOver").hidden = true;
     $("actBox").classList.remove("myturn");
     if (!v) { setStatus("Connecting", "Finding the table..."); $("waitUI").hidden = false; $("waitUI").textContent = "Connecting..."; $("actTitle").textContent = "YOUR HAND"; return; }
     const turnSeat = v.seats.find(s => s.id === v.turn);
     const sub = isOnline ? `${v.seats.length} at the table` : `Round ${v.round + (v.phase === "betting" ? 1 : 0)}`;
     if (!me) {
       $("actTitle").textContent = "WATCHING"; $("waitUI").hidden = false; $("waitUI").textContent = "The table is full (6 seats). You can watch.";
+    } else if (me.chips < BET_MIN && (v.phase === "betting" || me.state === "out")) {
+      $("actTitle").textContent = "OUT OF MONEY"; $("waitUI").hidden = false;
+      $("waitUI").textContent = isOnline ? "You've lost all your money. You can stay and watch the table." : "You've lost all your money. Start a new table to play again.";
+      $("startOver").hidden = isOnline;
     } else if (v.phase === "betting" && !me.ready) {
       $("actTitle").textContent = "YOUR BET"; $("betUI").hidden = false;
       betDraft = clamp(betDraft, BET_MIN, Math.max(BET_MIN, Math.min(BET_MAX, me.chips)));
-      $("betAmt").textContent = betDraft;
+      $("betAmt").textContent = "$" + betDraft;
       $("deal").textContent = isOnline ? "BET" : "DEAL";
       $("betDown").disabled = betDraft <= BET_MIN; $("betUp").disabled = betDraft >= Math.min(BET_MAX, me.chips);
     } else if (v.phase === "playing" && v.turn === mySeat) {
@@ -964,7 +992,8 @@
         me.state === "bust" ? "Bust. Better luck next hand." : me.state === "bj" ? "Blackjack! Sit back and enjoy it." : v.phase === "done" ? "Next round starting..." : `You have ${handInfo(me.cards).total}. Waiting...`;
     }
     const t = secsLeft();
-    if (v.phase === "betting") setStatus(me && !me.ready ? "Place your bet" : "Waiting for bets", t ? `Dealing in ${t}s` : sub, !!(me && me.ready));
+    if (me && me.chips < BET_MIN && v.phase === "betting") setStatus("Out of money", isOnline ? "You're watching." : "Start over to play again.");
+    else if (v.phase === "betting") setStatus(me && !me.ready ? "Place your bet" : "Waiting for bets", t ? `Dealing in ${t}s` : sub, !!(me && me.ready));
     else if (v.phase === "dealing") setStatus("Dealing", sub, true);
     else if (v.phase === "playing") setStatus(v.turn === mySeat ? "Your turn" : `${turnSeat ? turnSeat.name : "?"}'s turn`, t ? `${t}s left` : (turnSeat && turnSeat.bot ? "Thinking..." : sub), v.turn !== mySeat);
     else if (v.phase === "dealer") setStatus("Dealer's turn", "The dealer draws to 17.", true);
@@ -977,13 +1006,14 @@
   for (const v of CHIP_BTNS) {
     const b = document.createElement("button"); b.type = "button";
     const i = document.createElement("i"); i.style.background = CHIP_COLS[v];
-    const t = document.createElement("span"); t.textContent = "+" + v;
+    const t = document.createElement("span"); t.textContent = "+$" + v;
     b.append(i, t); b.onclick = () => { const me = view && view.seats.find(s => s.id === mySeat); betDraft = clamp(betDraft + v, BET_MIN, Math.min(BET_MAX, me ? me.chips : BET_MAX)); sfxSafe(SFX.chip); updateUI(); };
     $("chipBtns").append(b);
   }
   const nudge = (d) => { const me = view && view.seats.find(s => s.id === mySeat); betDraft = clamp(betDraft + d, BET_MIN, Math.min(BET_MAX, me ? me.chips : BET_MAX)); sfxSafe(SFX.chip); updateUI(); };
   $("betDown").onclick = () => nudge(-5); $("betUp").onclick = () => nudge(5);
   $("deal").onclick = doBet;
+  $("startOver").onclick = () => startLocal();
   $("hit").onclick = () => doAct("hit"); $("stand").onclick = () => doAct("stand"); $("double").onclick = () => doAct("double");
   document.addEventListener("keydown", (e) => {
     if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey) return;
