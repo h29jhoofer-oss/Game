@@ -52,13 +52,13 @@
 <p class="tag">Pull up a chair. What are we playing tonight?</p>
 <div class="games">
   <a class="game" href="chess.html" id="goChess">
-    <canvas id="artChess" width="96" height="72" aria-hidden="true"></canvas>
+    <canvas id="artChess" width="192" height="144" aria-hidden="true"></canvas>
     <div class="name">CHESS</div>
     <div class="desc">Devour Chess: every piece you eat gives you its powers. Fog, mystery chests and fireballs.</div>
     <span class="play">PLAY CHESS</span>
   </a>
   <a class="game" href="cards.html" id="goCards">
-    <canvas id="artCards" width="96" height="72" aria-hidden="true"></canvas>
+    <canvas id="artCards" width="192" height="144" aria-hidden="true"></canvas>
     <div class="name">CARDS</div>
     <div class="desc">Blackjack: beat the dealer to 21 against up to 5 bots, or with up to 5 friends online.</div>
     <span class="play">PLAY CARDS</span>
@@ -74,53 +74,159 @@
     const r = rng(seed); g.fillStyle = base; g.fillRect(x, y, w, h);
     for (let k = 0; k < h; k++) { if (r() < 0.4) continue; g.fillStyle = r() < 0.5 ? a : b; let p = 0; while (p < w) { const run = 2 + Math.floor(r() * 6); g.fillRect(x + p, y + k, Math.min(run, w - p), 1); p += run + (r() < 0.3 ? 2 : 0); } }
   }
-  // ----- Chess tile: a corner of the parquet board with a king and a knight -----
-  const KING = ["   kk   ","  kkkk  ","   kk   "," xxxxxx ","xxhxxxxx"," xhxxxx ","  xhxx  ","  xxxx  "," xxxxxx ","dddddddd","xxxxxxxx"];
-  const KNIGHT = ["   xx   ","  xxxx  "," xxhxxx ","xxhxxxxx","xxxx xxx","   xxxxx","  xhxxxx","  xxxxxx"," xxxxxx ","dddddddd","xxxxxxxx"];
-  function drawChess(g, t) {
-    wood(g, 0, 0, 96, 72, "#4a2c18", "#3f2513", "#55331d", 3);
-    g.fillStyle = "#1a0e06"; g.fillRect(5, 5, 86, 62);
-    for (let r = 0; r < 4; r++) for (let c = 0; c < 6; c++) {
-      const dark = (r + c) % 2, x = 6 + c * 14, y = 6 + r * 15;
-      wood(g, x, y, 14, 15, dark ? "#8f5a3c" : "#d9a066", dark ? "#7f4e33" : "#cf955b", dark ? "#9c6546" : "#e3ad74", 10 + r * 7 + c);
-      g.fillStyle = dark ? "#a8714f" : "#ecc08c"; g.fillRect(x, y, 14, 1);
+  // ----- Chess tile: a black king front and centre, a white queen behind it to
+  // the left and a black knight level with the queen, just right of the king.
+  // The board recedes in perspective; a low light in front throws long shadows back.
+  const PIECES = {
+    N: ["       xx       ","      xxxx      ","     xxxxxxx    ","    xxdxxxxxx   ","   xxxxxxxxxdx  ","  xxxxxxxxxxxx  ","  xdxxxxhxxxdx  ","  xxx   hxxxxx  ","       xhxxxdx  ","      xhxxxxxx  ","     xhxxxxxxx  ","    dddddddddd  ","   xhxxxxxxxxxx ","   dddddddddddd "],
+    Q: ["       xx       ","  x    xx    x  ","  x   xxxx   x  ","  xx  xhxx  xx  ","  xxx xhxx xxx  ","   xxxhxxxxxx   ","   dddddddddd   ","    xhxxxxxx    ","     xhxxxx     ","     xhxxxx     ","      xhxx      ","     xhxxxx     ","    dddddddd    ","  xhxxxxxxxxxx  ","  dddddddddddd  "],
+    K: ["       kk       ","     kkkkkk     ","       kk       ","       kk       ","   xxx xx xxx   ","  xxhxxxxxxxxx  ","  xhxxxdxxxxxx  ","  dddddddddddd  ","   xhxxxxxxxx   ","    xhxxxxxx    ","    xhxxxxxx    ","   dddddddddd   ","   xhxxxxxxxx   ","  xhxxxxxxxxxx  ","  dddddddddddd  "],
+  };
+  const PAL = { w: { x: "#f4ecd6", h: "#fffdf6", d: "#c9bc98", s: "#d8ccab", o: "#1b1424" }, b: { x: "#4b3a66", h: "#7a64a3", d: "#2a1f3d", s: "#3a2c52", o: "#0b0712" } };
+  // A piece as a small canvas: outline, highlight, and a shaded right-hand side.
+  function pieceCanvas(type, color) {
+    const rows = PIECES[type], pal = PAL[color], c = document.createElement("canvas"); c.width = 18; c.height = rows.length + 2;
+    const g = c.getContext("2d"), on = (i, j) => rows[j] && rows[j][i] && rows[j][i] !== " ";
+    for (let j = -1; j <= rows.length; j++) for (let i = -1; i <= 16; i++) {
+      if (on(i, j)) { const ch = rows[j][i]; g.fillStyle = ch === "k" ? (i < 7 ? "#ffe066" : "#e0b040") : ch === "h" ? pal.h : ch === "d" ? pal.d : (!on(i + 1, j) || !on(i + 2, j)) ? pal.s : pal.x; g.fillRect(i + 1, j + 1, 1, 1); }
+      else if (on(i + 1, j) || on(i - 1, j) || on(i, j + 1) || on(i, j - 1)) { g.fillStyle = pal.o; g.fillRect(i + 1, j + 1, 1, 1); }
     }
-    const bob = REDUCED ? 0 : Math.round(Math.sin(t / 400));
-    const shadow = (x, y) => { g.fillStyle = "rgba(0,0,0,0.3)"; g.fillRect(x + 1, y + 11, 8, 2); };
-    shadow(26, 38); mask(g, KING, 27, 27 - bob, { x: "#f4ecd6", h: "#ffffff", d: "#b8ab8c", k: "#ffe066" });
-    shadow(55, 23); mask(g, KNIGHT, 56, 12 + bob, { x: "#3b2d5a", h: "#5d4a8a", d: "#1a1626" });
-    for (const [rows, x, y] of [[KING, 27, 27 - bob], [KNIGHT, 56, 12 + bob]]) outline(g, rows, x, y);
+    return c;
   }
-  function outline(g, rows, x, y) {
-    const on = (i, j) => rows[j] && rows[j][i] && rows[j][i] !== " ";
-    g.fillStyle = "#000";
-    for (let j = -1; j <= rows.length; j++) for (let i = -1; i <= 8; i++)
-      if (!on(i, j) && (on(i + 1, j) || on(i - 1, j) || on(i, j + 1) || on(i, j - 1))) g.fillRect(x + i, y + j, 1, 1);
+  function silhouette(src) {
+    const c = document.createElement("canvas"); c.width = src.width; c.height = src.height;
+    const g = c.getContext("2d"); g.drawImage(src, 0, 0); g.globalCompositeOperation = "source-in"; g.fillStyle = "#000"; g.fillRect(0, 0, c.width, c.height);
+    return c;
   }
-  // ----- Cards tile: green felt, a fanned hand and a stack of chips -----
-  function card(g, x, y, rank, suit, red) {
+  let boardImg = null;
+  function perspectiveBoard() { // 96 x 72, drawn at 2x
+    const c = document.createElement("canvas"); c.width = 96; c.height = 72;
+    const g = c.getContext("2d"), r = rng(11);
+    const EDGE = 6.2; // far edge of the board, in squares
+    for (let y = 0; y < 72; y++) {
+      const z = 210 / (y + 30); // distance into the board
+      for (let x = 0; x < 96; x++) {
+        if (z > EDGE) { // the room behind: dark wood wall, warmer near the board
+          g.fillStyle = (x + y) % 7 === 0 && r() < 0.5 ? "#21162a" : "#1d1424"; g.fillRect(x, y, 1, 1); continue;
+        }
+        const u = (x - 48) * z / 26, iu = Math.floor(u + 0.5), iz = Math.floor(z);
+        const dark = (iu + iz) % 2 !== 0;
+        const n = r(), cross = Math.floor((dark ? z : u + 0.5) * 9) % 3 === 0; // grain runs one way per square
+        let col = dark ? (n < 0.25 || cross ? "#7f4e33" : "#8f5a3c") : (n < 0.25 || cross ? "#cf955b" : "#d9a066");
+        g.fillStyle = col; g.fillRect(x, y, 1, 1);
+        // fade into shadow toward the back
+        const fade = Math.min(0.75, Math.max(0, (z - 2.4) / 5));
+        if (fade > 0) { g.fillStyle = `rgba(20,12,24,${fade})`; g.fillRect(x, y, 1, 1); }
+      }
+      // the board's far edge: a lip of dark frame wood
+      if (z <= EDGE && 210 / (y - 1 + 30) > EDGE) { g.fillStyle = "#4a2c18"; g.fillRect(0, y, 96, 1); g.fillStyle = "#7a4f2e"; g.fillRect(0, y - 1, 96, 1); }
+    }
+    // warm pool of light from the front
+    const grd = g.createRadialGradient(48, 80, 4, 48, 80, 70);
+    grd.addColorStop(0, "rgba(255,200,120,0.22)"); grd.addColorStop(1, "rgba(255,200,120,0)");
+    g.fillStyle = grd; g.fillRect(0, 0, 96, 72);
+    return c;
+  }
+  const PC = {};
+  function drawChess(g, t) {
+    g.imageSmoothingEnabled = false;
+    if (!boardImg) { boardImg = perspectiveBoard(); for (const [k, ty, co] of [["K", "K", "b"], ["Q", "Q", "w"], ["N", "N", "b"]]) { PC[k] = pieceCanvas(ty, co); PC[k + "s"] = silhouette(PC[k]); } }
+    g.drawImage(boardImg, 0, 0, 192, 144);
+    // [piece, centre x, base y, pixel size]: the king is nearest, so biggest.
+    const cast = [["Q", 66, 96, 2], ["N", 120, 96, 2], ["K", 96, 134, 3]];
+    // long shadows thrown back (up the board), away from the light in front
+    for (const [k, cx, by, sc] of cast) {
+      const sh = PC[k + "s"], w = sh.width * sc, h = sh.height * sc;
+      g.save(); g.globalAlpha = 0.42;
+      g.setTransform(1, 0, 0.75, -1.05, cx - w / 2, by + 1); // flip about the base: the shadow stretches back up the board, leaning a little right
+      g.drawImage(sh, 0, 0, sh.width, sh.height, 0, 0, w, h);
+      g.restore();
+    }
+    for (const [k, cx, by, sc] of cast) {
+      const img = PC[k], w = img.width * sc, h = img.height * sc;
+      g.fillStyle = "rgba(10,6,14,0.5)"; g.fillRect(Math.round(cx - w * 0.36), by - sc, Math.round(w * 0.72), sc * 2); // contact shadow
+      g.drawImage(img, Math.round(cx - w / 2), by - h + sc, w, h);
+    }
+    // a glint travels over the king's cross now and then
+    const k = Math.floor(t / 90) % 50;
+    if (!REDUCED && k < 4) { g.fillStyle = "#e9dcff"; g.fillRect(96 - 3 + k * 2, 134 - 16 * 3 + 6 + k, 2, 2); }
+  }
+
+  // ----- Cards tile: the dealer's hand top centre, two players' hands bottom
+  // left and right, chips centre right and the deck centre left, a little higher.
+  const G = { A: [" # ", "# #", "###", "# #", "# #"], K: ["# #", "# #", "## ", "# #", "# #"], Q: [" # ", "# #", "# #", "## ", " ##"], J: ["  #", "  #", "  #", "# #", " # "],
+    4: ["# #", "# #", "###", "  #", "  #"], 7: ["###", "  #", " # ", " # ", " # "], 9: [" # ", "# #", " ##", "  #", "## "], T: ["# ###", "# # #", "# # #", "# # #", "# ###"] };
+  const SB = { S: ["   #   ", "  ###  ", " ##### ", "#######", "### ###", "   #   ", "  ###  "], H: [" ## ## ", "#######", "#######", "#######", " ##### ", "  ###  ", "   #   "],
+    D: ["   #   ", "  ###  ", " ##### ", "#######", " ##### ", "  ###  ", "   #   "], C: ["  ###  ", "  ###  ", "## # ##", "#######", "## # ##", "   #   ", "  ###  "] };
+  const SS = { S: ["  #  ", " ### ", "#####", "## ##", "  #  "], H: [" # # ", "#####", "#####", " ### ", "  #  "], D: ["  #  ", " ### ", "#####", " ### ", "  #  "], C: ["  #  ", " ### ", "# # #", "#####", "  #  "] };
+  const ink = (g, rows, x, y, col) => { g.fillStyle = col; rows.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === "#") g.fillRect(x + i, y + j, 1, 1); }); };
+  function card(g, x, y, c) {
+    g.fillStyle = "rgba(0,0,0,0.35)"; g.fillRect(x + 2, y + 2, 15, 21); // shadow on the felt
     g.fillStyle = "#1a1626"; g.fillRect(x + 1, y, 14, 22); g.fillRect(x, y + 1, 16, 20);
+    if (c === "??") {
+      g.fillStyle = "#4a3f6b"; g.fillRect(1 + x, 1 + y, 14, 20);
+      g.fillStyle = "#ffe066"; g.fillRect(x + 2, y + 2, 12, 1); g.fillRect(x + 2, y + 19, 12, 1); g.fillRect(x + 2, y + 2, 1, 18); g.fillRect(x + 13, y + 2, 1, 18);
+      for (let j = 4; j < 18; j++) for (let i = 4; i < 12; i++) if ((i + j) % 4 === 0 || (i - j + 40) % 4 === 0) { g.fillStyle = (i + j) % 8 === 0 ? "#ff7a59" : "#2a2340"; g.fillRect(x + i, y + j, 1, 1); }
+      return;
+    }
+    const red = c[1] === "H" || c[1] === "D", col = red ? "#d8344a" : "#1a1626";
     g.fillStyle = "#f7efd9"; g.fillRect(x + 2, y + 1, 12, 20); g.fillRect(x + 1, y + 2, 14, 18);
-    const col = red ? "#d8344a" : "#1a1626";
-    mask(g, rank, x + 2, y + 2, { "#": col });
-    mask(g, suit, x + 6, y + 10, { "#": col });
+    g.fillStyle = "#ddd0ae"; g.fillRect(x + 2, y + 20, 12, 1);
+    ink(g, G[c[0]], x + 2, y + 2, col); ink(g, SS[c[1]], x + 2, y + 8, col);
+    if ("JQK".includes(c[0])) { g.fillStyle = "#e0b040"; g.fillRect(x + 7, y + 6, 7, 1); g.fillRect(x + 7, y + 19, 7, 1); g.fillRect(x + 7, y + 6, 1, 14); g.fillRect(x + 13, y + 6, 1, 14); ink(g, G[c[0]], x + 9, y + 9, col); ink(g, SS[c[1]], x + 8, y + 14, col); }
+    else ink(g, SB[c[1]], x + (c[0] === "A" ? 5 : 7), y + (c[0] === "A" ? 11 : 12), col);
   }
-  const SPADE = ["   #   ", "  ###  ", " ##### ", "#######", "### ###", "   #   ", "  ###  "];
-  const HEART = [" ## ## ", "#######", "#######", "#######", " ##### ", "  ###  ", "   #   "];
-  const A = [" # ", "# #", "###", "# #", "# #"], K = ["# #", "# #", "## ", "# #", "# #"];
-  function drawCards(g, t) {
-    wood(g, 0, 0, 96, 72, "#4a2c18", "#3f2513", "#55331d", 5);
-    g.fillStyle = "#1a0e06"; g.fillRect(5, 5, 86, 62);
+  const CHIP = ["#e0403a", "#4a7ae0", "#3fae5a", "#8a4fd0", "#1a1626"];
+  function chipStack(g, x, y, cols, t, seed) {
+    g.fillStyle = "rgba(0,0,0,0.35)"; g.fillRect(x + 1, y + 3, 11, 3);
+    cols.forEach((c, i) => {
+      const cy = y - i * 2;
+      g.fillStyle = "#000"; g.fillRect(x, cy, 11, 4); g.fillRect(x + 1, cy - 1, 9, 6);
+      g.fillStyle = CHIP[c]; g.fillRect(x + 1, cy, 9, 4);
+      g.fillStyle = c === 4 ? "#ffe066" : "#f4ecd6"; g.fillRect(x + 3, cy, 1, 3); g.fillRect(x + 7, cy, 1, 3);
+      g.fillStyle = "rgba(0,0,0,0.3)"; g.fillRect(x + 1, cy + 3, 9, 1);
+    });
+    const top = y - (cols.length - 1) * 2, k = Math.floor(t / 110 + seed * 7) % 30;
+    if (!REDUCED && k < 3) { g.fillStyle = "#fff"; g.fillRect(x + 2 + k * 3, top, 1, 1); }
+  }
+  let feltImg = null;
+  const TW = 192, TH = 144;
+  function felt() {
+    const c = document.createElement("canvas"); c.width = TW; c.height = TH; const g = c.getContext("2d");
+    wood(g, 0, 0, TW, TH, "#4a2c18", "#3f2513", "#55331d", 5);
+    g.fillStyle = "#7a4f2e"; g.fillRect(0, 0, TW, 1); g.fillStyle = "#1a0e06"; g.fillRect(5, 5, TW - 10, TH - 10);
     const r = rng(9);
-    for (let y = 6; y < 66; y++) for (let x = 6; x < 90; x++) { g.fillStyle = r() < 0.12 ? "#2a5741" : r() < 0.1 ? "#36694f" : "#2f6148"; g.fillRect(x, y, 1, 1); }
-    g.fillStyle = "#c8963e"; for (let x = 20; x < 76; x++) g.fillRect(x, Math.round(58 - Math.sin((x - 20) / 56 * Math.PI) * 6), 1, 1);
-    const lift = REDUCED ? 0 : Math.round(Math.sin(t / 380));
-    card(g, 24, 18, K, HEART, true);
-    card(g, 36, 15 - lift, A, SPADE, false);
-    // chips
-    const chip = (x, y, c) => { g.fillStyle = "#000"; g.fillRect(x, y, 11, 5); g.fillStyle = c; g.fillRect(x + 1, y + 1, 9, 3); g.fillStyle = "#fff"; g.fillRect(x + 3, y + 1, 1, 3); g.fillRect(x + 7, y + 1, 1, 3); };
-    [["#e0403a", 0], ["#4a7ae0", 1], ["#3fae5a", 2], ["#8a4fd0", 3]].forEach(([c, i]) => chip(62, 44 - i * 3, c));
-    chip(72, 47, "#e0403a"); chip(73, 44, "#4a7ae0");
+    for (let y = 6; y < TH - 6; y++) for (let x = 6; x < TW - 6; x++) {
+      const dx = (x - TW / 2) / (TW / 2), dy = (y - TH / 2) / (TH / 2), v = dx * dx + dy * dy, n = r();
+      g.fillStyle = v > 0.75 && n < (v - 0.75) * 1.5 ? "#244d39" : n < 0.12 ? "#2a5741" : n < 0.2 ? "#36694f" : "#2f6148"; g.fillRect(x, y, 1, 1);
+    }
+    g.fillStyle = "#c8963e"; g.fillRect(5, 5, TW - 10, 1); g.fillRect(5, 5, 1, TH - 10);
+    // a warm lamp glow over the middle of the table
+    const grd = g.createRadialGradient(96, 70, 6, 96, 70, 95); grd.addColorStop(0, "rgba(255,210,140,0.16)"); grd.addColorStop(1, "rgba(255,210,140,0)");
+    g.fillStyle = grd; g.fillRect(6, 6, TW - 12, TH - 12);
+    // the gold arc the players sit along
+    g.fillStyle = "rgba(224,176,64,0.8)";
+    for (let x = 16; x < TW - 16; x++) g.fillRect(x, Math.round(94 + Math.sin(((x - 16) / (TW - 32)) * Math.PI) * 9), 1, 1);
+    g.fillStyle = "rgba(224,176,64,0.35)";
+    for (let x = 22; x < TW - 22; x++) g.fillRect(x, Math.round(98 + Math.sin(((x - 22) / (TW - 44)) * Math.PI) * 9), 1, 1);
+    return c;
+  }
+  function drawCards(g, t) {
+    if (!feltImg) feltImg = felt();
+    g.drawImage(feltImg, 0, 0);
+    // dealer: one card up, one face down, top centre
+    card(g, 81, 14, "9H"); card(g, 89, 14, "??");
+    // deck: centre left, a neat stack showing its thickness, sitting a touch higher than the chips
+    for (let i = 6; i >= 0; i--) card(g, 36 + Math.round(i * 0.5), 52 + i, "??");
+    // chips: centre right
+    chipStack(g, 122, 70, [0, 0, 1, 1, 2, 2], t, 1); chipStack(g, 136, 68, [3, 3, 4, 4, 3, 1, 1], t, 2);
+    chipStack(g, 129, 80, [2, 1, 0], t, 3); chipStack(g, 145, 79, [1, 0, 0, 2], t, 4);
+    // two players' hands, bottom left and bottom right, each with a bet in front
+    const lift = REDUCED ? 0 : Math.round((Math.sin(t / 420) + 1) / 2);
+    card(g, 24, 104, "AS"); card(g, 32, 103 - lift, "KH");
+    chipStack(g, 56, 124, [0, 1], t, 5);
+    card(g, 136, 104, "7D"); card(g, 144, 103, "TC"); card(g, 152, 102, "4S");
+    chipStack(g, 122, 124, [2, 0], t, 6);
   }
   const cvC = document.getElementById("artChess").getContext("2d"), cvK = document.getElementById("artCards").getContext("2d");
   function frame(t) { drawChess(cvC, t); drawCards(cvK, t); if (!REDUCED) setTimeout(() => requestAnimationFrame(frame), 120); }
