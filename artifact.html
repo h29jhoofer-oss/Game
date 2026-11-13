@@ -46,7 +46,7 @@
     <span class="play">PLAY CHESS</span>
   </a>
   <a class="game" href="cards.html" id="goCards">
-    <canvas id="artCards" width="192" height="144" aria-hidden="true"></canvas>
+    <canvas id="artCards" width="96" height="72" aria-hidden="true"></canvas>
     <div class="name">CARDS</div>
     <div class="desc">Blackjack: beat the dealer to 21 against up to 5 bots, or with up to 5 friends online.</div>
     <span class="play">PLAY CARDS</span>
@@ -121,7 +121,7 @@
     if (!boardImg) { boardImg = perspectiveBoard(); for (const [k, ty, co] of [["K", "K", "b"], ["Q", "Q", "w"], ["N", "N", "b"]]) { PC[k] = pieceCanvas(ty, co); PC[k + "s"] = silhouette(PC[k]); } }
     g.drawImage(boardImg, 0, 0, 192, 144);
     // [piece, centre x, base y, pixel size]: the king is nearest, so biggest.
-    const cast = [["Q", 66, 96, 2], ["N", 120, 96, 2], ["K", 96, 134, 3]];
+    const cast = [["Q", 46, 90, 4], ["N", 146, 90, 4], ["K", 96, 141, 5]];
     // long shadows thrown back (up the board), away from the light in front
     for (const [k, cx, by, sc] of cast) {
       const sh = PC[k + "s"], w = sh.width * sc, h = sh.height * sc;
@@ -135,9 +135,9 @@
       g.fillStyle = "rgba(10,6,14,0.5)"; g.fillRect(Math.round(cx - w * 0.36), by - sc, Math.round(w * 0.72), sc * 2); // contact shadow
       g.drawImage(img, Math.round(cx - w / 2), by - h + sc, w, h);
     }
-    // a glint travels over the king's cross now and then
-    const k = Math.floor(t / 90) % 50;
-    if (!REDUCED && k < 4) { g.fillStyle = "#e9dcff"; g.fillRect(96 - 3 + k * 2, 134 - 16 * 3 + 6 + k, 2, 2); }
+    // a glint travels down the king's gold cross now and then
+    const kk = Math.floor(t / 90) % 50, kh = PC.K.height * 5;
+    if (!REDUCED && kk < 4) { g.fillStyle = "#fffbe0"; g.fillRect(96 - 45 + 8 * 5, 141 - kh + 5 + 5 + kk * 5, 5, 5); }
   }
 
   // ----- Cards tile: the dealer's hand top centre, two players' hands bottom
@@ -178,43 +178,34 @@
     if (!REDUCED && k < 3) { g.fillStyle = "#fff"; g.fillRect(x + 2 + k * 3, top, 1, 1); }
   }
   let feltImg = null;
-  const TW = 192, TH = 144;
   function felt() {
-    const c = document.createElement("canvas"); c.width = TW; c.height = TH; const g = c.getContext("2d");
-    wood(g, 0, 0, TW, TH, "#4a2c18", "#3f2513", "#55331d", 5);
-    g.fillStyle = "#7a4f2e"; g.fillRect(0, 0, TW, 1); g.fillStyle = "#1a0e06"; g.fillRect(5, 5, TW - 10, TH - 10);
+    const c = document.createElement("canvas"); c.width = 96; c.height = 72; const g = c.getContext("2d");
+    wood(g, 0, 0, 96, 72, "#4a2c18", "#3f2513", "#55331d", 5);
+    g.fillStyle = "#7a4f2e"; g.fillRect(0, 0, 96, 1); g.fillStyle = "#1a0e06"; g.fillRect(3, 3, 90, 66);
     const r = rng(9);
-    for (let y = 6; y < TH - 6; y++) for (let x = 6; x < TW - 6; x++) {
-      const dx = (x - TW / 2) / (TW / 2), dy = (y - TH / 2) / (TH / 2), v = dx * dx + dy * dy, n = r();
-      g.fillStyle = v > 0.75 && n < (v - 0.75) * 1.5 ? "#244d39" : n < 0.12 ? "#2a5741" : n < 0.2 ? "#36694f" : "#2f6148"; g.fillRect(x, y, 1, 1);
+    for (let y = 4; y < 68; y++) for (let x = 4; x < 92; x++) {
+      const dx = (x - 48) / 48, dy = (y - 36) / 36, v = dx * dx + dy * dy, n = r();
+      g.fillStyle = v > 0.8 && n < (v - 0.8) * 1.6 ? "#244d39" : n < 0.12 ? "#2a5741" : n < 0.2 ? "#36694f" : "#2f6148"; g.fillRect(x, y, 1, 1);
     }
-    g.fillStyle = "#c8963e"; g.fillRect(5, 5, TW - 10, 1); g.fillRect(5, 5, 1, TH - 10);
-    // a warm lamp glow over the middle of the table
-    const grd = g.createRadialGradient(96, 70, 6, 96, 70, 95); grd.addColorStop(0, "rgba(255,210,140,0.16)"); grd.addColorStop(1, "rgba(255,210,140,0)");
-    g.fillStyle = grd; g.fillRect(6, 6, TW - 12, TH - 12);
+    g.fillStyle = "#c8963e"; g.fillRect(3, 3, 90, 1); g.fillRect(3, 3, 1, 66);
     // the gold arc the players sit along
-    g.fillStyle = "rgba(224,176,64,0.8)";
-    for (let x = 16; x < TW - 16; x++) g.fillRect(x, Math.round(94 + Math.sin(((x - 16) / (TW - 32)) * Math.PI) * 9), 1, 1);
-    g.fillStyle = "rgba(224,176,64,0.35)";
-    for (let x = 22; x < TW - 22; x++) g.fillRect(x, Math.round(98 + Math.sin(((x - 22) / (TW - 44)) * Math.PI) * 9), 1, 1);
+    g.fillStyle = "rgba(224,176,64,0.75)";
+    for (let x = 8; x < 88; x++) g.fillRect(x, Math.round(40 + Math.sin(((x - 8) / 80) * Math.PI) * 5), 1, 1);
     return c;
   }
   function drawCards(g, t) {
     if (!feltImg) feltImg = felt();
     g.drawImage(feltImg, 0, 0);
+    // deck: centre left, a neat stack showing its thickness
+    for (let i = 5; i >= 0; i--) card(g, 14 + Math.round(i * 0.6), 23 + i, "??");
     // dealer: one card up, one face down, top centre
-    card(g, 81, 14, "9H"); card(g, 89, 14, "??");
-    // deck: centre left, a neat stack showing its thickness, sitting a touch higher than the chips
-    for (let i = 6; i >= 0; i--) card(g, 36 + Math.round(i * 0.5), 52 + i, "??");
-    // chips: centre right
-    chipStack(g, 122, 70, [0, 0, 1, 1, 2, 2], t, 1); chipStack(g, 136, 68, [3, 3, 4, 4, 3, 1, 1], t, 2);
-    chipStack(g, 129, 80, [2, 1, 0], t, 3); chipStack(g, 145, 79, [1, 0, 0, 2], t, 4);
-    // two players' hands, bottom left and bottom right, each with a bet in front
+    card(g, 37, 6, "9H"); card(g, 44, 6, "??");
+    // chips: centre right, a little lower than the deck
+    chipStack(g, 58, 36, [0, 0, 1, 1, 2], t, 1); chipStack(g, 70, 35, [3, 3, 4, 4, 3, 1], t, 2); chipStack(g, 64, 42, [2, 1, 0], t, 3); chipStack(g, 77, 41, [1, 0, 0, 2], t, 4);
+    // two players' hands, bottom left and bottom right (one of them just hit blackjack)
     const lift = REDUCED ? 0 : Math.round((Math.sin(t / 420) + 1) / 2);
-    card(g, 24, 104, "AS"); card(g, 32, 103 - lift, "KH");
-    chipStack(g, 56, 124, [0, 1], t, 5);
-    card(g, 136, 104, "7D"); card(g, 144, 103, "TC"); card(g, 152, 102, "4S");
-    chipStack(g, 122, 124, [2, 0], t, 6);
+    card(g, 7, 46, "AS"); card(g, 15, 45 - lift, "KH");
+    card(g, 59, 46, "7D"); card(g, 66, 45, "TC"); card(g, 73, 44, "4S");
   }
   const cvC = document.getElementById("artChess").getContext("2d"), cvK = document.getElementById("artCards").getContext("2d");
   function frame(t) { drawChess(cvC, t); drawCards(cvK, t); if (!REDUCED) setTimeout(() => requestAnimationFrame(frame), 120); }
