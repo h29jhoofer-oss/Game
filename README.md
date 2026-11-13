@@ -41,6 +41,7 @@ Open `index.html` in a browser and pick CHESS, or host the folder on GitHub Page
 - Click a piece, then a highlighted square to move. Pieces that eat grow the features of their victims.
 - Online: **CREATE ONLINE GAME** gives you a link. Anyone who opens it can play you as Black, no account needed. Later visitors watch. Keep your page open while you play: your browser hosts the game. A friend's code can also be typed into **JOIN**.
 - Once an online game starts, the board fills the screen with the game buttons and a chat beside it (below it on phones). Players can type or use quick replies; spectators can read along.
+- Bot and same-screen games use the same big-board layout once they start, with UNDO / NEW GAME buttons, piece info, taunts and (with mystery boxes on) the POWERS buttons beside the board instead of chat. NEW GAME brings the settings back.
 - Checkmate wins. Pawns promote to queens. No castling or en passant.
 
 ## How online play works

@@ -153,6 +153,7 @@
     grid-template-areas: "board left"; grid-template-rows: auto; justify-content: center; }
   body.focus .side.left { height: min(calc(100vh - 32px), calc(100dvh - 32px)); }
   body.focus #status { min-height: 0; }
+  body.focus #info { min-height: 3.4em; }
   body.focus #chatBox { flex: 1 1 auto; min-height: 0; }
   body.focus .chatLog { flex: 1 1 auto; max-height: none; }
   @media (max-width: 760px) {
@@ -232,6 +233,12 @@
   </div></div>
   <div class="side left">
     <div class="box" id="status"></div>
+    <div class="box" id="localFocusBox" hidden>
+      <div class="row">
+        <button id="focusUndo">UNDO MOVE</button>
+        <button id="focusMenu">NEW GAME</button>
+      </div>
+    </div>
     <div class="box" id="tauntBox" hidden>
       <h2>TAUNT</h2>
       <div class="taunts" id="tauntBtns"></div>
@@ -927,6 +934,7 @@
     render(); updateUI();
   }
   function localMove(m) {
+    if (!localFocus && mode === "local") { localFocus = true; setTimeout(() => { updateUI(); window.scrollTo(0, 0); }, 0); }
     history.push({ board: clone(board), turn, lastMove, logLines: [...logLines], seen, bxState });
     const humanMove = !(cpuOn && turn === "b");
     aim = null;
@@ -2380,7 +2388,9 @@
   function updateUIMain() {
     syncAudio();
     const isOnline = mode === "online";
-    if (!isOnline) { document.body.classList.remove("focus"); $("chatBox").hidden = true; }
+    if (!isOnline) { document.body.classList.toggle("focus", localFocus); $("chatBox").hidden = true; }
+    $("localFocusBox").hidden = isOnline || !localFocus;
+    $("focusUndo").disabled = thinking || !history.length;
     $("setup").hidden = isOnline;
     $("onlineGame").hidden = !isOnline;
     $("localBox").hidden = isOnline || !history.length;
@@ -2489,8 +2499,9 @@
     box.hidden = !show;
     // Online focus mode hides the right column, so the powers move under the game buttons.
     const focus = document.body.classList.contains("focus");
-    if (focus && box.parentElement !== document.querySelector(".side.left")) $("onlineGame").after(box);
-    if (!focus && box.parentElement !== document.querySelector(".side.right")) document.querySelector(".side.right").prepend(box);
+    const info = $("info");
+    if (focus && box.parentElement !== document.querySelector(".side.left")) { $("localFocusBox").after(box); box.after(info); }
+    if (!focus && box.parentElement !== document.querySelector(".side.right")) { document.querySelector(".side.right").prepend(box); box.after(info); }
     if (!show) return;
     const btns = $("powerBtns"); btns.replaceChildren();
     const hint = [];
@@ -2803,10 +2814,15 @@
   $("boxToggle").onclick = () => { settings.boxes = !settings.boxes; saveSettings(); renderSettings(); };
   $("kingToggle").onclick = () => { settings.kingCap = !settings.kingCap; saveSettings(); renderSettings(); };
   $("curtainBtn").onclick = () => { curtain = false; sfxSafe(SFX.whoosh); render(); updateUI(); if (showCheck()) setTimeout(() => sfxSafe(SFX.check), 250); };
+  // Bot and same-screen games get the same big-board layout as online games once
+  // they're under way; NEW GAME brings the settings back.
+  let localFocus = false;
   $("start").onclick = () => {
     if (settings.opp === "online") { if (typeof Peer !== "undefined") createGame(); return; }
-    thinking = false; newLocalGame();
+    thinking = false; localFocus = true; newLocalGame(); window.scrollTo(0, 0);
   };
+  $("focusUndo").onclick = () => $("undo").onclick();
+  $("focusMenu").onclick = () => { localFocus = false; updateUI(); render(); $("setup").scrollIntoView({ block: "start" }); };
   $("join").onclick = () => openGame($("joinCode").value);
   $("joinCode").addEventListener("keydown", (e) => { if (e.key === "Enter") openGame($("joinCode").value); });
   $("resign").onclick = resign;
