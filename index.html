@@ -74,8 +74,8 @@
     const r = rng(seed); g.fillStyle = base; g.fillRect(x, y, w, h);
     for (let k = 0; k < h; k++) { if (r() < 0.4) continue; g.fillStyle = r() < 0.5 ? a : b; let p = 0; while (p < w) { const run = 2 + Math.floor(r() * 6); g.fillRect(x + p, y + k, Math.min(run, w - p), 1); p += run + (r() < 0.3 ? 2 : 0); } }
   }
-  // ----- Chess tile: a black king front and centre, a white queen behind it to
-  // the left and a black knight level with the queen, just right of the king.
+  // ----- Chess tile: a black king front and centre, a black knight behind it to
+  // the left and a white queen level with the knight, just right of the king.
   // The board recedes in perspective; a low light in front throws long shadows back.
   const PIECES = {
     N: ["       xx       ","      xxxx      ","     xxxxxxx    ","    xxdxxxxxx   ","   xxxxxxxxxdx  ","  xxxxxxxxxxxx  ","  xdxxxxhxxxdx  ","  xxx   hxxxxx  ","       xhxxxdx  ","      xhxxxxxx  ","     xhxxxxxxx  ","    dddddddddd  ","   xhxxxxxxxxxx ","   dddddddddddd "],
@@ -133,7 +133,7 @@
     if (!boardImg) { boardImg = perspectiveBoard(); for (const [k, ty, co] of [["K", "K", "b"], ["Q", "Q", "w"], ["N", "N", "b"]]) { PC[k] = pieceCanvas(ty, co); PC[k + "s"] = silhouette(PC[k]); } }
     g.drawImage(boardImg, 0, 0, 192, 144);
     // [piece, centre x, base y, pixel size]: the king is nearest, so biggest.
-    const cast = [["Q", 46, 90, 4], ["N", 146, 90, 4], ["K", 96, 141, 5]];
+    const cast = [["N", 56, 90, 4], ["Q", 136, 90, 4], ["K", 96, 141, 5]];
     // long shadows thrown back (up the board), away from the light in front
     for (const [k, cx, by, sc] of cast) {
       const sh = PC[k + "s"], w = sh.width * sc, h = sh.height * sc;
