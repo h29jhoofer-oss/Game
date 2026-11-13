@@ -1,10 +1,28 @@
-# Devour Chess
+# Pixel Parlor
+
+A cozy pixel-art game room. `index.html` is the home page: pick **CHESS** or **CARDS**.
+
+- `chess.html`: **Devour Chess** (below).
+- `cards.html`: **Pixel Blackjack**.
+
+Old chess invite links (`index.html#g-CODE`) still open the chess game.
+
+## Pixel Blackjack
+
+- Play against **1 to 5 bots** (PIP, MOSS, JUNIPER, TOFFEE and BRAMBLE, each with their own betting and playing style), or open an **online table** and send the link to **up to 5 friends**.
+- Everyone plays against the dealer. Bet 5 to 100 chips, then **HIT**, **STAND** or **DOUBLE** (keys H, S, D; Space deals). Blackjack pays 3 to 2, the dealer draws to 17 and stands on all 17s, and the dealer peeks for blackjack when showing an ace or a ten. Four decks, reshuffled when the shoe runs low. No splits or insurance.
+- Everyone starts with 200 chips; if you run out, the house lends you 200 more.
+- Cards fly out of the shoe and flip over, the dealer's hidden card flips when it's their turn, chips are paid out or swept away, and old cards slide into the discard tray. Bots say what they're doing in speech bubbles.
+- Its own synthesised lounge music, plus card, chip and win sounds. Sound settings are shared with chess.
+- Online: the host's browser runs the table and never sends anyone the shoe or the dealer's face-down card. Players have 15 seconds to bet once someone has bet, and 25 seconds per turn (then they stand). Anyone who drops out can reopen the link to get their seat and chips back. A 7th visitor watches. The table has a chat.
+
+## Devour Chess
 
 A pixel-art chess game with a twist: **you are what you eat.** When a piece captures another, it absorbs all of the victim's movement powers. A pawn that eats a knight can hop like a knight; a knight that eats a queen can slide like one too.
 
 ## Play
 
-Open `index.html` in a browser, or host the folder on GitHub Pages. No build step.
+Open `index.html` in a browser and pick CHESS, or host the folder on GitHub Pages. No build step.
 
 - Pick a game in the **NEW GAME** panel: play a **bot** (Easy, Medium or Hard), a **friend online**, or a friend on the **same screen**. Then press **START GAME**.
 - The **Devour rule** switch turns the twist on or off. Off is classic chess captures.
@@ -34,4 +52,4 @@ Some strict school or work networks block direct browser connections. If a frien
 ## Files
 
 - `index.html`: the game, for GitHub Pages or any static host.
-- `artifact.html`: the claude.ai copy, built from `index.html` by `tools/build_artifact.py`. It has everything except online play (claude.ai pages can't connect browsers directly).
+- `artifact.html` (home), `artifact-chess.html` and `artifact-cards.html`: the claude.ai copy, built by `tools/build_artifact.py`. It has everything except online play (claude.ai pages can't connect browsers directly).
