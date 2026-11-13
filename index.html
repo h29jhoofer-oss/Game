@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#16204a" />
+  <title>Rampart Rush</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- menu screens -->
+    <main id="screens">
+      <section id="screen-shop" class="screen"></section>
+      <section id="screen-cards" class="screen"></section>
+      <section id="screen-home" class="screen active"></section>
+      <section id="screen-quests" class="screen"></section>
+      <section id="screen-profile" class="screen"></section>
+    </main>
+    <nav id="nav">
+      <button data-tab="shop"><span class="ico">🛒</span><span>Shop</span></button>
+      <button data-tab="cards"><span class="ico">🃏</span><span>Cards</span></button>
+      <button data-tab="home" class="active"><span class="ico">⚔️</span><span>Battle</span></button>
+      <button data-tab="quests"><span class="ico">🏅</span><span>Quests</span><i class="badge" id="quest-badge"></i></button>
+      <button data-tab="profile"><span class="ico">👑</span><span>Profile</span></button>
+    </nav>
+
+    <!-- battle screen -->
+    <section id="screen-battle" class="hidden">
+      <header id="b-top">
+        <div class="b-player enemy">
+          <div class="b-name" id="b-enemy-name">Enemy</div>
+          <div class="b-sub" id="b-enemy-sub">King Lv 1</div>
+        </div>
+        <div class="b-timer" id="b-timer"><small>Time left</small><b>3:00</b></div>
+        <button id="b-pause" class="iconbtn" title="Pause">❚❚</button>
+      </header>
+      <div id="b-field">
+        <canvas id="b-canvas"></canvas>
+        <div id="b-crowns">
+          <div class="crowns enemy" id="b-crowns-enemy"><i></i><i></i><i></i></div>
+          <div class="crowns player" id="b-crowns-player"><i></i><i></i><i></i></div>
+        </div>
+        <div id="b-banner"></div>
+      </div>
+      <footer id="b-hud">
+        <div id="b-handrow">
+          <div id="b-next"><small>Next</small><div class="mini"></div></div>
+          <div id="b-hand"></div>
+        </div>
+        <div id="b-elixir">
+          <div class="drop"><b id="b-elixir-num">5</b></div>
+          <div class="bar"><div class="fill" id="b-elixir-fill"></div><div class="ticks"></div></div>
+        </div>
+      </footer>
+      <div id="b-end" class="hidden"></div>
+    </section>
+
+    <div id="modal-root"></div>
+    <div id="toast"></div>
+  </div>
+
+  <!-- core -->
+  <script src="js/core/util.js"></script>
+  <!-- data -->
+  <script src="js/data/cards.js"></script>
+  <script src="js/data/arenas.js"></script>
+  <!-- audio -->
+  <script src="js/audio/audio.js"></script>
+  <!-- rendering -->
+  <script src="js/render/sprites.js"></script>
+  <script src="js/render/cardart.js"></script>
+  <!-- battle engine -->
+  <script src="js/battle/map.js"></script>
+  <script src="js/battle/effects.js"></script>
+  <script src="js/battle/entities.js"></script>
+  <script src="js/battle/spells.js"></script>
+  <script src="js/battle/battle.js"></script>
+  <script src="js/battle/renderer.js"></script>
+  <!-- AI -->
+  <script src="js/ai/ai.js"></script>
+  <!-- progression -->
+  <script src="js/progression/profile.js"></script>
+  <!-- UI -->
+  <script src="js/ui/components.js"></script>
+  <script src="js/ui/menus.js"></script>
+  <script src="js/ui/battle-ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

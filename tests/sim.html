@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Rampart Rush – headless AI simulation</title></head>
+<body>
+<pre id="out">running…</pre>
+<script src="../js/core/util.js"></script>
+<script src="../js/data/cards.js"></script>
+<script src="../js/data/arenas.js"></script>
+<script src="../js/audio/audio.js"></script>
+<script src="../js/render/sprites.js"></script>
+<script src="../js/battle/map.js"></script>
+<script src="../js/battle/effects.js"></script>
+<script src="../js/battle/entities.js"></script>
+<script src="../js/battle/spells.js"></script>
+<script src="../js/battle/battle.js"></script>
+<script src="../js/ai/ai.js"></script>
+<script>
+// Runs complete AI-vs-AI battles as fast as possible and reports outcomes + any engine errors.
+window.runSims = function (n, d0, d1, arena) {
+  const out = { results: [], errors: [] };
+  for (let i = 0; i < n; i++) {
+    const deck0 = RR.AI.buildDeck(arena, 5), deck1 = RR.AI.buildDeck(arena, 5);
+    const B = new RR.Battle({
+      decks: [deck0.cards, deck1.cards], kingLevels: [3, 3],
+      controllers: [new RR.AI(0, d0, { skill: 0.5 }), new RR.AI(1, d1, { skill: 0.5 })],
+    });
+    let steps = 0, maxEnt = 0;
+    try {
+      while (!B.over && steps < 20000) { B.update(1 / 30); steps++; maxEnt = Math.max(maxEnt, B.entities.length); }
+      for (const e of B.entities) if (!isFinite(e.x) || !isFinite(e.y) || !isFinite(e.hp)) throw new Error('NaN entity ' + e.card.id);
+    } catch (err) { out.errors.push(String(err && err.stack || err)); }
+    out.results.push({ winner: B.winner, reason: B.endReason, t: Math.round(B.elapsed), crowns: [B.players[0].crowns, B.players[1].crowns],
+      played: B.stats.cardsPlayed, decks: [deck0.name, deck1.name], maxEnt,
+      towerHp: B.towers.map((ts) => ts.map((t) => Math.round(t.hp))) });
+  }
+  return out;
+};
+document.getElementById('out').textContent = 'ready';
+</script>
+</body></html>
