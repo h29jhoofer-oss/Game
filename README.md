@@ -13,6 +13,14 @@ Old chess invite links (`index.html#g-CODE`) still open the chess game.
 - Everyone plays against the dealer. Bet $5 to $100, then **HIT**, **STAND**, **DOUBLE** or **SPLIT** (keys H, S, D, P; Space deals). Blackjack pays 3 to 2, the dealer draws to 17 and stands on all 17s, and the dealer peeks for blackjack when showing an ace or a ten. Four decks, reshuffled when the shoe runs low. Split any two cards of the same value into separate hands (up to 4, double after split allowed); split aces get one card each, and 21 on a split hand is not blackjack. No insurance.
 - Everyone starts with **$500** and there are no loans. A bot that runs out of money leaves the table; if you run out, you're done (online you can stay and watch) and START OVER deals a fresh table. Each player's bankroll sits beside their bet as a pile of chips.
 - Cards fly out of the shoe and flip over, the dealer's hidden card flips when it's their turn, chips are paid out or swept away, and old cards slide into the discard tray. Bots say what they're doing in speech bubbles.
+- **Cheater mode** switch (needs at least 4 players: you plus 3+ bots, or 4+ people online). Roles are dealt in secret each game:
+  - **Dealer**: sits in the dealer's spot (the cards still deal themselves) and has a pistol lying left of the dealer's cards. Click it (or PICK UP THE PISTOL), then click a player to shoot. One shot ends the game.
+  - **Cheater**: a private panel shows the next 3 cards in the shoe and the dealer's face-down card. Wins by reaching $1,000.
+  - **Jester**: wins if the dealer shoots them, so they act guilty.
+  - **Gamblers**: honest players who win with the dealer if the cheater is shot.
+  - Shoot the cheater: the dealer and gamblers win. Shoot the jester: the jester wins. Shoot a gambler: the cheater wins. The cheater going broke is a win for the dealer. A reveal shows everyone's role, then NEW GAME deals new roles with everyone back at $500.
+  - Bot cheaters use what they see most of the time; bot jesters bet big and play cocky; a bot dealer tracks who keeps making suspiciously perfect hits and stands, betting big and winning fast, then takes its shot (it can be fooled by the jester).
+  - Online, the host presses DEAL ROLES once 4 people are seated; latecomers join as gamblers. Each player's browser is only ever sent its own role, and only the cheater's gets the peek.
 - Its own synthesised lounge music, plus card, chip and win sounds. Sound settings are shared with chess.
 - Online: the host's browser runs the table and never sends anyone the shoe or the dealer's face-down card. Players have 15 seconds to bet once someone has bet, and 25 seconds per turn (then they stand). Anyone who drops out can reopen the link to get their seat and chips back. A 7th visitor watches. The table has a chat.
 

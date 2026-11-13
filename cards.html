@@ -117,6 +117,20 @@
   .resultTag.lose { color: var(--bad); }
   .resultTag.push { color: #a9c7ff; }
   .betTag { color: var(--gold); padding: 1px 3px; }
+  .overlayCard { position: absolute; left: 50%; top: 5%; transform: translateX(-50%); max-height: 92%; overflow-y: auto; width: min(88%, 400px); z-index: 4;
+    background: var(--panel); border: 3px solid var(--edge); box-shadow: 5px 5px 0 var(--edge); padding: 14px;
+    display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center; animation: cardDrop .5s steps(6) both; }
+  @keyframes cardDrop { 0% { transform: translate(-50%, -60%) scale(.7); } 70% { transform: translate(-50%, 4%) scale(1.04); } 100% { transform: translateX(-50%); } }
+  .roleName { font-size: 18px; letter-spacing: 1px; text-shadow: 3px 3px 0 var(--edge); }
+  .roleList { display: grid; grid-template-columns: auto auto; gap: 4px 12px; text-align: left; font-size: 9px; }
+  #peekCv { width: 100%; height: auto; image-rendering: pixelated; background: #2f6148; border: 3px solid var(--edge); }
+  #peekBox { border-color: #ff5e7a; }
+  .suspects { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+  .suspects button { padding: 6px 4px; font-size: 9px; }
+  .suspects button.aim { background: var(--bad); color: var(--bg); }
+  canvas#table.aiming { cursor: crosshair; }
+  .seatTag .role { font-size: 0.95em; }
+  @media (prefers-reduced-motion: reduce) { .overlayCard { animation: none; } }
   @keyframes popIn { 0% { transform: translate(-50%, -50%) scale(.3); } 70% { transform: translate(-50%, -50%) scale(1.15); } 100% { transform: translate(-50%, -50%) scale(1); } }
   #bubbles { position: absolute; inset: 4px; pointer-events: none; z-index: 2; }
   .bubble { position: absolute; transform: translate(-50%, -100%); background: #f4ecd6; color: #1a1626; border: 3px solid #1a1626;
@@ -176,9 +190,27 @@
     <div id="tags"></div>
     <div id="bubbles"></div>
     <div id="toast" class="toast" hidden role="status"></div>
+    <div id="roleCard" class="overlayCard" hidden role="dialog" aria-live="polite">
+      <div class="label">YOUR SECRET ROLE</div>
+      <div id="roleName" class="roleName"></div>
+      <div id="roleText" class="muted"></div>
+      <button id="roleOk" class="primary">GOT IT</button>
+    </div>
+    <div id="overCard" class="overlayCard" hidden role="status">
+      <div id="overTitle" class="roleName"></div>
+      <div id="overText"></div>
+      <div id="overRoles" class="roleList"></div>
+      <button id="overNew" class="primary">NEW GAME, NEW ROLES</button>
+      <div id="overWait" class="muted" hidden>Waiting for the host to start a new game.</div>
+    </div>
   </div></div>
   <div class="side left">
     <div class="box" id="status"></div>
+    <div class="box" id="peekBox" hidden>
+      <h2>YOUR PEEK (SECRET)</h2>
+      <canvas id="peekCv" width="104" height="30"></canvas>
+      <div class="muted" id="peekHint"></div>
+    </div>
     <div class="box" id="actBox">
       <h2 id="actTitle">YOUR BET</h2>
       <div id="betUI">
@@ -205,6 +237,11 @@
       </div>
       <div id="waitUI" class="muted" hidden></div>
       <button id="startOver" class="primary big" hidden>START OVER WITH $500</button>
+      <div id="gunUI" hidden>
+        <div class="muted" id="gunHint"></div>
+        <button id="gunBtn" class="big" style="width:100%">PICK UP THE PISTOL</button>
+        <div class="suspects" id="suspects"></div>
+      </div>
     </div>
     <div class="box" id="setup">
       <h2>NEW TABLE</h2>
@@ -220,6 +257,11 @@
         <div class="seg" role="group" aria-label="Number of bots">
           <button data-bots="1">1</button><button data-bots="2">2</button><button data-bots="3">3</button><button data-bots="4">4</button><button data-bots="5">5</button>
         </div>
+      </div>
+      <div class="field">
+        <div class="label">CHEATER MODE</div>
+        <button id="cheatToggle" class="toggle" role="switch" aria-checked="false"><span class="track"><span class="knob"></span></span><span id="cheatLabel">OFF</span></button>
+        <div class="muted" id="cheatHint"></div>
       </div>
       <div class="field">
         <label class="label" for="nameInput">YOUR NAME</label>
@@ -248,6 +290,7 @@
       <div class="players" id="players"></div>
       <div class="row">
         <button id="dealNow" hidden>DEAL NOW</button>
+        <button id="dealRoles" class="primary" hidden>DEAL ROLES</button>
         <button id="reconnect" hidden>RECONNECT</button>
         <button id="leave">LEAVE</button>
       </div>
@@ -286,6 +329,7 @@
       <p><b>HIT</b> takes a card. <b>STAND</b> keeps your hand. <b>DOUBLE</b> doubles your bet on your first two cards and takes exactly one more card.</p>
       <p><b>SPLIT</b> turns two cards of the same value into two hands, each with its own bet (up to 4 hands). Split aces get one card each, and a split hand of 21 isn't blackjack.</p>
       <p>An ace plus a 10-value card is <b>blackjack</b> and pays 3 to 2. A win pays 1 to 1 and a tie (<b>push</b>) gives your bet back.</p>
+      <p id="cheatRules" hidden><b>Cheater mode:</b> one player is the <b>dealer</b> and holds a pistol. Secretly, one player is the <b>cheater</b> (sees the next 3 cards and the dealer's hidden card, wins at $1,000), one is the <b>jester</b> (wins if shot), and the rest are honest <b>gamblers</b>. The dealer gets one shot: hit the cheater and the house and gamblers win; hit the jester and the jester wins; hit a gambler and the cheater wins.</p>
       <p>The dealer must hit until 17 and stands on every 17. Everyone starts with <b>$500</b>. Run out and you're done: bots leave the table, and you can start over.</p>
     </div>
     <div class="box" id="log"></div>
@@ -343,53 +387,148 @@
     const color = SEAT_COLORS.find(c => !used.includes(c)) || SEAT_COLORS[0];
     return { id, name, bot, style: style || 0, color, chips: START, bet: 0, base: bot ? [5, 10, 20][style || 0] : 10, hands: [], cur: 0, state: "out", result: null, ready: false, gone: false, goneRounds: 0, token: null };
   }
-  const seatOf = (id) => T.seats.find(s => s.id === id);
+  const seatOf = (id) => T.seats.find(s => s.id === id) || (T.dealerSeat && T.dealerSeat.id === id ? T.dealerSeat : null);
   function tlog(text) { T.log.unshift(text); T.log = T.log.slice(0, 60); }
 
-  function newLocalTable(nBots) {
+  function newLocalTable(nBots, cheater) {
     clearTimers();
-    T = { kind: "local", phase: "betting", round: 0, shoe: newShoe(), shuffled: 0, dealer: { cards: [], hidden: true }, seats: [], turn: null, log: [], deadline: 0, lastAct: null, turnSeq: 0 };
+    T = { kind: "local", mode: cheater ? "cheater" : "classic", phase: "betting", round: 0, shoe: newShoe(), shuffled: 0, dealer: { cards: [], hidden: true }, seats: [], turn: null, log: [], deadline: 0, lastAct: null, turnSeq: 0 };
+    if (cheater) nBots = Math.max(3, nBots);
     const bots = BOTS.slice(0, nBots);
     const me = makeSeat("me", myName(), false);
     const order = [...bots.slice(0, Math.ceil(nBots / 2)).map(b => b), "me", ...bots.slice(Math.ceil(nBots / 2))];
     for (const o of order) T.seats.push(o === "me" ? me : makeSeat("bot-" + o.name, o.name, true, o.style));
     T.seats.forEach((st, i) => { st.color = SEAT_COLORS[i]; });
     tlog(`You sit down with ${bots.map(b => b.name).join(", ").replace(/, ([^,]*)$/, " and $1")}.`);
+    if (T.mode === "cheater") { T.order = [...T.seats]; newCheaterGame(); } else startBetting();
+  }
+
+  // ---------- Cheater mode ----------
+  // One player is secretly the cheater (sees the next cards), one is the jester
+  // (wants to be shot), the rest are honest gamblers, and one player is the
+  // dealer, who holds a pistol and gets a single shot to catch the cheater.
+  const CHEAT_GOAL = 1000, CHEAT_MIN = 4;
+  const ROLE_INFO = {
+    dealer: { name: "THE DEALER", color: "#ffe066", text: "You run the table and hold the pistol. One player is a cheater who can see the cards coming. Shoot them before they reach $1,000. Shoot an honest gambler and the cheater wins. Careful: the jester WANTS to be shot." },
+    cheater: { name: "THE CHEATER", color: "#ff5e7a", text: "You can see the next 3 cards in the shoe and the dealer's face-down card. Reach $1,000 to win, without the dealer working out that it's you." },
+    jester: { name: "THE JESTER", color: "#c98bff", text: "You win if the dealer shoots you. Act like the cheater: bet big, play boldly, look suspiciously lucky." },
+    gambler: { name: "A GAMBLER", color: "#3fd0a0", text: "You're an honest player. If the dealer shoots the cheater, you win together. If they shoot an honest player, the cheater wins." },
+  };
+  const isCheat = () => T && T.mode === "cheater";
+  const roleOf = (id) => (T.roles || {})[id];
+  const participants = () => T.order.filter(s => !s.gone || T.kind === "local");
+  function newCheaterGame() {
+    clearTimers();
+    const all = participants();
+    if (all.length < CHEAT_MIN) {
+      T.phase = "lobby"; T.roles = null; T.dealerSeat = null; T.over = null; T.seats = [...all];
+      for (const s of T.seats) { s.hands = []; s.state = "out"; s.result = null; s.ready = false; }
+      commit(); return;
+    }
+    const mix = [...all];
+    for (let i = mix.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [mix[i], mix[j]] = [mix[j], mix[i]]; }
+    // Tests can choose this screen's role; normal play never sets this.
+    const want = ["dealer", "cheater", "jester", "gambler"].indexOf(window.DEVOUR_TEST_ROLE), mi = mix.findIndex(x => x.id === mySeat);
+    if (want >= 0 && mi >= 0) [mix[want], mix[mi]] = [mix[mi], mix[want]];
+    T.roles = {}; T.roles[mix[0].id] = "dealer"; T.roles[mix[1].id] = "cheater"; T.roles[mix[2].id] = "jester";
+    for (const x of mix.slice(3)) T.roles[x.id] = "gambler";
+    T.dealerSeat = mix[0];
+    T.seats = all.filter(x => x !== mix[0]);
+    for (const x of all) { x.chips = START; x.broke = false; x.sus = 0; x.base = x.bot ? [5, 10, 20][x.style || 0] : 10; x.hands = []; x.state = "out"; x.result = null; x.ready = false; }
+    T.over = null; T.shot = null; T.aim = null; T.round = 0; T.gameNo = (T.gameNo || 0) + 1; T.log = [];
+    T.shoe = newShoe(); T.shuffled++;
+    tlog(`New game. ${mix[0].name} is the dealer and has the pistol. Somebody at the table is cheating...`);
     startBetting();
   }
+  function endCheaterGame(winner, text) {
+    clearTimers();
+    T.over = { winner, text, roles: { ...T.roles } };
+    T.phase = "over"; T.turn = null; T.deadline = 0;
+    tlog(text);
+    commit();
+  }
+  function shoot(shooterId, targetId) {
+    if (!isCheat() || T.over || !T.dealerSeat || T.dealerSeat.id !== shooterId) return false;
+    const target = T.seats.find(x => x.id === targetId); if (!target) return false;
+    clearTimers();
+    const role = roleOf(targetId), cheater = T.seats.find(x => roleOf(x.id) === "cheater");
+    T.shot = { target: targetId, n: (T.shot ? T.shot.n : 0) + 1 }; T.aim = null;
+    commit();
+    const D = T.dealerSeat.name;
+    later(1000, () => endCheaterGame(role === "cheater" ? "dealer" : role === "jester" ? "jester" : "cheater",
+      role === "cheater" ? `BANG! ${D} shot ${target.name}, who WAS the cheater. The dealer and the honest gamblers win!`
+      : role === "jester" ? `BANG! ${D} shot ${target.name}... the JESTER. That's exactly what they wanted: the jester wins!`
+      : `BANG! ${D} shot ${target.name}, an honest gambler. The real cheater, ${cheater ? cheater.name : "?"}, wins!`));
+    return true;
+  }
+  // After each round: did the cheater make it, or go broke?
+  function afterRound() {
+    if (isCheat()) {
+      const c = T.seats.find(x => roleOf(x.id) === "cheater");
+      if (c && c.chips >= CHEAT_GOAL) return endCheaterGame("cheater", `${c.name} reached $${c.chips}. ${c.name} was the CHEATER, and got away with it!`);
+      if (c && c.chips < BET_MIN) return endCheaterGame("dealer", `${c.name} went broke. ${c.name} was the cheater, so the house wins!`);
+      if (T.dealerSeat && T.dealerSeat.gone) return endCheaterGame("none", `The dealer left the table. Nobody wins this one.`);
+    }
+    startBetting();
+  }
+  // How suspicious a player looks to a bot dealer.
+  function noteSus(s, amount) { if (isCheat() && s) s.sus = (s.sus || 0) + amount; }
+  function botDealerThink() {
+    if (!isCheat() || T.over || !T.dealerSeat || !T.dealerSeat.bot || T.round < 2) return;
+    const score = (x) => (x.sus || 0) + Math.max(0, x.chips - START) / 140 + Math.random() * 0.8;
+    const ranked = T.seats.filter(x => !x.gone).map(x => [score(x), x]).sort((a, b) => b[0] - a[0]);
+    if (!ranked.length) return;
+    const [top, second] = ranked, rich = Math.max(...T.seats.map(x => x.chips));
+    const urgent = rich >= CHEAT_GOAL - 180 || T.round >= 12;
+    // The longer the game goes on, the less sure the dealer needs to be.
+    const sure = T.round >= 4 && (!second || top[0] - second[0] >= Math.max(0.6, 2.6 - (T.round - 4) * 0.3));
+    if (!urgent && !sure) return;
+    const target = urgent && rich >= CHEAT_GOAL - 180 ? T.seats.reduce((a, b) => (b.chips + (b.sus || 0) * 25 > a.chips + (a.sus || 0) * 25 ? b : a)) : top[1];
+    T.aim = target.id; commit(); // the dealer slowly raises the pistol
+    later(1600, () => shoot(T.dealerSeat.id, target.id));
+  }
+
 
   // Each seat plays one or more hands (more after a split): { cards, bet, state, split, doubled, result }.
   const sumBets = (s) => s.hands.reduce((n, h) => n + h.bet, 0);
   const canSplit = (s, h) => !!h && h.cards.length === 2 && cardVal(h.cards[0]) === cardVal(h.cards[1]) && s.hands.length < 4 && s.chips >= h.bet;
   const canDouble = (s, h) => !!h && h.cards.length === 2 && s.chips >= h.bet;
   function startBetting() {
+    if (isCheat() && (T.over || !T.roles)) return;
     T.phase = "betting"; T.turn = null; T.dealer = { cards: [], hidden: true }; T.deadline = 0; T.betTimer = false;
     for (const s of T.seats) if (s.gone) s.goneRounds++;
     T.seats = T.seats.filter(s => !s.gone || s.goneRounds < 3);
-    // Broke bots get up and leave; broke people stay to watch.
-    for (const s of T.seats.filter(x => x.bot && x.chips < BET_MIN)) tlog(`${s.name} is out of money and leaves the table.`);
-    T.seats = T.seats.filter(s => !(s.bot && s.chips < BET_MIN));
+    if (T.order) T.order = T.order.filter(s => !s.gone || s.goneRounds < 3);
+    // Broke bots get up and leave (in cheater mode they stay put); broke people stay to watch.
+    if (!isCheat()) {
+      for (const s of T.seats.filter(x => x.bot && x.chips < BET_MIN)) tlog(`${s.name} is out of money and leaves the table.`);
+      T.seats = T.seats.filter(s => !(s.bot && s.chips < BET_MIN));
+    }
     for (const s of T.seats) {
       s.hands = []; s.cur = 0; s.state = "out"; s.result = null; s.ready = false;
       if (s.chips < BET_MIN) { s.bet = 0; if (!s.broke) { s.broke = true; tlog(`${s.name} is out of money.`); } continue; }
       s.bet = clamp(s.base, BET_MIN, Math.min(BET_MAX, s.chips));
     }
     commit();
-    T.seats.filter(s => s.bot).forEach((s, i) => later(500 + i * 380, () => {
+    T.seats.filter(s => s.bot && s.chips >= BET_MIN).forEach((s, i) => later(500 + i * 380, () => {
       if (T.phase !== "betting") return;
-      s.bet = botBet(s); s.ready = true; commit(); maybeDeal();
+      s.bet = botBet(s); s.ready = true; noteSus(s, s.bet >= 40 ? 0.35 : 0); commit(); maybeDeal();
     }));
+    if (isCheat() && T.dealerSeat && T.dealerSeat.bot) later(700, botDealerThink);
   }
   function botBet(s) {
     const pools = [[5, 5, 10, 10, 15], [10, 10, 15, 20, 25], [20, 25, 30, 40, 50]];
-    const p = pools[s.style];
+    let p = pools[s.style];
+    // The cheater bets up when the next cards look friendly; the jester just bets big to look guilty.
+    if (isCheat() && roleOf(s.id) === "cheater") { const nx = T.shoe.slice(-4).map(cardVal); p = nx.filter(v => v >= 10).length >= 2 ? [50, 60, 75, 100] : [10, 15, 20, 25]; }
+    if (isCheat() && roleOf(s.id) === "jester") p = [30, 40, 50, 60, 75, 100];
     return clamp(p[Math.floor(Math.random() * p.length)], BET_MIN, Math.min(BET_MAX, s.chips));
   }
   function placeBet(id, amount) {
     const s = seatOf(id);
     if (!s || T.phase !== "betting" || s.ready || s.gone || s.chips < BET_MIN) return;
     s.bet = clamp(Math.round(+amount / 5) * 5 || BET_MIN, BET_MIN, Math.min(BET_MAX, s.chips));
-    s.base = s.bet; s.ready = true;
+    s.base = s.bet; s.ready = true; noteSus(s, s.bet >= 40 ? 0.35 : 0);
     commit(); maybeDeal();
     // Online: once someone is ready, everyone else has a little while to bet.
     if (T.kind === "online" && T.phase === "betting" && !T.betTimer && T.seats.some(x => !x.ready && !x.gone && x.chips >= BET_MIN)) {
@@ -450,7 +589,13 @@
     if (!h || h.state !== "play" || !["hit", "stand", "double", "split"].includes(a)) return false;
     if (a === "double" && !canDouble(s, h)) return false;
     if (a === "split" && !canSplit(s, h)) return false;
-    T.lastAct = { id, a: auto ? "timeout" : a, n: (T.lastAct ? T.lastAct.n : 0) + 1, bust: false };
+    T.lastAct = { id, a: auto ? "timeout" : a, n: (T.lastAct ? T.lastAct.n : 0) + 1, bust: false, say: s.say || null }; s.say = null;
+    if (isCheat() && (a === "hit" || a === "stand" || a === "double")) {
+      const now = handInfo(h.cards).total, next = handInfo([...h.cards, T.shoe[T.shoe.length - 1]]).total;
+      if (a === "stand" && now <= 16 && next > 21) noteSus(s, 0.7);       // stopped right before a bust
+      else if (a !== "stand" && now >= 12 && next >= 18 && next <= 21) noteSus(s, 0.9); // hit a stiff hand into a great card
+      else if (a !== "stand" && next > 21) noteSus(s, -0.4);
+    }
     if (a === "stand") { h.state = "stand"; if (auto) tlog(`${s.name} ran out of time and stands.`); }
     else if (a === "split") {
       // The pair becomes two hands, each with the same bet; each gets a new second card.
@@ -480,6 +625,19 @@
   // Bots play close to basic strategy; bold bots sometimes push their luck.
   function botDecide(s) {
     const hand = s.hands[s.cur], h = handInfo(hand.cards), up = cardVal(T.dealer.cards[0]), two = canDouble(s, hand);
+    if (isCheat() && roleOf(s.id) === "cheater" && Math.random() < 0.8) {
+      // Peeks at the next card... but not every time, or it would be too obvious.
+      const next = handInfo([...hand.cards, T.shoe[T.shoe.length - 1]]).total;
+      if (next > 21) return "stand";
+      if (two && next >= 19) return "double";
+      return next > h.total && h.total < 20 ? "hit" : "stand";
+    }
+    if (isCheat() && roleOf(s.id) === "jester" && Math.random() < 0.45) {
+      // Cocky, suspicious-looking plays.
+      s.say = ["HEH.", "I HAD A FEELING", "TRUST ME", "TOO EASY"][Math.floor(Math.random() * 4)];
+      if (two && h.total >= 9 && h.total <= 12) return "double";
+      if (h.total >= 12 && h.total <= 16) return "stand";
+    }
     if (canSplit(s, hand)) {
       const v = cardVal(hand.cards[0]);
       const split = v === 11 || v === 8 || (v === 9 && up <= 9 && up !== 7) || (v === 7 && up <= 7) || (v === 6 && up <= 6) || (v === 4 && (up === 5 || up === 6)) || ((v === 2 || v === 3) && up <= 7);
@@ -536,15 +694,21 @@
       parts.push(`${s.name} ${total === 0 ? "breaks even" : total > 0 ? "+$" + total : "-$" + -total}`);
     }
     if (parts.length) tlog(parts.join(", ") + ".");
+    for (const st of T.seats) if (st.state === "in" && st.result && st.result.delta > 0) noteSus(st, 0.25);
     T.phase = "done"; T.turn = null; T.deadline = 0; commit();
-    later(3600, startBetting);
+    later(3600, afterRound);
   }
 
   // What players are allowed to see: never the shoe or the dealer's face-down card.
-  function sanitize() {
-    const d = T.dealer;
+  function sanitize(forId) {
+    const d = T.dealer, cheat = isCheat(), role = cheat ? roleOf(forId) : null;
     return {
-      v: 2, kind: T.kind, phase: T.phase, round: T.round, shoeLeft: T.shoe.length, shuffled: T.shuffled,
+      v: 2, kind: T.kind, mode: T.mode || "classic", phase: T.phase,
+      myRole: role || null, gameNo: T.gameNo || 0, over: T.over || null, shot: T.shot || null, aim: T.aim || null, goal: CHEAT_GOAL,
+      dealerSeat: cheat && T.dealerSeat ? { id: T.dealerSeat.id, name: T.dealerSeat.name, color: T.dealerSeat.color, bot: T.dealerSeat.bot } : null,
+      players: cheat ? participants().length : 0,
+      // Only the cheater gets to peek: the next cards out of the shoe and the dealer's hole card.
+      peek: role === "cheater" && !T.over ? { next: T.shoe.slice(-3).reverse(), hole: d.hidden && d.cards[1] ? d.cards[1] : null } : null, round: T.round, shoeLeft: T.shoe.length, shuffled: T.shuffled,
       dealer: { hidden: d.hidden, cards: d.hidden ? d.cards.map((c, i) => i === 1 ? "??" : c) : [...d.cards] },
       seats: T.seats.map(s => ({ id: s.id, name: s.name, bot: s.bot, color: s.color, chips: s.chips, bet: s.state === "in" ? sumBets(s) : s.bet,
         hands: s.hands.map(h => ({ cards: [...h.cards], bet: h.bet, state: h.state, split: !!h.split, doubled: !!h.doubled, result: h.result || null })),
@@ -553,12 +717,11 @@
     };
   }
   function commit() {
-    const v = sanitize();
     if (T.kind === "online") {
       store.set("dc-cards-host-" + online.code, T);
-      for (const c of online.conns) if (c.open) { try { c.send({ type: "state", state: v }); } catch (_) {} }
+      for (const c of online.conns) if (c.open) { try { c.send({ type: "state", state: sanitize(c.seatId) }); } catch (_) {} }
     }
-    applyView(v);
+    applyView(sanitize(mySeat));
   }
 
   // ---------- Player actions from this screen ----------
@@ -664,6 +827,137 @@
     });
     ctx.globalAlpha = 1;
   }
+
+  // ----- Cheater mode: the dealer's pistol, lying on the felt just left of the dealer's cards -----
+  const GUN_ROWS = ["   LLLLLLLLLLLL", "  MMMMMMMMMMMMMD", "  MMMMMMMMMMMMM ", "  WWWMMGMDD     ", " WWWWw  M       ", " WWWw   D       ", "WWWWw           ", "WWWw            "];
+  const GUN_COL = { L: "#b4b6c4", M: "#6b6d7c", D: "#33343f", W: "#8f5a2c", w: "#5e3816", G: "#e0b040" };
+  let gunImg = null;
+  function gunSprite() {
+    if (gunImg) return gunImg;
+    const h = GUN_ROWS.length, w = 16, c = document.createElement("canvas"); c.width = w + 2; c.height = h + 2;
+    const g = c.getContext("2d"), on = (x, y) => y >= 0 && y < h && x >= 0 && x < w && GUN_ROWS[y][x] && GUN_ROWS[y][x] !== " ";
+    g.fillStyle = "#0b0712";
+    for (let y = -1; y <= h; y++) for (let x = -1; x <= w; x++) if (!on(x, y) && (on(x + 1, y) || on(x - 1, y) || on(x, y + 1) || on(x, y - 1))) g.fillRect(x + 1, y + 1, 1, 1);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (on(x, y)) { g.fillStyle = GUN_COL[GUN_ROWS[y][x]]; g.fillRect(x + 1, y + 1, 1, 1); }
+    return (gunImg = c);
+  }
+  const GUN = { x: 74, y: 30 }; // top-left of the pistol sprite
+  const MUZZLE = () => ({ x: GUN.x + 17, y: GUN.y + 2 });
+  let aiming = false, aimAt = null, shotFx = null;
+  function seatCentre(id) { const i = view.seats.findIndex(s => s.id === id); if (i < 0) return null; const p = seatPos(i, view.seats.length); return { x: p.x, y: p.y }; }
+  function drawGun(now) {
+    if (!view || view.mode !== "cheater" || !view.dealerSeat) return;
+    const target = shotFx ? shotFx.target : aiming ? aimAt : view.aim;
+    const raised = !!target || aiming;
+    const lift = raised ? 3 : 0;
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(GUN.x + 2, GUN.y + 9, 14, 2);
+    ctx.drawImage(gunSprite(), GUN.x, GUN.y - lift);
+    if (!raised && !REDUCED && Math.floor(now / 120) % 30 < 2) { ctx.fillStyle = "#ffffff"; ctx.fillRect(GUN.x + 6 + Math.floor(now / 120) % 30 * 3, GUN.y + 1, 1, 1); }
+    const m = MUZZLE(); m.y -= lift;
+    const tc = target && seatCentre(target);
+    if (tc && !shotFx) { // a dotted red laser to whoever the dealer is pointing at
+      const steps = Math.max(8, Math.hypot(tc.x - m.x, tc.y - m.y) / 3), pulse = REDUCED ? 1 : 0.6 + 0.4 * Math.sin(now / 90);
+      ctx.fillStyle = `rgba(255,60,80,${0.7 * pulse})`;
+      for (let i = 0; i < steps; i += 2) { const t = i / steps; ctx.fillRect(Math.round(m.x + (tc.x - m.x) * t), Math.round(m.y + (tc.y - m.y) * t), 1, 1); }
+      ctx.fillStyle = "#ff3c50"; // crosshair on the target
+      ctx.fillRect(tc.x - 7, tc.y, 5, 1); ctx.fillRect(tc.x + 3, tc.y, 5, 1); ctx.fillRect(tc.x, tc.y - 7, 1, 5); ctx.fillRect(tc.x, tc.y + 3, 1, 5);
+    }
+    if (shotFx) {
+      const t = now - shotFx.start;
+      if (t < 160) { // muzzle flash and tracer
+        ctx.fillStyle = "#fff3a0"; ctx.fillRect(m.x, m.y - 2, 5, 5); ctx.fillStyle = "#ffffff"; ctx.fillRect(m.x + 1, m.y - 1, 3, 3);
+        ctx.fillStyle = "#ffe066"; ctx.fillRect(m.x + 5, m.y, 3, 1); ctx.fillRect(m.x + 2, m.y - 4, 1, 3); ctx.fillRect(m.x + 2, m.y + 3, 1, 3);
+        if (tc) { ctx.fillStyle = "rgba(255,255,220,0.9)"; const steps = Math.hypot(tc.x - m.x, tc.y - m.y); for (let i = 0; i < steps; i++) { const u = i / steps; ctx.fillRect(Math.round(m.x + (tc.x - m.x) * u), Math.round(m.y + (tc.y - m.y) * u), 1, 1); } }
+      }
+      if (t > 900) shotFx = null;
+    }
+  }
+  function startShotFx(target) {
+    const now = performance.now(); shotFx = { target, start: now };
+    sfxSafe(SFX.bang);
+    const tc = seatCentre(target);
+    if (tc) {
+      for (let i = 0; i < 36; i++) { const a = Math.random() * 6.28, v = 25 + Math.random() * 60; particles.push({ x: tc.x, y: tc.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, col: ["#f7efd9", "#ff3c50", "#ffe066", "#4a3f6b"][i % 4], born: now, life: 700 + Math.random() * 400 }); }
+      // the target's cards go flying
+      for (const k of Object.keys(handsVis)) if (k.startsWith(target + "#")) for (const c of handsVis[k]) { c.born = now - DEAL_MS - 1; c.x += (Math.random() - 0.5) * 30; c.y += (Math.random() - 0.5) * 20 - 10; }
+    }
+    render();
+  }
+  const iAmDealer = (v) => !!v && !!v.dealerSeat && v.dealerSeat.id === mySeat;
+  function setAiming(on) {
+    aiming = on && iAmDealer(view) && !view.over && !view.shot; if (!aiming) aimAt = null;
+    cv.classList.toggle("aiming", aiming);
+    if (aiming) sfxSafe(SFX.cock);
+    updateUI(); render();
+  }
+  function doShoot(id) {
+    if (!aiming) return;
+    aiming = false; cv.classList.remove("aiming");
+    if (mode === "online" && online.seat !== "host") sendToHost({ type: "shoot", target: id }); else shoot(mySeat, id);
+  }
+  function tableXY(e) { return { x: e.offsetX / cv.clientWidth * LW, y: e.offsetY / cv.clientHeight * LH }; }
+  function seatAt(x, y) {
+    if (!view) return null;
+    const n = view.seats.length, sp = n <= 1 ? 40 : Math.min(48, 180 / (n - 1));
+    for (let i = 0; i < n; i++) { const p = seatPos(i, n); if (Math.abs(x - p.x) < Math.max(14, sp / 2) && y > p.y - 30 && y < p.y + 48) return view.seats[i].id; }
+    return null;
+  }
+  cv.addEventListener("click", (e) => {
+    if (!view || view.mode !== "cheater" || !iAmDealer(view) || view.over || view.shot) return;
+    const { x, y } = tableXY(e);
+    if (!aiming) { if (x >= GUN.x - 4 && x <= GUN.x + 22 && y >= GUN.y - 6 && y <= GUN.y + 14) setAiming(true); return; }
+    const id = seatAt(x, y);
+    if (id) doShoot(id); else setAiming(false);
+  });
+  cv.addEventListener("mousemove", (e) => {
+    if (!aiming) return;
+    const { x, y } = tableXY(e), id = seatAt(x, y);
+    if (id !== aimAt) { aimAt = id; render(); }
+  });
+  $("gunBtn").onclick = () => setAiming(!aiming);
+
+  // The cheater's secret view: the next three cards out of the shoe and the dealer's hole card.
+  function renderPeek(v) {
+    const box = $("peekBox"), pk = v && v.peek;
+    box.hidden = !pk;
+    if (!pk) return;
+    const g = $("peekCv").getContext("2d"); g.imageSmoothingEnabled = false;
+    g.fillStyle = "#2f6148"; g.fillRect(0, 0, 104, 30);
+    pk.next.forEach((c, i) => g.drawImage(cardSprite(c), 3 + i * 19, 4));
+    g.fillStyle = "#1a3a2a"; g.fillRect(64, 2, 1, 26);
+    if (pk.hole) g.drawImage(cardSprite(pk.hole), 72, 4);
+    else { g.fillStyle = "rgba(0,0,0,0.25)"; g.fillRect(72, 4, CW, CH); }
+    $("peekHint").textContent = "Left: the next 3 cards out of the shoe (first card first). Right: the dealer's face-down card." ;
+  }
+  function hideOverlays() { $("roleCard").hidden = true; $("overCard").hidden = true; aiming = false; aimAt = null; shotFx = null; cv.classList.remove("aiming"); }
+  function showRoleCard(v) {
+    const info = ROLE_INFO[v.myRole]; if (!info) return;
+    $("roleName").textContent = info.name; $("roleName").style.color = info.color; $("roleText").textContent = info.text;
+    $("roleCard").hidden = false; $("overCard").hidden = true;
+    sfxSafe(SFX.cock);
+  }
+  $("roleOk").onclick = () => { $("roleCard").hidden = true; };
+  function showOverCard(v) {
+    const o = v.over, mine = v.myRole;
+    const winners = o.winner === "dealer" ? ["dealer", "gambler"] : o.winner === "jester" ? ["jester"] : o.winner === "cheater" ? ["cheater"] : [];
+    const youWin = winners.includes(mine);
+    $("overTitle").textContent = o.winner === "dealer" ? "CHEATER CAUGHT!" : o.winner === "jester" ? "THE JESTER WINS!" : o.winner === "cheater" ? "THE CHEATER WINS!" : "GAME OVER";
+    $("overTitle").style.color = youWin ? "#ffe066" : "#ff5e7a";
+    $("overText").textContent = o.text + (mine ? ` You were ${ROLE_INFO[mine].name.toLowerCase()}: ${youWin ? "you win!" : "you lose."}` : "");
+    const list = $("overRoles"); list.replaceChildren();
+    const people = [...(v.dealerSeat ? [v.dealerSeat] : []), ...v.seats];
+    for (const pz of people) {
+      const r = o.roles[pz.id]; if (!r) continue;
+      const a = document.createElement("span"); a.textContent = pz.name + (pz.id === mySeat ? " (you)" : "");
+      const b = document.createElement("span"); b.textContent = ROLE_INFO[r].name.replace("THE ", "").replace("A ", ""); b.style.color = ROLE_INFO[r].color;
+      list.append(a, b);
+    }
+    const canRestart = mode === "local" || online.seat === "host";
+    $("overNew").hidden = !canRestart; $("overWait").hidden = canRestart;
+    $("roleCard").hidden = true; $("overCard").hidden = false;
+    if (mine) sfxSafe(youWin ? SFX.blackjack : SFX.lose);
+  }
+  $("overNew").onclick = () => { if (!T || !isCheat()) return; hideOverlays(); newCheaterGame(); };
 
   // A player's bankroll as a little pile of chip stacks beside their bet.
   function drawPile(x, y, amount) {
@@ -803,12 +1097,13 @@
     rafId = 0;
     const dt = Math.min(0.05, (now - (lastFrame || now)) / 1000); lastFrame = now;
     draw(now, dt);
-    const busy = particles.length || chipFx.length || sweep.length || shoeShake > now || (view && (view.turn || view.phase === "betting" || view.phase === "dealing" || view.phase === "dealer")) ||
+    const busy = particles.length || chipFx.length || sweep.length || shoeShake > now || shotFx || aiming || (view && view.aim) || (view && view.mode === "cheater" && !REDUCED) || (view && (view.turn || view.phase === "betting" || view.phase === "dealing" || view.phase === "dealer")) ||
       Object.values(handsVis).some(l => l.some(c => now - c.born < DEAL_MS + 400 || (c.flip && now - c.flip < 400)));
     if (busy && !(REDUCED && !chipFx.length && !sweep.length)) rafId = requestAnimationFrame(frame); else lastFrame = 0;
   }
   function draw(now, dt) {
     ctx.setTransform(K, 0, 0, K, 0, 0); ctx.imageSmoothingEnabled = false;
+    if (shotFx && now - shotFx.start < 350) { const k = 1 - (now - shotFx.start) / 350; ctx.translate(Math.round((Math.random() - 0.5) * 5 * k), Math.round((Math.random() - 0.5) * 5 * k)); }
     const n = view ? view.seats.length : 0;
     ctx.drawImage(tableBg(n), 0, 0);
     // shoe: a stack of backs peeking out, shaking while it's shuffled
@@ -857,6 +1152,7 @@
     };
     for (const s of view.seats) s.hands.forEach((h, k) => drawHand(handKey(s.id, k)));
     drawHand("dealer");
+    drawGun(now);
     // after a split, a gold bar under the hand being played
     const ts = view.turn && view.seats.find(s => s.id === view.turn);
     if (ts && ts.hands.length > 1 && view.phase === "playing") {
@@ -914,6 +1210,9 @@
       nm.append(dot, label);
       const ch = document.createElement("div"); ch.className = "ch"; ch.textContent = "$" + s.chips;
       el.append(nm, ch);
+      // Roles are revealed when a cheater game ends (and you always know your own).
+      const r = v.over ? v.over.roles[s.id] : s.id === mySeat ? v.myRole : null;
+      if (r) { const d = document.createElement("div"); d.className = "role"; d.style.color = ROLE_INFO[r].color; d.textContent = ROLE_INFO[r].name.replace("THE ", "").replace("A ", ""); el.append(d); }
       const note = s.chips < BET_MIN && s.state === "out" ? "BROKE" : v.phase === "betting" && !s.ready ? "BETTING..." : v.phase !== "betting" && s.state === "out" ? "SITTING OUT" : "";
       if (note) { const d = document.createElement("div"); d.className = "muted"; d.textContent = note; el.append(d); }
       place(el, p.x, p.y + 41);
@@ -930,9 +1229,13 @@
         }
       });
     });
+    if (!v.dealer.cards.length && v.dealerSeat) {
+      const d = tagEl("dealer", "totalTag"); d.textContent = "DEALER: " + v.dealerSeat.name + (v.dealerSeat.id === mySeat ? " (YOU)" : "");
+      place(d, DEALER.x, DEALER.y + 2);
+    }
     if (v.dealer.cards.length) {
       const d = tagEl("dealer", "totalTag" + (handInfo(v.dealer.cards).total > 21 ? " bust" : ""));
-      d.textContent = "DEALER " + (v.dealer.hidden ? handInfo([v.dealer.cards[0]]).total + " + ?" : handLabel(v.dealer.cards));
+      d.textContent = (v.dealerSeat ? v.dealerSeat.name + (v.dealerSeat.id === mySeat ? " (YOU)" : "") + ": " : "DEALER ") + (v.dealer.hidden ? handInfo([v.dealer.cards[0]]).total + " + ?" : handLabel(v.dealer.cards));
       place(d, DEALER.x, DEALER.y + 19);
     }
     for (const el of [...$("tags").children]) if (!keep.has(el.dataset.tag)) el.remove();
@@ -957,6 +1260,13 @@
     view = v;
     deadlineAt = v.left ? Date.now() + v.left : 0;
     syncHands(v, now);
+    if (v.mode === "cheater") {
+      if (v.gameNo && (!prev || prev.gameNo !== v.gameNo) && v.myRole && !v.over) { hideOverlays(); showRoleCard(v); }
+      if (v.shot && (!prev || !prev.shot || prev.shot.n !== v.shot.n)) { aiming = false; cv.classList.remove("aiming"); startShotFx(v.shot.target); }
+      if (v.aim && (!prev || prev.aim !== v.aim)) sfxSafe(SFX.cock);
+      if (v.over && (!prev || !prev.over)) setTimeout(() => { if (view && view.over) showOverCard(view); }, v.shot ? 700 : 300);
+      if (!v.over) $("overCard").hidden = true;
+    }
     if (prev) {
       if (v.shuffled !== prev.shuffled) { shoeShake = now + 900; sfxSafe(SFX.shuffle); discardCount = 0; }
       if (v.lastAct && (!prev.lastAct || v.lastAct.n !== prev.lastAct.n)) {
@@ -1019,20 +1329,52 @@
     $("setup").hidden = isOnline;
     $("onlineBox").hidden = !isOnline;
     $("chatBox").hidden = !isOnline || !online.connectedOnce;
-    document.body.classList.toggle("focus", isOnline && !!view && online.connectedOnce && view.seats.length > 1);
+    document.body.classList.toggle("focus", isOnline && !!view && online.connectedOnce && (view.seats.length > 1 || !!view.dealerSeat));
     $("botField").hidden = prefs.opp !== "bot";
     for (const b of document.querySelectorAll("[data-opp]")) b.setAttribute("aria-pressed", String(b.dataset.opp === prefs.opp));
     for (const b of document.querySelectorAll("[data-bots]")) b.setAttribute("aria-pressed", String(+b.dataset.bots === prefs.bots));
     $("start").textContent = prefs.opp === "online" ? "CREATE ONLINE TABLE" : "START";
     $("setupHint").textContent = prefs.opp === "online" ? "You'll get a link for up to 5 friends." : `You and ${prefs.bots} bot${prefs.bots > 1 ? "s" : ""} against the dealer.`;
+    $("cheatToggle").setAttribute("aria-checked", String(!!prefs.cheater));
+    $("cheatLabel").textContent = prefs.cheater ? "ON" : "OFF";
+    $("cheatHint").textContent = prefs.cheater ? (prefs.opp === "online" ? "Needs at least 4 people at the table: a dealer, a cheater, a jester and a gambler." : "You plus at least 3 bots. Your role is secret and random each game.") : "Plain blackjack.";
+    for (const b of document.querySelectorAll("[data-bots]")) b.disabled = !!prefs.cheater && +b.dataset.bots < 3;
+    $("cheatRules").hidden = !(view && view.mode === "cheater") && !prefs.cheater;
     if (isOnline) renderOnline();
     const v = view;
     const me = v && v.seats.find(s => s.id === mySeat);
-    $("betUI").hidden = $("playUI").hidden = $("waitUI").hidden = $("startOver").hidden = true;
+    $("betUI").hidden = $("playUI").hidden = $("waitUI").hidden = $("startOver").hidden = $("gunUI").hidden = true;
+    renderPeek(v);
     $("actBox").classList.remove("myturn");
     if (!v) { setStatus("Connecting", "Finding the table..."); $("waitUI").hidden = false; $("waitUI").textContent = "Connecting..."; $("actTitle").textContent = "YOUR HAND"; return; }
     const turnSeat = v.seats.find(s => s.id === v.turn);
     const sub = isOnline ? `${v.seats.length} at the table` : `Round ${v.round + (v.phase === "betting" ? 1 : 0)}`;
+    if (v.mode === "cheater") {
+      if (v.phase === "lobby") {
+        $("actTitle").textContent = "CHEATER MODE"; $("waitUI").hidden = false;
+        $("waitUI").textContent = `Cheater mode needs at least ${CHEAT_MIN} players. ${v.players} at the table so far.` + (online.seat === "host" ? " Press DEAL ROLES once everyone's here." : "");
+        setStatus("Waiting for players", `${v.players} / ${CHEAT_MIN}`, true); return;
+      }
+      if (v.over) {
+        $("actTitle").textContent = "GAME OVER"; $("waitUI").hidden = false; $("waitUI").textContent = v.over.text;
+        setStatus("Game over", mode === "local" || online.seat === "host" ? "Start a new game for new roles." : "Waiting for the host."); return;
+      }
+      if (iAmDealer(v)) {
+        $("actTitle").textContent = "YOU ARE THE DEALER"; $("gunUI").hidden = false;
+        $("gunHint").textContent = v.shot ? "BANG." : aiming ? "Click a player on the table (or a name below) to shoot. Click anywhere else to lower the pistol."
+          : "The cards deal themselves. Watch for a player who seems to know what's coming: hitting into perfect cards, stopping just before a bust, winning too fast. You have ONE shot. The cheater wins at $1,000.";
+        $("gunBtn").textContent = aiming ? "LOWER THE PISTOL" : "PICK UP THE PISTOL"; $("gunBtn").disabled = !!v.shot;
+        const box = $("suspects"); box.replaceChildren();
+        for (const st of v.seats) {
+          const b = document.createElement("button"); b.className = aiming ? "aim" : "";
+          b.textContent = (aiming ? "SHOOT " : "") + st.name + (aiming ? "" : ` $${st.chips}`);
+          b.disabled = !aiming; b.onclick = () => doShoot(st.id);
+          box.append(b);
+        }
+        const richest = v.seats.reduce((a, b) => (b.chips > a.chips ? b : a), v.seats[0] || { chips: 0, name: "" });
+        setStatus(aiming ? "Taking aim..." : "You're the dealer", `Richest: ${richest.name} $${richest.chips} of $${v.goal}`); return;
+      }
+    }
     if (!me) {
       $("actTitle").textContent = "WATCHING"; $("waitUI").hidden = false; $("waitUI").textContent = "The table is full (6 seats). You can watch.";
     } else if (me.chips < BET_MIN && (v.phase === "betting" || me.state === "out")) {
@@ -1058,6 +1400,10 @@
         `You have ${me.hands.map(h => handInfo(h.cards).total).join(" and ")}. Waiting...`;
     }
     const t = secsLeft();
+    if (v.mode === "cheater" && v.myRole && v.phase !== "playing") {
+      const r = ROLE_INFO[v.myRole], mine = me ? `$${me.chips}` : "";
+      setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : `You are ${r.name.toLowerCase()}`, v.myRole === "cheater" ? `${mine} of $${v.goal}. Don't get caught.` : v.myRole === "jester" ? "Look guilty. Get shot." : "Stay honest. Hope they aim well.");
+    } else
     if (me && me.chips < BET_MIN && v.phase === "betting") setStatus("Out of money", isOnline ? "You're watching." : "Start over to play again.");
     else if (v.phase === "betting") setStatus(me && !me.ready ? "Place your bet" : "Waiting for bets", t ? `Dealing in ${t}s` : sub, !!(me && me.ready));
     else if (v.phase === "dealing") setStatus("Dealing", sub, true);
@@ -1095,6 +1441,7 @@
   let mode = "local";
   for (const b of document.querySelectorAll("[data-opp]")) b.onclick = () => { prefs.opp = b.dataset.opp; savePrefs(); updateUI(); };
   for (const b of document.querySelectorAll("[data-bots]")) b.onclick = () => { prefs.bots = +b.dataset.bots; savePrefs(); updateUI(); };
+  $("cheatToggle").onclick = () => { prefs.cheater = !prefs.cheater; if (prefs.cheater && prefs.bots < 3) prefs.bots = 3; savePrefs(); updateUI(); };
   $("nameInput").value = prefs.name;
   $("nameInput").addEventListener("input", () => {
     prefs.name = $("nameInput").value; savePrefs();
@@ -1105,7 +1452,7 @@
     mode = "local"; mySeat = "me"; view = null;
     for (const k of Object.keys(handsVis)) delete handsVis[k];
     sweep = []; chipFx.length = 0; discardCount = 0; $("tags").replaceChildren(); $("bubbles").replaceChildren();
-    newLocalTable(prefs.bots);
+    hideOverlays(); newLocalTable(prefs.bots, !!prefs.cheater);
   }
   $("start").onclick = () => { if (prefs.opp === "online") { if (typeof Peer !== "undefined") hostTable(newCode(), true); } else startLocal(); };
 
@@ -1145,10 +1492,10 @@
       tlog("The table was reopened. Bets in play were returned.");
       startBetting();
     } else {
-      T = { kind: "online", phase: "betting", round: 0, shoe: newShoe(), shuffled: 0, dealer: { cards: [], hidden: true }, seats: [], turn: null, log: [], deadline: 0, lastAct: null, turnSeq: 0 };
-      T.seats.push(makeSeat("h", myName(), false));
+      T = { kind: "online", mode: prefs.cheater ? "cheater" : "classic", phase: "betting", round: 0, shoe: newShoe(), shuffled: 0, dealer: { cards: [], hidden: true }, seats: [], turn: null, log: [], deadline: 0, lastAct: null, turnSeq: 0 };
+      T.seats.push(makeSeat("h", myName(), false)); T.order = [...T.seats];
       tlog(`${myName()} opened the table.`);
-      startBetting();
+      if (isCheat()) newCheaterGame(); else startBetting();
     }
     startHostPeer();
     updateUI();
@@ -1187,13 +1534,14 @@
     if (!msg || typeof msg !== "object" || !T) return;
     if (msg.type === "hello") {
       const token = typeof msg.token === "string" ? msg.token.slice(0, 20) : "";
-      let s = token && T.seats.find(x => x.token === token);
+      let s = token && (T.order || T.seats).find(x => x.token === token);
       if (s) { s.gone = false; s.goneRounds = 0; s.name = cleanName(msg.name) || s.name; }
-      else if (T.seats.filter(x => !x.gone).length < 6 && T.seats.length < 6) {
+      else if ((T.order || T.seats).length < 6) {
         const id = "p" + Math.random().toString(36).slice(2, 8);
         s = makeSeat(id, cleanName(msg.name) || "GUEST", false); s.token = token;
         // Seat newcomers to the left of everyone already playing.
-        T.seats.push(s);
+        T.seats.push(s); if (T.order) T.order.push(s);
+        if (isCheat() && T.roles && !T.over) T.roles[s.id] = "gambler"; // late arrivals are honest players
         if (T.phase === "betting") s.bet = clamp(s.base, BET_MIN, s.chips);
       }
       if (s) {
@@ -1208,6 +1556,7 @@
     }
     const id = conn.seatId; if (!id) return;
     if (msg.type === "bet") placeBet(id, msg.amount);
+    else if (msg.type === "shoot") shoot(id, msg.target);
     else if (msg.type === "act") act(id, msg.a);
     else if (msg.type === "chat") hostReceiveChat(id, msg.text);
   }
@@ -1261,6 +1610,10 @@
     $("shareLink").value = online.code ? tableLink(online.code) : "";
     $("shareBox").hidden = online.seat !== "host";
     $("dealNow").hidden = !(online.seat === "host" && view && view.phase === "betting" && view.seats.some(s => s.ready));
+    const lobby = view && view.mode === "cheater" && (view.phase === "lobby");
+    $("dealRoles").hidden = !(online.seat === "host" && lobby);
+    $("dealRoles").disabled = !view || view.players < CHEAT_MIN;
+    $("dealRoles").textContent = view && view.players < CHEAT_MIN ? `NEED ${CHEAT_MIN} PLAYERS (${view ? view.players : 0}/${CHEAT_MIN})` : "DEAL ROLES";
     const box = $("players"); box.replaceChildren();
     for (const s of (view ? view.seats : [])) {
       const c = document.createElement("span"); c.className = "chip"; c.style.background = s.color;
@@ -1273,6 +1626,7 @@
     for (const b of document.querySelectorAll("#quickChat button")) b.disabled = !canChat;
   }
   $("dealNow").onclick = () => { if (online.seat === "host" && T) dealRound(); };
+  $("dealRoles").onclick = () => { if (online.seat === "host" && T && isCheat()) newCheaterGame(); };
   $("leave").onclick = () => leaveOnline(true);
   $("reconnect").onclick = () => { if (online.code && online.seat === "guest") { setMsg("gameMsg", "Reconnecting..."); if (online.peer && !online.peer.destroyed) connectToHost(); else joinTable(online.code); } };
   $("copyLink").onclick = () => {
@@ -1380,6 +1734,9 @@
     push() { tone({ type: "triangle", f: 587, dur: 0.15, vol: 0.08 }); tone({ type: "triangle", f: 587, at: 0.18, dur: 0.2, vol: 0.07 }); },
     lose() { [440, 370, 311].forEach((f, i) => tone({ type: "triangle", f, at: i * 0.15, dur: 0.25, vol: 0.09, vib: 4 })); },
     bust() { tone({ type: "sine", f: 160, f2: 55, dur: 0.3, vol: 0.3 }); noise({ type: "lowpass", freq: 700, dur: 0.2, vol: 0.25 }); },
+    cock() { noise({ type: "highpass", freq: 3000, dur: 0.04, vol: 0.25 }); noise({ at: 0.09, type: "highpass", freq: 2200, dur: 0.05, vol: 0.3 }); tone({ type: "square", f: 300, f2: 180, at: 0.09, dur: 0.04, vol: 0.05 }); },
+    bang() { noise({ type: "lowpass", freq: 3000, f2: 200, dur: 0.5, vol: 0.9 }); tone({ type: "sine", f: 120, f2: 35, dur: 0.4, vol: 0.6 }); noise({ type: "highpass", freq: 4000, dur: 0.05, vol: 0.5 });
+      for (let i = 0; i < 4; i++) noise({ at: 0.35 + i * 0.12, type: "bandpass", freq: 900, q: 2, dur: 0.15, vol: 0.12 / (i + 1) }); },
     tick() { tone({ type: "square", f: 1800, dur: 0.02, vol: 0.03 }); },
     join() { tone({ type: "triangle", f: 660, dur: 0.1, vol: 0.08 }); tone({ type: "triangle", f: 990, at: 0.1, dur: 0.15, vol: 0.08 }); },
     chat() { tone({ type: "triangle", f: 988, dur: 0.08, vol: 0.08 }); tone({ type: "triangle", f: 1319, at: 0.08, dur: 0.12, vol: 0.08 }); },
