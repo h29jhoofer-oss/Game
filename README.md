@@ -69,7 +69,8 @@ js/ui/components.js     Cards, chests, modals, toasts, chest-opening sequence
 js/ui/menus.js          Home, Cards (deck builder), Shop, Quests, Profile/Settings
 js/ui/battle-ui.js      Hand, drag/tap deploy, HUD, banners, end screen
 js/main.js              Bootstrap + main loop
-tests/sim.html          Headless AI-vs-AI simulation harness (exposes runSims())
+tests/sim.html          Headless harness: runSims() AI-vs-AI matches, runMechanics() ability checks
+tests/run-tests.js      Playwright runner for both (node tests/run-tests.js)
 ```
 
 Progress is saved in `localStorage`. Use **Profile → Reset Progress** to start over.

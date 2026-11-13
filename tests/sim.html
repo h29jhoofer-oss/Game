@@ -34,6 +34,85 @@ window.runSims = function (n, d0, d1, arena) {
   }
   return out;
 };
+window.runMechanics = function () {
+    const res = {};
+    const mk = () => { const d = RR.Cards.starterDeck.map((x) => ({ id: x, level: 1 })); const B = new RR.Battle({ decks: [d, d], kingLevels: [1, 1] }); B.phase = 'regular'; return B; };
+    const run = (B, s) => { for (let i = 0; i < s * 30; i++) B.update(1 / 30); };
+    const C = RR.Cards.get;
+    let B;
+    // Titan splits into pebble golems
+    B = mk(); B.deploy(0, C('mountain_titan'), 9, 20, 1); run(B, 1.5);
+    const t = B.entities.find((e) => e.card.id === 'mountain_titan'); B.dealDamage(t, 99999); run(B, 0.1);
+    res.titanSplit = B.entities.filter((e) => e.card.id === 'pebble_golem').length;
+    // Necromancer spawns rattlers
+    B = mk(); B.deploy(0, C('necromancer'), 9, 26, 1); run(B, 1.5);
+    res.necroSpawn = B.entities.filter((e) => e.card.id === 'bone_rattlers').length;
+    // Imp den spawns
+    B = mk(); B.deploy(0, C('imp_den'), 9, 24, 1); run(B, 6.5);
+    res.denSpawn = B.entities.filter((e) => e.card.id === 'gremlin_gang').length;
+    // Elixir well
+    B = mk(); B.players[0].elixir = 0; B.deploy(0, C('elixir_well'), 9, 26, 1); const e0 = B.players[0].elixir; run(B, 10);
+    res.wellElixir = +(B.players[0].elixir).toFixed(2) + ' (no-well regen ~3.6)';
+    // Rune trap triggers on enemy ground troop and stuns
+    B = mk(); B.deploy(0, C('rune_trap'), 9, 20, 1); B.deploy(1, C('iron_squire'), 9, 18.5, 1); run(B, 3);
+    res.trapGone = !B.entities.some((e) => e.card.id === 'rune_trap');
+    // Mole burrows to target
+    B = mk(); B.deploy(0, C('tunneling_mole'), 4.5, 5, 1); run(B, 0.5);
+    const m = B.entities.find((e) => e.card.id === 'tunneling_mole'); res.moleBurrowingUntargetable = m.untargetable; run(B, 6);
+    res.moleAt = [+m.x.toFixed(1), +m.y.toFixed(1)]; res.moleEnemyTowerHp = B.towers[1][1].hp;
+    // Inferno ramps damage on a tank
+    B = mk(); B.deploy(1, C('inferno_spire'), 9, 9, 1); B.deploy(0, C('boulder_brute'), 9, 14.6, 1); run(B, 10);
+    const br = B.entities.find((e) => e.card.id === 'boulder_brute'); res.infernoMeltsBrute = !br;
+    // Ram rider jumps river (does not use bridge)
+    B = mk(); B.deploy(0, C('ram_rider'), 9, 18, 1); run(B, 2.2);
+    const rr = B.entities.find((e) => e.card.id === 'ram_rider'); res.ramX = rr && +rr.x.toFixed(2); res.ramY = rr && +rr.y.toFixed(2);
+    // Ground squire uses the bridge
+    B = mk(); B.deploy(0, C('iron_squire'), 9, 18, 1); let crossedAt = null;
+    for (let i = 0; i < 300; i++) { B.update(1 / 30); const s = B.entities[0]; if (s && s.y < 16 && crossedAt == null) crossedAt = +s.x.toFixed(2); }
+    res.squireCrossX = crossedAt;
+    // Drummer aura buffs allies
+    B = mk(); B.deploy(0, C('war_drummer'), 9, 24, 1); B.deploy(0, C('iron_squire'), 9.5, 24, 1); run(B, 1.3);
+    res.drummerBuff = B.entities.find((e) => e.card.id === 'iron_squire').buffMul;
+    // Frost mist slows, battle cry buffs
+    B = mk(); B.deploy(1, C('iron_squire'), 9, 10, 1); run(B, 1.1); B.deploy(0, C('frost_mist'), 9, 10.5, 1); run(B, 0.1);
+    res.frostSlow = B.entities.find((e) => e.card.id === 'iron_squire').slowMul;
+    // Meteor knockback + damage
+    B = mk(); B.deploy(1, C('longbow_twins'), 9, 10, 1); run(B, 1.1); B.deploy(0, C('meteor'), 9, 10, 1); run(B, 2.5);
+    res.meteorKillsArchers = B.entities.filter((e) => e.card.id === 'longbow_twins').length === 0;
+    // Arrow volley on a tower uses crown multiplier
+    B = mk(); B.deploy(0, C('arrow_volley'), 3.5, 6.5, 1); run(B, 1.5);
+    res.arrowsTowerDmg = 3000 - B.towers[1][1].hp;
+    // Storm caller chain + deploy zap stuns
+    B = mk(); B.deploy(0, C('storm_caller'), 9, 19.5, 1); run(B, 0.9); B.deploy(1, C('gremlin_gang'), 9, 20.5, 1); run(B, 0.15);
+    res.stormStunned = B.entities.filter((e) => e.card.id === 'gremlin_gang' && e.stun > 0).length;
+    // Gale blast pushes enemies back
+    B = mk(); B.deploy(1, C('iron_squire'), 9, 13, 1); run(B, 1.05); const sq = B.entities[0]; const y0 = sq.y; B.deploy(0, C('gale_blast'), 9, 18, 1); run(B, 0.8);
+    res.galePush = +(y0 - sq.y).toFixed(2);
+    // Paladin charges
+    B = mk(); B.deploy(0, C('charging_paladin'), 3.5, 22, 1); let charged = false; for (let i = 0; i < 200; i++) { B.update(1 / 30); const pp = B.entities[0]; if (pp && pp.charging) charged = true; }
+    res.paladinCharged = charged;
+    // Zeppelin death damage
+    B = mk(); B.deploy(1, C('iron_squire'), 9, 20, 1); B.deploy(0, C('gas_zeppelin'), 9, 20, 1); run(B, 1.1);
+    const z = B.entities.find((e) => e.card.id === 'gas_zeppelin'); const sqHp = B.entities.find((e) => e.card.id === 'iron_squire').hp; B.dealDamage(z, 99999); run(B, 0.05);
+    res.zepDeathDmg = sqHp - (B.entities.find((e) => e.card.id === 'iron_squire') || { hp: 0 }).hp;
+    // Druid heals
+    B = mk(); B.deploy(0, C('forest_druid'), 9, 26, 1); B.deploy(0, C('iron_squire'), 10, 26, 1); run(B, 1.1);
+    const s2 = B.entities.find((e) => e.card.id === 'iron_squire'); s2.hp -= 500; const h0 = s2.hp; run(B, 1.6);
+    res.druidHealed = s2.hp - h0;
+    // Siege ballista hits tower from own side
+    B = mk(); B.deploy(0, C('siege_ballista'), 3.5, 18.5, 1); run(B, 12);
+    res.ballistaTowerDmg = 3000 - B.towers[1][1].hp;
+    // Pocket deploy after destroying a princess tower
+    B = mk(); res.pocketBefore = RR.Map.canDeploy(B, 0, C('iron_squire'), 3.5, 12); B.kill(B.towers[1][1]); res.pocketAfter = RR.Map.canDeploy(B, 0, C('iron_squire'), 3.5, 12);
+    res.kingActiveAfterPrincess = B.towers[1][0].active; res.crowns = B.players[0].crowns;
+    // King tower kill ends game
+    B.kill(B.towers[1][0]); res.endReason = B.endReason; res.winner = B.winner;
+    // Elixir: cannot overspend; card cycling
+    B = mk(); B.players[0].elixir = 2; res.cantAfford = !B.playCard(0, B.players[0].hand.findIndex((h) => C(h.id).cost > 2), 9, 24);
+    B.players[0].elixir = 10; const before = B.players[0].hand.map((h) => h.id); const next = B.players[0].queue[0].id; B.playCard(0, 0, 9, 24);
+    res.cycle = B.players[0].hand[0].id === next && B.players[0].queue[B.players[0].queue.length - 1].id === before[0];
+    return res;
+  };
 document.getElementById('out').textContent = 'ready';
 </script>
 </body></html>
