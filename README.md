@@ -10,7 +10,7 @@ Old chess invite links (`index.html#g-CODE`) still open the chess game.
 ## Pixel Blackjack
 
 - Play against **1 to 5 bots** (PIP, MOSS, JUNIPER, TOFFEE and BRAMBLE, each with their own betting and playing style), or open an **online table** and send the link to **up to 5 friends**.
-- Everyone plays against the dealer. Bet $5 to $100, then **HIT**, **STAND** or **DOUBLE** (keys H, S, D; Space deals). Blackjack pays 3 to 2, the dealer draws to 17 and stands on all 17s, and the dealer peeks for blackjack when showing an ace or a ten. Four decks, reshuffled when the shoe runs low. No splits or insurance.
+- Everyone plays against the dealer. Bet $5 to $100, then **HIT**, **STAND**, **DOUBLE** or **SPLIT** (keys H, S, D, P; Space deals). Blackjack pays 3 to 2, the dealer draws to 17 and stands on all 17s, and the dealer peeks for blackjack when showing an ace or a ten. Four decks, reshuffled when the shoe runs low. Split any two cards of the same value into separate hands (up to 4, double after split allowed); split aces get one card each, and 21 on a split hand is not blackjack. No insurance.
 - Everyone starts with **$500** and there are no loans. A bot that runs out of money leaves the table; if you run out, you're done (online you can stay and watch) and START OVER deals a fresh table. Each player's bankroll sits beside their bet as a pile of chips.
 - Cards fly out of the shoe and flip over, the dealer's hidden card flips when it's their turn, chips are paid out or swept away, and old cards slide into the discard tray. Bots say what they're doing in speech bubbles.
 - Its own synthesised lounge music, plus card, chip and win sounds. Sound settings are shared with chess.
@@ -42,7 +42,7 @@ Open `index.html` in a browser and pick CHESS, or host the folder on GitHub Page
 - Online: **CREATE ONLINE GAME** gives you a link. Anyone who opens it can play you as Black, no account needed. Later visitors watch. Keep your page open while you play: your browser hosts the game. A friend's code can also be typed into **JOIN**.
 - Once an online game starts, the board fills the screen with the game buttons and a chat beside it (below it on phones). Players can type or use quick replies; spectators can read along.
 - Bot and same-screen games use the same big-board layout once they start, with UNDO / NEW GAME buttons, piece info, taunts and (with mystery boxes on) the POWERS buttons beside the board instead of chat. NEW GAME brings the settings back.
-- Checkmate wins. Pawns promote to queens. No castling or en passant.
+- Checkmate wins. Castling (king and rook that have never moved; on the XXL board, the nearest rook on each side) and en passant (by any piece with pawn powers) work as in normal chess.
 
 ## How online play works
 

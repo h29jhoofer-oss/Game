@@ -86,7 +86,8 @@
   .chipBtns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .chipBtns button { padding: 6px 2px; font-size: 9px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
   .chipBtns i { width: 18px; height: 10px; border: 2px solid var(--edge); display: block; }
-  .moves { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .moves { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .moves button.spl { background: #59c1ff; color: var(--bg); }
   .moves button { padding: 14px 4px; font-size: 11px; }
   .moves button.hit { background: var(--ok); color: var(--bg); }
   .moves button.stand { background: var(--accent); color: var(--bg); }
@@ -198,8 +199,9 @@
           <button class="hit" id="hit">HIT</button>
           <button class="stand" id="stand">STAND</button>
           <button class="dbl" id="double">DOUBLE</button>
+          <button class="spl" id="split">SPLIT</button>
         </div>
-        <div class="keys">Keys: H hit, S stand, D double.</div>
+        <div class="keys">Keys: H hit, S stand, D double, P split.</div>
       </div>
       <div id="waitUI" class="muted" hidden></div>
       <button id="startOver" class="primary big" hidden>START OVER WITH $500</button>
@@ -282,6 +284,7 @@
       <p>Everyone plays against the <b>dealer</b>, not each other. Get closer to <b>21</b> than the dealer without going over.</p>
       <p>Number cards count their number, J Q K count 10, and an <b>ace</b> counts 1 or 11, whichever helps.</p>
       <p><b>HIT</b> takes a card. <b>STAND</b> keeps your hand. <b>DOUBLE</b> doubles your bet on your first two cards and takes exactly one more card.</p>
+      <p><b>SPLIT</b> turns two cards of the same value into two hands, each with its own bet (up to 4 hands). Split aces get one card each, and a split hand of 21 isn't blackjack.</p>
       <p>An ace plus a 10-value card is <b>blackjack</b> and pays 3 to 2. A win pays 1 to 1 and a tie (<b>push</b>) gives your bet back.</p>
       <p>The dealer must hit until 17 and stands on every 17. Everyone starts with <b>$500</b>. Run out and you're done: bots leave the table, and you can start over.</p>
     </div>
@@ -310,6 +313,8 @@
   // ---------- Cards ----------
   const RANKS = "A23456789TJQK", SUITS = "SHDC";
   function newShoe() {
+    // Tests can stack the deck (cards are dealt from the end); normal play never sets this.
+    if (Array.isArray(window.DEVOUR_TEST_SHOE)) { const t = window.DEVOUR_TEST_SHOE; window.DEVOUR_TEST_SHOE = null; return [...t]; }
     const a = [];
     for (let d = 0; d < 4; d++) for (const s of SUITS) for (const r of RANKS) a.push(r + s);
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
@@ -322,7 +327,7 @@
     while (t > 21 && aces) { t -= 10; aces--; }
     return { total: t, soft: aces > 0, bj: cards.length === 2 && t === 21 };
   }
-  const handLabel = (cards) => { const h = handInfo(cards); return h.bj ? "BLACKJACK" : h.total > 21 ? "BUST " + h.total : (h.soft && h.total < 21 ? "SOFT " : "") + h.total; };
+  const handLabel = (cards, split) => { const h = handInfo(cards); return h.bj && !split ? "BLACKJACK" : h.total > 21 ? "BUST " + h.total : (h.soft && h.total < 21 ? "SOFT " : "") + h.total; };
 
   // ---------- The table (run by the host's browser, or locally against bots) ----------
   const START = 500, BET_MIN = 5, BET_MAX = 100, BET_TIME = 15000, TURN_TIME = 25000;
@@ -336,7 +341,7 @@
   function makeSeat(id, name, bot, style) {
     const used = T ? T.seats.map(s => s.color) : [];
     const color = SEAT_COLORS.find(c => !used.includes(c)) || SEAT_COLORS[0];
-    return { id, name, bot, style: style || 0, color, chips: START, bet: 0, base: bot ? [5, 10, 20][style || 0] : 10, cards: [], state: "out", result: null, ready: false, gone: false, goneRounds: 0, token: null };
+    return { id, name, bot, style: style || 0, color, chips: START, bet: 0, base: bot ? [5, 10, 20][style || 0] : 10, hands: [], cur: 0, state: "out", result: null, ready: false, gone: false, goneRounds: 0, token: null };
   }
   const seatOf = (id) => T.seats.find(s => s.id === id);
   function tlog(text) { T.log.unshift(text); T.log = T.log.slice(0, 60); }
@@ -348,10 +353,15 @@
     const me = makeSeat("me", myName(), false);
     const order = [...bots.slice(0, Math.ceil(nBots / 2)).map(b => b), "me", ...bots.slice(Math.ceil(nBots / 2))];
     for (const o of order) T.seats.push(o === "me" ? me : makeSeat("bot-" + o.name, o.name, true, o.style));
+    T.seats.forEach((st, i) => { st.color = SEAT_COLORS[i]; });
     tlog(`You sit down with ${bots.map(b => b.name).join(", ").replace(/, ([^,]*)$/, " and $1")}.`);
     startBetting();
   }
 
+  // Each seat plays one or more hands (more after a split): { cards, bet, state, split, doubled, result }.
+  const sumBets = (s) => s.hands.reduce((n, h) => n + h.bet, 0);
+  const canSplit = (s, h) => !!h && h.cards.length === 2 && cardVal(h.cards[0]) === cardVal(h.cards[1]) && s.hands.length < 4 && s.chips >= h.bet;
+  const canDouble = (s, h) => !!h && h.cards.length === 2 && s.chips >= h.bet;
   function startBetting() {
     T.phase = "betting"; T.turn = null; T.dealer = { cards: [], hidden: true }; T.deadline = 0; T.betTimer = false;
     for (const s of T.seats) if (s.gone) s.goneRounds++;
@@ -360,7 +370,7 @@
     for (const s of T.seats.filter(x => x.bot && x.chips < BET_MIN)) tlog(`${s.name} is out of money and leaves the table.`);
     T.seats = T.seats.filter(s => !(s.bot && s.chips < BET_MIN));
     for (const s of T.seats) {
-      s.cards = []; s.state = "out"; s.result = null; s.ready = false; s.doubled = false;
+      s.hands = []; s.cur = 0; s.state = "out"; s.result = null; s.ready = false;
       if (s.chips < BET_MIN) { s.bet = 0; if (!s.broke) { s.broke = true; tlog(`${s.name} is out of money.`); } continue; }
       s.bet = clamp(s.base, BET_MIN, Math.min(BET_MAX, s.chips));
     }
@@ -398,21 +408,21 @@
     const players = T.seats.filter(s => s.ready && !s.gone && s.bet >= BET_MIN && s.chips >= s.bet);
     if (!players.length) { T.betTimer = false; T.deadline = 0; commit(); return; }
     T.phase = "dealing"; T.round++; T.deadline = 0;
-    for (const s of T.seats) s.state = players.includes(s) ? "play" : "out";
-    for (const s of players) { s.chips -= s.bet; s.base = s.bet; }
-    if (T.shoe.length < 16 * (players.length + 1)) { T.shoe = newShoe(); T.shuffled++; tlog("The dealer shuffles a fresh shoe."); }
+    for (const s of T.seats) s.state = players.includes(s) ? "in" : "out";
+    for (const s of players) { s.chips -= s.bet; s.base = s.bet; s.cur = 0; s.hands = [{ cards: [], bet: s.bet, state: "play" }]; }
+    if (T.shoe.length < 20 * (players.length + 1)) { T.shoe = newShoe(); T.shuffled++; tlog("The dealer shuffles a fresh shoe."); }
     commit();
     const order = [];
     for (let k = 0; k < 2; k++) { for (const s of players) order.push(s); order.push(null); }
     order.forEach((s, i) => later(450 + i * 270, () => {
       const c = T.shoe.pop();
-      if (s) s.cards.push(c); else T.dealer.cards.push(c);
+      if (s) s.hands[0].cards.push(c); else T.dealer.cards.push(c);
       commit();
     }));
     later(450 + order.length * 270 + 300, afterDeal);
   }
   function afterDeal() {
-    for (const s of T.seats) if (s.state === "play" && handInfo(s.cards).bj) { s.state = "bj"; tlog(`${s.name} has BLACKJACK!`); }
+    for (const s of T.seats) if (s.state === "in" && handInfo(s.hands[0].cards).bj) { s.hands[0].state = "bj"; tlog(`${s.name} has BLACKJACK!`); }
     const up = T.dealer.cards[0];
     if ((up[0] === "A" || cardVal(up) === 10) && handInfo(T.dealer.cards).bj) {
       T.dealer.hidden = false; T.phase = "dealer"; tlog("The dealer peeks... BLACKJACK!"); commit(); later(1100, settle); return;
@@ -427,32 +437,54 @@
     else if (T.kind === "online") later(TURN_TIME, () => { if (T.turnSeq === seq) act(s.id, "stand", true); });
   }
   function nextTurn(from) {
-    const i = T.seats.findIndex((s, j) => j > from && s.state === "play");
+    const i = T.seats.findIndex((s, j) => j > from && s.state === "in" && s.hands.some(h => h.state === "play"));
     if (i < 0) { T.turn = null; T.deadline = 0; commit(); later(500, dealerPlay); return; }
     const s = T.seats[i];
+    s.cur = s.hands.findIndex(h => h.state === "play");
     T.turn = s.id; armTurn(s); commit();
   }
+  const RANK_NAMES = { A: "aces", T: "tens", J: "jacks", Q: "queens", K: "kings" };
   function act(id, a, auto) {
     if (!T || T.phase !== "playing" || T.turn !== id) return false;
-    const i = T.seats.findIndex(s => s.id === id), s = T.seats[i];
-    if (!s || s.state !== "play" || !["hit", "stand", "double"].includes(a)) return false;
-    if (a === "double" && !(s.cards.length === 2 && s.chips >= s.bet)) return false;
-    T.lastAct = { id, a: auto ? "timeout" : a, n: (T.lastAct ? T.lastAct.n : 0) + 1 };
-    if (a === "stand") { s.state = "stand"; if (auto) tlog(`${s.name} ran out of time and stands.`); }
-    else {
-      if (a === "double") { s.chips -= s.bet; s.bet *= 2; s.doubled = true; }
-      s.cards.push(T.shoe.pop());
-      const h = handInfo(s.cards);
-      if (h.total > 21) { s.state = "bust"; tlog(`${s.name} busts with ${h.total}.`); }
-      else if (a === "double") { s.state = "stand"; tlog(`${s.name} doubles down to $${s.bet} and gets ${h.total}.`); }
-      else if (h.total === 21) s.state = "stand";
+    const i = T.seats.findIndex(s => s.id === id), s = T.seats[i], h = s && s.hands[s.cur];
+    if (!h || h.state !== "play" || !["hit", "stand", "double", "split"].includes(a)) return false;
+    if (a === "double" && !canDouble(s, h)) return false;
+    if (a === "split" && !canSplit(s, h)) return false;
+    T.lastAct = { id, a: auto ? "timeout" : a, n: (T.lastAct ? T.lastAct.n : 0) + 1, bust: false };
+    if (a === "stand") { h.state = "stand"; if (auto) tlog(`${s.name} ran out of time and stands.`); }
+    else if (a === "split") {
+      // The pair becomes two hands, each with the same bet; each gets a new second card.
+      s.chips -= h.bet;
+      const nh = { cards: [h.cards.pop()], bet: h.bet, state: "play", split: true };
+      h.split = true;
+      s.hands.splice(s.cur + 1, 0, nh);
+      h.cards.push(T.shoe.pop()); nh.cards.push(T.shoe.pop());
+      const r = h.cards[0][0];
+      tlog(`${s.name} splits ${RANK_NAMES[r] || r + "s"}.`);
+      if (r === "A") { h.state = "stand"; nh.state = "stand"; } // split aces get one card each
+      else { if (handInfo(h.cards).total === 21) h.state = "stand"; if (handInfo(nh.cards).total === 21) nh.state = "stand"; }
+    } else {
+      if (a === "double") { s.chips -= h.bet; h.bet *= 2; h.doubled = true; }
+      h.cards.push(T.shoe.pop());
+      const hi = handInfo(h.cards);
+      if (hi.total > 21) { h.state = "bust"; T.lastAct.bust = true; tlog(`${s.name} busts with ${hi.total}.`); }
+      else if (a === "double") { h.state = "stand"; tlog(`${s.name} doubles down to $${h.bet} and gets ${hi.total}.`); }
+      else if (hi.total === 21) h.state = "stand";
     }
-    if (s.state === "play") { armTurn(s); commit(); return true; }
+    if (h.state === "play") { armTurn(s); commit(); return true; }
+    // On to this player's next hand, or the next player.
+    const k = s.hands.findIndex((x, j) => j > s.cur && x.state === "play");
+    if (k >= 0) { T.turnSeq++; commit(); later(550, () => { s.cur = k; armTurn(s); commit(); }); return true; }
     T.turnSeq++; commit(); later(550, () => nextTurn(i)); return true;
   }
-  // Bots play close to basic strategy (no splits here); bold bots sometimes push their luck.
+  // Bots play close to basic strategy; bold bots sometimes push their luck.
   function botDecide(s) {
-    const h = handInfo(s.cards), up = cardVal(T.dealer.cards[0]), two = s.cards.length === 2 && s.chips >= s.bet;
+    const hand = s.hands[s.cur], h = handInfo(hand.cards), up = cardVal(T.dealer.cards[0]), two = canDouble(s, hand);
+    if (canSplit(s, hand)) {
+      const v = cardVal(hand.cards[0]);
+      const split = v === 11 || v === 8 || (v === 9 && up <= 9 && up !== 7) || (v === 7 && up <= 7) || (v === 6 && up <= 6) || (v === 4 && (up === 5 || up === 6)) || ((v === 2 || v === 3) && up <= 7);
+      if (split) return "split";
+    }
     if (h.soft) {
       if (h.total >= 19) return "stand";
       if (h.total === 18) return up >= 9 ? "hit" : (two && up >= 3 && up <= 6 ? "double" : "stand");
@@ -470,7 +502,7 @@
   }
   function dealerPlay() {
     T.phase = "dealer"; T.dealer.hidden = false; commit();
-    const live = T.seats.some(s => s.state === "stand");
+    const live = T.seats.some(s => s.state === "in" && s.hands.some(h => h.state === "stand"));
     const step = () => {
       const h = handInfo(T.dealer.cards);
       if (live && h.total < 17) { T.dealer.cards.push(T.shoe.pop()); commit(); later(700, step); }
@@ -483,20 +515,25 @@
     tlog(d.bj ? "Dealer: blackjack." : d.total > 21 ? `Dealer busts with ${d.total}!` : `Dealer stands on ${d.total}.`);
     const parts = [];
     for (const s of T.seats) {
-      if (s.state === "out") continue;
-      const h = handInfo(s.cards);
-      let kind, delta;
-      if (s.state === "bust") { kind = "lose"; delta = -s.bet; }
-      else if (s.state === "bj") {
-        if (d.bj) { kind = "push"; delta = 0; s.chips += s.bet; }
-        else { kind = "bj"; delta = Math.floor(s.bet * 1.5); s.chips += s.bet + delta; }
+      if (s.state !== "in") continue;
+      let total = 0;
+      for (const hand of s.hands) {
+        const h = handInfo(hand.cards);
+        let kind, delta;
+        if (hand.state === "bust") { kind = "lose"; delta = -hand.bet; }
+        else if (hand.state === "bj") {
+          if (d.bj) { kind = "push"; delta = 0; s.chips += hand.bet; }
+          else { kind = "bj"; delta = Math.floor(hand.bet * 1.5); s.chips += hand.bet + delta; }
+        }
+        else if (d.bj) { kind = "lose"; delta = -hand.bet; }
+        else if (d.total > 21 || h.total > d.total) { kind = "win"; delta = hand.bet; s.chips += 2 * hand.bet; }
+        else if (h.total === d.total) { kind = "push"; delta = 0; s.chips += hand.bet; }
+        else { kind = "lose"; delta = -hand.bet; }
+        hand.result = { kind, delta }; total += delta;
       }
-      else if (d.bj) { kind = "lose"; delta = -s.bet; }
-      else if (d.total > 21 || h.total > d.total) { kind = "win"; delta = s.bet; s.chips += 2 * s.bet; }
-      else if (h.total === d.total) { kind = "push"; delta = 0; s.chips += s.bet; }
-      else { kind = "lose"; delta = -s.bet; }
-      s.result = { kind, delta };
-      parts.push(`${s.name} ${kind === "push" ? "pushes" : delta > 0 ? "+$" + delta : "-$" + -delta}`);
+      const kinds = s.hands.map(h => h.result.kind);
+      s.result = { kind: total > 0 ? (kinds.every(k => k === "bj") ? "bj" : "win") : total < 0 ? "lose" : "push", delta: total };
+      parts.push(`${s.name} ${total === 0 ? "breaks even" : total > 0 ? "+$" + total : "-$" + -total}`);
     }
     if (parts.length) tlog(parts.join(", ") + ".");
     T.phase = "done"; T.turn = null; T.deadline = 0; commit();
@@ -507,9 +544,11 @@
   function sanitize() {
     const d = T.dealer;
     return {
-      v: 1, kind: T.kind, phase: T.phase, round: T.round, shoeLeft: T.shoe.length, shuffled: T.shuffled,
+      v: 2, kind: T.kind, phase: T.phase, round: T.round, shoeLeft: T.shoe.length, shuffled: T.shuffled,
       dealer: { hidden: d.hidden, cards: d.hidden ? d.cards.map((c, i) => i === 1 ? "??" : c) : [...d.cards] },
-      seats: T.seats.map(s => ({ id: s.id, name: s.name, bot: s.bot, color: s.color, chips: s.chips, bet: s.bet, cards: [...s.cards], state: s.state, result: s.result, ready: s.ready, gone: s.gone, doubled: !!s.doubled })),
+      seats: T.seats.map(s => ({ id: s.id, name: s.name, bot: s.bot, color: s.color, chips: s.chips, bet: s.state === "in" ? sumBets(s) : s.bet,
+        hands: s.hands.map(h => ({ cards: [...h.cards], bet: h.bet, state: h.state, split: !!h.split, doubled: !!h.doubled, result: h.result || null })),
+        cur: s.cur, state: s.state, result: s.result, ready: s.ready, gone: s.gone })),
       turn: T.turn, left: T.deadline ? Math.max(0, T.deadline - Date.now()) : 0, log: T.log.slice(0, 30), lastAct: T.lastAct,
     };
   }
@@ -715,33 +754,48 @@
   const chipFx = [], particles = [];
   let shoeShake = 0, discardCount = 0, rafId = 0, lastFrame = 0;
   const DEAL_MS = 300;
+  const handKey = (id, k) => id + "#" + k;
   function handTarget(key, idx, count) {
-    let base, n = view ? view.seats.length : 1;
-    if (key === "dealer") base = DEALER;
-    else { const i = view.seats.findIndex(s => s.id === key); base = seatPos(i, n); }
-    const w = CW + (count - 1) * FAN;
-    return { x: Math.round(base.x - w / 2 + idx * FAN), y: Math.round(base.y - CH / 2 - idx * 1) };
+    if (key === "dealer") { const w = CW + (count - 1) * FAN; return { x: Math.round(DEALER.x - w / 2 + idx * FAN), y: Math.round(DEALER.y - CH / 2 - idx) }; }
+    // A seat's hands sit side by side, fanned a little tighter once it has split.
+    const [sid, hs] = key.split("#"), hi = +hs, n = view.seats.length, si = view.seats.findIndex(s => s.id === sid);
+    const seat = view.seats[si], base = seatPos(Math.max(0, si), n), nh = seat ? Math.max(1, seat.hands.length) : 1, fan = nh > 1 ? 5 : FAN, gap = 3;
+    const widths = [];
+    for (let k = 0; k < nh; k++) { const len = k === hi ? count : (handsVis[handKey(sid, k)] || []).length; widths.push(CW + (Math.max(1, len) - 1) * fan); }
+    const total = widths.reduce((a, b) => a + b, 0) + gap * (nh - 1);
+    let x0 = base.x - total / 2; for (let k = 0; k < hi; k++) x0 += widths[k] + gap;
+    return { x: Math.round(x0 + idx * fan), y: Math.round(base.y - CH / 2 - idx) };
   }
   function syncHands(v, now) {
-    const keys = ["dealer", ...v.seats.map(s => s.id)];
-    for (const k of Object.keys(handsVis)) if (!keys.includes(k)) delete handsVis[k];
+    const want = { dealer: v.dealer.cards };
+    for (const s of v.seats) s.hands.forEach((h, k) => { want[handKey(s.id, k)] = h.cards; });
+    // Cards no longer where they were: swept away at the end of a round, or moved to a new hand by a split.
+    const orphans = [];
+    for (const k of Object.keys(handsVis)) {
+      const list = handsVis[k], cards = want[k];
+      if (!cards) { orphans.push(...list); delete handsVis[k]; continue; }
+      let keep = 0;
+      while (keep < list.length && keep < cards.length && (list[keep].card === cards[keep] || list[keep].card === "??")) keep++;
+      if (keep < list.length) orphans.push(...list.splice(keep));
+    }
     let stagger = 0;
-    for (const k of keys) {
-      const cards = k === "dealer" ? v.dealer.cards : v.seats.find(s => s.id === k).cards;
+    for (const [k, cards] of Object.entries(want)) {
       const list = handsVis[k] || (handsVis[k] = []);
-      if (cards.length < list.length) { // a new round: slide the old cards to the discard tray
-        for (const c of list) sweep.push({ card: c.card === "??" ? "??" : c.card, x: c.x, y: c.y, born: now });
-        discardCount += list.length; list.length = 0; sfxSafe(SFX.sweep);
-      }
       cards.forEach((card, i) => {
         if (i < list.length) {
           if (list[i].card === "??" && card !== "??") { list[i].card = card; list[i].flip = now; sfxSafe(SFX.flip); }
           return;
         }
+        const oi = v.phase === "playing" ? orphans.findIndex(o => o.card === card) : -1;
+        if (oi >= 0) { const o = orphans.splice(oi, 1)[0]; o.born = now - DEAL_MS - 1; list.push(o); return; } // slides over to its new hand
         list.push({ card, x: SHOE.x - CW / 2, y: SHOE.y - CH / 2, fromX: SHOE.x - CW / 2, fromY: SHOE.y - CH / 2, born: now + stagger, flip: card === "??" ? 0 : now + stagger + DEAL_MS * 0.4 });
         stagger += 80;
         setTimeout(() => sfxSafe(SFX.deal), Math.max(0, stagger - 80));
       });
+    }
+    if (orphans.length) {
+      for (const c of orphans) sweep.push({ card: "??", x: c.x, y: c.y, born: now });
+      discardCount += orphans.length; sfxSafe(SFX.sweep);
     }
   }
   function render() { if (!rafId) rafId = requestAnimationFrame(frame); }
@@ -791,17 +845,24 @@
         let face = c.card, sx = 1;
         if (c.flip) { const f = (now - c.flip) / 260; if (f < 0) face = "??"; else if (f < 1 && !REDUCED) { sx = Math.abs(Math.cos(f * Math.PI)); if (f < 0.5) face = "??"; } }
         else face = "??";
-        const s = view.seats.find(z => z.id === key);
+        const [sid, hs] = key.split("#"), seat = view.seats.find(z => z.id === sid), hand = seat && seat.hands[+hs];
+        const bust = !!hand && hand.state === "bust";
         let shake = 0;
-        if (s && s.state === "bust" && i === list.length - 1 && now - c.born < DEAL_MS + 500) shake = Math.round(Math.sin(now / 25) * 1.5);
+        if (bust && i === list.length - 1 && now - c.born < DEAL_MS + 500) shake = Math.round(Math.sin(now / 25) * 1.5);
         ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(Math.round(x) + 2, Math.round(y) + CH, CW - 2, 2);
         const w = Math.max(1, Math.round(CW * sx));
         ctx.drawImage(cardSprite(face), Math.round(x + (CW - w) / 2) + shake, Math.round(y), w, CH);
-        if (s && s.state === "bust") { ctx.fillStyle = "rgba(255,40,70,0.18)"; ctx.fillRect(Math.round(x) + shake, Math.round(y), CW, CH); }
+        if (bust) { ctx.fillStyle = "rgba(255,40,70,0.18)"; ctx.fillRect(Math.round(x) + shake, Math.round(y), CW, CH); }
       });
     };
-    for (const s of view.seats) drawHand(s.id);
+    for (const s of view.seats) s.hands.forEach((h, k) => drawHand(handKey(s.id, k)));
     drawHand("dealer");
+    // after a split, a gold bar under the hand being played
+    const ts = view.turn && view.seats.find(s => s.id === view.turn);
+    if (ts && ts.hands.length > 1 && view.phase === "playing") {
+      const key = handKey(ts.id, ts.cur), len = (handsVis[key] || []).length;
+      if (len) { const a = handTarget(key, 0, len), b = handTarget(key, len - 1, len); ctx.fillStyle = "#ffe066"; ctx.fillRect(a.x, a.y + CH + 3, b.x + CW - a.x, 2); }
+    }
     // cards from last round sliding into the discard tray
     for (let i = sweep.length - 1; i >= 0; i--) {
       const c = sweep[i], t = (now - c.born) / 420;
@@ -856,16 +917,18 @@
       const note = s.chips < BET_MIN && s.state === "out" ? "BROKE" : v.phase === "betting" && !s.ready ? "BETTING..." : v.phase !== "betting" && s.state === "out" ? "SITTING OUT" : "";
       if (note) { const d = document.createElement("div"); d.className = "muted"; d.textContent = note; el.append(d); }
       place(el, p.x, p.y + 41);
-      if (s.cards.length) {
-        const t = tagEl("total-" + s.id, "totalTag" + (s.state === "bust" ? " bust" : s.state === "bj" ? " bj" : ""));
-        t.textContent = handLabel(s.cards);
-        place(t, p.x, p.y - 19 - Math.max(0, s.cards.length - 1));
-      }
-      if (s.result && v.phase === "done") {
-        const r = tagEl("res-" + s.id, "resultTag " + s.result.kind);
-        r.textContent = s.result.kind === "push" ? "PUSH" : s.result.delta > 0 ? `+$${s.result.delta}` : `-$${-s.result.delta}`;
-        place(r, p.x, p.y + 2);
-      }
+      s.hands.forEach((h, k) => {
+        if (!h.cards.length) return;
+        const key = handKey(s.id, k), len = h.cards.length, a = handTarget(key, 0, len), b = handTarget(key, len - 1, len), cx = (a.x + b.x + CW) / 2;
+        const t = tagEl("total-" + key, "totalTag" + (h.state === "bust" ? " bust" : h.state === "bj" ? " bj" : ""));
+        t.textContent = s.hands.length > 1 ? handLabel(h.cards, true).replace("BUST ", "X") : handLabel(h.cards, h.split);
+        place(t, cx, p.y - 19 - Math.max(0, len - 1));
+        if (h.result && v.phase === "done") {
+          const r = tagEl("res-" + key, "resultTag " + h.result.kind);
+          r.textContent = h.result.kind === "push" ? "PUSH" : h.result.delta > 0 ? `+$${h.result.delta}` : `-$${-h.result.delta}`;
+          place(r, cx, p.y + 2);
+        }
+      });
     });
     if (v.dealer.cards.length) {
       const d = tagEl("dealer", "totalTag" + (handInfo(v.dealer.cards).total > 21 ? " bust" : ""));
@@ -898,10 +961,10 @@
       if (v.shuffled !== prev.shuffled) { shoeShake = now + 900; sfxSafe(SFX.shuffle); discardCount = 0; }
       if (v.lastAct && (!prev.lastAct || v.lastAct.n !== prev.lastAct.n)) {
         const s = v.seats.find(x => x.id === v.lastAct.id);
-        const words = { hit: ["HIT ME!", "HIT!", "ONE MORE"], stand: ["STAND.", "I'M GOOD", "STAY"], double: ["DOUBLE!", "ALL IN... ISH"], timeout: ["...ZZZ"] }[v.lastAct.a] || ["?"];
-        if (s && s.id !== mySeat) bubble(s.id, s.state === "bust" ? "OOF!" : words[Math.floor(Math.random() * words.length)]);
-        if (s && s.state === "bust") setTimeout(() => sfxSafe(SFX.bust), DEAL_MS);
-        if (v.lastAct.a === "double") sfxSafe(SFX.chips);
+        const words = { hit: ["HIT ME!", "HIT!", "ONE MORE"], stand: ["STAND.", "I'M GOOD", "STAY"], double: ["DOUBLE!", "ALL IN... ISH"], split: ["SPLIT!", "TWO HANDS!"], timeout: ["...ZZZ"] }[v.lastAct.a] || ["?"];
+        if (s && s.id !== mySeat) bubble(s.id, v.lastAct.bust ? "OOF!" : words[Math.floor(Math.random() * words.length)]);
+        if (v.lastAct.bust) setTimeout(() => sfxSafe(SFX.bust), DEAL_MS);
+        if (v.lastAct.a === "double" || v.lastAct.a === "split") sfxSafe(SFX.chips);
       }
       // chips going on the table
       for (const s of v.seats) { const o = prev.seats.find(x => x.id === s.id); if (o && !o.ready && s.ready && s.id !== mySeat) sfxSafe(SFX.chip); }
@@ -916,10 +979,11 @@
     v.seats.forEach((s, i) => {
       if (!s.result) return;
       const p = seatPos(i, n), circ = [p.x, p.y + 22], home = [p.x + (p.x < 119 ? -15 : 15), p.y + 23];
-      const r = s.result;
-      if (r.kind === "lose") chipFx.push({ amount: s.bet, start: now, path: [[...circ, 0], [...circ, 350], [...tray, 900]] });
-      else if (r.kind === "push") chipFx.push({ amount: s.bet, start: now, path: [[...circ, 0], [...circ, 700], [...home, 1200]] });
-      else {
+      const r = s.result, back = Math.max(0, s.bet + r.delta);
+      if (r.delta <= 0) {
+        if (s.bet - back > 0) chipFx.push({ amount: s.bet - back, start: now, path: [[...circ, 0], [...circ, 350], [...tray, 900]] });
+        if (back > 0) chipFx.push({ amount: back, start: now, path: [[...circ, 0], [...circ, 700], [...home, 1200]] });
+      } else {
         chipFx.push({ amount: r.delta, start: now, path: [[...tray, 0], [circ[0] + 8, circ[1], 500], [circ[0] + 8, circ[1], 1000], [...home, 1500]] });
         chipFx.push({ amount: s.bet, start: now, path: [[...circ, 0], [...circ, 1000], [...home, 1500]] });
         setTimeout(() => sparkle(circ[0], circ[1] - 4, r.kind === "bj" ? ["#ffe066", "#ffffff", "#ff7a59"] : ["#ffe066", "#3fd0a0"], r.kind === "bj" ? 30 : 16), 450);
@@ -931,7 +995,7 @@
       if (r.kind === "bj") { toast(`BLACKJACK! +$${r.delta}`); sfxSafe(SFX.blackjack); }
       else if (r.kind === "win") { toast(`YOU WIN +$${r.delta}`); sfxSafe(SFX.win); }
       else if (r.kind === "push") { toast("PUSH", "push"); sfxSafe(SFX.push); }
-      else { toast(me.state === "bust" ? `BUST! -$${-r.delta}` : `DEALER WINS -$${-r.delta}`, "lose"); sfxSafe(SFX.lose); }
+      else { toast(me.hands.length && me.hands.every(h => h.state === "bust") ? `BUST! -$${-r.delta}` : `DEALER WINS -$${-r.delta}`, "lose"); sfxSafe(SFX.lose); }
       if (me.chips < BET_MIN) setTimeout(() => toast("OUT OF MONEY", "lose"), 2100);
     } else sfxSafe(SFX.chips);
   }
@@ -983,13 +1047,15 @@
       $("betDown").disabled = betDraft <= BET_MIN; $("betUp").disabled = betDraft >= Math.min(BET_MAX, me.chips);
     } else if (v.phase === "playing" && v.turn === mySeat) {
       $("actTitle").textContent = "YOUR TURN"; $("playUI").hidden = false; $("actBox").classList.add("myturn");
-      const h = handInfo(me.cards);
-      $("playHint").textContent = `You have ${h.soft && h.total < 21 ? "soft " : ""}${h.total}. Dealer shows ${handInfo([v.dealer.cards[0]]).total}.`;
-      $("double").disabled = !(me.cards.length === 2 && me.chips >= me.bet);
+      const hand = me.hands[me.cur] || { cards: [] }, h = handInfo(hand.cards);
+      $("playHint").textContent = (me.hands.length > 1 ? `Hand ${me.cur + 1} of ${me.hands.length}: you` : "You") + ` have ${h.soft && h.total < 21 ? "soft " : ""}${h.total}. Dealer shows ${handInfo([v.dealer.cards[0]]).total}.`;
+      $("double").disabled = !canDouble(me, hand);
+      $("split").disabled = !canSplit(me, hand);
     } else {
       $("actTitle").textContent = "YOUR HAND"; $("waitUI").hidden = false;
       $("waitUI").textContent = v.phase === "betting" ? `You bet ${me.bet}. Waiting for the others...` : me.state === "out" ? "You're sitting this round out. You'll get to bet next round." :
-        me.state === "bust" ? "Bust. Better luck next hand." : me.state === "bj" ? "Blackjack! Sit back and enjoy it." : v.phase === "done" ? "Next round starting..." : `You have ${handInfo(me.cards).total}. Waiting...`;
+        me.hands.length && me.hands.every(h => h.state === "bust") ? "Bust. Better luck next hand." : me.hands[0] && me.hands[0].state === "bj" ? "Blackjack! Sit back and enjoy it." : v.phase === "done" ? "Next round starting..." :
+        `You have ${me.hands.map(h => handInfo(h.cards).total).join(" and ")}. Waiting...`;
     }
     const t = secsLeft();
     if (me && me.chips < BET_MIN && v.phase === "betting") setStatus("Out of money", isOnline ? "You're watching." : "Start over to play again.");
@@ -1014,11 +1080,11 @@
   $("betDown").onclick = () => nudge(-5); $("betUp").onclick = () => nudge(5);
   $("deal").onclick = doBet;
   $("startOver").onclick = () => startLocal();
-  $("hit").onclick = () => doAct("hit"); $("stand").onclick = () => doAct("stand"); $("double").onclick = () => doAct("double");
+  $("hit").onclick = () => doAct("hit"); $("stand").onclick = () => doAct("stand"); $("double").onclick = () => doAct("double"); $("split").onclick = () => doAct("split");
   document.addEventListener("keydown", (e) => {
     if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
-    if (view && view.phase === "playing" && view.turn === mySeat) { if (k === "h") doAct("hit"); else if (k === "s") doAct("stand"); else if (k === "d") doAct("double"); }
+    if (view && view.phase === "playing" && view.turn === mySeat) { if (k === "h") doAct("hit"); else if (k === "s") doAct("stand"); else if (k === "d") doAct("double"); else if (k === "p") doAct("split"); }
     if (view && view.phase === "betting") {
       if (k === " " || k === "enter") { e.preventDefault(); doBet(); }
       if (k === "+" || k === "=") nudge(5); if (k === "-") nudge(-5);
@@ -1073,7 +1139,7 @@
     if (saved && saved.kind === "online" && Array.isArray(saved.seats)) {
       T = saved;
       // Timers don't survive a reload: hand back any bets on the table and start a fresh round.
-      if (["dealing", "playing", "dealer"].includes(T.phase)) for (const s of T.seats) if (s.state !== "out") s.chips += s.bet;
+      if (["dealing", "playing", "dealer"].includes(T.phase)) for (const s of T.seats) if (s.state === "in") s.chips += (s.hands || []).reduce((n, h) => n + h.bet, 0);
       for (const s of T.seats) if (s.id !== "h") { s.gone = true; s.goneRounds = 0; }
       T.lastAct = null; T.turnSeq = T.turnSeq || 0;
       tlog("The table was reopened. Bets in play were returned.");

@@ -354,7 +354,7 @@
     <div class="box" id="info">Click a piece to see its powers.</div>
     <div class="box rules">
       <p><b>The twist:</b> a piece that captures <b>absorbs</b> every power of its victim and can move like all of them.</p>
-      <p>Checkmate wins as usual. Pawns that reach the far side become the piece you choose. No castling or en passant.</p>
+      <p>Checkmate wins as usual. Pawns that reach the far side become the piece you choose. Castling and en passant work as usual: a king and rook that haven't moved can castle, and any piece with pawn powers can take a pawn en passant.</p>
       <p><b>Kings' feast:</b> if the game would end in a draw because only kings are left, or a player is stuck without being in check, any king that has eaten pieces shakes and spits them all back out as its own pieces.</p>
       <p>Pawn eats knight? It can now hop like a knight. Eaten pieces fuse onto the eater in their own colors:</p>
       <div class="legend" id="legend"></div>
@@ -458,6 +458,9 @@
         for (const dc of [-1, 1]) {
           const tr = r + d, tc = c + dc;
           if (inside(tr, tc) && b[tr][tc] && b[tr][tc].color !== p.color) add(tr, tc);
+          // En passant: an enemy pawn that just moved two squares, right beside us.
+          const side = inside(r, tc) && b[r][tc];
+          if (inside(tr, tc) && !b[tr][tc] && side && side.color !== p.color && side.type === "P" && side.dbl) out.set(tr * BN + tc, { fr: r, fc: c, tr, tc, ep: true });
         }
       }
     }
@@ -468,13 +471,20 @@
   // never shows up as a refused move.
   function applyMove(b, m, noJester) {
     const nb = clone(b);
-    const mover = nb[m.fr][m.fc], victim = nb[m.tr][m.tc];
-    if (victim && victim.jester && !noJester) { nb[m.fr][m.fc] = null; nb[m.tr][m.tc] = null; return nb; } // the eater dies too
+    const mover = nb[m.fr][m.fc];
+    // A pawn can only be taken en passant on the very next move.
+    const opp = other(mover.color);
+    for (const row of nb) for (const q of row) if (q && q.dbl && q.color === opp) delete q.dbl;
+    const vr = m.ep ? m.fr : m.tr, victim = nb[vr][m.tc];
+    if (victim && victim.jester && !noJester) { nb[m.fr][m.fc] = null; nb[vr][m.tc] = null; return nb; } // the eater dies too
     if (victim && devour) for (const pw of victim.powers) if (!mover.powers.includes(pw)) mover.powers.push(pw);
     // Keep a record of every piece swallowed (and what those had swallowed) for the kings' feast.
     if (victim) mover.ate = [...(mover.ate || []), ...(victim.type === "K" ? [] : [victim.type]), ...(victim.ate || [])].slice(0, 60);
     mover.moved = true;
+    if (m.ep) nb[vr][m.tc] = null;
     nb[m.tr][m.tc] = mover; nb[m.fr][m.fc] = null;
+    if (mover.type === "P" && Math.abs(m.tr - m.fr) === 2 && m.fc === m.tc) mover.dbl = true;
+    if (m.castle) { const rk = nb[m.fr][m.castle.rf]; nb[m.fr][m.castle.rf] = null; nb[m.fr][m.castle.rt] = rk; if (rk) rk.moved = true; }
     if (mover.type === "P" && (m.tr === 0 || m.tr === BN - 1)) {
       // The pawn becomes the chosen piece; powers it ate stay with it.
       const to = "QRBN".includes(m.promo) && m.promo ? m.promo : "Q";
@@ -501,9 +511,28 @@
     const k = findKing(b, color); if (!k) return true;
     return attacked(b, k[0], k[1], other(color));
   }
+  // Castling: a king and a rook that have never moved, with only empty squares
+  // between them. The king steps two squares toward the rook, which jumps over it.
+  // (On the XXL board that's the nearest rook on each side.)
+  function castleMoves(b, r, c) {
+    const k = b[r][c], out = [];
+    if (!k || k.type !== "K" || k.moved) return out;
+    for (const dir of [-1, 1]) {
+      let cc = c + dir;
+      while (inside(r, cc) && !b[r][cc]) cc += dir;
+      const rk = inside(r, cc) && b[r][cc];
+      if (rk && rk.color === k.color && rk.type === "R" && !rk.moved && Math.abs(cc - c) >= 3)
+        out.push({ fr: r, fc: c, tr: r, tc: c + 2 * dir, castle: { rf: cc, rt: c + dir } });
+    }
+    return out;
+  }
+  // No castling out of check, through an attacked square, or into check.
+  const castleSafe = (b, m, color) => !inCheck(b, color) && !attacked(b, m.fr, m.castle.rt, other(color)) && !inCheck(applyMove(b, m, true), color);
   function legalMovesFrom(b, r, c) {
     const p = b[r][c];
-    return pseudoMoves(b, r, c).filter(m => !(b[m.tr][m.tc] && b[m.tr][m.tc].type === "K") && !inCheck(applyMove(b, m, true), p.color));
+    const normal = pseudoMoves(b, r, c).filter(m => !(b[m.tr][m.tc] && b[m.tr][m.tc].type === "K") && !inCheck(applyMove(b, m, true), p.color));
+    // Castling first, so it wins when a king that ate a rook could also just slide there.
+    return [...castleMoves(b, r, c).filter(m => castleSafe(b, m, p.color)), ...normal];
   }
   function allLegal(b, color) {
     const out = [];
@@ -560,15 +589,20 @@
       }
       prev = [r, c];
     }
-    return { fr: m.fr, fc: m.fc, tr: m.tr, tc: m.tc, promo: m.promo };
+    return { ...m };
   }
   // Moves a team may plan in the fog: anything its view allows. With kings
   // protected, a move is refused if (as it would really play out) it leaves
   // your own king attacked, the same safety rule as normal chess.
   function fogLegalFrom(b, sn, color, r, c, kc) {
-    const planned = pseudoMoves(viewBoard(b, color, sn), r, c);
-    if (kc) return planned;
-    return planned.filter(m => { const rm = resolveMove(b, m, true); return rm && !(b[rm.tr][rm.tc] && b[rm.tr][rm.tc].type === "K") && !inCheck(applyMove(b, rm, true), color); });
+    const view = viewBoard(b, color, sn);
+    const castles = castleMoves(view, r, c).filter(m => {
+      for (let x = Math.min(m.fc, m.castle.rf) + 1; x < Math.max(m.fc, m.castle.rf); x++) if (!isSeen(sn, color, r, x) || b[r][x]) return false;
+      return kc || castleSafe(b, m, color);
+    });
+    const planned = pseudoMoves(view, r, c);
+    if (kc) return [...castles, ...planned];
+    return [...castles, ...planned.filter(m => { const rm = resolveMove(b, m, true); return rm && !(b[rm.tr][rm.tc] && b[rm.tr][rm.tc].type === "K") && !inCheck(applyMove(b, rm, true), color); })];
   }
   function fogAllLegal(b, sn, color, kc) {
     const out = [];
@@ -751,7 +785,8 @@
     const info = describeMove(b, rm);
     let nb = applyMove(b, rm);
     let nsn = fogOn ? markSeen(sn, mover.color, pathSquares(rm)) : sn;
-    const jesterKill = !!(b[rm.tr][rm.tc] && b[rm.tr][rm.tc].jester);
+    const vic = rm.ep ? b[rm.fr][rm.tc] : b[rm.tr][rm.tc];
+    const jesterKill = !!(vic && vic.jester);
     return finishTurn(b, nb, nsn, rm, mover.color, info, jesterKill, fogOn, kc, bx);
   }
   function playPower(b, sn, m, fogOn, kc, bx) {
@@ -899,7 +934,11 @@
   const FILES = "abcdefghijklmnop";
   const sqName = (r, c) => FILES[c] + (BN - r);
   function describeMove(b, m) {
-    const mover = b[m.fr][m.fc], victim = b[m.tr][m.tc];
+    const mover = b[m.fr][m.fc], victim = m.ep ? b[m.fr][m.tc] : b[m.tr][m.tc];
+    if (m.castle) {
+      const side = BN === 8 ? (m.tc > m.fc ? "kingside" : "queenside") : (m.tc > m.fc ? "to the right" : "to the left");
+      return { line: fog ? `${colorName(mover.color)} castled` : `${mover.color === "w" ? "W" : "B"} King castles ${side}`, captured: false, gained: false };
+    }
     let line = `${mover.color === "w" ? "W" : "B"} ${NAMES[mover.type]} ${sqName(m.fr, m.fc)}-${sqName(m.tr, m.tc)}`;
     const promotedTo = mover.type === "P" && (m.tr === 0 || m.tr === BN - 1) ? (m.promo && "QRBN".includes(m.promo) ? m.promo : "Q") : null;
     const gained = victim && devour ? victim.powers.filter(p => !mover.powers.includes(p) && p !== promotedTo) : [];
@@ -907,7 +946,7 @@
       const C = colorName(mover.color);
       line = victim ? `${C} ate ${colorName(victim.color)}'s ${NAMES[victim.type]} on ${sqName(m.tr, m.tc)}` : `${C} moved`;
     } else if (victim) {
-      line += ` eats ${NAMES[victim.type]}`;
+      line += ` eats ${NAMES[victim.type]}` + (m.ep ? " en passant" : "");
       if (gained.length) line += ` +${gained.map(g => NAMES[g]).join("+")}`;
     }
     if (promotedTo && !fog) line += `, becomes a ${NAMES[promotedTo]}`;
@@ -1047,7 +1086,7 @@
     const rm = res.m;
     return { info: res.info, ambush: !!rm.ambush, state: {
       ...st, board: flatten(res.board), turn: res.nextTurn, seen: res.seen, boxes: res.bx,
-      lastMove: { fr: rm.fr, fc: rm.fc, tr: rm.tr, tc: rm.tc, captured: res.info.captured, feast: res.feast, box: res.boxFx, jk: res.jesterKill,
+      lastMove: { fr: rm.fr, fc: rm.fc, tr: rm.tr, tc: rm.tc, ep: !!rm.ep, castle: rm.castle || null, captured: res.info.captured, feast: res.feast, box: res.boxFx, jk: res.jesterKill,
         ...(rm.power ? { power: rm.power, color: rm.color, killed: rm.killed } : {}) },
       log: [...res.logs, ...(st.log || [])].slice(0, 80),
       status: res.over ? "over" : "playing", result: res.result, ply: st.ply + 1,
@@ -2051,13 +2090,13 @@
     if (m.power) { startPowerAnim(m); return; }
     const mover = prevBoard[m.fr] && prevBoard[m.fr][m.fc];
     if (!mover) return;
-    const victim = prevBoard[m.tr][m.tc];
+    const vsq = m.ep ? [m.fr, m.tc] : [m.tr, m.tc], victim = prevBoard[vsq[0]][vsq[1]];
     const after = nextBoard && nextBoard[m.tr][m.tc];
     const promo = after && mover.type === "P" && after.type !== "P"
       ? { from: { color: after.color, type: "P", powers: ["P", ...after.powers.slice(1).filter(x => x !== "P")] }, to: after } : null;
     if (fogged(m.fr, m.fc)) {
       // Moved out of the smoke: nothing to watch, but a visible victim still bursts.
-      if (victim && !fogged(m.tr, m.tc)) { anim = null; finishAnim(performance.now(), { victim, m, gained: false }); render(); }
+      if (victim && !fogged(vsq[0], vsq[1])) { anim = null; finishAnim(performance.now(), { victim, vsq, m, gained: false }); render(); }
       else if (pendingFeast) { startFeast(pendingFeast); pendingFeast = null; }
       flushBox();
       return;
@@ -2065,7 +2104,9 @@
     const gained = devour && !!victim && victim.powers.some(x => !mover.powers.includes(x));
     if (REDUCED) { if (gained || promo) flash = { r: m.tr, c: m.tc, start: performance.now(), dur: 300 }; pendingFeast = null; flushBox(); render(); return; }
     const dist = Math.hypot(m.tr - m.fr, m.tc - m.fc);
-    anim = { mover, victim, gained, promo, m, start: performance.now(), dur: 150 + dist * 45 };
+    const rook = m.castle ? { piece: prevBoard[m.fr][m.castle.rf], from: m.castle.rf, to: m.castle.rt } : null;
+    anim = { mover, victim, vsq, gained, promo, rook, m, start: performance.now(), dur: 150 + dist * 45 + (rook ? 120 : 0) };
+    if (rook) sfxSafe(SFX.move);
     render();
   }
   // Teleports blink across the board; fireballs streak down and explode.
@@ -2131,7 +2172,7 @@
   function finishAnim(now, given) {
     const a = given || anim; anim = null;
     if (a.victim) {
-      const [sr, sc] = toScreen(a.m.tr, a.m.tc);
+      const vs = a.vsq || [a.m.tr, a.m.tc], [sr, sc] = toScreen(vs[0], vs[1]);
       const pal = PAL[a.victim.color];
       for (let i = 0; i < 14; i++) {
         const ang = Math.random() * Math.PI * 2, sp = 20 + Math.random() * 40;
@@ -2235,6 +2276,7 @@
     for (let r = 0; r < BN; r++) for (let c = 0; c < BN; c++) {
       const p = board[r][c]; if (!p) continue;
       if (anim && r === anim.m.tr && c === anim.m.tc) continue; // drawn in flight below
+      if (anim && anim.rook && r === anim.m.fr && c === anim.rook.to) continue;
       if (fogged(r, c)) continue;
       if (feastFx && feastFx.spews.some(x => x.tr === r && x.tc === c)) continue; // still inside a king
       const [sr, sc] = toScreen(r, c);
@@ -2279,8 +2321,12 @@
       const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
       const [fr, fc] = toScreen(a.m.fr, a.m.fc), [tr, tc] = toScreen(a.m.tr, a.m.tc);
       if (a.victim) {
-        const shake = t > 0.6 ? Math.round((Math.random() - 0.5) * 2) : 0;
-        ctx.drawImage(spriteFor(a.victim), tc * S + shake, tr * S);
+        const shake = t > 0.6 ? Math.round((Math.random() - 0.5) * 2) : 0, [vr, vc] = toScreen(a.vsq[0], a.vsq[1]);
+        ctx.drawImage(spriteFor(a.victim), vc * S + shake, vr * S);
+      }
+      if (a.rook && a.rook.piece) { // the rook hops over the king
+        const [rr, rf] = toScreen(a.m.fr, a.rook.from), [, rt] = toScreen(a.m.fr, a.rook.to);
+        ctx.drawImage(spriteFor(a.rook.piece), Math.round(rf * S + (rt - rf) * S * e), Math.round(rr * S - Math.sin(Math.PI * t) * 9));
       }
       const x = Math.round(fc * S + (tc - fc) * S * e);
       const y = Math.round(fr * S + (tr - fr) * S * e - Math.sin(Math.PI * t) * 6);
@@ -2612,7 +2658,7 @@
     // Your own pieces might be captured before your turn, so their squares count too.
     const b = (fog ? viewBoard(board, me, seen) : board).map(row => row.map(p => p && p.color === me && p.type !== "K" ? { color: other(me), type: "P", powers: ["P"] } : p));
     b[r][c] = board[r][c];
-    return pseudoMoves(b, r, c);
+    return [...pseudoMoves(b, r, c), ...castleMoves(fog ? viewBoard(board, me, seen) : board, r, c)];
   }
   function premoveClick(r, c) {
     const me = mode === "online" ? myColor() : "w";
