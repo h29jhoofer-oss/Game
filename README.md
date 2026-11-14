@@ -16,8 +16,8 @@ Old chess invite links (`index.html#g-CODE`) still open the chess game.
 - **Cheater mode** switch (needs at least 4 players: you plus 3+ bots, or 4+ people online). Roles are dealt in secret each game:
   - **Dealer**: sits in the dealer's spot (the cards still deal themselves) and has a pistol lying left of the dealer's cards. Click it (or PICK UP THE PISTOL), then click a player to shoot. One shot ends the game.
   - **Cheater**: a private panel shows the next 3 cards in the shoe and the dealer's face-down card. Wins by reaching $1,000.
-  - **Jester**: wins if the dealer shoots them, so they act guilty.
-  - **Gamblers**: honest players who win with the dealer if the cheater is shot.
+  - **Jester**: sees the next card out of the shoe and wins if the dealer shoots them, so they act guilty.
+  - **Gamblers**: win with the dealer if the cheater is shot. Each has one ace in their pocket: once a game, on their turn, they can quietly swap it for a card in their hand. The card just changes on the table, with no log line or sound, so a watchful dealer may catch it (and shooting a gambler hands the win to the cheater).
   - Shoot the cheater: the dealer and gamblers win. Shoot the jester: the jester wins. Shoot a gambler: the cheater wins. The cheater going broke is a win for the dealer. A reveal shows everyone's role, then NEW GAME deals new roles with everyone back at $500.
   - Bot cheaters use what they see most of the time; bot jesters bet big and play cocky; a bot dealer tracks who keeps making suspiciously perfect hits and stands, betting big and winning fast, then takes its shot (it can be fooled by the jester).
   - Online, the host presses DEAL ROLES once 4 people are seated; latecomers join as gamblers. Each player's browser is only ever sent its own role, and only the cheater's gets the peek.
