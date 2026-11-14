@@ -125,6 +125,12 @@
   .roleList { display: grid; grid-template-columns: auto auto; gap: 4px 12px; text-align: left; font-size: 9px; }
   #peekCv { width: 100%; height: auto; image-rendering: pixelated; background: #2f6148; border: 3px solid var(--edge); }
   #peekBox { border-color: #ff5e7a; }
+  #pocketBox { border-color: #3fd0a0; }
+  .pocketRow { display: flex; gap: 10px; align-items: center; }
+  #pocketCv { width: 66px; height: 84px; flex: none; image-rendering: pixelated; background: #2f6148; border: 3px solid var(--edge); }
+  .swapBtns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+  .swapBtns button { padding: 5px 4px; font-size: 9px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .swapBtns .mini { width: 32px; height: 44px; image-rendering: pixelated; }
   .suspects { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
   .suspects button { padding: 6px 4px; font-size: 9px; }
   .suspects button.aim { background: var(--bad); color: var(--bg); }
@@ -210,6 +216,11 @@
       <h2>YOUR PEEK (SECRET)</h2>
       <canvas id="peekCv" width="104" height="30"></canvas>
       <div class="muted" id="peekHint"></div>
+    </div>
+    <div class="box" id="pocketBox" hidden>
+      <h2>YOUR POCKET (SECRET)</h2>
+      <div class="pocketRow"><canvas id="pocketCv" width="22" height="28"></canvas><div class="muted" id="pocketHint"></div></div>
+      <div class="swapBtns" id="swapBtns"></div>
     </div>
     <div class="box" id="actBox">
       <h2 id="actTitle">YOUR BET</h2>
@@ -329,7 +340,7 @@
       <p><b>HIT</b> takes a card. <b>STAND</b> keeps your hand. <b>DOUBLE</b> doubles your bet on your first two cards and takes exactly one more card.</p>
       <p><b>SPLIT</b> turns two cards of the same value into two hands, each with its own bet (up to 4 hands). Split aces get one card each, and a split hand of 21 isn't blackjack.</p>
       <p>An ace plus a 10-value card is <b>blackjack</b> and pays 3 to 2. A win pays 1 to 1 and a tie (<b>push</b>) gives your bet back.</p>
-      <p id="cheatRules" hidden><b>Cheater mode:</b> one player is the <b>dealer</b> and holds a pistol. Secretly, one player is the <b>cheater</b> (sees the next 3 cards and the dealer's hidden card, wins at $1,000), one is the <b>jester</b> (wins if shot), and the rest are honest <b>gamblers</b>. The dealer gets one shot: hit the cheater and the house and gamblers win; hit the jester and the jester wins; hit a gambler and the cheater wins.</p>
+      <p id="cheatRules" hidden><b>Cheater mode:</b> one player is the <b>dealer</b> and holds a pistol. Secretly, one player is the <b>cheater</b> (sees the next 3 cards and the dealer's hidden card, wins at $1,000), one is the <b>jester</b> (sees the next card, wins if shot), and the rest are <b>gamblers</b>, each with one ace in their pocket to swap into their hand once a game. The dealer gets one shot: hit the cheater and the house and gamblers win; hit the jester and the jester wins; hit a gambler and the cheater wins.</p>
       <p>The dealer must hit until 17 and stands on every 17. Everyone starts with <b>$500</b>. Run out and you're done: bots leave the table, and you can start over.</p>
     </div>
     <div class="box" id="log"></div>
@@ -411,8 +422,8 @@
   const ROLE_INFO = {
     dealer: { name: "THE DEALER", color: "#ffe066", text: "You run the table and hold the pistol. One player is a cheater who can see the cards coming. Shoot them before they reach $1,000. Shoot an honest gambler and the cheater wins. Careful: the jester WANTS to be shot." },
     cheater: { name: "THE CHEATER", color: "#ff5e7a", text: "You can see the next 3 cards in the shoe and the dealer's face-down card. Reach $1,000 to win, without the dealer working out that it's you." },
-    jester: { name: "THE JESTER", color: "#c98bff", text: "You win if the dealer shoots you. Act like the cheater: bet big, play boldly, look suspiciously lucky." },
-    gambler: { name: "A GAMBLER", color: "#3fd0a0", text: "You're an honest player. If the dealer shoots the cheater, you win together. If they shoot an honest player, the cheater wins." },
+    jester: { name: "THE JESTER", color: "#c98bff", text: "You win if the dealer shoots you. You can see the next card out of the shoe, so use it to look suspiciously lucky: bet big, play boldly, act like the cheater." },
+    gambler: { name: "A GAMBLER", color: "#3fd0a0", text: "You're a mostly honest player with one ace up your sleeve. Once a game, on your turn, slip it into your hand in place of one of your cards. Do it discreetly: if the dealer catches you and shoots, the cheater wins. If the dealer shoots the cheater, you win together." },
   };
   const isCheat = () => T && T.mode === "cheater";
   const roleOf = (id) => (T.roles || {})[id];
@@ -434,6 +445,7 @@
     for (const x of mix.slice(3)) T.roles[x.id] = "gambler";
     T.dealerSeat = mix[0];
     T.seats = all.filter(x => x !== mix[0]);
+    for (const x of all) { x.pocket = T.roles[x.id] === "gambler" ? "A" + SUITS[Math.floor(Math.random() * 4)] : null; x.pocketUsed = false; }
     for (const x of all) { x.chips = START; x.broke = false; x.sus = 0; x.base = x.bot ? [5, 10, 20][x.style || 0] : 10; x.hands = []; x.state = "out"; x.result = null; x.ready = false; }
     T.over = null; T.shot = null; T.aim = null; T.round = 0; T.gameNo = (T.gameNo || 0) + 1; T.log = [];
     T.shoe = newShoe(); T.shuffled++;
@@ -571,7 +583,7 @@
   function armTurn(s) {
     const seq = ++T.turnSeq;
     T.deadline = T.kind === "online" && !s.bot ? Date.now() + TURN_TIME : 0;
-    if (s.bot) later(700 + Math.random() * 700, () => { if (T.turnSeq === seq) act(s.id, botDecide(s)); });
+    if (s.bot) later(700 + Math.random() * 700, () => { if (T.turnSeq !== seq) return; const k = botSwap(s); if (k >= 0 && swapAce(s.id, k)) return; act(s.id, botDecide(s)); });
     else if (s.gone) later(500, () => { if (T.turnSeq === seq) act(s.id, "stand", true); });
     else if (T.kind === "online") later(TURN_TIME, () => { if (T.turnSeq === seq) act(s.id, "stand", true); });
   }
@@ -622,6 +634,33 @@
     if (k >= 0) { T.turnSeq++; commit(); later(550, () => { s.cur = k; armTurn(s); commit(); }); return true; }
     T.turnSeq++; commit(); later(550, () => nextTurn(i)); return true;
   }
+  // A gambler's pocket ace: once a game, on their own turn, it replaces one card in
+  // the hand they're playing. There's no log line or sound; the card just changes,
+  // so only a sharp-eyed dealer notices.
+  function swapAce(id, ci) {
+    if (!isCheat() || T.over || T.phase !== "playing" || T.turn !== id || roleOf(id) !== "gambler") return false;
+    const i = T.seats.findIndex(x => x.id === id), s = T.seats[i], h = s && s.hands[s.cur];
+    if (!s || !s.pocket || s.pocketUsed || !h || h.state !== "play" || !(ci >= 0 && ci < h.cards.length) || !Number.isInteger(ci)) return false;
+    const old = h.cards[ci]; h.cards[ci] = s.pocket; s.pocket = old; s.pocketUsed = true;
+    if (Math.random() < 0.35) noteSus(s, 1.1); // a bot dealer might spot the sleight of hand
+    if (handInfo(h.cards).total === 21) {
+      h.state = "stand";
+      const k = s.hands.findIndex((x, j) => j > s.cur && x.state === "play");
+      T.turnSeq++; commit();
+      if (k >= 0) later(550, () => { s.cur = k; armTurn(s); commit(); }); else later(550, () => nextTurn(i));
+      return true;
+    }
+    armTurn(s); commit(); return true;
+  }
+  // Which card a bot gambler would swap for its ace (or -1).
+  function botSwap(s) {
+    if (!isCheat() || roleOf(s.id) !== "gambler" || !s.pocket || s.pocketUsed) return -1;
+    const h = s.hands[s.cur], now = handInfo(h.cards).total;
+    if (now >= 19) return -1;
+    let best = -1, bestT = now + 2;
+    h.cards.forEach((c, i) => { const t = handInfo(h.cards.map((x, j) => j === i ? s.pocket : x)).total; if (t <= 21 && t >= 19 && t > bestT) { best = i; bestT = t; } });
+    return best >= 0 && Math.random() < 0.75 ? best : -1;
+  }
   // Bots play close to basic strategy; bold bots sometimes push their luck.
   function botDecide(s) {
     const hand = s.hands[s.cur], h = handInfo(hand.cards), up = cardVal(T.dealer.cards[0]), two = canDouble(s, hand);
@@ -631,6 +670,12 @@
       if (next > 21) return "stand";
       if (two && next >= 19) return "double";
       return next > h.total && h.total < 20 ? "hit" : "stand";
+    }
+    if (isCheat() && roleOf(s.id) === "jester" && Math.random() < 0.6) {
+      // Peeks at the next card too, and makes sure the dealer sees it play "perfectly".
+      const next = handInfo([...hand.cards, T.shoe[T.shoe.length - 1]]).total;
+      if (next > 21) { s.say = Math.random() < 0.5 ? "NOT TODAY" : null; return "stand"; }
+      if (next >= 17 && next > h.total) return two && next >= 19 ? "double" : "hit";
     }
     if (isCheat() && roleOf(s.id) === "jester" && Math.random() < 0.45) {
       // Cocky, suspicious-looking plays.
@@ -707,8 +752,10 @@
       myRole: role || null, gameNo: T.gameNo || 0, over: T.over || null, shot: T.shot || null, aim: T.aim || null, goal: CHEAT_GOAL,
       dealerSeat: cheat && T.dealerSeat ? { id: T.dealerSeat.id, name: T.dealerSeat.name, color: T.dealerSeat.color, bot: T.dealerSeat.bot } : null,
       players: cheat ? participants().length : 0,
-      // Only the cheater gets to peek: the next cards out of the shoe and the dealer's hole card.
-      peek: role === "cheater" && !T.over ? { next: T.shoe.slice(-3).reverse(), hole: d.hidden && d.cards[1] ? d.cards[1] : null } : null, round: T.round, shoeLeft: T.shoe.length, shuffled: T.shuffled,
+      // The cheater peeks at the next 3 cards and the dealer's hole card; the jester at the next card.
+      peek: role === "cheater" && !T.over ? { next: T.shoe.slice(-3).reverse(), hole: d.hidden && d.cards[1] ? d.cards[1] : null }
+        : role === "jester" && !T.over ? { next: T.shoe.slice(-1), hole: null, jester: true } : null,
+      pocket: role === "gambler" && !T.over && seatOf(forId) ? { card: seatOf(forId).pocket, used: !!seatOf(forId).pocketUsed } : null, round: T.round, shoeLeft: T.shoe.length, shuffled: T.shuffled,
       dealer: { hidden: d.hidden, cards: d.hidden ? d.cards.map((c, i) => i === 1 ? "??" : c) : [...d.cards] },
       seats: T.seats.map(s => ({ id: s.id, name: s.name, bot: s.bot, color: s.color, chips: s.chips, bet: s.state === "in" ? sumBets(s) : s.bet,
         hands: s.hands.map(h => ({ cards: [...h.cards], bet: h.bet, state: h.state, split: !!h.split, doubled: !!h.doubled, result: h.result || null })),
@@ -958,11 +1005,37 @@
     if (!pk) return;
     const g = $("peekCv").getContext("2d"); g.imageSmoothingEnabled = false;
     g.fillStyle = "#2f6148"; g.fillRect(0, 0, 104, 30);
+    if (pk.jester) {
+      pk.next.forEach((c) => g.drawImage(cardSprite(c), 44, 4));
+      $("peekHint").textContent = "The next card out of the shoe. Use it to look suspiciously lucky.";
+      return;
+    }
     pk.next.forEach((c, i) => g.drawImage(cardSprite(c), 3 + i * 19, 4));
     g.fillStyle = "#1a3a2a"; g.fillRect(64, 2, 1, 26);
     if (pk.hole) g.drawImage(cardSprite(pk.hole), 72, 4);
     else { g.fillStyle = "rgba(0,0,0,0.25)"; g.fillRect(72, 4, CW, CH); }
     $("peekHint").textContent = "Left: the next 3 cards out of the shoe (first card first). Right: the dealer's face-down card." ;
+  }
+  const cardName = (c) => ({ A: "ace", T: "10", J: "jack", Q: "queen", K: "king" }[c[0]] || c[0]) + " of " + { S: "spades", H: "hearts", D: "diamonds", C: "clubs" }[c[1]];
+  function renderPocket(v) {
+    const box = $("pocketBox"), pk = v && v.pocket;
+    box.hidden = !pk;
+    if (!pk) return;
+    const g = $("pocketCv").getContext("2d"); g.imageSmoothingEnabled = false;
+    g.fillStyle = "#2f6148"; g.fillRect(0, 0, 22, 28);
+    g.globalAlpha = pk.used ? 0.45 : 1; g.drawImage(cardSprite(pk.card), 3, 3); g.globalAlpha = 1;
+    const me = v.seats.find(x => x.id === mySeat), hand = me && me.hands[me.cur];
+    const myTurn = v.phase === "playing" && v.turn === mySeat && hand && hand.state === "play";
+    $("pocketHint").textContent = pk.used ? "Ace played. The card you swapped out is hidden in your pocket." : myTurn ? "Pick the card to swap for your ace. Be quick and quiet." : "One ace, once a game. You can slip it in on your turn.";
+    const btns = $("swapBtns"); btns.replaceChildren();
+    if (pk.used || !myTurn) return;
+    hand.cards.forEach((c, i) => {
+      const b = document.createElement("button"), mini = document.createElement("canvas");
+      mini.width = CW; mini.height = CH; mini.className = "mini"; mini.getContext("2d").drawImage(cardSprite(c), 0, 0);
+      b.append(mini, document.createTextNode("SWAP")); b.setAttribute("aria-label", "Swap the " + cardName(c) + " for your ace");
+      b.onclick = () => { if (mode === "online" && online.seat !== "host") sendToHost({ type: "swap", ci: i }); else swapAce(mySeat, i); };
+      btns.append(b);
+    });
   }
   function hideOverlays() { $("roleCard").hidden = true; $("overCard").hidden = true; aiming = false; aimAt = null; shotFx = null; cv.classList.remove("aiming"); }
   function showRoleCard(v) {
@@ -1098,6 +1171,13 @@
   function syncHands(v, now) {
     const want = { dealer: v.dealer.cards };
     for (const s of v.seats) s.hands.forEach((h, k) => { want[handKey(s.id, k)] = h.cards; });
+    // A pocket-ace swap: same hand, same size, one card changed. It changes in place.
+    for (const [k, cards] of Object.entries(want)) {
+      const list = handsVis[k];
+      if (k === "dealer" || !list || list.length !== cards.length) continue;
+      const diff = list.map((c, i) => c.card !== cards[i] && c.card !== "??" && cards[i] !== "??" ? i : -1).filter(i => i >= 0);
+      if (diff.length === 1) { list[diff[0]].card = cards[diff[0]]; list[diff[0]].swap = now; }
+    }
     // Cards no longer where they were: swept away at the end of a round, or moved to a new hand by a split.
     const orphans = [];
     for (const k of Object.keys(handsVis)) {
@@ -1179,6 +1259,7 @@
         const bust = !!hand && hand.state === "bust";
         let shake = 0;
         if (bust && i === list.length - 1 && now - c.born < DEAL_MS + 500) shake = Math.round(Math.sin(now / 25) * 1.5);
+        if (c.swap && now - c.swap < 240 && !REDUCED) y -= 1; // the faintest twitch as the card is switched
         ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(Math.round(x) + 2, Math.round(y) + CH, CW - 2, 2);
         const w = Math.max(1, Math.round(CW * sx));
         ctx.drawImage(cardSprite(face), Math.round(x + (CW - w) / 2) + shake, Math.round(y), w, CH);
@@ -1379,7 +1460,7 @@
     const v = view;
     const me = v && v.seats.find(s => s.id === mySeat);
     $("betUI").hidden = $("playUI").hidden = $("waitUI").hidden = $("startOver").hidden = $("gunUI").hidden = true;
-    renderPeek(v);
+    renderPeek(v); renderPocket(v);
     $("actBox").classList.remove("myturn");
     if (!v) { setStatus("Connecting", "Finding the table..."); $("waitUI").hidden = false; $("waitUI").textContent = "Connecting..."; $("actTitle").textContent = "YOUR HAND"; return; }
     const turnSeat = v.seats.find(s => s.id === v.turn);
@@ -1437,7 +1518,7 @@
     const t = secsLeft();
     if (v.mode === "cheater" && v.myRole && v.phase !== "playing") {
       const r = ROLE_INFO[v.myRole], mine = me ? `$${me.chips}` : "";
-      setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : `You are ${r.name.toLowerCase()}`, v.myRole === "cheater" ? `${mine} of $${v.goal}. Don't get caught.` : v.myRole === "jester" ? "Look guilty. Get shot." : "Stay honest. Hope they aim well.");
+      setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : `You are ${r.name.toLowerCase()}`, v.myRole === "cheater" ? `${mine} of $${v.goal}. Don't get caught.` : v.myRole === "jester" ? "You see the next card. Look guilty. Get shot." : "You have an ace up your sleeve. Don't get caught.");
     } else
     if (me && me.chips < BET_MIN && v.phase === "betting") setStatus("Out of money", isOnline ? "You're watching." : "Start over to play again.");
     else if (v.phase === "betting") setStatus(me && !me.ready ? "Place your bet" : "Waiting for bets", t ? `Dealing in ${t}s` : sub, !!(me && me.ready));
@@ -1592,6 +1673,7 @@
     const id = conn.seatId; if (!id) return;
     if (msg.type === "bet") placeBet(id, msg.amount);
     else if (msg.type === "shoot") shoot(id, msg.target);
+    else if (msg.type === "swap") swapAce(id, +msg.ci);
     else if (msg.type === "act") act(id, msg.a);
     else if (msg.type === "chat") hostReceiveChat(id, msg.text);
   }
