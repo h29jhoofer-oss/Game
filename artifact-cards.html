@@ -1503,7 +1503,7 @@
     $("setupHint").textContent = prefs.opp === "online" ? "You'll get a link for up to 5 friends." : `You and ${prefs.bots} bot${prefs.bots > 1 ? "s" : ""} against the dealer.`;
     $("cheatToggle").setAttribute("aria-checked", String(!!prefs.cheater));
     $("cheatLabel").textContent = prefs.cheater ? "ON" : "OFF";
-    $("cheatHint").textContent = prefs.cheater ? (prefs.opp === "online" ? "Needs at least 4 people at the table: a dealer, a cheater, a jester and a gambler." : "You plus at least 3 bots. Your role is secret and random each game.") : "Plain blackjack.";
+    $("cheatHint").textContent = prefs.cheater ? (prefs.opp === "online" ? "4 to 6 people (you plus 3 to 5 friends): a dealer, a cheater, a jester and 1 to 3 gamblers." : "You plus at least 3 bots. Your role is secret and random each game.") : "Plain blackjack.";
     for (const b of document.querySelectorAll("[data-bots]")) b.disabled = !!prefs.cheater && +b.dataset.bots < 3;
     $("cheatRules").hidden = !(view && view.mode === "cheater") && !prefs.cheater;
     if (isOnline) renderOnline();
@@ -1518,8 +1518,8 @@
     if (v.mode === "cheater") {
       if (v.phase === "lobby") {
         $("actTitle").textContent = "CHEATER MODE"; $("waitUI").hidden = false;
-        $("waitUI").textContent = `Cheater mode needs at least ${CHEAT_MIN} players. ${v.players} at the table so far.` + (online.seat === "host" ? " Press DEAL ROLES once everyone's here." : "");
-        setStatus("Waiting for players", `${v.players} / ${CHEAT_MIN}`, true); return;
+        $("waitUI").textContent = !me ? "The table is full (6 people). You can watch." : `Cheater mode needs ${CHEAT_MIN} to 6 people, dealer included. ${v.players} at the table so far.` + (online.seat === "host" ? " Press DEAL ROLES once everyone's here." : "");
+        setStatus("Waiting for players", v.players < CHEAT_MIN ? `${v.players} / ${CHEAT_MIN} needed (up to 6)` : `${v.players} / 6 seated`, true); return;
       }
       if (v.over) {
         $("actTitle").textContent = "GAME OVER"; $("waitUI").hidden = false; $("waitUI").textContent = v.over.text;
@@ -1789,7 +1789,7 @@
     const lobby = view && view.mode === "cheater" && (view.phase === "lobby");
     $("dealRoles").hidden = !(online.seat === "host" && lobby);
     $("dealRoles").disabled = !view || view.players < CHEAT_MIN;
-    $("dealRoles").textContent = view && view.players < CHEAT_MIN ? `NEED ${CHEAT_MIN} PLAYERS (${view ? view.players : 0}/${CHEAT_MIN})` : "DEAL ROLES";
+    $("dealRoles").textContent = view && view.players < CHEAT_MIN ? `NEED ${CHEAT_MIN} PLAYERS (${view ? view.players : 0}/${CHEAT_MIN})` : `DEAL ROLES (${view ? view.players : 0} PLAYERS)`;
     const box = $("players"); box.replaceChildren();
     for (const s of (view ? view.seats : [])) {
       const c = document.createElement("span"); c.className = "chip"; c.style.background = s.color;
