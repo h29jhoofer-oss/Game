@@ -249,6 +249,14 @@
       <div id="waitUI" class="muted" hidden></div>
       <button id="startOver" class="primary big" hidden>START OVER WITH $500</button>
       <div id="gunUI" hidden>
+        <div id="dealerUI" hidden style="margin-bottom:10px">
+          <div class="muted" id="dealerHint"></div>
+          <div class="moves">
+            <button class="hit" id="dHit">HIT</button>
+            <button class="stand" id="dStand">STAND</button>
+          </div>
+          <div class="keys">Keys: H hit, S stand.</div>
+        </div>
         <div class="muted" id="gunHint"></div>
         <button id="gunBtn" class="big" style="width:100%">PICK UP THE PISTOL</button>
         <div class="suspects" id="suspects"></div>
@@ -340,7 +348,7 @@
       <p><b>HIT</b> takes a card. <b>STAND</b> keeps your hand. <b>DOUBLE</b> doubles your bet on your first two cards and takes exactly one more card.</p>
       <p><b>SPLIT</b> turns two cards of the same value into two hands, each with its own bet (up to 4 hands). Split aces get one card each, and a split hand of 21 isn't blackjack.</p>
       <p>An ace plus a 10-value card is <b>blackjack</b> and pays 3 to 2. A win pays 1 to 1 and a tie (<b>push</b>) gives your bet back.</p>
-      <p id="cheatRules" hidden><b>Cheater mode:</b> one player is the <b>dealer</b> and holds a pistol. Secretly, one player is the <b>cheater</b> (sees the next 3 cards and the dealer's hidden card, wins at $1,000), one is the <b>jester</b> (sees the next card, wins if shot), and the rest are <b>gamblers</b>, each with one ace in their pocket to swap into their hand once a game. The dealer gets one shot: hit the cheater and the house and gamblers win; hit the jester and the jester wins; hit a gambler and the cheater wins.</p>
+      <p id="cheatRules" hidden><b>Cheater mode:</b> one player is the <b>dealer</b> and holds a pistol. Secretly, one player is the <b>cheater</b> (sees the next 3 cards and the dealer's hidden card, wins at $1,000), one is the <b>jester</b> (sees the next card, wins if shot), and the rest are <b>gamblers</b>, each with one ace in their pocket to swap into their hand once a game. The dealer plays the house hand themselves, hitting or standing on anything they like. The dealer gets one shot: hit the cheater and the house and gamblers win; hit the jester and the jester wins; hit a gambler and the cheater wins.</p>
       <p>The dealer must hit until 17 and stands on every 17. Everyone starts with <b>$500</b>. Run out and you're done: bots leave the table, and you can start over.</p>
     </div>
     <div class="box" id="log"></div>
@@ -507,7 +515,7 @@
   const canDouble = (s, h) => !!h && h.cards.length === 2 && s.chips >= h.bet;
   function startBetting() {
     if (isCheat() && (T.over || !T.roles)) return;
-    T.phase = "betting"; T.turn = null; T.dealer = { cards: [], hidden: true }; T.deadline = 0; T.betTimer = false;
+    T.phase = "betting"; T.turn = null; T.dealerTurn = false; T.dealer = { cards: [], hidden: true }; T.deadline = 0; T.betTimer = false;
     for (const s of T.seats) if (s.gone) s.goneRounds++;
     T.seats = T.seats.filter(s => !s.gone || s.goneRounds < 3);
     if (T.order) T.order = T.order.filter(s => !s.gone || s.goneRounds < 3);
@@ -703,9 +711,43 @@
     if (s.style === 2 && h.total === 17 && Math.random() < 0.3) return "hit";
     return "stand";
   }
+  // In cheater mode a human dealer plays the house hand themselves: hit or stand on
+  // anything. If they run out of time (online), the house rule finishes the hand.
+  const humanDealer = () => isCheat() && T.dealerSeat && !T.dealerSeat.bot && !T.dealerSeat.gone;
+  function dealerAct(id, a, auto) {
+    if (!T || T.phase !== "dealer" || !T.dealerTurn || !T.dealerSeat || T.dealerSeat.id !== id || !["hit", "stand"].includes(a)) return false;
+    const now = handInfo(T.dealer.cards);
+    T.lastAct = { id, a: auto ? "timeout" : a, n: (T.lastAct ? T.lastAct.n : 0) + 1, bust: false, say: null };
+    if (a === "hit" && now.total < 21) {
+      T.dealer.cards.push(T.shoe.pop());
+      const h = handInfo(T.dealer.cards);
+      if (h.total > 21) T.lastAct.bust = true;
+      if (h.total < 21) { armDealer(); commit(); return true; }
+    } else if (auto) tlog(`${T.dealerSeat.name} ran out of time; the house rule plays the rest.`);
+    T.dealerTurn = false; T.deadline = 0; T.turnSeq++;
+    if (auto) { commit(); later(500, houseDraw); return true; }
+    commit(); later(700, settle); return true;
+  }
+  function armDealer() {
+    const seq = ++T.turnSeq;
+    T.deadline = T.kind === "online" ? Date.now() + TURN_TIME : 0;
+    if (T.kind === "online") later(TURN_TIME, () => { if (T.turnSeq === seq && T.dealerTurn) dealerAct(T.dealerSeat.id, "stand", true); });
+  }
+  function houseDraw() {
+    const step = () => {
+      const h = handInfo(T.dealer.cards);
+      if (h.total < 17) { T.dealer.cards.push(T.shoe.pop()); commit(); later(700, step); }
+      else later(600, settle);
+    };
+    step();
+  }
   function dealerPlay() {
     T.phase = "dealer"; T.dealer.hidden = false; commit();
     const live = T.seats.some(s => s.state === "in" && s.hands.some(h => h.state === "stand"));
+    if (live && humanDealer() && handInfo(T.dealer.cards).total < 21) {
+      tlog(`${T.dealerSeat.name} turns over the hole card and decides.`);
+      T.dealerTurn = true; armDealer(); commit(); return;
+    }
     const step = () => {
       const h = handInfo(T.dealer.cards);
       if (live && h.total < 17) { T.dealer.cards.push(T.shoe.pop()); commit(); later(700, step); }
@@ -714,6 +756,7 @@
     later(800, step);
   }
   function settle() {
+    T.dealerTurn = false;
     const d = handInfo(T.dealer.cards);
     tlog(d.bj ? "Dealer: blackjack." : d.total > 21 ? `Dealer busts with ${d.total}!` : `Dealer stands on ${d.total}.`);
     const parts = [];
@@ -760,7 +803,7 @@
       seats: T.seats.map(s => ({ id: s.id, name: s.name, bot: s.bot, color: s.color, chips: s.chips, bet: s.state === "in" ? sumBets(s) : s.bet,
         hands: s.hands.map(h => ({ cards: [...h.cards], bet: h.bet, state: h.state, split: !!h.split, doubled: !!h.doubled, result: h.result || null })),
         cur: s.cur, state: s.state, result: s.result, ready: s.ready, gone: s.gone })),
-      turn: T.turn, left: T.deadline ? Math.max(0, T.deadline - Date.now()) : 0, log: T.log.slice(0, 30), lastAct: T.lastAct,
+      turn: T.turn, dealerTurn: !!T.dealerTurn, left: T.deadline ? Math.max(0, T.deadline - Date.now()) : 0, log: T.log.slice(0, 30), lastAct: T.lastAct,
     };
   }
   function commit() {
@@ -780,6 +823,11 @@
     sfxSafe(SFX.chips);
     if (mode === "online" && online.seat !== "host") sendToHost({ type: "bet", amount: betDraft });
     else placeBet(mySeat, betDraft);
+  }
+  function doDealer(a) {
+    if (!view || !view.dealerTurn || !iAmDealer(view)) return;
+    if (mode === "online" && online.seat !== "host") sendToHost({ type: "dact", a });
+    else dealerAct(mySeat, a);
   }
   function doAct(a) {
     if (!view || view.phase !== "playing" || view.turn !== mySeat) return;
@@ -997,6 +1045,7 @@
     if (id !== aimAt) { aimAt = id; render(); }
   });
   $("gunBtn").onclick = () => setAiming(!aiming);
+  $("dHit").onclick = () => doDealer("hit"); $("dStand").onclick = () => doDealer("stand");
 
   // The cheater's secret view: the next three cards out of the shoe and the dealer's hole card.
   function renderPeek(v) {
@@ -1395,6 +1444,7 @@
       // chips going on the table
       for (const s of v.seats) { const o = prev.seats.find(x => x.id === s.id); if (o && !o.ready && s.ready && s.id !== mySeat) sfxSafe(SFX.chip); }
       if (v.turn === mySeat && prev.turn !== mySeat) { sfxSafe(SFX.turn); }
+      if (v.dealerTurn && !prev.dealerTurn && iAmDealer(v)) sfxSafe(SFX.turn);
       if (v.phase === "done" && prev.phase !== "done") settleFx(v, now);
       if (v.phase === "betting" && prev.phase !== "betting") { $("bubbles").replaceChildren(); }
     }
@@ -1476,9 +1526,15 @@
         setStatus("Game over", mode === "local" || online.seat === "host" ? "Start a new game for new roles." : "Waiting for the host."); return;
       }
       if (iAmDealer(v)) {
-        $("actTitle").textContent = "YOU ARE THE DEALER"; $("gunUI").hidden = false;
+        $("actTitle").textContent = v.dealerTurn ? "YOUR HAND, DEALER" : "YOU ARE THE DEALER"; $("gunUI").hidden = false;
+        $("dealerUI").hidden = !v.dealerTurn; $("actBox").classList.toggle("myturn", !!v.dealerTurn);
+        if (v.dealerTurn) {
+          const dh = handInfo(v.dealer.cards), stand = v.seats.filter(x => x.state === "in" && x.hands.some(h => h.state === "stand" || h.state === "bj"));
+          $("dealerHint").textContent = `You have ${dh.soft && dh.total < 21 ? "soft " : ""}${dh.total}. Hit or stand on anything: the house rule doesn't bind you. Still in: ${stand.map(x => x.name + " " + x.hands.filter(h => h.state === "stand").map(h => handInfo(h.cards).total).join("/")).join(", ") || "nobody"}.`;
+          setStatus("Your hand, dealer", v.left ? `${Math.ceil(v.left / 1000)}s left` : "Hit or stand"); return;
+        }
         $("gunHint").textContent = v.shot ? "BANG." : aiming ? "Click a player on the table (or a name below) to shoot. Click anywhere else to lower the pistol."
-          : "The cards deal themselves. Watch for a player who seems to know what's coming: hitting into perfect cards, stopping just before a bust, winning too fast. You have ONE shot. The cheater wins at $1,000.";
+          : v.dealerTurn ? "You can still shoot at any time." : "When everyone's played, you play the house hand. Watch for a player who seems to know what's coming: hitting into perfect cards, stopping just before a bust, winning too fast. You have ONE shot. The cheater wins at $1,000.";
         $("gunBtn").textContent = aiming ? "LOWER THE PISTOL" : "PICK UP THE PISTOL"; $("gunBtn").disabled = !!v.shot;
         const box = $("suspects"); box.replaceChildren();
         for (const st of v.seats) {
@@ -1516,7 +1572,8 @@
         `You have ${me.hands.map(h => handInfo(h.cards).total).join(" and ")}. Waiting...`;
     }
     const t = secsLeft();
-    if (v.mode === "cheater" && v.myRole && v.phase !== "playing") {
+    if (v.mode === "cheater" && v.dealerTurn && !iAmDealer(v) && v.dealerSeat) setStatus("Dealer's turn", `${v.dealerSeat.name} is deciding...`, true);
+    else if (v.mode === "cheater" && v.myRole && v.phase !== "playing") {
       const r = ROLE_INFO[v.myRole], mine = me ? `$${me.chips}` : "";
       setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : `You are ${r.name.toLowerCase()}`, v.myRole === "cheater" ? `${mine} of $${v.goal}. Don't get caught.` : v.myRole === "jester" ? "You see the next card. Look guilty. Get shot." : "You have an ace up your sleeve. Don't get caught.");
     } else
@@ -1524,7 +1581,7 @@
     else if (v.phase === "betting") setStatus(me && !me.ready ? "Place your bet" : "Waiting for bets", t ? `Dealing in ${t}s` : sub, !!(me && me.ready));
     else if (v.phase === "dealing") setStatus("Dealing", sub, true);
     else if (v.phase === "playing") setStatus(v.turn === mySeat ? "Your turn" : `${turnSeat ? turnSeat.name : "?"}'s turn`, t ? `${t}s left` : (turnSeat && turnSeat.bot ? "Thinking..." : sub), v.turn !== mySeat);
-    else if (v.phase === "dealer") setStatus("Dealer's turn", "The dealer draws to 17.", true);
+    else if (v.phase === "dealer") setStatus("Dealer's turn", v.dealerTurn && v.dealerSeat ? `${v.dealerSeat.name} is deciding...` : "The dealer draws to 17.", true);
     else setStatus(me && me.result ? ({ bj: "Blackjack!", win: "You win!", push: "Push", lose: "Dealer wins" })[me.result.kind] : "Round over", "Next round in a moment...");
   }
   setInterval(() => { if (view && deadlineAt) updateUI(); if (deadlineAt && secsLeft() <= 5 && secsLeft() > 0 && view && (view.turn === mySeat || (view.phase === "betting" && view.seats.some(s => s.id === mySeat && !s.ready)))) sfxSafe(SFX.tick); }, 1000);
@@ -1546,6 +1603,7 @@
   document.addEventListener("keydown", (e) => {
     if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
+    if (view && view.dealerTurn && iAmDealer(view)) { if (k === "h") doDealer("hit"); else if (k === "s") doDealer("stand"); }
     if (view && view.phase === "playing" && view.turn === mySeat) { if (k === "h") doAct("hit"); else if (k === "s") doAct("stand"); else if (k === "d") doAct("double"); else if (k === "p") doAct("split"); }
     if (view && view.phase === "betting") {
       if (k === " " || k === "enter") { e.preventDefault(); doBet(); }
@@ -1674,6 +1732,7 @@
     if (msg.type === "bet") placeBet(id, msg.amount);
     else if (msg.type === "shoot") shoot(id, msg.target);
     else if (msg.type === "swap") swapAce(id, +msg.ci);
+    else if (msg.type === "dact") dealerAct(id, msg.a);
     else if (msg.type === "act") act(id, msg.a);
     else if (msg.type === "chat") hostReceiveChat(id, msg.text);
   }
