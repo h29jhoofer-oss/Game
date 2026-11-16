@@ -85,7 +85,7 @@
   .faces { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
   .faces button, .loadBtns button { padding: 5px 2px; display: flex; justify-content: center; }
   .faces button[aria-pressed="true"], .loadBtns button[aria-pressed="true"] { background: var(--gold); }
-  canvas.die { width: 27px; height: 27px; image-rendering: pixelated; display: block; }
+  canvas.die { width: 24px; height: 28px; image-rendering: pixelated; display: block; }
   .moves { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .moves button { padding: 12px 4px; font-size: 11px; }
   button.bid { background: var(--ok); color: var(--bg); grid-column: 1 / -1; }
@@ -502,7 +502,7 @@
 
   // ---------- Drawing ----------
   const cv = $("table"), ctx = cv.getContext("2d");
-  const LW = 240, LH = 190, K = 4, F = 8, CX = 120, CY = 92;
+  const LW = 240, LH = 190, K = 4, F = 8, CX = 120, CY = 95;
   const WOOD = { base: "#4a2c18", grainA: "#3f2513", grainB: "#55331d", hi: "#7a4f2e", lo: "#24140a", groove: "#1a0e06", lip: "#8f6038" };
   const GLYPHS = {
     A: [" # ", "# #", "###", "# #", "# #"], B: ["## ", "# #", "## ", "# #", "## "], C: [" ##", "#  ", "#  ", "#  ", " ##"], D: ["## ", "# #", "# #", "# #", "## "],
@@ -529,45 +529,59 @@
       }
     }
   }
-  // Dice: 9 x 9, cream with dark pips; the wild one has a red pip.
-  const PIPS = { 1: [[4, 4]], 2: [[2, 2], [6, 6]], 3: [[2, 2], [4, 4], [6, 6]], 4: [[2, 2], [6, 2], [2, 6], [6, 6]], 5: [[2, 2], [6, 2], [4, 4], [2, 6], [6, 6]], 6: [[2, 2], [6, 2], [2, 4], [6, 4], [2, 6], [6, 6]] };
+  // Dice: 12 x 14. A rounded cream face with chunky 2 x 2 pips, and a darker
+  // strip along the bottom for the side you can see. The wild one is a big red pip.
+  const DW = 12, DH = 14;
+  const PIPS = { 1: [], 2: [[8, 2], [2, 8]], 3: [[8, 2], [5, 5], [2, 8]], 4: [[2, 2], [8, 2], [2, 8], [8, 8]], 5: [[2, 2], [8, 2], [5, 5], [2, 8], [8, 8]], 6: [[2, 2], [8, 2], [2, 5], [8, 5], [2, 8], [8, 8]] };
   const dieCache = {};
   function dieSprite(face, glow) {
     const key = face + (glow ? "g" : "");
     if (dieCache[key]) return dieCache[key];
-    const c = document.createElement("canvas"); c.width = 9; c.height = 9; const g = c.getContext("2d");
-    g.fillStyle = glow ? "#ffe066" : "#1a1626"; g.fillRect(1, 0, 7, 9); g.fillRect(0, 1, 9, 7);
-    g.fillStyle = "#f4ecd6"; g.fillRect(1, 1, 7, 7);
-    g.fillStyle = "#d8ccab"; g.fillRect(1, 7, 7, 1); g.fillRect(7, 1, 1, 7);
-    g.fillStyle = "#fffdf6"; g.fillRect(1, 1, 6, 1);
-    g.fillStyle = face === 1 ? "#d8344a" : "#1a1626";
-    for (const [x, y] of PIPS[face]) g.fillRect(x, y, 1, 1);
+    const c = document.createElement("canvas"); c.width = DW; c.height = DH; const g = c.getContext("2d");
+    const px = (col, x, y, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+    // outline with rounded corners
+    const edge = glow ? "#ffe066" : "#1a1626";
+    px(edge, 2, 0, 8, 1); px(edge, 1, 1, 10, 1); px(edge, 0, 2, 12, 10); px(edge, 1, 12, 10, 1); px(edge, 2, 13, 8, 1);
+    // the side (depth) and the face
+    px("#b8a986", 1, 10, 10, 2); px("#a8987a", 2, 12, 8, 1);
+    px("#f4ecd6", 2, 1, 8, 1); px("#f4ecd6", 1, 2, 10, 8);
+    px("#fffdf6", 2, 1, 7, 1); px("#fffdf6", 1, 2, 1, 6);          // light from the top left
+    px("#ddd1b0", 10, 3, 1, 7); px("#e6dbbd", 2, 9, 8, 1);        // soft shade on the far edges
+    if (face === 1) { px("#d8344a", 4, 4, 4, 4); px("#f4ecd6", 4, 4, 1, 1); px("#f4ecd6", 7, 4, 1, 1); px("#f4ecd6", 4, 7, 1, 1); px("#f4ecd6", 7, 7, 1, 1); px("#ff8a9a", 5, 5, 1, 1); }
+    for (const [x, y] of PIPS[face]) { px("#1a1626", x, y, 2, 2); px("#4a3f6b", x, y, 1, 1); }
     return dieCache[key] = c;
   }
-  // The cup: dark leather, a gold band near the mouth, open end down.
+  // The cup: a big leather dice cup, open end down, with a stitched seam, a gold
+  // band and a thick rolled lip, wide enough to hide all five dice.
+  const UW = 46, UH = 34;
   let cupImg = null;
   function cupSprite() {
     if (cupImg) return cupImg;
-    const c = document.createElement("canvas"); c.width = 26; c.height = 22; const g = c.getContext("2d");
-    for (let y = 0; y < 22; y++) {
-      const half = Math.round(8 + (y / 21) * 5), x0 = 13 - half, x1 = 13 + half;
+    const c = document.createElement("canvas"); c.width = UW; c.height = UH; const g = c.getContext("2d"), r = rng(4);
+    for (let y = 0; y < UH; y++) {
+      const half = y >= UH - 3 ? 23 : Math.round(14 + (y / (UH - 4)) * 8) - (y === 0 ? 2 : y === 1 ? 1 : 0), x0 = 23 - half, x1 = 23 + half;
       g.fillStyle = "#000"; g.fillRect(x0, y, x1 - x0, 1);
-      if (y === 0 || y === 21) continue;
+      if (y === 0 || y === UH - 1) continue;
       for (let x = x0 + 1; x < x1 - 1; x++) {
         const u = (x - x0) / (x1 - x0);
-        g.fillStyle = y >= 15 && y <= 16 ? (u < 0.3 ? "#ffe066" : u > 0.75 ? "#a07a2e" : "#c8963e") : y >= 19 ? "#3d2010" : u < 0.18 ? "#9a5a33" : u < 0.32 ? "#7a4527" : u > 0.78 ? "#40210f" : "#5e331b";
-        g.fillRect(x, y, 1, 1);
+        let col;
+        if (y <= 2) col = u < 0.25 ? "#7a4527" : "#4a2614";                                   // the closed top
+        else if (y >= UH - 4) col = y === UH - 4 ? (u < 0.3 ? "#8a5030" : "#5e331b") : u < 0.2 ? "#5e331b" : "#2e180b"; // rolled lip
+        else if (y >= 22 && y <= 24) col = y === 22 ? (u < 0.35 ? "#fff1a0" : "#e0b040") : u < 0.3 ? "#ffe066" : u > 0.75 ? "#a07a2e" : "#c8963e";
+        else col = u < 0.12 ? "#5e331b" : u < 0.22 ? "#a8653a" : u < 0.34 ? "#86492a" : u > 0.86 ? "#331a0c" : u > 0.7 ? "#4a2614" : "#6a3a1f";
+        if (y > 2 && y < 21 && Math.abs(u - 0.55) < 0.02 && y % 3 === 0) col = "#2e180b"; // stitches up the seam
+        if (y > 2 && y < 21 && col === "#6a3a1f" && r() < 0.12) col = "#5e331b";        // a bit of leather grain
+        g.fillStyle = col; g.fillRect(x, y, 1, 1);
       }
     }
-    g.fillStyle = "#2e180b"; g.fillRect(6, 1, 14, 1);
     return cupImg = c;
   }
   // Seats sit round an oval table, with this screen's player at the bottom.
   function seatPos(i, n, meIdx) {
     const rel = ((i - meIdx) % n + n) % n, a = Math.PI / 2 + rel * 2 * Math.PI / n;
-    return { x: CX + Math.cos(a) * 84, y: CY + Math.sin(a) * 54, up: Math.sin(a) < -0.2 };
+    return { x: CX + Math.cos(a) * 86, y: CY + Math.sin(a) * 50, up: Math.sin(a) < -0.2 };
   }
-  const SLOTS = [[-14, -9], [-4, -9], [6, -9], [-9, 1], [1, 1]];
+  const SLOTS = [[-19, -14], [-6, -14], [7, -14], [-12, 0], [1, 0]];
   const meIndex = (v) => Math.max(0, v.seats.findIndex(s => s.id === mySeat));
 
   let bgImg = null;
@@ -591,7 +605,7 @@
     g.fillStyle = WOOD.groove; g.fillRect(F - 2, F - 2, LW - 2 * F + 4, 2); g.fillRect(F - 2, F - 2, 2, LH - 2 * F + 4); g.fillRect(F - 2, LH - F, LW - 2 * F + 4, 2); g.fillRect(LW - F, F - 2, 2, LH - 2 * F + 4);
     g.fillStyle = "#c8963e"; g.fillRect(F - 1, F - 1, LW - 2 * F + 2, 1); g.fillRect(F - 1, F - 1, 1, LH - 2 * F + 2);
     // a gold ring in the middle where the bid sits
-    for (let t = 0; t < 360; t += 2) { const a = t * Math.PI / 180; if (t % 12 < 8) { g.fillStyle = "rgba(224,176,64,0.55)"; g.fillRect(Math.round(CX + Math.cos(a) * 30), Math.round(CY + Math.sin(a) * 19), 1, 1); } }
+    for (let t = 0; t < 360; t += 2) { const a = t * Math.PI / 180; if (t % 12 < 8) { g.fillStyle = "rgba(224,176,64,0.55)"; g.fillRect(Math.round(CX + Math.cos(a) * 36), Math.round(CY + Math.sin(a) * 22), 1, 1); } }
     return bgImg = c;
   }
 
@@ -605,6 +619,15 @@
     const busy = particles.length || (view && (view.phase === "rolling" || (view.phase === "reveal" && now - revealStart < 2500) || view.turn));
     if (busy && !(REDUCED && !particles.length)) rafId = requestAnimationFrame(frame); else lastFrame = 0;
   }
+  // A chunky 5 x 7 font for the bid in the middle of the table.
+  const BIG = {
+    0: [" ### ", "## ##", "## ##", "## ##", "## ##", "## ##", " ### "], 1: ["  ## ", " ### ", "  ## ", "  ## ", "  ## ", "  ## ", " ####"],
+    2: [" ### ", "## ##", "   ##", "  ## ", " ##  ", "##   ", "#####"], 3: ["#### ", "   ##", "   ##", " ### ", "   ##", "   ##", "#### "],
+    4: ["   ##", "  ###", " # ##", "#  ##", "#####", "   ##", "   ##"], 5: ["#####", "##   ", "#### ", "   ##", "   ##", "## ##", " ### "],
+    6: [" ### ", "##   ", "#### ", "## ##", "## ##", "## ##", " ### "], 7: ["#####", "   ##", "  ## ", "  ## ", " ##  ", " ##  ", " ##  "],
+    8: [" ### ", "## ##", "## ##", " ### ", "## ##", "## ##", " ### "], 9: [" ### ", "## ##", "## ##", " ####", "   ##", "  ## ", " ##  "],
+  };
+  function drawBig(str, x, y, col) { for (const ch of String(str)) { mask(ctx, BIG[ch], x, y, col, 2); x += 12; } }
   function drawNumber(str, x, y, col, scale) { for (const ch of String(str)) { if (GLYPHS[ch]) mask(ctx, GLYPHS[ch], x, y, col, scale); x += 4 * scale; } }
   function draw(now, dt) {
     ctx.setTransform(K, 0, 0, K, 0, 0); ctx.imageSmoothingEnabled = false;
@@ -615,7 +638,7 @@
     view.seats.forEach((s, i) => {
       const p = seatPos(i, n, mi), mine = s.id === mySeat;
       if (s.count <= 0 && !(rev && rev.dice[s.id])) { // out: an empty cup lying on its side
-        ctx.globalAlpha = 0.45; ctx.drawImage(cupSprite(), Math.round(p.x - 13), Math.round(p.y - 11)); ctx.globalAlpha = 1; return;
+        ctx.globalAlpha = 0.45; ctx.drawImage(cupSprite(), Math.round(p.x - UW / 2), Math.round(p.y + 15 - UH)); ctx.globalAlpha = 1; return;
       }
       const shake = view.phase === "rolling" && !REDUCED ? Math.round(Math.sin(now / 28 + i * 2) * 1.5) : 0;
       // the dice under (or beside) the cup
@@ -625,28 +648,29 @@
       const showDice = dice && (mine || lift > 0.35);
       if (showDice) dice.forEach((d, k) => {
         const [ox, oy] = SLOTS[k], hit = glowF && matches(d, glowF);
-        ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(Math.round(p.x + ox) + 1, Math.round(p.y + oy) + 9, 8, 1);
+        ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(Math.round(p.x + ox) + 2, Math.round(p.y + oy) + DH, DW - 2, 1);
         if (glowF && !hit) ctx.globalAlpha = 0.4;
         ctx.drawImage(dieSprite(d, hit && lift >= 1), Math.round(p.x + ox), Math.round(p.y + oy));
         ctx.globalAlpha = 1;
       });
       // the cup: down over the dice, lifted to one side for your own, or rising on a reveal
-      let cx = p.x, cy = p.y + 11, up = 0;
-      if (mine && !rev) { cx = p.x + 25; up = view.phase === "rolling" ? 0 : 2; }
-      if (mine && view.phase === "rolling") cx = p.x;
-      if (rev) { up = 18 * lift; if (mine) cx = p.x; }
-      ctx.fillStyle = `rgba(0,0,0,${0.35 - up / 70})`; ctx.fillRect(Math.round(cx - 12 + up / 4), Math.round(cy - 1), Math.round(24 - up / 2), 2);
-      if (rev && lift >= 1) ctx.globalAlpha = 0.55;
-      ctx.drawImage(cupSprite(), Math.round(cx - 13 + shake), Math.round(cy - 22 - up));
+      // Your own cup is in your hand (so you can see your dice) except while shaking.
+      // On a reveal every cup lifts away and fades so the dice can be counted.
+      if (mine && !rev && view.phase !== "rolling") return;
+      if (rev && lift >= 1) return;
+      const cx = p.x, cy = p.y + 16, up = rev ? 14 * lift : 0;
+      ctx.globalAlpha = rev ? 1 - lift : 1;
+      ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(Math.round(cx - 22 + up / 3), Math.round(cy - 1), Math.round(44 - up / 1.5), 2);
+      ctx.drawImage(cupSprite(), Math.round(cx - UW / 2 + shake), Math.round(cy - UH - up));
       ctx.globalAlpha = 1;
     });
     // the bid in the middle: "4 x [five]"
     const b = rev ? rev.bid : view.bid;
     if (b) {
-      const qs = String(b.q), w = qs.length * 8 + 8 + 18, x0 = Math.round(CX - w / 2), y0 = CY - 9;
-      drawNumber(qs, x0 + 2, y0 + 6, "#000", 2); drawNumber(qs, x0, y0 + 4, "#ffe066", 2);
-      ctx.fillStyle = "#f4ecd6"; const xx = x0 + qs.length * 8 + 1; for (let k = 0; k < 5; k++) { ctx.fillRect(xx + k, y0 + 7 + k, 1, 1); ctx.fillRect(xx + 4 - k, y0 + 7 + k, 1, 1); }
-      ctx.drawImage(dieSprite(b.f), x0 + qs.length * 8 + 8, y0, 18, 18);
+      const qs = String(b.q), w = qs.length * 12 + 10 + DW * 2, x0 = Math.round(CX - w / 2), y0 = CY - DH;
+      drawBig(qs, x0, y0 + 9, "#3a0f16"); drawBig(qs, x0, y0 + 7, "#ffe066");
+      ctx.fillStyle = "#f4ecd6"; const xx = x0 + qs.length * 12 + 1; for (let k = 0; k < 5; k++) { ctx.fillRect(xx + k, y0 + 12 + k, 1, 1); ctx.fillRect(xx + 4 - k, y0 + 12 + k, 1, 1); }
+      ctx.drawImage(dieSprite(b.f), x0 + qs.length * 12 + 10, y0, DW * 2, DH * 2);
     }
     // dice popping when lost
     for (let i = particles.length - 1; i >= 0; i--) {
@@ -686,11 +710,11 @@
       ct.textContent = s.waiting ? "NEXT GAME" : v.phase === "lobby" ? "READY" : s.count <= 0 ? (v.winner === s.id ? "WINNER" : "OUT") : `${s.count} ${s.count === 1 ? "DIE" : "DICE"}`;
       el.append(ct);
       if (s.lastBid && v.phase === "bidding") { const lb = document.createElement("div"); lb.className = "lb"; lb.textContent = bidText(s.lastBid); el.append(lb); }
-      place(el, p.x, p.up ? p.y - 24 : p.y + 22);
+      place(el, p.x, p.up ? p.y - 29 : p.y + 27);
       if (rev && (rev.loser === s.id || rev.gain === s.id)) {
         const r = tagEl("res-" + s.id, "resultTag " + (rev.gain === s.id ? "win" : "lose"));
         r.textContent = rev.gain === s.id ? "+1 DIE" : "-1 DIE";
-        place(r, p.x + 22, p.y - 14);
+        place(r, p.x + 30, p.y - 20);
       }
     });
     if (v.winner && v.phase === "over") {
@@ -698,18 +722,18 @@
       r.textContent = w ? `${w.name} WINS!` : "GAME OVER"; place(r, CX, CY);
     } else if (rev) {
       const r = tagEl("mid", "resultTag " + (rev.loser === rev.bidder ? "lose" : "win"));
-      r.textContent = `THERE ${rev.count === 1 ? "WAS" : "WERE"} ${rev.count}`; place(r, CX, CY + 18);
+      r.textContent = `THERE ${rev.count === 1 ? "WAS" : "WERE"} ${rev.count}`; place(r, CX, CY - 24);
     } else if (v.phase !== "lobby") {
       const by = v.bid && v.seats.find(s => s.id === v.bid.by), m = tagEl("mid", "midTag");
       m.textContent = by ? `${by.name}${by.id === mySeat ? " (YOU)" : ""} BIDS` : `${v.total} DICE IN PLAY`;
-      place(m, CX, v.bid ? CY + 18 : CY);
+      place(m, CX, v.bid ? CY + 22 : CY);
     }
     for (const el of [...$("tags").children]) if (!keep.has(el.dataset.tag)) el.remove();
   }
   function bubble(seatId, text) {
     if (!view) return;
     const i = view.seats.findIndex(s => s.id === seatId); if (i < 0) return;
-    const p = seatPos(i, view.seats.length, meIndex(view)), pp = pct(p.x, p.y - 16);
+    const p = seatPos(i, view.seats.length, meIndex(view)), pp = pct(p.x, p.y - 20);
     const el = document.createElement("div"); el.className = "bubble"; el.textContent = text;
     el.style.left = pp.left; el.style.top = pp.top;
     $("bubbles").append(el); setTimeout(() => el.remove(), 1600);
@@ -732,7 +756,7 @@
         if (v.lastAct.id !== mySeat) bubble(v.lastAct.id, v.lastAct.say || bidText(v.lastAct));
         sfxSafe(SFX.bid);
       }
-      if (v.lastAct && (!prev.lastAct || v.lastAct.n !== prev.lastAct.n) && v.lastAct.a !== "bid") bubble(v.lastAct.id, v.lastAct.a === "liar" ? (v.lastAct.say || "LIAR!") : "SPOT ON!");
+      if (v.lastAct && (!prev.lastAct || v.lastAct.n !== prev.lastAct.n) && v.lastAct.a !== "bid" && v.lastAct.id !== mySeat) bubble(v.lastAct.id, v.lastAct.a === "liar" ? (v.lastAct.say || "LIAR!") : "SPOT ON!");
       if (v.turn === mySeat && prev.turn !== mySeat) {
         sfxSafe(SFX.turn);
         // start the draft at the smallest raise on the face you bid last (or your best face)
@@ -779,7 +803,7 @@
     if (sub) { const s = document.createElement("div"); s.className = "muted"; s.textContent = sub; box.append(s); }
   }
   const secsLeft = () => deadlineAt ? Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1000)) : 0;
-  function dieCanvas(face) { const c = document.createElement("canvas"); c.width = 9; c.height = 9; c.className = "die"; c.getContext("2d").drawImage(dieSprite(face), 0, 0); return c; }
+  function dieCanvas(face) { const c = document.createElement("canvas"); c.width = DW; c.height = DH; c.className = "die"; c.getContext("2d").drawImage(dieSprite(face), 0, 0); return c; }
   const faceBtns = [];
   for (let f = 2; f <= 6; f++) {
     const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-label", PLURAL[f].toLowerCase());
