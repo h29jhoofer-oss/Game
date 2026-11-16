@@ -1,0 +1,1256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Pixel-art roulette against up to 5 bots, or up to 5 friends online with a link.">
+<title>Pixel Roulette</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #1a1626; --panel: #2a2340; --raised: #4a3f6b; --raised-hi: #5d5085;
+    --ink: #f4ecd6; --muted: #a99fc4; --accent: #ff7a59; --ok: #3fd0a0; --bad: #ff5e7a; --gold: #ffe066; --edge: #000;
+    --font-pixel: "Press Start 2P", ui-monospace, "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { background: var(--bg); }
+  body {
+    color: var(--ink); font-family: var(--font-pixel); font-size: 10px; line-height: 1.7;
+    display: flex; flex-direction: column; align-items: center; padding-block: 16px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  h1 { font-size: 18px; margin: 8px 0 4px; color: var(--accent); text-shadow: 3px 3px 0 var(--edge); letter-spacing: 1px; text-align: center; }
+  .tag { color: var(--muted); margin: 0 0 16px; text-align: center; }
+  .topnav { width: 100%; max-width: 1180px; display: flex; }
+  a.back { color: var(--ink); text-decoration: none; background: var(--raised); border: 3px solid var(--edge); box-shadow: 3px 3px 0 var(--edge); padding: 6px 10px; font-size: 9px; }
+  a.back:hover { background: var(--raised-hi); }
+  a.back:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--edge); }
+  .wrap { display: grid; gap: 16px; width: 100%; max-width: 1180px; justify-content: center;
+    grid-template-columns: minmax(0, 620px); grid-template-areas: "board" "left" "right"; align-items: start; }
+  @media (min-width: 760px) {
+    .wrap { grid-template-columns: minmax(0, 620px) minmax(240px, 290px); grid-template-areas: "board left" "board right"; grid-template-rows: auto 1fr; }
+  }
+  @media (min-width: 1100px) {
+    .wrap { grid-template-columns: 260px minmax(0, 620px) 280px; grid-template-areas: "left board right"; grid-template-rows: auto; }
+  }
+  .boardcol { grid-area: board; min-width: 0; }
+  .boardwrap { position: relative; }
+  canvas#table { width: 100%; height: auto; display: block; image-rendering: pixelated; border: 4px solid var(--edge); box-shadow: 6px 6px 0 var(--edge); }
+  .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .side.left { grid-area: left; }
+  .side.right { grid-area: right; }
+  .box { background: var(--panel); border: 3px solid var(--edge); box-shadow: 4px 4px 0 var(--edge); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .box h2 { font-size: 10px; margin: 0; color: var(--accent); letter-spacing: 1px; }
+  .muted { color: var(--muted); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button, input { font: inherit; color: var(--ink); border: 3px solid var(--edge); }
+  button { background: var(--raised); padding: 8px 10px; cursor: pointer; box-shadow: 3px 3px 0 var(--edge); }
+  button:hover { background: var(--raised-hi); }
+  button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--edge); }
+  button.primary { background: var(--accent); color: var(--bg); }
+  button:disabled { opacity: .45; cursor: default; transform: none; }
+  button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--ok); outline-offset: 2px; }
+  input { background: var(--bg); padding: 8px; width: 9.5em; text-transform: uppercase; }
+  .code { font-size: 16px; color: var(--ok); letter-spacing: 3px; user-select: all; }
+  #status { min-height: 3.6em; }
+  #status .main { color: var(--ink); }
+  #log { max-height: 160px; overflow-y: auto; color: var(--muted); }
+  .rules p { margin: 0; color: var(--muted); }
+  .rules b { color: var(--ink); font-weight: normal; }
+  .err { color: var(--bad); }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .label { color: var(--muted); font-size: 8px; letter-spacing: 1px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button { flex: 1 1 auto; padding: 8px 6px; }
+  .seg button[aria-pressed="true"] { background: var(--ok); color: var(--bg); }
+  .toggle { display: inline-flex; align-items: center; gap: 10px; align-self: flex-start; }
+  .track { width: 34px; height: 18px; background: var(--bg); border: 3px solid var(--edge); position: relative; display: inline-block; }
+  .knob { position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; background: var(--muted); transition: left .12s; }
+  .toggle[aria-checked="true"] .track { background: var(--ok); }
+  .toggle[aria-checked="true"] .knob { left: 19px; background: var(--ink); }
+  button.big { padding: 12px 10px; font-size: 12px; }
+  .divider { border: 0; border-top: 3px dashed var(--raised); margin: 4px 0; width: 100%; }
+  input[type="range"] { width: 100%; padding: 0; border: 0; background: transparent; accent-color: var(--ok); text-transform: none; }
+  .dots { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+  .dots i { width: 4px; height: 4px; background: var(--accent); animation: dothop .9s steps(2, jump-none) infinite; }
+  .dots i:nth-child(2) { animation-delay: .3s; } .dots i:nth-child(3) { animation-delay: .6s; }
+  @keyframes dothop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+  @media (prefers-reduced-motion: reduce) { .knob { transition: none; } .dots i { animation: none; } }
+  /* Your bets */
+  .chipSel { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .chipSel button { padding: 6px 2px; font-size: 9px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .chipSel button[aria-pressed="true"] { background: var(--gold); color: var(--bg); }
+  .chipSel i { width: 18px; height: 10px; border: 2px solid var(--edge); display: block; }
+  .betSum { text-align: center; font-size: 14px; color: var(--gold); text-shadow: 2px 2px 0 var(--edge); }
+  .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tools button { padding: 7px 2px; font-size: 9px; }
+  .keys { font-size: 8px; color: var(--muted); }
+  #spin { width: 100%; }
+  #actBox.myturn { animation: turnGlow 1s steps(2) infinite; }
+  @keyframes turnGlow { 50% { border-color: var(--gold); } }
+  @media (prefers-reduced-motion: reduce) { #actBox.myturn { animation: none; border-color: var(--gold); } }
+  #magnetUI .tools { grid-template-columns: 1fr 1fr; }
+  #magnetUI button { padding: 12px 4px; font-size: 11px; background: #c98bff; color: var(--bg); }
+  canvas#table { cursor: default; }
+  canvas#table.betting { cursor: pointer; }
+
+  /* Labels laid over the table */
+  #tags { position: absolute; inset: 4px; pointer-events: none; }
+  .tagEl { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; font-size: clamp(6px, 1.05vw, 8px); line-height: 1.4;
+    background: rgba(26,22,38,.88); border: 2px solid var(--edge); padding: 2px 5px; text-align: center; }
+  .plTag { transform: translate(0, -50%); text-align: left; display: flex; gap: 5px; align-items: center; min-width: 40%; }
+  .plTag i { width: 7px; height: 7px; border: 1px solid var(--edge); display: inline-block; flex: none; }
+  .plTag .nm { flex: 1 1 auto; }
+  .plTag .ch { color: var(--gold); }
+  .plTag .bt { color: var(--muted); }
+  .plTag .bt.win { color: var(--ok); }
+  .plTag .bt.lose { color: var(--bad); }
+  .plTag.me { border-color: var(--ok); }
+  .plTag.ready { border-color: var(--gold); }
+  .plTag.gone { opacity: .5; }
+  .tipTag { color: var(--ink); }
+  .midTag { color: var(--gold); }
+  .resultTag { font-size: clamp(7px, 1.3vw, 10px); border-width: 3px; animation: popIn .5s steps(5) both; }
+  .resultTag.win { color: var(--gold); border-color: var(--gold); }
+  .resultTag.lose { color: var(--bad); }
+  @keyframes popIn { 0% { transform: translate(-50%, -50%) scale(.3); } 70% { transform: translate(-50%, -50%) scale(1.15); } 100% { transform: translate(-50%, -50%) scale(1); } }
+  #bubbles { position: absolute; inset: 4px; pointer-events: none; z-index: 2; }
+  .bubble { position: absolute; transform: translate(-50%, -100%); background: #f4ecd6; color: #1a1626; border: 3px solid #1a1626;
+    padding: 3px 6px; font-size: clamp(7px, 1.4vw, 10px); white-space: nowrap; box-shadow: 3px 3px 0 rgba(0,0,0,.4); animation: bubblePop 1.6s steps(12) both; }
+  .bubble::after { content: ""; position: absolute; left: 50%; bottom: -8px; width: 7px; height: 7px; background: inherit;
+    border-right: 3px solid #1a1626; border-bottom: 3px solid #1a1626; transform: translateX(-50%) rotate(45deg); }
+  @keyframes bubblePop { 0% { transform: translate(-50%, -100%) scale(.2); opacity: 0; } 10% { transform: translate(-50%, -100%) scale(1.15); opacity: 1; }
+    18% { transform: translate(-50%, -100%) scale(1); } 80% { opacity: 1; } 100% { transform: translate(-50%, -130%); opacity: 0; } }
+  .toast { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); z-index: 3; pointer-events: none;
+    background: var(--panel); border: 3px solid var(--edge); box-shadow: 4px 4px 0 var(--edge); padding: 8px 12px;
+    color: var(--gold); font-size: 13px; text-align: center; white-space: nowrap; }
+  .toast.show { animation: toastPop 2s steps(12) both; }
+  .toast.lose { color: var(--bad); }
+  .toast.push { color: #a9c7ff; }
+  @keyframes toastPop { 0% { transform: translate(-50%, -30px) scale(.6); opacity: 0; } 12% { transform: translate(-50%, 0) scale(1.1); opacity: 1; }
+    20% { transform: translate(-50%, 0) scale(1); } 85% { opacity: 1; } 100% { transform: translate(-50%, -10px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .toast.show, .bubble, .resultTag, .seatTag.turn { animation: none; } }
+
+  /* Online players and chat */
+  .players { display: grid; grid-template-columns: 14px 1fr auto; gap: 6px 8px; align-items: center; }
+  .chip { width: 14px; height: 14px; border: 2px solid var(--edge); }
+  .chatLog { min-height: 120px; max-height: 240px; overflow-y: auto; background: var(--bg); border: 3px solid var(--edge);
+    padding: 8px; display: flex; flex-direction: column; gap: 6px; overflow-wrap: anywhere; }
+  .chatMsg { display: flex; gap: 6px; align-items: baseline; }
+  .chatMsg .chip { flex: none; width: 10px; height: 10px; transform: translateY(1px); }
+  .chatMsg .who { color: var(--accent); flex: none; }
+  .chatMsg.mine .who { color: var(--ok); }
+  .chatMsg.sys { color: var(--muted); }
+  .chatForm { display: flex; gap: 6px; }
+  .chatForm input { flex: 1 1 auto; min-width: 0; width: auto; text-transform: none; }
+  .quick { display: flex; gap: 6px; flex-wrap: wrap; }
+  .quick button { padding: 4px 8px; font-size: 8px; }
+  #chatBox.ping { animation: chatPing .6s steps(3); }
+  @keyframes chatPing { 50% { border-color: var(--ok); } }
+
+  /* Online focus layout: the table fills the screen, with your moves and chat beside it. */
+  body.focus { padding-block: 12px; }
+  body.focus h1, body.focus .tag, body.focus .topnav, body.focus .side.right, body.focus #setup, body.focus #soundBox, body.focus #shareBox { display: none !important; }
+  body.focus .wrap { max-width: none; grid-template-columns: min(calc(100vw - 370px), calc((100dvh - 40px) * 1.26)) 310px;
+    grid-template-areas: "board left"; grid-template-rows: auto; justify-content: center; }
+  body.focus .side.left { max-height: calc(100dvh - 24px); overflow-y: auto; }
+  body.focus #chatBox { flex: 1 1 auto; min-height: 0; }
+  @media (max-width: 759px) {
+    body.focus .wrap { grid-template-columns: minmax(0, 1fr); grid-template-areas: "board" "left"; }
+    body.focus .side.left { max-height: none; }
+  }
+</style>
+<script src="vendor/peerjs.min.js"></script>
+</head>
+<body>
+<nav class="topnav"><a class="back" href="index.html">&#9664; GAMES</a></nav>
+<h1>PIXEL ROULETTE</h1>
+<p class="tag">Red or black? Place your bets.</p>
+<div class="wrap">
+  <div class="boardcol"><div class="boardwrap">
+    <canvas id="table" width="960" height="760" aria-label="Roulette table: the wheel and the betting layout"></canvas>
+    <div id="tags"></div>
+    <div id="bubbles"></div>
+    <div id="toast" class="toast" hidden role="status"></div>
+  </div></div>
+  <div class="side left">
+    <div class="box" id="status"></div>
+    <div class="box" id="actBox">
+      <h2 id="actTitle">YOUR BETS</h2>
+      <div id="betUI" hidden>
+        <div class="chipSel" id="chipSel"></div>
+        <div class="betSum" id="betSum">$0</div>
+        <div class="muted" id="betHint"></div>
+        <div class="tools">
+          <button id="undo">UNDO</button>
+          <button id="clear">CLEAR</button>
+          <button id="rebet">REBET</button>
+        </div>
+        <button id="spin" class="primary big">SPIN!</button>
+        <div class="keys">Click the table to bet, right-click to take a chip back. Keys: 1 to 5 pick a chip, U undo, C clear, R rebet, Space spins.</div>
+      </div>
+      <div id="magnetUI" hidden>
+        <div class="muted" id="magnetHint"></div>
+        <div class="tools">
+          <button id="nudgeL">&#9664; NUDGE</button>
+          <button id="nudgeR">NUDGE &#9654;</button>
+        </div>
+      </div>
+      <div id="waitUI" class="muted" hidden></div>
+      <button id="startOver" class="primary big" hidden>START OVER WITH $500</button>
+    </div>
+    <div class="box" id="setup">
+      <h2>NEW TABLE</h2>
+      <div class="field">
+        <div class="label">PLAY WITH</div>
+        <div class="seg" role="group" aria-label="Play with">
+          <button data-opp="bot">BOTS</button>
+          <button data-opp="online" id="oppOnline">FRIENDS ONLINE</button>
+        </div>
+      </div>
+      <div class="field" id="botField">
+        <div class="label">HOW MANY BOTS</div>
+        <div class="seg" role="group" aria-label="Number of bots">
+          <button data-bots="1">1</button><button data-bots="2">2</button><button data-bots="3">3</button><button data-bots="4">4</button><button data-bots="5">5</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="label" for="nameInput">YOUR NAME</label>
+        <input id="nameInput" maxlength="8" placeholder="YOU" autocomplete="off">
+      </div>
+      <div class="muted" id="setupHint"></div>
+      <button id="start" class="primary big">START</button>
+      <hr class="divider">
+      <div class="label">HAVE A TABLE CODE?</div>
+      <div class="row">
+        <input id="joinCode" maxlength="6" placeholder="CODE" aria-label="Table code" autocomplete="off">
+        <button id="join">JOIN</button>
+      </div>
+      <div id="onlineMsg" class="muted"></div>
+    </div>
+    <div class="box" id="onlineBox" hidden>
+      <h2>ONLINE TABLE</h2>
+      <div>Code: <span class="code" id="tableCode"></span></div>
+      <div id="shareBox">
+        <div class="muted">Send this link to up to 5 friends. Keep this page open: your browser runs the table.</div>
+        <div class="row" style="margin-top:6px">
+          <input id="shareLink" readonly aria-label="Table link" style="flex:1 1 10em;min-width:0;text-transform:none">
+          <button id="copyLink">COPY LINK</button>
+        </div>
+      </div>
+      <div class="players" id="players"></div>
+      <div class="row">
+        <button id="spinNow" hidden>SPIN NOW</button>
+        <button id="reconnect" hidden>RECONNECT</button>
+        <button id="leave">LEAVE</button>
+      </div>
+      <div id="gameMsg" class="muted"></div>
+    </div>
+    <div class="box" id="chatBox" hidden>
+      <h2>CHAT</h2>
+      <div id="chatLog" class="chatLog" role="log" aria-live="polite"></div>
+      <div class="quick" id="quickChat">
+        <button type="button" data-say="Come on, red!">RED!</button>
+        <button type="button" data-say="Come on, black!">BLACK!</button>
+        <button type="button" data-say="Ouch...">OUCH</button>
+        <button type="button" data-say="GG!">GG</button>
+      </div>
+      <form id="chatForm" class="chatForm" autocomplete="off">
+        <input id="chatInput" maxlength="200" placeholder="Say something..." aria-label="Chat message">
+        <button id="chatSend" type="submit">SEND</button>
+      </form>
+    </div>
+    <div class="box" id="soundBox">
+      <h2>SOUND</h2>
+      <div class="row">
+        <button id="musicToggle" class="toggle" role="switch" aria-checked="true"><span class="track"><span class="knob"></span></span><span>MUSIC</span></button>
+        <button id="sfxToggle" class="toggle" role="switch" aria-checked="true"><span class="track"><span class="knob"></span></span><span>EFFECTS</span></button>
+      </div>
+      <label class="field" for="volume"><span class="label">VOLUME <span id="volLabel"></span></span>
+        <input id="volume" type="range" min="0" max="100" step="5"></label>
+      <div class="muted" id="soundHint">Press M to mute.</div>
+    </div>
+  </div>
+  <div class="side right">
+    <div class="box rules">
+      <h2>HOW TO PLAY</h2>
+      <p>Pick a chip and click the table to bet on where the ball will land. The wheel has <b>0 to 36</b>; zero is green.</p>
+      <p><b>A single number</b> pays 35 to 1. <b>A dozen</b> (1-12, 13-24, 25-36) or <b>a column</b> (the 2:1 boxes) pays 2 to 1.</p>
+      <p><b>Red, black, odd, even, 1-18 and 19-36</b> pay 1 to 1. They all lose on zero.</p>
+      <p>Up to <b>$200</b> a spin. Everyone starts with <b>$500</b>. Press <b>SPIN</b> when you're ready (online, the wheel spins once everyone's ready, or 20 seconds after the first bet).</p>
+      <p><b>The magnet:</b> while the ball settles, you can nudge it one pocket left or right. It needs <b>5 spins</b> to recharge, and everyone sees you use it.</p>
+    </div>
+    <div class="box" id="log"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+  // ---------- Settings (sound is shared with the other games) ----------
+  const settings = { music: true, sfx: true, volume: 70, muted: false };
+  const prefs = { opp: "bot", bots: 3, name: "" };
+  try { const s = JSON.parse(localStorage.getItem("dc-settings")) || {}; for (const k of Object.keys(settings)) if (k in s) settings[k] = s[k]; } catch (_) {}
+  try { Object.assign(prefs, JSON.parse(localStorage.getItem("dc-roulette")) || {}); } catch (_) {}
+  function saveSettings() {
+    try { const cur = JSON.parse(localStorage.getItem("dc-settings")) || {}; localStorage.setItem("dc-settings", JSON.stringify({ ...cur, ...settings })); } catch (_) {}
+  }
+  function savePrefs() { try { localStorage.setItem("dc-roulette", JSON.stringify(prefs)); } catch (_) {} }
+  const myName = () => (prefs.name || "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim().slice(0, 8) || "YOU";
+
+  // ---------- The wheel and the layout ----------
+  // A single-zero wheel, in wheel order.
+  const WHEEL = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+  const REDS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+  const colorOf = (n) => n === 0 ? "green" : REDS.has(n) ? "red" : "black";
+  const START = 500, MAX_BET = 200, CHIPS = [5, 10, 25, 50, 100], BET_TIME = 20000, SPIN_MS = 5200, SETTLE_MS = 2800, PAYOUT_MS = 3800, RECHARGE = 5;
+  // Betting layout, in table pixels: zero, 12 x 3 numbers, the column bets, the dozens and the even-money boxes.
+  const GX = 34, NW = 14, GY = 118, RH = 12;
+  const CELLS = [];
+  CELLS.push({ id: "n0", name: "0", mult: 35, wins: (n) => n === 0, x: 20, y: GY, w: 14, h: RH * 3 });
+  for (let n = 1; n <= 36; n++) { const col = Math.floor((n - 1) / 3), row = 2 - (n - 1) % 3; CELLS.push({ id: "n" + n, name: String(n), mult: 35, wins: (x) => x === n, x: GX + col * NW, y: GY + row * RH, w: NW, h: RH }); }
+  for (let k = 1; k <= 3; k++) CELLS.push({ id: "c" + k, name: `COLUMN ${k}`, label: "2:1", mult: 2, wins: (n) => n > 0 && (n - k) % 3 === 0, x: GX + 12 * NW, y: GY + (3 - k) * RH, w: 16, h: RH });
+  for (let k = 1; k <= 3; k++) CELLS.push({ id: "d" + k, name: `${(k - 1) * 12 + 1}-${k * 12}`, label: `${(k - 1) * 12 + 1}-${k * 12}`, mult: 2, wins: (n) => n >= (k - 1) * 12 + 1 && n <= k * 12, x: GX + (k - 1) * 4 * NW, y: GY + 3 * RH, w: 4 * NW, h: 10 });
+  const OUT = [["low", "1-18", (n) => n >= 1 && n <= 18], ["even", "EVEN", (n) => n > 0 && n % 2 === 0], ["red", "RED", (n) => REDS.has(n)], ["black", "BLACK", (n) => n > 0 && !REDS.has(n)], ["odd", "ODD", (n) => n % 2 === 1], ["high", "19-36", (n) => n >= 19]];
+  OUT.forEach(([id, name, wins], i) => CELLS.push({ id, name, label: id === "red" || id === "black" ? "" : name, mult: 1, wins, x: GX + i * 28, y: GY + 3 * RH + 10, w: 28, h: RH }));
+  const CELL = Object.fromEntries(CELLS.map(c => [c.id, c]));
+  const payText = (c) => `${c.name} pays ${c.mult} to 1`;
+
+  // ---------- The table (run by the host's browser, or locally against bots) ----------
+  const BOTS = [ // style: 0 careful (even money), 1 steady (dozens and columns), 2 bold (single numbers)
+    { name: "PIP", style: 0 }, { name: "MOSS", style: 1 }, { name: "JUNIPER", style: 2 }, { name: "TOFFEE", style: 1 }, { name: "BRAMBLE", style: 2 },
+  ];
+  const SEAT_COLORS = ["#ff7a59", "#3fd0a0", "#59c1ff", "#ffe066", "#c98bff", "#ff5e7a"];
+  let T = null, timers = [];
+  const later = (ms, fn) => { const id = setTimeout(() => { timers = timers.filter(x => x !== id); fn(); }, ms); timers.push(id); };
+  function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+  function makeSeat(id, name, bot, style) {
+    const used = T ? T.seats.map(s => s.color) : [];
+    const color = SEAT_COLORS.find(c => !used.includes(c)) || SEAT_COLORS[0];
+    return { id, name, bot, style: style || 0, color, chips: START, ready: false, gone: false, goneRounds: 0, token: null, magnet: 0, prev: [], stack: [], result: null, say: null };
+  }
+  const seatOf = (id) => T.seats.find(s => s.id === id);
+  const betsOf = (id) => T.bets.filter(b => b.seat === id);
+  const stakeOf = (id) => betsOf(id).reduce((n, b) => n + b.amount, 0);
+  function tlog(text) { T.log.unshift(text); T.log = T.log.slice(0, 60); }
+  const returnFor = (bets, n) => bets.reduce((t, b) => t + (CELL[b.cell].wins(n) ? b.amount * (CELL[b.cell].mult + 1) : 0), 0);
+
+  function newLocalTable(nBots) {
+    clearTimers();
+    T = { kind: "local", phase: "betting", round: 0, spinNo: 0, seats: [], bets: [], pocket: null, history: [], log: [], deadline: 0, lastAct: null };
+    const bots = BOTS.slice(0, nBots), half = Math.ceil(nBots / 2);
+    const order = [...bots.slice(0, half), "me", ...bots.slice(half)];
+    for (const o of order) T.seats.push(o === "me" ? makeSeat("me", myName(), false) : makeSeat("bot-" + o.name, o.name, true, o.style));
+    T.seats.forEach((st, i) => { st.color = SEAT_COLORS[i]; });
+    tlog(`${T.seats.length} players sit down with $${START} each.`);
+    newRound();
+  }
+  function newRound() {
+    clearTimers();
+    T.round++; T.bets = []; T.phase = "betting"; T.deadline = 0;
+    for (const s of T.seats) { s.stack = []; s.ready = false; s.result = null; if (s.gone) s.goneRounds++; }
+    // Broke bots leave; long-gone players lose their seat.
+    for (const s of T.seats.filter(x => x.bot && x.chips < CHIPS[0])) tlog(`${s.name} is out of money and leaves the table.`);
+    T.seats = T.seats.filter(s => !(s.bot && s.chips < CHIPS[0]) && !(s.gone && s.goneRounds >= 3));
+    for (const s of T.seats.filter(x => x.bot)) later(500 + Math.random() * 1500, () => botBet(s));
+    commit();
+  }
+  function placeBet(id, cell, amount, quiet) {
+    const s = T && seatOf(id);
+    if (!s || T.phase !== "betting" || !CELL[cell] || !CHIPS.includes(amount)) return false;
+    if (amount > s.chips || stakeOf(id) + amount > MAX_BET) return false;
+    const b = T.bets.find(x => x.seat === id && x.cell === cell);
+    if (b) b.amount += amount; else T.bets.push({ seat: id, cell, amount });
+    s.chips -= amount; s.stack.push([cell, amount]); s.ready = false;
+    armBetClock();
+    if (!quiet) { T.lastAct = { id, a: "chip", n: (T.lastAct ? T.lastAct.n : 0) + 1 }; commit(); }
+    return true;
+  }
+  function takeBack(id, cell) {
+    const s = T && seatOf(id); if (!s || T.phase !== "betting") return false;
+    let i = s.stack.length - 1;
+    if (cell) while (i >= 0 && s.stack[i][0] !== cell) i--;
+    if (i < 0) return false;
+    const [c, amount] = s.stack.splice(i, 1)[0], b = T.bets.find(x => x.seat === id && x.cell === c);
+    b.amount -= amount; if (b.amount <= 0) T.bets = T.bets.filter(x => x !== b);
+    s.chips += amount; s.ready = false; commit(); return true;
+  }
+  function clearBets(id) {
+    const s = T && seatOf(id); if (!s || T.phase !== "betting") return false;
+    s.chips += stakeOf(id); T.bets = T.bets.filter(b => b.seat !== id); s.stack = []; s.ready = false; commit(); return true;
+  }
+  function rebet(id) {
+    const s = T && seatOf(id); if (!s || T.phase !== "betting" || !s.prev.length) return false;
+    s.chips += stakeOf(id); T.bets = T.bets.filter(b => b.seat !== id); s.stack = [];
+    for (const b of s.prev) { let left = b.amount; for (const c of [...CHIPS].reverse()) while (left >= c && placeBet(id, b.cell, c, true)) left -= c; }
+    commit(); return true;
+  }
+  function setReady(id) {
+    const s = T && seatOf(id); if (!s || T.phase !== "betting") return false;
+    s.ready = true; commit(); maybeSpin(); return true;
+  }
+  // Online, the clock starts when somebody bets; then the wheel spins whoever's ready.
+  function armBetClock() {
+    if (T.kind !== "online" || T.deadline) return;
+    T.deadline = Date.now() + BET_TIME;
+    const round = T.round;
+    later(BET_TIME, () => { if (T.round === round && T.phase === "betting") spin(); });
+  }
+  function maybeSpin() {
+    if (T.phase !== "betting") return;
+    const people = T.seats.filter(s => !s.bot && !s.gone);
+    if (people.length && people.every(s => s.ready) && T.seats.filter(s => s.bot).every(s => s.ready)) spin();
+  }
+  function spin() {
+    if (T.phase !== "betting") return;
+    clearTimers();
+    T.phase = "spinning"; T.deadline = 0; T.spinNo++;
+    const forced = window.DEVOUR_TEST_POCKET; // tests can pick the pocket; normal play never sets this
+    T.pocket = typeof forced === "number" ? WHEEL.indexOf(forced) : Math.floor(Math.random() * WHEEL.length);
+    for (const s of T.seats) if (s.magnet > 0) s.magnet--;
+    tlog("No more bets. The ball is rolling...");
+    commit();
+    later(SPIN_MS, () => {
+      T.phase = "settling"; T.deadline = Date.now() + SETTLE_MS; commit();
+      for (const s of T.seats.filter(x => x.bot && x.magnet === 0)) later(400 + Math.random() * 1600, () => botNudge(s));
+      later(SETTLE_MS, payout);
+    });
+  }
+  // The magnet: nudge the settling ball one pocket over. Recharges after RECHARGE spins.
+  function nudge(id, dir) {
+    const s = T && seatOf(id);
+    if (!s || T.phase !== "settling" || s.magnet > 0 || (dir !== 1 && dir !== -1)) return false;
+    T.pocket = (T.pocket + dir + WHEEL.length) % WHEEL.length; s.magnet = RECHARGE;
+    T.lastAct = { id, a: "nudge", dir, n: (T.lastAct ? T.lastAct.n : 0) + 1, say: s.say || null }; s.say = null;
+    tlog(`${s.name} uses the magnet: the ball hops to ${WHEEL[T.pocket]}.`);
+    commit(); return true;
+  }
+  function botNudge(s) {
+    if (T.phase !== "settling" || s.magnet > 0) return;
+    const bets = betsOf(s.id); if (!bets.length) return;
+    const at = (k) => returnFor(bets, WHEEL[(T.pocket + k + WHEEL.length) % WHEEL.length]);
+    const here = at(0), l = at(-1), r = at(1);
+    if (Math.max(l, r) > here && Math.random() < 0.6) { s.say = ["MAGNET!", "COME HERE...", "HOP!"][Math.floor(Math.random() * 3)]; nudge(s.id, r >= l ? 1 : -1); }
+  }
+  function payout() {
+    const n = WHEEL[T.pocket];
+    T.history.unshift(n); T.history = T.history.slice(0, 12);
+    const parts = [];
+    for (const s of T.seats) {
+      const bets = betsOf(s.id), staked = bets.reduce((t, b) => t + b.amount, 0);
+      if (!staked) { s.result = null; continue; }
+      const back = returnFor(bets, n);
+      s.chips += back; s.result = { delta: back - staked, won: back > 0 };
+      s.prev = bets.map(b => ({ cell: b.cell, amount: b.amount }));
+      parts.push(`${s.name} ${back - staked >= 0 ? "+$" + (back - staked) : "-$" + (staked - back)}`);
+    }
+    tlog(`${n} ${colorOf(n).toUpperCase()}.` + (parts.length ? " " + parts.join(", ") + "." : ""));
+    T.phase = "payout"; T.deadline = 0; commit();
+    later(PAYOUT_MS, newRound);
+  }
+  // Bots: careful ones bet even money, steady ones dozens and columns, bold ones single numbers.
+  function botBet(s) {
+    if (T.phase !== "betting") return;
+    const unit = [10, 10, 5][s.style], pick = (a) => a[Math.floor(Math.random() * a.length)];
+    const plan = [];
+    if (s.style === 0) { plan.push([pick(["red", "black", "odd", "even", "low", "high"]), pick([10, 25, 25, 50])]); if (Math.random() < 0.3) plan.push([pick(["d1", "d2", "d3"]), 10]); }
+    else if (s.style === 1) { plan.push([pick(["d1", "d2", "d3", "c1", "c2", "c3"]), pick([10, 25])]); if (Math.random() < 0.5) plan.push([pick(["red", "black"]), 10]); }
+    else { const k = 2 + Math.floor(Math.random() * 3); for (let i = 0; i < k; i++) plan.push(["n" + Math.floor(Math.random() * 37), unit * (Math.random() < 0.3 ? 2 : 1)]); }
+    for (const [cell, amt] of plan) { let left = amt; for (const c of [...CHIPS].reverse()) while (left >= c && placeBet(s.id, cell, c, true)) left -= c; }
+    s.ready = true;
+    T.lastAct = { id: s.id, a: "chip", n: (T.lastAct ? T.lastAct.n : 0) + 1 };
+    commit(); maybeSpin();
+  }
+
+  // Nothing is secret at the roulette table: everyone sees every chip.
+  function sanitize() {
+    return {
+      v: 1, kind: T.kind, phase: T.phase, round: T.round, spinNo: T.spinNo, pocket: T.phase === "betting" ? null : T.pocket, history: T.history,
+      bets: T.bets, lastAct: T.lastAct, log: T.log.slice(0, 30), left: T.deadline ? Math.max(0, T.deadline - Date.now()) : 0,
+      seats: T.seats.map(s => ({ id: s.id, name: s.name, bot: s.bot, color: s.color, chips: s.chips, ready: s.ready, gone: s.gone, magnet: s.magnet, result: s.result, hasPrev: s.prev.length > 0 })),
+    };
+  }
+  function commit() {
+    if (T.kind === "online") {
+      store.set("dc-roulette-host-" + online.code, T);
+      const state = sanitize();
+      for (const c of online.conns) if (c.open) { try { c.send({ type: "state", state }); } catch (_) {} }
+    }
+    applyView(sanitize());
+  }
+
+  // ---------- Player actions from this screen ----------
+  let mySeat = "me", chipSel = 10;
+  const remote = () => mode === "online" && online.seat !== "host";
+  const send = (msg, local) => { if (remote()) sendToHost(msg); else local(); };
+  function doBet(cell) {
+    if (!view || view.phase !== "betting") return;
+    sfxSafe(SFX.chip);
+    send({ type: "bet", cell, amount: chipSel }, () => placeBet(mySeat, cell, chipSel));
+  }
+  const doTake = (cell) => send({ type: "take", cell }, () => takeBack(mySeat, cell));
+  const doClear = () => send({ type: "clear" }, () => clearBets(mySeat));
+  const doRebet = () => { sfxSafe(SFX.chips); send({ type: "rebet" }, () => rebet(mySeat)); };
+  const doReady = () => send({ type: "ready" }, () => setReady(mySeat));
+  const doNudge = (dir) => send({ type: "nudge", dir }, () => nudge(mySeat, dir));
+
+  // ---------- Drawing ----------
+  const cv = $("table"), ctx = cv.getContext("2d");
+  const LW = 240, LH = 190, K = 4, F = 8, WX = 64, WY = 62, STEP = Math.PI * 2 / 37;
+  const WOOD = { base: "#4a2c18", grainA: "#3f2513", grainB: "#55331d", hi: "#7a4f2e", lo: "#24140a", groove: "#1a0e06", lip: "#8f6038" };
+  const GLYPHS = {
+    A: [" # ", "# #", "###", "# #", "# #"], B: ["## ", "# #", "## ", "# #", "## "], C: [" ##", "#  ", "#  ", "#  ", " ##"], D: ["## ", "# #", "# #", "# #", "## "],
+    E: ["###", "#  ", "## ", "#  ", "###"], J: ["  #", "  #", "  #", "# #", " # "], K: ["# #", "# #", "## ", "# #", "# #"], L: ["#  ", "#  ", "#  ", "#  ", "###"],
+    N: ["# #", "###", "###", "# #", "# #"], O: [" # ", "# #", "# #", "# #", " # "], P: ["## ", "# #", "## ", "#  ", "#  "], Q: [" # ", "# #", "# #", "## ", " ##"],
+    R: ["## ", "# #", "## ", "# #", "# #"], S: [" ##", "#  ", " # ", "  #", "## "], T: ["###", " # ", " # ", " # ", " # "], Y: ["# #", "# #", " # ", " # ", " # "],
+    1: [" # ", "## ", " # ", " # ", "###"], 2: ["## ", "  #", " # ", "#  ", "###"], 3: ["## ", "  #", " # ", "  #", "## "], 4: ["# #", "# #", "###", "  #", "  #"],
+    5: ["###", "#  ", "## ", "  #", "## "], 6: [" ##", "#  ", "## ", "# #", " # "], 7: ["###", "  #", " # ", " # ", " # "], 8: [" # ", "# #", " # ", "# #", " # "],
+    9: [" # ", "# #", " ##", "  #", "## "], 0: [" # ", "# #", "# #", "# #", " # "], " ": ["   ", "   ", "   ", "   ", "   "],
+    TEN: ["# ###", "# # #", "# # #", "# # #", "# ###"],
+  };
+  const mask = (g, rows, x, y, col, scale = 1) => { g.fillStyle = col; rows.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === "#") g.fillRect(x + i * scale, y + j * scale, scale, scale); }); };
+  function grain(g, x, y, w, h, wd, vertical, rand) {
+    g.fillStyle = wd.base; g.fillRect(x, y, w, h);
+    const len = vertical ? h : w, across = vertical ? w : h;
+    for (let k = 0; k < across; k++) {
+      if (rand() < 0.45) continue;
+      const col = rand() < 0.5 ? wd.grainA : wd.grainB; let pos = 0, wob = 0;
+      while (pos < len) {
+        const run = 2 + Math.floor(rand() * 7); g.fillStyle = col;
+        const kk = clamp(k + wob, 0, across - 1);
+        if (vertical) g.fillRect(x + kk, y + pos, 1, Math.min(run, len - pos)); else g.fillRect(x + pos, y + kk, Math.min(run, len - pos), 1);
+        pos += run + (rand() < 0.3 ? 2 : 0); if (rand() < 0.15) wob += rand() < 0.5 ? -1 : 1;
+      }
+    }
+  }
+  // A square 3 x 5 font for the layout, and a chunky 5 x 7 one for the winning number.
+  const SQ = {
+    0: ["###", "# #", "# #", "# #", "###"], 1: [" # ", "## ", " # ", " # ", "###"], 2: ["###", "  #", "###", "#  ", "###"], 3: ["###", "  #", " ##", "  #", "###"],
+    4: ["# #", "# #", "###", "  #", "  #"], 5: ["###", "#  ", "###", "  #", "###"], 6: ["###", "#  ", "###", "# #", "###"], 7: ["###", "  #", "  #", " # ", " # "],
+    8: ["###", "# #", "###", "# #", "###"], 9: ["###", "# #", "###", "  #", "###"], E: ["###", "#  ", "## ", "#  ", "###"], V: ["# #", "# #", "# #", "# #", " # "],
+    N: ["# #", "###", "###", "# #", "# #"], O: ["###", "# #", "# #", "# #", "###"], D: ["## ", "# #", "# #", "# #", "## "], "-": ["   ", "   ", "###", "   ", "   "], ":": ["   ", " # ", "   ", " # ", "   "],
+  };
+  const BIG = {
+    0: [" ### ", "## ##", "## ##", "## ##", "## ##", "## ##", " ### "], 1: ["  ## ", " ### ", "  ## ", "  ## ", "  ## ", "  ## ", " ####"],
+    2: [" ### ", "## ##", "   ##", "  ## ", " ##  ", "##   ", "#####"], 3: ["#### ", "   ##", "   ##", " ### ", "   ##", "   ##", "#### "],
+    4: ["   ##", "  ###", " # ##", "#  ##", "#####", "   ##", "   ##"], 5: ["#####", "##   ", "#### ", "   ##", "   ##", "## ##", " ### "],
+    6: [" ### ", "##   ", "#### ", "## ##", "## ##", "## ##", " ### "], 7: ["#####", "   ##", "  ## ", "  ## ", " ##  ", " ##  ", " ##  "],
+    8: [" ### ", "## ##", "## ##", " ### ", "## ##", "## ##", " ### "], 9: [" ### ", "## ##", "## ##", " ####", "   ##", "  ## ", " ##  "],
+  };
+  const textW = (s) => s.length * 4 - 1;
+  function sqText(g, s, x, y, col) { for (const ch of s) { if (SQ[ch]) mask(g, SQ[ch], x, y, col); x += 4; } }
+  const POCKET = { red: "#c8344a", black: "#1f1a2c", green: "#2f9e5a" };
+  const CHIP_COLS = { 5: "#e0403a", 10: "#4a7ae0", 25: "#3fae5a", 50: "#8a4fd0", 100: "#1a1626" };
+
+  // The felt and the betting layout, drawn once.
+  let bgImg = null;
+  function tableBg() {
+    if (bgImg) return bgImg;
+    const c = document.createElement("canvas"); c.width = LW; c.height = LH;
+    const g = c.getContext("2d"), rand = rng(55);
+    grain(g, 0, 0, LW, F, WOOD, false, rand); grain(g, 0, LH - F, LW, F, WOOD, false, rand);
+    grain(g, 0, F, F, LH - 2 * F, WOOD, true, rand); grain(g, LW - F, F, F, LH - 2 * F, WOOD, true, rand);
+    g.fillStyle = WOOD.hi; g.fillRect(0, 0, LW, 1); g.fillRect(0, 0, 1, LH);
+    g.fillStyle = WOOD.lo; g.fillRect(0, LH - 1, LW, 1); g.fillRect(LW - 1, 0, 1, LH);
+    g.fillStyle = WOOD.groove; g.fillRect(3, 3, LW - 6, 1); g.fillRect(3, 3, 1, LH - 6); g.fillRect(3, LH - 4, LW - 6, 1); g.fillRect(LW - 4, 3, 1, LH - 6);
+    const fr = rng(6);
+    for (let y = F; y < LH - F; y++) for (let x = F; x < LW - F; x++) {
+      const dx = (x - 120) / 120, dy = (y - 95) / 95, v = dx * dx + dy * dy, n2 = fr();
+      g.fillStyle = v > 0.85 && n2 < (v - 0.85) * 2 ? "#244d39" : n2 < 0.1 ? "#2a5741" : n2 < 0.18 ? "#36694f" : "#2f6148";
+      g.fillRect(x, y, 1, 1);
+    }
+    g.fillStyle = WOOD.groove; g.fillRect(F - 2, F - 2, LW - 2 * F + 4, 2); g.fillRect(F - 2, F - 2, 2, LH - 2 * F + 4); g.fillRect(F - 2, LH - F, LW - 2 * F + 4, 2); g.fillRect(LW - F, F - 2, 2, LH - 2 * F + 4);
+    g.fillStyle = "#c8963e"; g.fillRect(F - 1, F - 1, LW - 2 * F + 2, 1); g.fillRect(F - 1, F - 1, 1, LH - 2 * F + 2);
+    // the wheel's wooden bowl, sunk into the table
+    for (let y = -54; y <= 54; y++) for (let x = -54; x <= 54; x++) { const r = Math.hypot(x, y); if (r <= 53 && r > 49) { g.fillStyle = r > 52 ? "#1a0e06" : (Math.atan2(y, x) < -0.5 && Math.atan2(y, x) > -2.6) ? "#7a4f2e" : "#3f2513"; g.fillRect(WX + x, WY + y, 1, 1); } }
+    // the layout
+    for (const cl of CELLS) {
+      const n = cl.id[0] === "n" ? +cl.id.slice(1) : null;
+      g.fillStyle = n === null ? "#2a5741" : POCKET[colorOf(n)];
+      g.fillRect(cl.x, cl.y, cl.w, cl.h);
+      g.fillStyle = "#e0b040"; g.fillRect(cl.x, cl.y, cl.w, 1); g.fillRect(cl.x, cl.y, 1, cl.h); g.fillRect(cl.x, cl.y + cl.h, cl.w + 1, 1); g.fillRect(cl.x + cl.w, cl.y, 1, cl.h + 1);
+      if (n !== null) { const s = String(n); sqText(g, s, Math.round(cl.x + (cl.w - textW(s)) / 2) + 1, Math.round(cl.y + (cl.h - 5) / 2) + (n === 0 ? 0 : 1), "#f4ecd6"); }
+      else if (cl.label) sqText(g, cl.label, Math.round(cl.x + (cl.w - textW(cl.label)) / 2) + 1, Math.round(cl.y + (cl.h - 5) / 2) + 1, "#f4ecd6");
+      else { // a red or black diamond
+        const cx = cl.x + cl.w / 2, cy = cl.y + cl.h / 2 + 0.5; g.fillStyle = cl.id === "red" ? POCKET.red : POCKET.black;
+        for (let k = -4; k <= 4; k++) { const w = 4 - Math.abs(k); g.fillRect(Math.round(cx - w * 1.6), Math.round(cy + k * 0.9), Math.max(1, Math.round(w * 3.2)), 1); }
+      }
+    }
+    return bgImg = c;
+  }
+
+  // The wheel is drawn pixel by pixel every frame, so it turns crisply.
+  const wheelCv = document.createElement("canvas"); wheelCv.width = 100; wheelCv.height = 100;
+  const wg = wheelCv.getContext("2d"), wImg = wg.createImageData(100, 100);
+  const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const RGB = { red: hex(POCKET.red), black: hex(POCKET.black), green: hex(POCKET.green), fret: hex("#e0b040"), fretLo: hex("#a07a2e"), track: hex("#3a2416"), trackHi: hex("#5a3a22"),
+    rim: hex("#6b3f22"), rimHi: hex("#8f5a3c"), edge: hex("#1a0e06"), cone: hex("#8f5a3c"), coneLo: hex("#6b3f22"), coneHi: hex("#b07448"), spoke: hex("#4a2c18"), gold: hex("#e0b040"), goldHi: hex("#fff1a0"), win: hex("#ffe066") };
+  const POCKET_RGB = WHEEL.map(n => RGB[colorOf(n)]);
+  function drawWheel(rot, glowIdx, now) {
+    const d = wImg.data;
+    for (let y = 0; y < 100; y++) for (let x = 0; x < 100; x++) {
+      const dx = x - 49.5, dy = y - 49.5, r = Math.hypot(dx, dy), o = (y * 100 + x) * 4;
+      if (r > 49) { d[o + 3] = 0; continue; }
+      const a = Math.atan2(dy, dx), lit = Math.cos(a + 2.2); // light from the top left
+      let c;
+      if (r > 47.5) c = RGB.edge;
+      else if (r > 44) c = lit > 0.45 ? RGB.rimHi : RGB.rim;
+      else if (r > 38) c = lit > 0.55 && r > 41 ? RGB.trackHi : RGB.track;
+      else if (r > 37) c = RGB.fretLo;
+      else if (r > 28) {
+        const u = (((a - rot) % (Math.PI * 2)) + Math.PI * 4) % (Math.PI * 2) / STEP, k = Math.floor(u) % 37, f = u - Math.floor(u);
+        c = f < 0.1 ? RGB.fret : (k === glowIdx && Math.floor(now / 250) % 2 === 0) ? RGB.win : POCKET_RGB[k];
+      } else if (r > 27) c = RGB.fret;
+      else if (r > 7) {
+        const spoke = Math.abs(Math.sin(2 * (a - rot))) < 0.07 && r > 9; // four turning spokes
+        c = spoke ? RGB.spoke : lit > 0.5 ? RGB.coneHi : r > 20 && lit < -0.3 ? RGB.coneLo : RGB.cone;
+      } else c = r < 2.5 || (lit > 0.6 && r < 5) ? RGB.goldHi : RGB.gold;
+      d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+    }
+    wg.putImageData(wImg, 0, 0);
+    ctx.drawImage(wheelCv, WX - 50, WY - 50);
+  }
+
+  // Wheel and ball motion. The wheel always turns slowly; a spin whips it round and
+  // the ball runs the other way round the track, drops in and lands in the pocket.
+  const W_IDLE = 0.35, W_SPIN = 3.4;
+  const motion = { base: 0, t0: 0, spin: null, ballIdx: null, ballShown: null, hop: null };
+  function rotAt(now) {
+    const sp = motion.spin;
+    if (!sp) return motion.base + W_IDLE * (now - motion.t0) / 1000;
+    const T_ = SPIN_MS / 1000, t = Math.min((now - sp.start) / 1000, T_);
+    let r = sp.rot0 + W_IDLE * t + (W_SPIN - W_IDLE) * T_ / 3 * (1 - Math.pow(1 - t / T_, 3));
+    if (now - sp.start > SPIN_MS) r += W_IDLE * (now - sp.start - SPIN_MS) / 1000;
+    return r;
+  }
+  function startSpin(now, idx) {
+    const rot0 = rotAt(now);
+    motion.spin = { start: now, rot0, idx };
+    const landRot = rotAt(now + SPIN_MS);
+    motion.spin.target = landRot + (idx + 0.5) * STEP;
+    motion.ballIdx = idx; motion.ballShown = idx; motion.hop = null;
+  }
+  function ballPos(now) {
+    const sp = motion.spin;
+    if (sp && now - sp.start < SPIN_MS) {
+      const u = (now - sp.start) / SPIN_MS, e = 1 - Math.pow(1 - u, 2.4);
+      const a = sp.target + Math.PI * 2 * 5 * (1 - e);
+      let r = 42;
+      if (u > 0.62) { const v = (u - 0.62) / 0.38; r = 42 - 9 * Math.min(1, v * 1.4) + Math.abs(Math.sin(v * Math.PI * 4)) * 3 * (1 - v); }
+      return { a, r };
+    }
+    if (motion.ballIdx === null) return null;
+    let idx = motion.ballShown, lift = 0;
+    if (motion.hop) {
+      const v = clamp((now - motion.hop.start) / 280, 0, 1);
+      idx = motion.hop.from + (motion.hop.to - motion.hop.from) * v; lift = Math.sin(v * Math.PI) * 4;
+      if (v >= 1) { motion.ballShown = motion.hop.to; motion.hop = null; }
+    }
+    return { a: rotAt(now) + (idx + 0.5) * STEP, r: 33 + lift };
+  }
+
+  let view = null, rafId = 0, lastFrame = 0, hoverCell = null;
+  const particles = [];
+  function render() { if (!rafId) rafId = requestAnimationFrame(frame); }
+  function frame(now) {
+    rafId = 0;
+    const dt = Math.min(0.05, (now - (lastFrame || now)) / 1000); lastFrame = now;
+    draw(now, dt);
+    if (!REDUCED || particles.length || (view && view.phase !== "betting")) rafId = requestAnimationFrame(frame); else lastFrame = 0;
+  }
+  function chipAt(x, y, col, n) {
+    for (let k = 0; k < n; k++) {
+      const yy = y - k * 2;
+      ctx.fillStyle = "#000"; ctx.fillRect(x - 3, yy - 1, 7, 4); ctx.fillRect(x - 2, yy - 2, 5, 6);
+      ctx.fillStyle = col; ctx.fillRect(x - 2, yy - 1, 5, 4);
+      ctx.fillStyle = "#f4ecd6"; ctx.fillRect(x - 2, yy, 1, 1); ctx.fillRect(x + 2, yy, 1, 1); ctx.fillRect(x, yy - 1, 1, 1);
+      ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(x - 2, yy + 2, 5, 1);
+    }
+  }
+  function draw(now, dt) {
+    ctx.setTransform(K, 0, 0, K, 0, 0); ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tableBg(), 0, 0);
+    if (!view) return;
+    const n = view.pocket !== null && view.phase === "payout" ? WHEEL[view.pocket] : null;
+    drawWheel(rotAt(now), view.phase === "payout" ? view.pocket : -1, now);
+    const b = ballPos(now);
+    if (b) {
+      const bx = Math.round(WX + Math.cos(b.a) * b.r - 1), by = Math.round(WY + Math.sin(b.a) * b.r - 1);
+      ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(bx + 1, by + 2, 3, 1);
+      ctx.fillStyle = "#f4ecd6"; ctx.fillRect(bx, by, 3, 3); ctx.fillStyle = "#ffffff"; ctx.fillRect(bx, by, 2, 1); ctx.fillStyle = "#a99fc4"; ctx.fillRect(bx + 2, by + 2, 1, 1);
+    }
+    // the last number, big, and the history strip
+    const last = n !== null ? n : view.phase === "betting" && view.history.length ? view.history[0] : null;
+    ctx.fillStyle = "#000"; ctx.fillRect(140, 12, 48, 30);
+    ctx.fillStyle = last === null ? "#1a1626" : POCKET[colorOf(last)]; ctx.fillRect(141, 13, 46, 28);
+    ctx.fillStyle = "#e0b040"; ctx.fillRect(141, 13, 46, 1); ctx.fillRect(141, 40, 46, 1);
+    if (last !== null) { const s = String(last), w = s.length * 12 - 2; for (let i = 0; i < s.length; i++) { mask(ctx, BIG[s[i]], 164 - w / 2 + i * 12 + 1, 21, "#000", 2); mask(ctx, BIG[s[i]], 164 - w / 2 + i * 12, 20, "#f4ecd6", 2); } }
+    else if (view.phase !== "betting") { const k = Math.floor(now / 200) % 3; for (let i = 0; i < 3; i++) { ctx.fillStyle = i === k ? "#ffe066" : "#4a3f6b"; ctx.fillRect(156 + i * 7, 26, 4, 4); } }
+    view.history.slice(n !== null ? 1 : 0, 11).forEach((h, i) => {
+      const x = 194 + (i % 3) * 12, y = 13 + Math.floor(i / 3) * 8;
+      ctx.fillStyle = "#000"; ctx.fillRect(x, y, 11, 7); ctx.fillStyle = POCKET[colorOf(h)]; ctx.fillRect(x + 1, y + 1, 9, 5);
+      const s = String(h); sqText(ctx, s, x + Math.round((11 - textW(s)) / 2), y + 1, "#f4ecd6");
+      // drawn at 5 px tall over a 5 px box: trim to fit
+    });
+    // hover outline on the layout
+    if (hoverCell && view.phase === "betting") { const c = CELL[hoverCell]; ctx.fillStyle = "#ffffff"; ctx.fillRect(c.x, c.y, c.w + 1, 1); ctx.fillRect(c.x, c.y + c.h, c.w + 1, 1); ctx.fillRect(c.x, c.y, 1, c.h); ctx.fillRect(c.x + c.w, c.y, 1, c.h + 1); }
+    // winning boxes blink gold after the spin
+    if (n !== null && Math.floor(now / 300) % 2 === 0) for (const c of CELLS) if (c.wins(n)) { ctx.fillStyle = "#ffe066"; ctx.fillRect(c.x, c.y, c.w + 1, 1); ctx.fillRect(c.x, c.y + c.h, c.w + 1, 1); ctx.fillRect(c.x, c.y, 1, c.h); ctx.fillRect(c.x + c.w, c.y, 1, c.h + 1); }
+    // everyone's chips: a little stack per player per box, in their colour
+    const byCell = {};
+    for (const bt of view.bets) (byCell[bt.cell] = byCell[bt.cell] || []).push(bt);
+    for (const [cell, list] of Object.entries(byCell)) {
+      const c = CELL[cell], lose = n !== null && !c.wins(n);
+      list.forEach((bt, k) => {
+        const seat = view.seats.find(s => s.id === bt.seat), col = seat ? seat.color : "#888";
+        const x = Math.round(c.x + c.w / 2 + (list.length > 1 ? (k % 3 - (Math.min(list.length, 3) - 1) / 2) * 4 : 0)), y = Math.round(c.y + c.h / 2 + 1 - Math.floor(k / 3) * 3);
+        if (lose) ctx.globalAlpha = 0.3;
+        chipAt(x, y, col, clamp(Math.ceil(bt.amount / 25), 1, 4));
+        ctx.globalAlpha = 1;
+      });
+    }
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const q = particles[i];
+      q.vy += 90 * dt; q.x += q.vx * dt; q.y += q.vy * dt;
+      if (now - q.born > q.life) { particles.splice(i, 1); continue; }
+      ctx.fillStyle = q.col; ctx.fillRect(Math.round(q.x), Math.round(q.y), 2, 2);
+    }
+  }
+  function sparkle(x, y, cols, n = 18) {
+    const now = performance.now();
+    for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, v = 20 + Math.random() * 45; particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 35, col: cols[i % cols.length], born: now, life: 600 + Math.random() * 400 }); }
+    render();
+  }
+
+  // ----- Clicking the layout -----
+  function tableXY(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left - cv.clientLeft) / cv.clientWidth * LW, y: (e.clientY - r.top - cv.clientTop) / cv.clientHeight * LH }; }
+  const cellAt = (x, y) => { const c = CELLS.find(c => x >= c.x && x < c.x + c.w + 1 && y >= c.y && y < c.y + c.h + 1); return c ? c.id : null; };
+  const canBet = () => !!view && view.phase === "betting" && view.seats.some(s => s.id === mySeat);
+  cv.addEventListener("click", (e) => { if (!canBet()) return; const { x, y } = tableXY(e), id = cellAt(x, y); if (id) doBet(id); });
+  cv.addEventListener("contextmenu", (e) => { const { x, y } = tableXY(e), id = cellAt(x, y); if (id && canBet()) { e.preventDefault(); doTake(id); } });
+  cv.addEventListener("mousemove", (e) => {
+    const { x, y } = tableXY(e), id = canBet() ? cellAt(x, y) : null;
+    if (id !== hoverCell) { hoverCell = id; cv.classList.toggle("betting", !!id); if (view) { renderTags(view); updateUI(); } render(); }
+  });
+  cv.addEventListener("mouseleave", () => { hoverCell = null; cv.classList.remove("betting"); if (view) renderTags(view); });
+
+  // ----- Labels over the table -----
+  const pct = (x, y) => ({ left: (x / LW * 100) + "%", top: (y / LH * 100) + "%" });
+  function tagEl(key, cls) {
+    let el = document.querySelector(`[data-tag="${key}"]`);
+    if (!el) { el = document.createElement("div"); el.dataset.tag = key; $("tags").append(el); }
+    el.className = "tagEl " + cls;
+    return el;
+  }
+  const PL_Y = (i) => 57 + i * 10.5;
+  function renderTags(v) {
+    const keep = new Set();
+    const place = (el, x, y) => { const p = pct(x, y); el.style.left = p.left; el.style.top = p.top; keep.add(el.dataset.tag); };
+    v.seats.forEach((s, i) => {
+      const el = tagEl("pl-" + s.id, "plTag" + (s.id === mySeat ? " me" : "") + (v.phase === "betting" && s.ready ? " ready" : "") + (s.gone ? " gone" : ""));
+      el.replaceChildren();
+      const dot = document.createElement("i"); dot.style.background = s.color;
+      const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = s.name + (s.id === mySeat ? " (YOU)" : "");
+      const ch = document.createElement("span"); ch.className = "ch"; ch.textContent = "$" + s.chips;
+      const bt = document.createElement("span"); bt.className = "bt";
+      const stake = v.bets.filter(b => b.seat === s.id).reduce((t, b) => t + b.amount, 0);
+      if (v.phase === "payout" && s.result) { bt.textContent = s.result.delta >= 0 ? `+$${s.result.delta}` : `-$${-s.result.delta}`; bt.className = "bt " + (s.result.delta > 0 ? "win" : s.result.delta < 0 ? "lose" : ""); }
+      else bt.textContent = stake ? `BET $${stake}` : v.phase === "betting" ? (s.ready ? "READY" : "...") : "";
+      el.append(dot, nm, ch, bt);
+      place(el, 122, PL_Y(i));
+    });
+    if (hoverCell && v.phase === "betting") {
+      const c = CELL[hoverCell], t = tagEl("tip", "tipTag"); t.textContent = payText(c).toUpperCase();
+      place(t, clamp(c.x + c.w / 2, 40, 200), c.y - 6);
+    }
+    if (v.phase === "spinning" || v.phase === "settling") { const m = tagEl("mid", "midTag"); m.textContent = v.phase === "spinning" ? "NO MORE BETS" : "SETTLING..."; place(m, 164, 48); }
+    else if (v.phase === "payout" && v.pocket !== null) { const nn = WHEEL[v.pocket], r = tagEl("mid", "resultTag win"); r.textContent = `${nn} ${colorOf(nn).toUpperCase()}`; place(r, 164, 48); }
+    for (const el of [...$("tags").children]) if (!keep.has(el.dataset.tag)) el.remove();
+  }
+  function bubble(seatId, text) {
+    if (!view) return;
+    const i = view.seats.findIndex(s => s.id === seatId); if (i < 0) return;
+    const pp = pct(150, PL_Y(i) - 5);
+    const el = document.createElement("div"); el.className = "bubble"; el.textContent = text;
+    el.style.left = pp.left; el.style.top = pp.top;
+    $("bubbles").append(el); setTimeout(() => el.remove(), 1600);
+  }
+  function toast(text, cls = "") {
+    const t = $("toast"); t.textContent = text; t.className = "toast " + cls; t.hidden = false; void t.offsetWidth; t.classList.add("show");
+    clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.hidden = true; }, 2000);
+  }
+
+  // ----- A new view arrives: work out what changed and animate it -----
+  let deadlineAt = 0;
+  function applyView(v) {
+    const prev = view, now = performance.now();
+    view = v;
+    deadlineAt = v.left ? Date.now() + v.left : 0;
+    if (v.phase === "spinning" && (!prev || prev.spinNo !== v.spinNo || prev.phase !== "spinning")) { startSpin(now, v.pocket); sfxSafe(SFX.launch); rollSound(); }
+    if (!prev && v.pocket !== null && v.phase !== "spinning") { motion.ballIdx = v.pocket; motion.ballShown = v.pocket; }
+    if (prev && v.pocket !== null && prev.pocket !== null && v.pocket !== prev.pocket && v.spinNo === prev.spinNo) {
+      // a magnet nudge: the ball hops one pocket over
+      let from = motion.hop ? motion.hop.to : motion.ballShown, d = v.pocket - (((from % 37) + 37) % 37);
+      if (d > 18) d -= 37; if (d < -18) d += 37;
+      motion.hop = { from, to: from + d, start: now }; sfxSafe(SFX.magnet);
+    }
+    if (prev) {
+      if (v.lastAct && (!prev.lastAct || v.lastAct.n !== prev.lastAct.n)) {
+        if (v.lastAct.a === "nudge") bubble(v.lastAct.id, v.lastAct.say || "MAGNET!");
+        else if (v.lastAct.a === "chip" && v.lastAct.id !== mySeat) sfxSafe(SFX.chip);
+      }
+      if (v.phase === "settling" && prev.phase !== "settling") sfxSafe(SFX.clack);
+      if (v.phase === "payout" && prev.phase !== "payout") payoutFx(v);
+      if (v.phase === "betting" && prev.phase !== "betting") $("bubbles").replaceChildren();
+    }
+    renderTags(v); renderLog(v); updateUI(); render();
+  }
+  function payoutFx(v) {
+    const nn = WHEEL[v.pocket];
+    sparkle(WX, WY, nn === 0 ? ["#3fd0a0", "#ffe066"] : ["#ffe066", "#ffffff", POCKET[colorOf(nn)]], 14);
+    const me = v.seats.find(s => s.id === mySeat);
+    if (me && me.result) {
+      if (me.result.delta > 0) { toast(`${nn} ${colorOf(nn).toUpperCase()}! +$${me.result.delta}`); sfxSafe(SFX.win); }
+      else if (me.result.delta === 0) { toast(`${nn} ${colorOf(nn).toUpperCase()}: EVEN`, "push"); sfxSafe(SFX.chips); }
+      else { toast(`${nn} ${colorOf(nn).toUpperCase()}: -$${-me.result.delta}`, "lose"); sfxSafe(SFX.lose); }
+      if (me.chips < CHIPS[0]) setTimeout(() => toast("OUT OF MONEY", "lose"), 2100);
+    } else sfxSafe(SFX.chips);
+    for (const c of CELLS) if (c.wins(nn) && v.bets.some(b => b.cell === c.id)) sparkle(c.x + c.w / 2, c.y + c.h / 2, ["#ffe066", "#3fd0a0"], 8);
+  }
+  function renderLog(v) {
+    const box = $("log"); box.textContent = "";
+    (v.log.length ? v.log : ["Place your bets."]).forEach((l, i) => { if (i) box.append(document.createElement("br")); box.append(l); });
+  }
+
+  // ----- Side panels -----
+  function setStatus(main, sub, dots) {
+    const box = $("status"); box.replaceChildren();
+    const m = document.createElement("div"); m.className = "main"; m.textContent = main;
+    if (dots) { const d = document.createElement("span"); d.className = "dots"; d.innerHTML = "<i></i><i></i><i></i>"; m.append(d); }
+    box.append(m);
+    if (sub) { const s = document.createElement("div"); s.className = "muted"; s.textContent = sub; box.append(s); }
+  }
+  const secsLeft = () => deadlineAt ? Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1000)) : 0;
+  const chipBtns = CHIPS.map(v => {
+    const b = document.createElement("button"); b.type = "button";
+    const i = document.createElement("i"); i.style.background = CHIP_COLS[v];
+    const t = document.createElement("span"); t.textContent = "$" + v;
+    b.append(i, t); b.onclick = () => { chipSel = v; sfxSafe(SFX.chip); updateUI(); };
+    $("chipSel").append(b); return [v, b];
+  });
+  function updateUI() {
+    syncAudio();
+    const isOnline = mode === "online", v = view;
+    $("setup").hidden = isOnline;
+    $("onlineBox").hidden = !isOnline;
+    $("chatBox").hidden = !isOnline || !online.connectedOnce;
+    document.body.classList.toggle("focus", isOnline && !!v && online.connectedOnce && v.seats.length > 1);
+    $("botField").hidden = prefs.opp !== "bot";
+    for (const b of document.querySelectorAll("[data-opp]")) b.setAttribute("aria-pressed", String(b.dataset.opp === prefs.opp));
+    for (const b of document.querySelectorAll("[data-bots]")) b.setAttribute("aria-pressed", String(+b.dataset.bots === prefs.bots));
+    $("setupHint").textContent = prefs.opp === "online" ? "You'll get a link for up to 5 friends." : `You and ${prefs.bots} bot${prefs.bots > 1 ? "s" : ""}, $${START} each.`;
+    if (isOnline) renderOnline();
+    for (const id of ["betUI", "magnetUI", "waitUI", "startOver"]) $(id).hidden = true;
+    $("actBox").classList.remove("myturn");
+    if (!v) { setStatus(isOnline ? "Connecting" : "Setting up", "", true); $("actTitle").textContent = "WAITING"; return; }
+    const me = v.seats.find(s => s.id === mySeat), myBets = v.bets.filter(b => b.seat === mySeat), stake = myBets.reduce((t, b) => t + b.amount, 0);
+    const t = secsLeft(), nn = v.pocket !== null ? WHEEL[v.pocket] : null;
+    if (!me) {
+      $("actTitle").textContent = "WATCHING"; $("waitUI").hidden = false; $("waitUI").textContent = "The table is full (6 players). You can watch.";
+    } else if (v.phase === "betting" && me.chips < CHIPS[0] && !stake) {
+      $("actTitle").textContent = "OUT OF MONEY"; $("waitUI").hidden = false;
+      $("waitUI").textContent = isOnline ? "You've lost all your money. You can stay and watch." : "You've lost all your money. Start over to play again.";
+      $("startOver").hidden = isOnline;
+    } else if (v.phase === "betting") {
+      $("actTitle").textContent = "YOUR BETS"; $("betUI").hidden = false; if (!me.ready) $("actBox").classList.add("myturn");
+      for (const [val, b] of chipBtns) { b.setAttribute("aria-pressed", String(val === chipSel)); b.disabled = val > me.chips || stake + val > MAX_BET; }
+      $("betSum").textContent = `$${stake} BET`;
+      $("betHint").textContent = hoverCell ? payText(CELL[hoverCell]) + "." : stake ? `${myBets.length} bet${myBets.length > 1 ? "s" : ""} down. Up to $${MAX_BET} a spin.` : "Pick a chip, then click a number or a box on the table.";
+      $("undo").disabled = $("clear").disabled = !stake; $("rebet").disabled = !me.hasPrev;
+      $("spin").textContent = me.ready ? "WAITING FOR THE OTHERS" : isOnline ? (stake ? "READY!" : "READY (NO BET)") : (stake ? "SPIN!" : "SPIN WITHOUT BETTING");
+      $("spin").disabled = me.ready;
+    } else if (v.phase === "spinning" || v.phase === "settling") {
+      $("actTitle").textContent = "THE MAGNET"; $("magnetUI").hidden = false;
+      const ready = me.magnet === 0, open = v.phase === "settling" && ready;
+      const l = WHEEL[(v.pocket + 36) % 37], r = WHEEL[(v.pocket + 1) % 37];
+      $("magnetHint").textContent = !ready ? `Recharging: ready in ${me.magnet} spin${me.magnet > 1 ? "s" : ""}.` : v.phase === "spinning" ? "Get ready: once the ball drops, you can nudge it one pocket over." : `The ball is in ${nn}. Nudge it to ${l} or ${r}?`;
+      $("nudgeL").textContent = v.phase === "settling" ? `◀ ${l}` : "◀ NUDGE"; $("nudgeR").textContent = v.phase === "settling" ? `${r} ▶` : "NUDGE ▶";
+      $("nudgeL").disabled = $("nudgeR").disabled = !open;
+      if (open) $("actBox").classList.add("myturn");
+    } else {
+      $("actTitle").textContent = "THE RESULT"; $("waitUI").hidden = false;
+      $("waitUI").textContent = me.result ? (me.result.delta > 0 ? `${nn} ${colorOf(nn)}: you win $${me.result.delta}!` : me.result.delta === 0 ? `${nn} ${colorOf(nn)}: you broke even.` : `${nn} ${colorOf(nn)}: you lose $${-me.result.delta}.`) : `${nn} ${colorOf(nn)}. You sat this one out.`;
+    }
+    if (v.phase === "betting") setStatus("Place your bets", isOnline ? (t ? `Spinning in ${t}s` : "The clock starts with the first bet.") : "Press SPIN when you're ready.", !!(me && me.ready));
+    else if (v.phase === "spinning") setStatus("No more bets", "The ball is rolling...", true);
+    else if (v.phase === "settling") setStatus("The ball drops...", t ? `Magnets: ${t}s` : "", true);
+    else if (nn !== null) setStatus(`${nn} ${colorOf(nn).toUpperCase()}`, nn === 0 ? "Zero! Every outside bet loses." : `${nn % 2 ? "Odd" : "Even"}, ${nn <= 18 ? "1-18" : "19-36"}, dozen ${Math.ceil(nn / 12)}.`);
+  }
+  setInterval(() => { if (view && deadlineAt) updateUI(); }, 1000);
+  $("undo").onclick = () => doTake(null); $("clear").onclick = doClear; $("rebet").onclick = doRebet; $("spin").onclick = doReady;
+  $("nudgeL").onclick = () => doNudge(-1); $("nudgeR").onclick = () => doNudge(1);
+  $("startOver").onclick = () => startLocal();
+  document.addEventListener("keydown", (e) => {
+    if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || !view) return;
+    const k = e.key.toLowerCase();
+    if (view.phase === "betting") {
+      if (k >= "1" && k <= "5") { chipSel = CHIPS[+k - 1]; updateUI(); }
+      else if (k === "u") doTake(null); else if (k === "c") doClear(); else if (k === "r") doRebet();
+      else if (k === " " || k === "enter") { e.preventDefault(); doReady(); }
+    } else if (view.phase === "settling") { if (k === "arrowleft") doNudge(-1); else if (k === "arrowright") doNudge(1); }
+  });
+
+  // setup
+  let mode = "local";
+  for (const b of document.querySelectorAll("[data-opp]")) b.onclick = () => { prefs.opp = b.dataset.opp; savePrefs(); updateUI(); };
+  for (const b of document.querySelectorAll("[data-bots]")) b.onclick = () => { prefs.bots = +b.dataset.bots; savePrefs(); updateUI(); };
+  $("nameInput").value = prefs.name;
+  $("nameInput").addEventListener("input", () => {
+    prefs.name = $("nameInput").value; savePrefs();
+    if (mode === "local" && T) { const s = seatOf("me"); if (s) { s.name = myName(); commit(); } }
+  });
+  function resetScreen() { view = null; particles.length = 0; hoverCell = null; motion.spin = null; motion.ballIdx = null; motion.hop = null; $("tags").replaceChildren(); $("bubbles").replaceChildren(); }
+  function startLocal() {
+    leaveOnline(false);
+    mode = "local"; mySeat = "me"; resetScreen();
+    newLocalTable(prefs.bots);
+  }
+  $("start").onclick = () => { if (prefs.opp === "online") { if (typeof Peer !== "undefined") hostTable(newCode(), true); } else startLocal(); };
+
+  // ---------- Online (peer-to-peer; the host's browser runs the table) ----------
+  const PREFIX = "devour-roulette-v1-";
+  const PEER_OPTS = window.DEVOUR_PEER_OPTS || {};
+  const online = { code: null, seat: null, peer: null, conns: [], hostConn: null, connected: false, connectedOnce: false, chat: [], retries: 0 };
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (_) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} },
+  };
+  function newCode() { const abc = "abcdefghjkmnpqrstuvwxyz23456789"; let s = ""; for (let i = 0; i < 6; i++) s += abc[Math.floor(Math.random() * abc.length)]; return s; }
+  const tableLink = (code) => location.origin + location.pathname + "#r-" + code;
+  function setHash(code) { try { const h = code ? "#r-" + code : ""; if (location.hash !== h) window.history.replaceState(null, "", h || location.pathname); } catch (_) {} }
+  function setMsg(id, text, isErr) { const el = $(id); el.textContent = text || ""; el.classList.toggle("err", !!isErr); }
+  function myToken() {
+    let t = null; try { t = sessionStorage.getItem("dc-roulette-token"); } catch (_) {}
+    if (!t) { t = Math.random().toString(36).slice(2, 12); try { sessionStorage.setItem("dc-roulette-token", t); } catch (_) {} }
+    return t;
+  }
+  function hostTable(code, fresh) {
+    leaveOnline(false); clearTimers(); resetScreen();
+    mode = "online"; online.code = code; online.seat = "host"; mySeat = "h"; online.connectedOnce = true;
+    setHash(code);
+    const saved = !fresh && store.get("dc-roulette-host-" + code);
+    if (saved && saved.kind === "online" && Array.isArray(saved.seats)) {
+      T = saved;
+      // Timers don't survive a reload: hand back any chips on the table and start a fresh round.
+      if (T.phase === "betting" || T.phase === "spinning" || T.phase === "settling") for (const b of T.bets) { const s = seatOf(b.seat); if (s) s.chips += b.amount; }
+      for (const s of T.seats) if (s.id !== "h") { s.gone = true; s.goneRounds = 0; }
+      T.lastAct = null;
+      tlog("The table was reopened. Bets in play were returned.");
+      newRound();
+    } else {
+      T = { kind: "online", phase: "betting", round: 0, spinNo: 0, seats: [], bets: [], pocket: null, history: [], log: [], deadline: 0, lastAct: null };
+      T.seats.push(makeSeat("h", myName(), false));
+      tlog(`${myName()} opened the table.`);
+      newRound();
+    }
+    startHostPeer();
+    updateUI();
+  }
+  function startHostPeer() {
+    const code = online.code;
+    setMsg("gameMsg", "Connecting to the match server...");
+    const peer = new Peer(PREFIX + code, PEER_OPTS); online.peer = peer;
+    peer.on("open", () => { online.retries = 0; setMsg("gameMsg", ""); updateUI(); });
+    peer.on("connection", (conn) => {
+      conn.on("open", () => { if (online.peer !== peer) { conn.close(); return; } online.conns.push(conn); try { conn.send({ type: "chat-history", list: online.chat.slice(-60) }); } catch (_) {} });
+      conn.on("data", (msg) => onHostMessage(conn, msg));
+      conn.on("close", () => {
+        online.conns = online.conns.filter(c => c !== conn);
+        const id = conn.seatId; if (!id || !T) return;
+        const s = seatOf(id); if (!s) return;
+        s.gone = true; s.goneRounds = 0; sysChat(`${s.name} left the table.`); tlog(`${s.name} stepped away.`);
+        commit(); maybeSpin();
+      });
+    });
+    peer.on("disconnected", () => { if (online.peer === peer && !peer.destroyed) { try { peer.reconnect(); } catch (_) {} } });
+    peer.on("error", (e) => {
+      if (online.peer !== peer) return;
+      if (e.type === "unavailable-id") {
+        if (online.retries++ < 5) { peer.destroy(); setTimeout(() => { if (online.code === code && online.seat === "host") startHostPeer(); }, 3000); setMsg("gameMsg", "Reconnecting your table..."); }
+        else setMsg("gameMsg", "This table is already open in another tab.", true);
+      } else if (["network", "server-error", "socket-error", "socket-closed"].includes(e.type)) setMsg("gameMsg", "Can't reach the match server. Check your internet connection.", true);
+    });
+  }
+  const cleanName = (n) => (typeof n === "string" ? n : "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim().slice(0, 8);
+  function onHostMessage(conn, msg) {
+    if (!msg || typeof msg !== "object" || !T) return;
+    if (msg.type === "hello") {
+      const token = typeof msg.token === "string" ? msg.token.slice(0, 20) : "";
+      let s = token && T.seats.find(x => x.token === token);
+      if (s) { s.gone = false; s.goneRounds = 0; s.name = cleanName(msg.name) || s.name; }
+      else if (T.seats.length < 6) { s = makeSeat("p" + Math.random().toString(36).slice(2, 8), cleanName(msg.name) || "GUEST", false); s.token = token; T.seats.push(s); }
+      if (s) {
+        conn.seatId = s.id;
+        for (const c of online.conns) if (c !== conn && c.seatId === s.id) { c.seatId = null; try { c.close(); } catch (_) {} }
+        try { conn.send({ type: "welcome", seat: s.id }); } catch (_) {}
+        sysChat(`${s.name} joined the table.`); sfxSafe(SFX.join); tlog(`${s.name} sits down with $${s.chips}.`);
+      } else try { conn.send({ type: "welcome", seat: null }); } catch (_) {}
+      commit();
+      return;
+    }
+    const id = conn.seatId; if (!id) return;
+    if (msg.type === "bet") placeBet(id, String(msg.cell), +msg.amount);
+    else if (msg.type === "take") takeBack(id, msg.cell ? String(msg.cell) : null);
+    else if (msg.type === "clear") clearBets(id);
+    else if (msg.type === "rebet") rebet(id);
+    else if (msg.type === "ready") setReady(id);
+    else if (msg.type === "nudge") nudge(id, +msg.dir);
+    else if (msg.type === "chat") hostReceiveChat(id, msg.text);
+  }
+  function joinTable(code) {
+    leaveOnline(false); clearTimers(); resetScreen(); T = null;
+    mode = "online"; online.code = code; online.seat = "guest"; mySeat = null;
+    setHash(code); setMsg("gameMsg", "Connecting to the table...");
+    updateUI(); render();
+    const peer = new Peer(PEER_OPTS); online.peer = peer;
+    peer.on("open", () => connectToHost());
+    peer.on("error", (e) => {
+      if (online.peer !== peer) return;
+      if (e.type === "peer-unavailable") { setMsg("gameMsg", "Can't find that table. Check the code, and make sure the person who opened it still has the page open.", true); $("reconnect").hidden = false; }
+      else if (["network", "server-error", "socket-error", "socket-closed"].includes(e.type)) { setMsg("gameMsg", "Can't reach the match server. Check your internet connection.", true); $("reconnect").hidden = false; }
+    });
+  }
+  function connectToHost() {
+    const peer = online.peer; if (!peer || peer.destroyed) return;
+    $("reconnect").hidden = true;
+    if (peer.disconnected) { try { peer.reconnect(); } catch (_) {} }
+    const conn = peer.connect(PREFIX + online.code, { reliable: true });
+    online.hostConn = conn;
+    const t = setTimeout(() => { if (!conn.open && online.hostConn === conn) { setMsg("gameMsg", "Still trying to reach the table. Some school or work networks block direct connections.", true); $("reconnect").hidden = false; } }, 15000);
+    conn.on("open", () => { clearTimeout(t); online.connected = true; online.connectedOnce = true; setMsg("gameMsg", ""); try { conn.send({ type: "hello", token: myToken(), name: myName() }); } catch (_) {} updateUI(); });
+    conn.on("data", (msg) => {
+      if (!msg || typeof msg !== "object" || online.hostConn !== conn) return;
+      if (msg.type === "welcome") { mySeat = msg.seat || null; if (!mySeat) setMsg("gameMsg", "The table is full. You're watching."); if (view) applyView(view); }
+      else if (msg.type === "state" && msg.state && Array.isArray(msg.state.seats)) applyView(msg.state);
+      else if (msg.type === "chat-history" && Array.isArray(msg.list)) { online.chat = msg.list.filter(okChat).slice(-120); renderChat(); }
+      else if (msg.type === "chat" && okChat(msg.msg)) addChat(msg.msg);
+    });
+    conn.on("close", () => {
+      clearTimeout(t); if (online.hostConn !== conn) return;
+      online.connected = false; setMsg("gameMsg", "Lost the connection to the table. Press RECONNECT once the host is back.", true);
+      sysChat("Connection lost."); $("reconnect").hidden = false; updateUI();
+    });
+  }
+  function sendToHost(msg) {
+    const c = online.hostConn;
+    if (!c || !c.open) { setMsg("gameMsg", "Not connected to the table.", true); return false; }
+    try { c.send(msg); return true; } catch (_) { return false; }
+  }
+  function leaveOnline(toLocal = true) {
+    if (online.peer) { try { online.peer.destroy(); } catch (_) {} }
+    Object.assign(online, { code: null, seat: null, peer: null, conns: [], hostConn: null, connected: false, connectedOnce: false, chat: [], retries: 0 });
+    renderChat(); $("reconnect").hidden = true; document.body.classList.remove("focus");
+    if (toLocal) { setHash(null); setMsg("gameMsg", ""); prefs.opp = "bot"; startLocal(); }
+  }
+  function renderOnline() {
+    $("tableCode").textContent = (online.code || "").toUpperCase();
+    $("shareLink").value = online.code ? tableLink(online.code) : "";
+    $("shareBox").hidden = online.seat !== "host";
+    $("spinNow").hidden = !(online.seat === "host" && view && view.phase === "betting" && view.bets.length);
+    const box = $("players"); box.replaceChildren();
+    for (const s of (view ? view.seats : [])) {
+      const c = document.createElement("span"); c.className = "chip"; c.style.background = s.color;
+      const n = document.createElement("span"); n.textContent = s.name + (s.id === mySeat ? " (you)" : "") + (s.id === "h" ? " - host" : "") + (s.gone ? " - away" : "");
+      const ch = document.createElement("span"); ch.className = "muted"; ch.textContent = "$" + s.chips;
+      box.append(c, n, ch);
+    }
+    const canChat = !!mySeat && (online.seat === "host" || online.connected);
+    $("chatInput").disabled = $("chatSend").disabled = !canChat;
+    for (const b of document.querySelectorAll("#quickChat button")) b.disabled = !canChat;
+  }
+  $("spinNow").onclick = () => { if (online.seat === "host" && T) spin(); };
+  $("leave").onclick = () => leaveOnline(true);
+  $("reconnect").onclick = () => { if (online.code && online.seat === "guest") { setMsg("gameMsg", "Reconnecting..."); if (online.peer && !online.peer.destroyed) connectToHost(); else joinTable(online.code); } };
+  $("copyLink").onclick = () => {
+    const input = $("shareLink"), done = () => { $("copyLink").textContent = "COPIED!"; setTimeout(() => { $("copyLink").textContent = "COPY LINK"; }, 1500); };
+    if (navigator.clipboard) navigator.clipboard.writeText(input.value).then(done, () => { input.select(); try { document.execCommand("copy"); done(); } catch (_) {} });
+    else { input.select(); try { document.execCommand("copy"); done(); } catch (_) {} }
+  };
+  function openTable(raw) {
+    const code = (raw || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (code.length !== 6) { setMsg("onlineMsg", "Codes are 6 letters and numbers.", true); return; }
+    if (typeof Peer === "undefined") return;
+    if (store.get("dc-roulette-host-" + code)) hostTable(code, false); else joinTable(code);
+  }
+  $("join").onclick = () => openTable($("joinCode").value);
+  $("joinCode").addEventListener("keydown", (e) => { if (e.key === "Enter") openTable($("joinCode").value); });
+
+  // ----- Chat -----
+  const okChat = (m) => m && typeof m === "object" && typeof m.text === "string" && typeof m.name === "string";
+  const cleanText = (t) => typeof t === "string" ? t.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 200) : "";
+  function addChat(entry, quiet) {
+    online.chat.push(entry); if (online.chat.length > 120) online.chat.shift();
+    renderChat();
+    if (!quiet && entry.from !== "sys" && entry.from !== mySeat) { sfxSafe(SFX.chat); const b = $("chatBox"); b.classList.remove("ping"); void b.offsetWidth; b.classList.add("ping"); }
+  }
+  function sysChat(text) { const e = { from: "sys", name: "", text }; addChat(e, true); broadcastChat(e); }
+  function broadcastChat(entry, except) { if (online.seat !== "host") return; for (const c of online.conns) if (c.open && c !== except) { try { c.send({ type: "chat", msg: entry }); } catch (_) {} } }
+  const chatTimes = [];
+  function hostReceiveChat(id, text) {
+    const now = Date.now(); while (chatTimes.length && now - chatTimes[0] > 3000) chatTimes.shift();
+    if (chatTimes.length >= 8) return;
+    const s = seatOf(id), t = cleanText(text); if (!s || !t) return;
+    chatTimes.push(now);
+    const e = { from: id, name: s.name, color: s.color, text: t }; addChat(e); broadcastChat(e);
+  }
+  function sendChat(text) {
+    const t = cleanText(text); if (!t || !mySeat) return false;
+    if (online.seat === "host") { const s = seatOf(mySeat); const e = { from: mySeat, name: s.name, color: s.color, text: t }; addChat(e, true); broadcastChat(e); return true; }
+    return sendToHost({ type: "chat", text: t });
+  }
+  function renderChat() {
+    const log = $("chatLog"), atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30;
+    log.replaceChildren();
+    if (!online.chat.length) { const e = document.createElement("div"); e.className = "chatMsg sys"; e.textContent = "No messages yet. Say hi!"; log.append(e); }
+    for (const m of online.chat) {
+      const row = document.createElement("div");
+      if (m.from === "sys") { row.className = "chatMsg sys"; row.textContent = m.text; log.append(row); continue; }
+      row.className = "chatMsg" + (m.from === mySeat ? " mine" : "");
+      const chip = document.createElement("span"); chip.className = "chip"; chip.style.background = /^#[0-9a-f]{6}$/i.test(m.color || "") ? m.color : "#888";
+      const who = document.createElement("span"); who.className = "who"; who.textContent = (m.from === mySeat ? "You" : m.name) + ":";
+      const text = document.createElement("span"); text.textContent = m.text;
+      row.append(chip, who, text); log.append(row);
+    }
+    if (atBottom) log.scrollTop = log.scrollHeight;
+  }
+  $("chatForm").addEventListener("submit", (e) => { e.preventDefault(); if (sendChat($("chatInput").value)) $("chatInput").value = ""; });
+  for (const b of document.querySelectorAll("#quickChat button")) b.onclick = () => sendChat(b.dataset.say);
+  // ---------- Sound: synthesised with Web Audio ----------
+  const audio = { ctx: null, master: null, sfx: null, music: null, noise: null };
+  function ac() {
+    if (audio.ctx) return audio.ctx;
+    try {
+      const C = window.AudioContext || window.webkitAudioContext, c = new C();
+      audio.ctx = c; audio.master = c.createGain(); audio.master.connect(c.destination);
+      audio.sfx = c.createGain(); audio.sfx.connect(audio.master); audio.music = c.createGain(); audio.music.connect(audio.master);
+      const buf = c.createBuffer(1, c.sampleRate, c.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      audio.noise = buf; applyVolumes();
+    } catch (_) { audio.ctx = null; }
+    return audio.ctx;
+  }
+  function applyVolumes() {
+    const c = audio.ctx; if (!c) return; const now = c.currentTime;
+    audio.master.gain.setTargetAtTime(settings.muted ? 0 : (settings.volume / 100) * 0.9, now, 0.03);
+    audio.sfx.gain.setTargetAtTime(settings.sfx ? 1 : 0, now, 0.03);
+    audio.music.gain.setTargetAtTime(settings.music ? 0.5 : 0, now, 0.25);
+  }
+  const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+  function tone({ type = "square", f, f2, at = 0, abs = false, dur = 0.1, vol = 0.1, attack = 0.004, bus = "sfx", vib = 0 }) {
+    const c = ac(); if (!c) return;
+    const t0 = abs ? at : c.currentTime + at, o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    if (vib) { const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = 5; lg.gain.value = vib; l.connect(lg); lg.connect(o.frequency); l.start(t0); l.stop(t0 + dur + 0.05); }
+    g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(vol, t0 + attack); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(audio[bus]); o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  function noise({ at = 0, abs = false, dur = 0.1, vol = 0.1, type = "bandpass", freq = 1000, f2, q = 1, bus = "sfx" }) {
+    const c = ac(); if (!c) return;
+    const t0 = abs ? at : c.currentTime + at, src = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain();
+    src.buffer = audio.noise; src.loop = true; fl.type = type; fl.frequency.setValueAtTime(freq, t0); fl.Q.value = q;
+    if (f2) fl.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(vol, t0 + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(fl); fl.connect(g); g.connect(audio[bus]); src.start(t0, Math.random() * 0.5); src.stop(t0 + dur + 0.02);
+  }
+  const SFX = {
+    click() { tone({ f: 1400, dur: 0.025, vol: 0.03 }); },
+    chip() { tone({ type: "sine", f: 2500, dur: 0.05, vol: 0.06 }); tone({ type: "sine", f: 3300, at: 0.035, dur: 0.06, vol: 0.05 }); noise({ type: "highpass", freq: 5000, dur: 0.03, vol: 0.07 }); },
+    chips() { for (let i = 0; i < 4; i++) { tone({ type: "sine", f: 2300 + Math.random() * 900, at: i * 0.045, dur: 0.05, vol: 0.05 }); noise({ at: i * 0.045, type: "highpass", freq: 5000, dur: 0.025, vol: 0.06 }); } },
+    launch() { noise({ type: "bandpass", freq: 1200, f2: 3000, q: 2, dur: 0.25, vol: 0.15 }); tone({ type: "sine", f: 300, f2: 700, dur: 0.2, vol: 0.05 }); },
+    tick(v) { noise({ type: "bandpass", freq: 3200, q: 4, dur: 0.02, vol: 0.12 * v }); },
+    clack() { for (let i = 0; i < 4; i++) noise({ at: i * 0.09 * (1 + i * 0.3), type: "bandpass", freq: 2600, q: 3, dur: 0.03, vol: 0.25 / (i + 1) }); tone({ type: "square", f: 900, dur: 0.02, vol: 0.03 }); },
+    magnet() { tone({ type: "sawtooth", f: 220, f2: 880, dur: 0.18, vol: 0.05 }); tone({ type: "sine", f: 1320, at: 0.15, dur: 0.12, vol: 0.06 }); },
+    win() { [523, 659, 784, 1046].forEach((f, i) => tone({ type: "triangle", f, at: i * 0.08, dur: 0.22, vol: 0.1 })); setTimeout(() => SFX.chips(), 450); },
+    lose() { [440, 370, 311].forEach((f, i) => tone({ type: "triangle", f, at: i * 0.15, dur: 0.25, vol: 0.09, vib: 4 })); },
+    join() { tone({ type: "triangle", f: 660, dur: 0.1, vol: 0.08 }); tone({ type: "triangle", f: 990, at: 0.1, dur: 0.15, vol: 0.08 }); },
+    chat() { tone({ type: "triangle", f: 988, dur: 0.08, vol: 0.08 }); tone({ type: "triangle", f: 1319, at: 0.08, dur: 0.12, vol: 0.08 }); },
+  };
+  const sfxSafe = (fn) => { try { if (settings.sfx && !settings.muted) fn(); } catch (_) {} };
+  // The ball rattling round the track: quick ticks that slow and soften as it drops.
+  function rollSound() {
+    if (!settings.sfx || settings.muted) return;
+    let t = 0; const ticks = [];
+    while (t < SPIN_MS - 300) { const u = t / SPIN_MS; ticks.push([t, 1 - u * 0.7]); t += 45 + u * u * 260; }
+    for (const [at, v] of ticks) setTimeout(() => sfxSafe(() => SFX.tick(v)), at);
+  }
+
+  // ----- Music: an original, slow lounge loop in F major -----
+  // Walking triangle bass, soft chord stabs, brushed drums and a sine "vibraphone" tune, swung.
+  const LOUNGE = [ // [bass root, chord, walk]
+    [41, [57, 60, 64, 69], [41, 45, 48, 50]], [38, [57, 60, 62, 65], [38, 41, 45, 42]], [43, [58, 62, 65, 67], [43, 46, 50, 47]], [36, [58, 60, 64, 67], [36, 40, 43, 40]],
+    [45, [55, 60, 64, 67], [45, 48, 52, 49]], [38, [57, 60, 62, 66], [38, 42, 45, 42]], [43, [58, 62, 65, 67], [43, 46, 50, 48]], [36, [58, 60, 64, 67], [36, 40, 43, 40]],
+  ];
+  const TUNE = [
+    [[0, 76, 2], [2, 77, 1], [3, 79, 3], [6, 76, 2]], [[0, 77, 3], [4, 74, 2], [6, 72, 2]], [[0, 74, 2], [2, 77, 2], [4, 81, 3]], [[0, 79, 4], [5, 76, 1], [6, 72, 2]],
+    [[0, 72, 2], [2, 76, 2], [4, 79, 4]], [[0, 78, 3], [3, 77, 1], [4, 74, 4]], [[0, 74, 2], [2, 70, 2], [4, 72, 2], [6, 74, 2]], [[0, 76, 6]],
+  ];
+  const music = { playing: false, step: 0, next: 0, timer: null };
+  const QUARTER = 60 / 84;
+  function playStep(s, at) {
+    const bar = (s >> 3) % 8, st = s & 7, [root, chord, walk] = LOUNGE[bar], n = (o) => ({ abs: true, bus: "music", ...o });
+    const eighth = st % 2 === 0 ? QUARTER * 0.62 : QUARTER * 0.38;
+    if (st % 2 === 0) tone(n({ type: "triangle", f: midi(walk[st >> 1]), at, dur: QUARTER * 0.9, vol: 0.15, attack: 0.01 }));
+    if (st === 2 || st === 5) for (const note of chord) tone(n({ type: "sine", f: midi(note), at, dur: 0.35, vol: 0.022, attack: 0.01 }));
+    for (const [p, note, len] of TUNE[bar]) if (p === st && (s >> 6) % 2 === 1) { tone(n({ type: "sine", f: midi(note), at, dur: len * QUARTER * 0.5, vol: 0.05, vib: 3 })); tone(n({ type: "triangle", f: midi(note - 12), at, dur: len * QUARTER * 0.4, vol: 0.015 })); }
+    if (st === 2 || st === 6) noise(n({ type: "highpass", freq: 3500, at, dur: 0.18, vol: 0.05 }));
+    noise(n({ type: "highpass", freq: 8000, at, dur: 0.03, vol: st % 2 ? 0.015 : 0.025 }));
+    if (st === 0 && bar % 2 === 0) tone(n({ type: "sine", f: 90, f2: 45, at, dur: 0.18, vol: 0.12 }));
+    return eighth;
+  }
+  function startMusic() {
+    const c = ac(); if (!c || music.playing) return;
+    music.playing = true; music.next = c.currentTime + 0.1;
+    music.timer = setInterval(() => { while (music.next < c.currentTime + 0.2) { music.next += playStep(music.step, music.next); music.step = (music.step + 1) % 128; } }, 30);
+  }
+  function syncAudio() { if (audio.ctx && settings.music && !music.playing) startMusic(); }
+  function unlockAudio() { const c = ac(); if (!c) return; if (c.state === "suspended") c.resume(); syncAudio(); }
+  document.addEventListener("pointerdown", unlockAudio);
+  document.addEventListener("keydown", (e) => {
+    unlockAudio();
+    if ((e.key === "m" || e.key === "M") && !(e.target instanceof HTMLInputElement)) { settings.muted = !settings.muted; saveSettings(); renderSound(); applyVolumes(); }
+  });
+  document.addEventListener("visibilitychange", () => { const c = audio.ctx; if (!c) return; if (document.hidden) c.suspend(); else c.resume(); });
+  document.addEventListener("click", (e) => { if (e.target.closest("button") && !e.target.closest("#chipSel")) sfxSafe(SFX.click); });
+  function renderSound() {
+    $("musicToggle").setAttribute("aria-checked", String(settings.music));
+    $("sfxToggle").setAttribute("aria-checked", String(settings.sfx));
+    $("volume").value = settings.volume;
+    $("volLabel").textContent = settings.muted ? "(MUTED)" : settings.volume + "%";
+    $("soundHint").textContent = settings.muted ? "Muted. Press M to unmute." : "Press M to mute.";
+  }
+  $("musicToggle").onclick = () => { settings.music = !settings.music; saveSettings(); renderSound(); applyVolumes(); syncAudio(); };
+  $("sfxToggle").onclick = () => { settings.sfx = !settings.sfx; saveSettings(); renderSound(); applyVolumes(); };
+  $("volume").oninput = () => { settings.volume = +$("volume").value; settings.muted = false; saveSettings(); renderSound(); applyVolumes(); };
+  // ---------- Boot ----------
+  renderSound(); renderChat();
+  const hashCode = () => { const m = /^#r-([a-z0-9]{6})$/i.exec(location.hash); return m ? m[1].toLowerCase() : null; };
+  if (typeof Peer === "undefined") {
+    $("oppOnline").disabled = true; $("join").disabled = true;
+    if (prefs.opp === "online") prefs.opp = "bot";
+    setMsg("onlineMsg", "Online play couldn't load. You can still play the bots here.", true);
+    startLocal();
+  } else {
+    const code = hashCode();
+    if (code) openTable(code); else startLocal();
+  }
+  window.addEventListener("hashchange", () => { const code = hashCode(); if (code && code !== online.code && typeof Peer !== "undefined") openTable(code); });
+})();
+</script>
+</body>
+</html>

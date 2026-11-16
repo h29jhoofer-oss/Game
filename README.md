@@ -1,10 +1,11 @@
 # Pixel Parlor
 
-A cozy pixel-art game room. `index.html` is the home page: pick **CHESS**, **CARDS** or **DICE**.
+A cozy pixel-art game room. `index.html` is the home page: pick **CHESS**, **CARDS**, **DICE** or **ROULETTE**.
 
 - `chess.html`: **Devour Chess** (below).
 - `cards.html`: **Pixel Blackjack**.
 - `dice.html`: **Pixel Liar's Dice**.
+- `roulette.html`: **Pixel Roulette**.
 
 Old chess invite links (`index.html#g-CODE`) still open the chess game.
 
@@ -34,6 +35,15 @@ Old chess invite links (`index.html#g-CODE`) still open the chess game.
 - **Loaded die:** once a game, each player can secretly turn one of their dice to any face. There's no log line or sound.
 - Bots (PIP, MOSS, JUNIPER, TOFFEE, BRAMBLE) work out the odds from their own dice; careful ones call liar sooner, bluffers push their bids, and they use their loaded die now and then.
 - Online: the host's browser runs the table and only ever sends each player their own dice; everyone's dice are sent only when the cups come up. 30 seconds per turn (then the smallest raise is made for you). Keys: + and - for the count, 2 to 6 for the face, Enter bids, L liar, O spot on.
+
+## Pixel Roulette
+
+- Single-zero roulette for 1 to 6 players: you and **1 to 5 bots**, or an **online table** with up to 5 friends. Everyone starts with $500 and can bet up to $200 a spin.
+- Pick a chip ($5 to $100) and click the layout: single numbers pay 35 to 1, dozens and columns 2 to 1, and red/black, odd/even, 1-18/19-36 pay 1 to 1 (they lose on zero). Right-click takes a chip back; UNDO, CLEAR and REBET help. Every player's chips show in their colour.
+- The wheel is drawn pixel by pixel each frame. The ball runs round the track against the spin, drops, rattles and lands.
+- **The magnet:** while the ball settles, anyone can nudge it one pocket left or right. It recharges after 5 spins, and everyone sees who used it. Bots use theirs when a neighbouring pocket pays them more.
+- Bots: careful ones play even money, steady ones dozens and columns, bold ones scatter single numbers. Broke bots leave the table.
+- Online: the host's browser runs the wheel. It spins when everyone is ready, or 20 seconds after the first bet (the host can also press SPIN NOW). Keys: 1 to 5 pick a chip, U undo, C clear, R rebet, Space spins, arrows nudge.
 
 ## Devour Chess
 
@@ -72,4 +82,4 @@ Some strict school or work networks block direct browser connections. If a frien
 ## Files
 
 - `index.html`: the game, for GitHub Pages or any static host.
-- `artifact.html` (home), `artifact-chess.html`, `artifact-cards.html` and `artifact-dice.html`: the claude.ai copy, built by `tools/build_artifact.py`. It has everything except online play (claude.ai pages can't connect browsers directly).
+- `artifact.html` (home), `artifact-chess.html`, `artifact-cards.html`, `artifact-dice.html` and `artifact-roulette.html`: the claude.ai copy, built by `tools/build_artifact.py`. It has everything except online play (claude.ai pages can't connect browsers directly).

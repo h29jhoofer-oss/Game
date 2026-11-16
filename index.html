@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="A cozy pixel-art game room: Devour Chess, Blackjack and Liar's Dice, against bots or friends online.">
+<meta name="description" content="A cozy pixel-art game room: Devour Chess, Blackjack, Liar's Dice and Roulette, against bots or friends online.">
 <title>Pixel Parlor</title>
 <script>
   // Old chess invite links (index.html#g-CODE) still open the chess game.
@@ -29,8 +29,8 @@
   }
   h1 { font-size: 22px; margin: 0; color: var(--accent); text-shadow: 3px 3px 0 var(--edge); letter-spacing: 2px; text-align: center; }
   .tag { color: var(--muted); margin: 0 0 18px; text-align: center; }
-  .games { display: grid; grid-template-columns: repeat(3, minmax(0, 300px)); gap: 24px; width: 100%; justify-content: center; }
-  @media (max-width: 1020px) { .games { grid-template-columns: repeat(2, minmax(0, 300px)); } }
+  .games { display: grid; grid-template-columns: repeat(4, minmax(0, 290px)); gap: 24px; width: 100%; justify-content: center; }
+  @media (max-width: 1300px) { .games { grid-template-columns: repeat(2, minmax(0, 300px)); } }
   @media (max-width: 640px) { .games { grid-template-columns: minmax(0, 340px); } }
   a.game {
     display: flex; flex-direction: column; gap: 10px; padding: 12px; text-decoration: none; color: var(--ink);
@@ -69,6 +69,12 @@
     <div class="name">DICE</div>
     <div class="desc">Liar's Dice: bid on what's under everyone's cups, call bluffs, and be the last one holding dice.</div>
     <span class="play">PLAY DICE</span>
+  </a>
+  <a class="game" href="roulette.html" id="goRoulette">
+    <canvas id="artRoulette" width="96" height="72" aria-hidden="true"></canvas>
+    <div class="name">ROULETTE</div>
+    <div class="desc">Roulette: red or black, a dozen or a lucky number. Nudge the ball with your magnet as it settles.</div>
+    <span class="play">PLAY ROULETTE</span>
   </a>
 </div>
 <p class="foot">Every game works against bots, or online with a link you send to friends.</p>
@@ -197,7 +203,7 @@
     if (!REDUCED && k < 3) { g.fillStyle = "#fff"; g.fillRect(x + 2 + k * 3, top, 1, 1); }
   }
   let feltImg = null;
-  function felt() {
+  function felt(arc = true) {
     const c = document.createElement("canvas"); c.width = 96; c.height = 72; const g = c.getContext("2d");
     wood(g, 0, 0, 96, 72, "#4a2c18", "#3f2513", "#55331d", 5);
     g.fillStyle = "#7a4f2e"; g.fillRect(0, 0, 96, 1); g.fillStyle = "#1a0e06"; g.fillRect(3, 3, 90, 66);
@@ -208,8 +214,10 @@
     }
     g.fillStyle = "#c8963e"; g.fillRect(3, 3, 90, 1); g.fillRect(3, 3, 1, 66);
     // the gold arc the players sit along
-    g.fillStyle = "rgba(224,176,64,0.75)";
-    for (let x = 8; x < 88; x++) g.fillRect(x, Math.round(40 + Math.sin(((x - 8) / 80) * Math.PI) * 5), 1, 1);
+    if (arc) {
+      g.fillStyle = "rgba(224,176,64,0.75)";
+      for (let x = 8; x < 88; x++) g.fillRect(x, Math.round(40 + Math.sin(((x - 8) / 80) * Math.PI) * 5), 1, 1);
+    }
     return c;
   }
   function drawCards(g, t) {
@@ -284,8 +292,51 @@
     const k = REDUCED ? 0 : Math.floor(t / 260) % 6, bob = REDUCED ? 0 : Math.round(Math.abs(Math.sin(t / 260 * Math.PI)) * 3);
     die(g, 78, 55 - bob, [6, 2, 4, 3, 5, 1][k]);
   }
-  const cvC = document.getElementById("artChess").getContext("2d"), cvK = document.getElementById("artCards").getContext("2d"), cvD = document.getElementById("artDice").getContext("2d");
-  function frame(t) { drawChess(cvC, t); drawCards(cvK, t); drawDice(cvD, t); if (!REDUCED) setTimeout(() => requestAnimationFrame(frame), 120); }
+  // ----- Roulette tile: the wheel turning on the left with the ball in it, a corner
+  // of the betting layout covered in chips, and stacks of winnings in front.
+  const WH = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+  const RD = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+  const pocketCol = (n) => n === 0 ? "#2f9e5a" : RD.has(n) ? "#c8344a" : "#1f1a2c";
+  const SQD = { 0: ["###", "# #", "# #", "# #", "###"], 1: [" # ", "## ", " # ", " # ", "###"], 2: ["###", "  #", "###", "#  ", "###"], 3: ["###", "  #", " ##", "  #", "###"],
+    4: ["# #", "# #", "###", "  #", "  #"], 5: ["###", "#  ", "###", "  #", "###"], 6: ["###", "#  ", "###", "# #", "###"], 7: ["###", "  #", "  #", " # ", " # "],
+    8: ["###", "# #", "###", "# #", "###"], 9: ["###", "# #", "###", "  #", "###"], "-": ["   ", "   ", "###", "   ", "   "] };
+  let feltR = null;
+  function drawRoulette(g, t) {
+    if (!feltR) { feltR = felt(false); }
+    g.drawImage(feltR, 0, 0);
+    // a corner of the layout: 19 to 30, and the third dozen bar
+    for (let col = 0; col < 3; col++) for (let row = 0; row < 3; row++) {
+      const n = 19 + col * 3 + (2 - row), x = 61 + col * 10, y = 6 + row * 10;
+      g.fillStyle = "#e0b040"; g.fillRect(x, y, 11, 11); g.fillStyle = pocketCol(n); g.fillRect(x + 1, y + 1, 9, 9);
+      ink(g, SQD[String(n)[0]], x + 2, y + 3, "#f4ecd6"); ink(g, SQD[String(n)[1]], x + 6, y + 3, "#f4ecd6");
+    }
+    // red and black boxes under the numbers
+    for (const [x, col] of [[61, "#c8344a"], [76, "#1f1a2c"]]) {
+      g.fillStyle = "#e0b040"; g.fillRect(x, 36, 16, 9); g.fillStyle = "#2a5741"; g.fillRect(x + 1, 37, 14, 7);
+      g.fillStyle = col; for (let k = -2; k <= 2; k++) { const w = 3 - Math.abs(k); g.fillRect(x + 8 - w * 2, 40 + k, w * 4, 1); }
+    }
+    // chips on a few numbers
+    const pip = (x, y, c) => { g.fillStyle = "#000"; g.fillRect(x - 1, y - 1, 7, 5); g.fillStyle = c; g.fillRect(x, y, 5, 3); g.fillStyle = "#f4ecd6"; g.fillRect(x, y + 1, 1, 1); g.fillRect(x + 4, y + 1, 1, 1); };
+    pip(64, 10, "#e0403a"); pip(74, 20, "#4a7ae0"); pip(74, 18, "#4a7ae0"); pip(84, 30, "#3fae5a"); pip(84, 10, "#8a4fd0"); pip(66, 38, "#e0403a"); pip(66, 36, "#ffe066");
+    // the wheel, drawn pixel by pixel so it turns crisply
+    const cx = 31.5, cy = 36.5, rot = REDUCED ? 0.4 : t / 1400, step = Math.PI * 2 / 37;
+    for (let y = 9; y < 65; y++) for (let x = 4; x < 60; x++) {
+      const dx = x - cx, dy = y - cy, r = Math.hypot(dx, dy); if (r > 27) continue;
+      const a = Math.atan2(dy, dx), lit = Math.cos(a + 2.2);
+      let c;
+      if (r > 26) c = "#1a0e06"; else if (r > 23.5) c = lit > 0.45 ? "#8f5a3c" : "#6b3f22"; else if (r > 20.5) c = lit > 0.55 ? "#5a3a22" : "#3a2416";
+      else if (r > 15) { const u = ((((a - rot) % (Math.PI * 2)) + Math.PI * 4) % (Math.PI * 2)) / step, k = Math.floor(u) % 37; c = u - Math.floor(u) < 0.12 ? "#e0b040" : pocketCol(WH[k]); }
+      else if (r > 14) c = "#e0b040"; else if (r > 4) c = Math.abs(Math.sin(2 * (a - rot))) < 0.12 && r > 5 ? "#4a2c18" : lit > 0.5 ? "#b07448" : "#8f5a3c";
+      else c = r < 1.5 || lit > 0.6 ? "#fff1a0" : "#e0b040";
+      g.fillStyle = c; g.fillRect(x, y, 1, 1);
+    }
+    // the ball, riding pocket 17
+    const ba = rot + (8 + 0.5) * step; g.fillStyle = "#ffffff"; g.fillRect(Math.round(cx + Math.cos(ba) * 18 - 1), Math.round(cy + Math.sin(ba) * 18 - 1), 2, 2);
+    // winnings stacked in front
+    chipStack(g, 60, 57, [0, 0, 1, 1, 3], t, 5); chipStack(g, 71, 59, [3, 3, 4, 4, 3, 2, 2], t, 6); chipStack(g, 82, 57, [2, 1, 0, 0], t, 7); chipStack(g, 64, 64, [1, 1, 2], t, 8); chipStack(g, 77, 65, [4, 0], t, 9);
+  }
+  const cvC = document.getElementById("artChess").getContext("2d"), cvK = document.getElementById("artCards").getContext("2d"), cvD = document.getElementById("artDice").getContext("2d"), cvR = document.getElementById("artRoulette").getContext("2d");
+  function frame(t) { drawChess(cvC, t); drawCards(cvK, t); drawDice(cvD, t); drawRoulette(cvR, t); if (!REDUCED) setTimeout(() => requestAnimationFrame(frame), 120); }
   requestAnimationFrame(frame);
 })();
 </script>
