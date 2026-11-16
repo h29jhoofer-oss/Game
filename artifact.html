@@ -19,7 +19,8 @@
   }
   h1 { font-size: 22px; margin: 0; color: var(--accent); text-shadow: 3px 3px 0 var(--edge); letter-spacing: 2px; text-align: center; }
   .tag { color: var(--muted); margin: 0 0 18px; text-align: center; }
-  .games { display: grid; grid-template-columns: repeat(2, minmax(0, 300px)); gap: 24px; width: 100%; justify-content: center; }
+  .games { display: grid; grid-template-columns: repeat(3, minmax(0, 300px)); gap: 24px; width: 100%; justify-content: center; }
+  @media (max-width: 1020px) { .games { grid-template-columns: repeat(2, minmax(0, 300px)); } }
   @media (max-width: 640px) { .games { grid-template-columns: minmax(0, 340px); } }
   a.game {
     display: flex; flex-direction: column; gap: 10px; padding: 12px; text-decoration: none; color: var(--ink);
@@ -51,8 +52,14 @@
     <div class="desc">Blackjack: beat the dealer to 21 against up to 5 bots, or with up to 5 friends online.</div>
     <span class="play">PLAY CARDS</span>
   </a>
+  <a class="game" href="dice.html" id="goDice">
+    <canvas id="artDice" width="96" height="72" aria-hidden="true"></canvas>
+    <div class="name">DICE</div>
+    <div class="desc">Liar's Dice: bid on what's under everyone's cups, call bluffs, and be the last one holding dice.</div>
+    <span class="play">PLAY DICE</span>
+  </a>
 </div>
-<p class="foot">Both games work against bots, or online with a link you send to friends.</p>
+<p class="foot">Every game works against bots, or online with a link you send to friends.</p>
 <script>
 (() => {
   const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -207,8 +214,66 @@
     card(g, 7, 46, "AS"); card(g, 15, 45 - lift, "KH");
     card(g, 59, 46, "7D"); card(g, 66, 45, "TC"); card(g, 73, 44, "4S");
   }
-  const cvC = document.getElementById("artChess").getContext("2d"), cvK = document.getElementById("artCards").getContext("2d");
-  function frame(t) { drawChess(cvC, t); drawCards(cvK, t); if (!REDUCED) setTimeout(() => requestAnimationFrame(frame), 120); }
+  // ----- Dice tile: a cup lifted off a winning cluster of fives, another cup still
+  // hiding its dice, a bid on the baize and one die still tumbling.
+  const PIPS = { 1: [[4, 4]], 2: [[2, 2], [6, 6]], 3: [[2, 2], [4, 4], [6, 6]], 4: [[2, 2], [6, 2], [2, 6], [6, 6]], 5: [[2, 2], [6, 2], [4, 4], [2, 6], [6, 6]], 6: [[2, 2], [6, 2], [2, 4], [6, 4], [2, 6], [6, 6]] };
+  function die(g, x, y, face, glow) {
+    g.fillStyle = "rgba(0,0,0,0.35)"; g.fillRect(x + 1, y + 9, 8, 1);
+    g.fillStyle = glow ? "#ffe066" : "#1a1626"; g.fillRect(x + 1, y, 7, 9); g.fillRect(x, y + 1, 9, 7);
+    g.fillStyle = "#f4ecd6"; g.fillRect(x + 1, y + 1, 7, 7);
+    g.fillStyle = "#d8ccab"; g.fillRect(x + 1, y + 7, 7, 1); g.fillRect(x + 7, y + 1, 1, 7);
+    g.fillStyle = "#fffdf6"; g.fillRect(x + 1, y + 1, 6, 1);
+    g.fillStyle = face === 1 ? "#d8344a" : "#1a1626"; for (const [a, b] of PIPS[face]) g.fillRect(x + a, y + b, 1, 1);
+  }
+  function cup(g, cx, by) { // open end down, bottom centre at (cx, by)
+    for (let y = 0; y < 22; y++) {
+      const half = Math.round(8 + (y / 21) * 5), x0 = cx - half, x1 = cx + half, yy = by - 22 + y;
+      g.fillStyle = "#000"; g.fillRect(x0, yy, x1 - x0, 1);
+      if (y === 0 || y === 21) continue;
+      for (let x = x0 + 1; x < x1 - 1; x++) {
+        const u = (x - x0) / (x1 - x0);
+        g.fillStyle = y >= 15 && y <= 16 ? (u < 0.3 ? "#ffe066" : u > 0.75 ? "#a07a2e" : "#c8963e") : y >= 19 ? "#3d2010" : u < 0.18 ? "#9a5a33" : u < 0.32 ? "#7a4527" : u > 0.78 ? "#40210f" : "#5e331b";
+        g.fillRect(x, yy, 1, 1);
+      }
+    }
+  }
+  let baizeImg = null;
+  function baize() {
+    const c = document.createElement("canvas"); c.width = 96; c.height = 72; const g = c.getContext("2d");
+    wood(g, 0, 0, 96, 72, "#4a2c18", "#3f2513", "#55331d", 6);
+    g.fillStyle = "#7a4f2e"; g.fillRect(0, 0, 96, 1); g.fillStyle = "#1a0e06"; g.fillRect(3, 3, 90, 66);
+    const r = rng(12);
+    for (let y = 4; y < 68; y++) for (let x = 4; x < 92; x++) {
+      const dx = (x - 48) / 48, dy = (y - 36) / 36, v = dx * dx + dy * dy, n = r();
+      g.fillStyle = v > 0.8 && n < (v - 0.8) * 1.6 ? "#4a1820" : n < 0.12 ? "#561d26" : n < 0.2 ? "#6e2a33" : "#62222c"; g.fillRect(x, y, 1, 1);
+    }
+    g.fillStyle = "#c8963e"; g.fillRect(3, 3, 90, 1); g.fillRect(3, 3, 1, 66);
+    return c;
+  }
+  function drawDice(g, t) {
+    if (!baizeImg) baizeImg = baize();
+    g.drawImage(baizeImg, 0, 0);
+    // two cups still down at the back corners, a stray die or two beside them
+    for (const cx of [17, 79]) { g.fillStyle = "rgba(0,0,0,0.35)"; g.fillRect(cx - 12, 29, 25, 2); cup(g, cx, 30); }
+    die(g, 25, 31, 3); die(g, 4, 33, 6); die(g, 62, 30, 4); die(g, 84, 33, 2);
+    // centre: the reveal. Fives and wild ones glow; the lifted cup hovers above.
+    const cl = [[34, 38, 5], [44, 38, 1], [54, 38, 5], [39, 48, 2], [49, 48, 5]];
+    for (const [x, y, f] of cl) die(g, x, y, f, f === 5 || f === 1);
+    const hover = REDUCED ? 0 : Math.round(Math.sin(t / 380) + 1);
+    g.fillStyle = "rgba(0,0,0,0.25)"; g.fillRect(36, 35, 22, 2);
+    cup(g, 48, 27 - hover);
+    // the bid in front: "4 x five"
+    const Y = 61;
+    g.fillStyle = "#ffe066"; [[0, 0], [0, 1], [0, 2], [2, 0], [2, 1], [2, 2], [1, 2], [2, 3], [2, 4]].forEach(([a, b]) => g.fillRect(8 + a, Y + b, 1, 1));
+    g.fillStyle = "#f4ecd6"; for (let k = 0; k < 3; k++) { g.fillRect(13 + k, Y + 1 + k, 1, 1); g.fillRect(15 - k, Y + 1 + k, 1, 1); }
+    die(g, 18, Y - 2, 5);
+    die(g, 66, 58, 1);
+    // a die still tumbling in from the bottom right
+    const k = REDUCED ? 0 : Math.floor(t / 260) % 6, bob = REDUCED ? 0 : Math.round(Math.abs(Math.sin(t / 260 * Math.PI)) * 3);
+    die(g, 78, 55 - bob, [6, 2, 4, 3, 5, 1][k]);
+  }
+  const cvC = document.getElementById("artChess").getContext("2d"), cvK = document.getElementById("artCards").getContext("2d"), cvD = document.getElementById("artDice").getContext("2d");
+  function frame(t) { drawChess(cvC, t); drawCards(cvK, t); drawDice(cvD, t); if (!REDUCED) setTimeout(() => requestAnimationFrame(frame), 120); }
   requestAnimationFrame(frame);
 })();
 </script>

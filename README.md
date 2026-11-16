@@ -1,9 +1,10 @@
 # Pixel Parlor
 
-A cozy pixel-art game room. `index.html` is the home page: pick **CHESS** or **CARDS**.
+A cozy pixel-art game room. `index.html` is the home page: pick **CHESS**, **CARDS** or **DICE**.
 
 - `chess.html`: **Devour Chess** (below).
 - `cards.html`: **Pixel Blackjack**.
+- `dice.html`: **Pixel Liar's Dice**.
 
 Old chess invite links (`index.html#g-CODE`) still open the chess game.
 
@@ -24,6 +25,15 @@ Old chess invite links (`index.html#g-CODE`) still open the chess game.
   - Online, 4 to 6 people can play (the dealer counts as one, so up to 5 at the cards). The host presses DEAL ROLES once at least 4 are seated; latecomers join as gamblers until all 6 seats are taken. Each player's browser is only ever sent its own role and its own secrets (the cheater's and jester's peeks, a gambler's pocket).
 - Its own synthesised lounge music, plus card, chip and win sounds. Sound settings are shared with chess.
 - Online: the host's browser runs the table and never sends anyone the shoe or the dealer's face-down card. Players have 15 seconds to bet once someone has bet, and 25 seconds per turn (then they stand). Anyone who drops out can reopen the link to get their seat and chips back. A 7th visitor watches. The table has a chat.
+
+## Pixel Liar's Dice
+
+- 2 to 6 players: you and **1 to 5 bots**, or an **online table** with up to 5 friends (the host presses START GAME once at least 2 are seated; anyone arriving mid-game is dealt in next game, and a 7th visitor watches).
+- Everyone starts with 5 dice, rolled in secret under a leather cup. Players take turns bidding on how many dice of one face are on the whole table (**ones are wild**). Each bid must raise the count, or keep it and raise the face.
+- **LIAR!** lifts every cup: if the bid was short, the bidder loses a die, otherwise the caller does. **SPOT ON** wins a die back (up to 5) if the bid is exactly right, and costs a die if not. The loser starts the next round; the last player with dice wins.
+- **Loaded die:** once a game, each player can secretly turn one of their dice to any face. There's no log line or sound.
+- Bots (PIP, MOSS, JUNIPER, TOFFEE, BRAMBLE) work out the odds from their own dice; careful ones call liar sooner, bluffers push their bids, and they use their loaded die now and then.
+- Online: the host's browser runs the table and only ever sends each player their own dice; everyone's dice are sent only when the cups come up. 30 seconds per turn (then the smallest raise is made for you). Keys: + and - for the count, 2 to 6 for the face, Enter bids, L liar, O spot on.
 
 ## Devour Chess
 
@@ -62,4 +72,4 @@ Some strict school or work networks block direct browser connections. If a frien
 ## Files
 
 - `index.html`: the game, for GitHub Pages or any static host.
-- `artifact.html` (home), `artifact-chess.html` and `artifact-cards.html`: the claude.ai copy, built by `tools/build_artifact.py`. It has everything except online play (claude.ai pages can't connect browsers directly).
+- `artifact.html` (home), `artifact-chess.html`, `artifact-cards.html` and `artifact-dice.html`: the claude.ai copy, built by `tools/build_artifact.py`. It has everything except online play (claude.ai pages can't connect browsers directly).

@@ -1,0 +1,1217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Pixel-art Liar's Dice against up to 5 bots, or up to 5 friends online with a link.">
+<title>Pixel Liar's Dice</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #1a1626; --panel: #2a2340; --raised: #4a3f6b; --raised-hi: #5d5085;
+    --ink: #f4ecd6; --muted: #a99fc4; --accent: #ff7a59; --ok: #3fd0a0; --bad: #ff5e7a; --gold: #ffe066; --edge: #000;
+    --font-pixel: "Press Start 2P", ui-monospace, "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { background: var(--bg); }
+  body {
+    color: var(--ink); font-family: var(--font-pixel); font-size: 10px; line-height: 1.7;
+    display: flex; flex-direction: column; align-items: center; padding-block: 16px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  h1 { font-size: 18px; margin: 8px 0 4px; color: var(--accent); text-shadow: 3px 3px 0 var(--edge); letter-spacing: 1px; text-align: center; }
+  .tag { color: var(--muted); margin: 0 0 16px; text-align: center; }
+  .topnav { width: 100%; max-width: 1180px; display: flex; }
+  a.back { color: var(--ink); text-decoration: none; background: var(--raised); border: 3px solid var(--edge); box-shadow: 3px 3px 0 var(--edge); padding: 6px 10px; font-size: 9px; }
+  a.back:hover { background: var(--raised-hi); }
+  a.back:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--edge); }
+  .wrap { display: grid; gap: 16px; width: 100%; max-width: 1180px; justify-content: center;
+    grid-template-columns: minmax(0, 620px); grid-template-areas: "board" "left" "right"; align-items: start; }
+  @media (min-width: 760px) {
+    .wrap { grid-template-columns: minmax(0, 620px) minmax(240px, 290px); grid-template-areas: "board left" "board right"; grid-template-rows: auto 1fr; }
+  }
+  @media (min-width: 1100px) {
+    .wrap { grid-template-columns: 260px minmax(0, 620px) 280px; grid-template-areas: "left board right"; grid-template-rows: auto; }
+  }
+  .boardcol { grid-area: board; min-width: 0; }
+  .boardwrap { position: relative; }
+  canvas#table { width: 100%; height: auto; display: block; image-rendering: pixelated; border: 4px solid var(--edge); box-shadow: 6px 6px 0 var(--edge); }
+  .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .side.left { grid-area: left; }
+  .side.right { grid-area: right; }
+  .box { background: var(--panel); border: 3px solid var(--edge); box-shadow: 4px 4px 0 var(--edge); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .box h2 { font-size: 10px; margin: 0; color: var(--accent); letter-spacing: 1px; }
+  .muted { color: var(--muted); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button, input { font: inherit; color: var(--ink); border: 3px solid var(--edge); }
+  button { background: var(--raised); padding: 8px 10px; cursor: pointer; box-shadow: 3px 3px 0 var(--edge); }
+  button:hover { background: var(--raised-hi); }
+  button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--edge); }
+  button.primary { background: var(--accent); color: var(--bg); }
+  button:disabled { opacity: .45; cursor: default; transform: none; }
+  button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--ok); outline-offset: 2px; }
+  input { background: var(--bg); padding: 8px; width: 9.5em; text-transform: uppercase; }
+  .code { font-size: 16px; color: var(--ok); letter-spacing: 3px; user-select: all; }
+  #status { min-height: 3.6em; }
+  #status .main { color: var(--ink); }
+  #log { max-height: 160px; overflow-y: auto; color: var(--muted); }
+  .rules p { margin: 0; color: var(--muted); }
+  .rules b { color: var(--ink); font-weight: normal; }
+  .err { color: var(--bad); }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .label { color: var(--muted); font-size: 8px; letter-spacing: 1px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button { flex: 1 1 auto; padding: 8px 6px; }
+  .seg button[aria-pressed="true"] { background: var(--ok); color: var(--bg); }
+  .toggle { display: inline-flex; align-items: center; gap: 10px; align-self: flex-start; }
+  .track { width: 34px; height: 18px; background: var(--bg); border: 3px solid var(--edge); position: relative; display: inline-block; }
+  .knob { position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; background: var(--muted); transition: left .12s; }
+  .toggle[aria-checked="true"] .track { background: var(--ok); }
+  .toggle[aria-checked="true"] .knob { left: 19px; background: var(--ink); }
+  button.big { padding: 12px 10px; font-size: 12px; }
+  .divider { border: 0; border-top: 3px dashed var(--raised); margin: 4px 0; width: 100%; }
+  input[type="range"] { width: 100%; padding: 0; border: 0; background: transparent; accent-color: var(--ok); text-transform: none; }
+  .dots { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+  .dots i { width: 4px; height: 4px; background: var(--accent); animation: dothop .9s steps(2, jump-none) infinite; }
+  .dots i:nth-child(2) { animation-delay: .3s; } .dots i:nth-child(3) { animation-delay: .6s; }
+  @keyframes dothop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+  @media (prefers-reduced-motion: reduce) { .knob { transition: none; } .dots i { animation: none; } }
+  /* Your bid */
+  .bidLine { display: flex; align-items: center; gap: 8px; }
+  .bidAmt { flex: 1; text-align: center; font-size: 18px; color: var(--gold); text-shadow: 2px 2px 0 var(--edge); }
+  .faces { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .faces button, .loadBtns button { padding: 5px 2px; display: flex; justify-content: center; }
+  .faces button[aria-pressed="true"], .loadBtns button[aria-pressed="true"] { background: var(--gold); }
+  canvas.die { width: 27px; height: 27px; image-rendering: pixelated; display: block; }
+  .moves { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .moves button { padding: 12px 4px; font-size: 11px; }
+  button.bid { background: var(--ok); color: var(--bg); grid-column: 1 / -1; }
+  button.liar { background: var(--bad); color: var(--bg); }
+  button.spot { background: #59c1ff; color: var(--bg); }
+  .keys { font-size: 8px; color: var(--muted); }
+  #actBox.myturn { animation: turnGlow 1s steps(2) infinite; }
+  @keyframes turnGlow { 50% { border-color: var(--gold); } }
+  @media (prefers-reduced-motion: reduce) { #actBox.myturn { animation: none; border-color: var(--gold); } }
+  #loadBox { border-color: #c98bff; }
+  .loadBtns { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+
+  /* Labels laid over the table */
+  #tags { position: absolute; inset: 4px; pointer-events: none; }
+  .tagEl { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; font-size: clamp(6px, 1.05vw, 8px); line-height: 1.4;
+    background: rgba(26,22,38,.88); border: 2px solid var(--edge); padding: 2px 5px; text-align: center; }
+  .seatTag { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .seatTag .nm { display: flex; align-items: center; gap: 4px; }
+  .seatTag .nm i { width: 7px; height: 7px; border: 1px solid var(--edge); display: inline-block; }
+  .seatTag .ct { color: var(--muted); }
+  .seatTag .lb { color: var(--gold); }
+  .seatTag.me { border-color: var(--ok); }
+  .seatTag.turn { border-color: var(--gold); animation: turnGlow 1s steps(2) infinite; }
+  .seatTag.gone, .seatTag.out { opacity: .5; }
+  .midTag { color: var(--ink); }
+  .resultTag { font-size: clamp(7px, 1.3vw, 10px); border-width: 3px; animation: popIn .5s steps(5) both; }
+  .resultTag.win { color: var(--gold); border-color: var(--gold); }
+  .resultTag.lose { color: var(--bad); }
+  @keyframes popIn { 0% { transform: translate(-50%, -50%) scale(.3); } 70% { transform: translate(-50%, -50%) scale(1.15); } 100% { transform: translate(-50%, -50%) scale(1); } }
+  #bubbles { position: absolute; inset: 4px; pointer-events: none; z-index: 2; }
+  .bubble { position: absolute; transform: translate(-50%, -100%); background: #f4ecd6; color: #1a1626; border: 3px solid #1a1626;
+    padding: 3px 6px; font-size: clamp(7px, 1.4vw, 10px); white-space: nowrap; box-shadow: 3px 3px 0 rgba(0,0,0,.4); animation: bubblePop 1.6s steps(12) both; }
+  .bubble::after { content: ""; position: absolute; left: 50%; bottom: -8px; width: 7px; height: 7px; background: inherit;
+    border-right: 3px solid #1a1626; border-bottom: 3px solid #1a1626; transform: translateX(-50%) rotate(45deg); }
+  @keyframes bubblePop { 0% { transform: translate(-50%, -100%) scale(.2); opacity: 0; } 10% { transform: translate(-50%, -100%) scale(1.15); opacity: 1; }
+    18% { transform: translate(-50%, -100%) scale(1); } 80% { opacity: 1; } 100% { transform: translate(-50%, -130%); opacity: 0; } }
+  .toast { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); z-index: 3; pointer-events: none;
+    background: var(--panel); border: 3px solid var(--edge); box-shadow: 4px 4px 0 var(--edge); padding: 8px 12px;
+    color: var(--gold); font-size: 13px; text-align: center; white-space: nowrap; }
+  .toast.show { animation: toastPop 2s steps(12) both; }
+  .toast.lose { color: var(--bad); }
+  .toast.push { color: #a9c7ff; }
+  @keyframes toastPop { 0% { transform: translate(-50%, -30px) scale(.6); opacity: 0; } 12% { transform: translate(-50%, 0) scale(1.1); opacity: 1; }
+    20% { transform: translate(-50%, 0) scale(1); } 85% { opacity: 1; } 100% { transform: translate(-50%, -10px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .toast.show, .bubble, .resultTag, .seatTag.turn { animation: none; } }
+
+  /* Online players and chat */
+  .players { display: grid; grid-template-columns: 14px 1fr auto; gap: 6px 8px; align-items: center; }
+  .chip { width: 14px; height: 14px; border: 2px solid var(--edge); }
+  .chatLog { min-height: 120px; max-height: 240px; overflow-y: auto; background: var(--bg); border: 3px solid var(--edge);
+    padding: 8px; display: flex; flex-direction: column; gap: 6px; overflow-wrap: anywhere; }
+  .chatMsg { display: flex; gap: 6px; align-items: baseline; }
+  .chatMsg .chip { flex: none; width: 10px; height: 10px; transform: translateY(1px); }
+  .chatMsg .who { color: var(--accent); flex: none; }
+  .chatMsg.mine .who { color: var(--ok); }
+  .chatMsg.sys { color: var(--muted); }
+  .chatForm { display: flex; gap: 6px; }
+  .chatForm input { flex: 1 1 auto; min-width: 0; width: auto; text-transform: none; }
+  .quick { display: flex; gap: 6px; flex-wrap: wrap; }
+  .quick button { padding: 4px 8px; font-size: 8px; }
+  #chatBox.ping { animation: chatPing .6s steps(3); }
+  @keyframes chatPing { 50% { border-color: var(--ok); } }
+
+  /* Online focus layout: the table fills the screen, with your moves and chat beside it. */
+  body.focus { padding-block: 12px; }
+  body.focus h1, body.focus .tag, body.focus .topnav, body.focus .side.right, body.focus #setup, body.focus #soundBox, body.focus #shareBox { display: none !important; }
+  body.focus .wrap { max-width: none; grid-template-columns: min(calc(100vw - 370px), calc((100dvh - 40px) * 1.26)) 310px;
+    grid-template-areas: "board left"; grid-template-rows: auto; justify-content: center; }
+  body.focus .side.left { max-height: calc(100dvh - 24px); overflow-y: auto; }
+  body.focus #chatBox { flex: 1 1 auto; min-height: 0; }
+  @media (max-width: 759px) {
+    body.focus .wrap { grid-template-columns: minmax(0, 1fr); grid-template-areas: "board" "left"; }
+    body.focus .side.left { max-height: none; }
+  }
+</style>
+
+</head>
+<body>
+<nav class="topnav"><a class="back" href="index.html">&#9664; GAMES</a></nav>
+<h1>PIXEL LIAR'S DICE</h1>
+<p class="tag">Bid bold. Call bluffs. Keep your dice.</p>
+<div class="wrap">
+  <div class="boardcol"><div class="boardwrap">
+    <canvas id="table" width="960" height="760" aria-label="Liar's dice table"></canvas>
+    <div id="tags"></div>
+    <div id="bubbles"></div>
+    <div id="toast" class="toast" hidden role="status"></div>
+  </div></div>
+  <div class="side left">
+    <div class="box" id="status"></div>
+    <div class="box" id="loadBox" hidden>
+      <h2>YOUR LOADED DIE (SECRET)</h2>
+      <div class="muted" id="loadHint"></div>
+      <div class="loadBtns" id="loadDice"></div>
+      <div class="loadBtns" id="loadFaces"></div>
+    </div>
+    <div class="box" id="actBox">
+      <h2 id="actTitle">YOUR BID</h2>
+      <div id="playUI" hidden>
+        <div class="muted" id="playHint"></div>
+        <div class="bidLine">
+          <button id="qDown" aria-label="Fewer dice">-</button>
+          <div class="bidAmt" id="bidAmt">1</div>
+          <button id="qUp" aria-label="More dice">+</button>
+        </div>
+        <div class="faces" id="faces"></div>
+        <div class="moves">
+          <button class="bid" id="bidBtn">BID</button>
+          <button class="liar" id="liarBtn">LIAR!</button>
+          <button class="spot" id="spotBtn">SPOT ON</button>
+        </div>
+        <div class="keys">Keys: + and - change the count, 2 to 6 pick a face, Enter bids, L calls liar, O calls spot on.</div>
+      </div>
+      <div id="waitUI" class="muted" hidden></div>
+      <button id="again" class="primary big" hidden>PLAY AGAIN</button>
+      <button id="startGame" class="primary big" hidden>START GAME</button>
+    </div>
+    <div class="box" id="setup">
+      <h2>NEW TABLE</h2>
+      <div class="field">
+        <div class="label">PLAY WITH</div>
+        <div class="seg" role="group" aria-label="Play with">
+          <button data-opp="bot">BOTS</button>
+          <button data-opp="online" id="oppOnline">FRIENDS ONLINE</button>
+        </div>
+      </div>
+      <div class="field" id="botField">
+        <div class="label">HOW MANY BOTS</div>
+        <div class="seg" role="group" aria-label="Number of bots">
+          <button data-bots="1">1</button><button data-bots="2">2</button><button data-bots="3">3</button><button data-bots="4">4</button><button data-bots="5">5</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="label" for="nameInput">YOUR NAME</label>
+        <input id="nameInput" maxlength="8" placeholder="YOU" autocomplete="off">
+      </div>
+      <div class="muted" id="setupHint"></div>
+      <button id="start" class="primary big">START</button>
+      <hr class="divider">
+      <div class="label">HAVE A TABLE CODE?</div>
+      <div class="row">
+        <input id="joinCode" maxlength="6" placeholder="CODE" aria-label="Table code" autocomplete="off">
+        <button id="join">JOIN</button>
+      </div>
+      <div id="onlineMsg" class="muted"></div>
+    </div>
+    <div class="box" id="onlineBox" hidden>
+      <h2>ONLINE TABLE</h2>
+      <div>Code: <span class="code" id="tableCode"></span></div>
+      <div id="shareBox">
+        <div class="muted">Send this link to up to 5 friends. Keep this page open: your browser runs the table.</div>
+        <div class="row" style="margin-top:6px">
+          <input id="shareLink" readonly aria-label="Table link" style="flex:1 1 10em;min-width:0;text-transform:none">
+          <button id="copyLink">COPY LINK</button>
+        </div>
+      </div>
+      <div class="players" id="players"></div>
+      <div class="row">
+        <button id="reconnect" hidden>RECONNECT</button>
+        <button id="leave">LEAVE</button>
+      </div>
+      <div id="gameMsg" class="muted"></div>
+    </div>
+    <div class="box" id="chatBox" hidden>
+      <h2>CHAT</h2>
+      <div id="chatLog" class="chatLog" role="log" aria-live="polite"></div>
+      <div class="quick" id="quickChat">
+        <button type="button" data-say="Liar!">LIAR</button>
+        <button type="button" data-say="I trust you... for now.">TRUST</button>
+        <button type="button" data-say="Ouch...">OUCH</button>
+        <button type="button" data-say="GG!">GG</button>
+      </div>
+      <form id="chatForm" class="chatForm" autocomplete="off">
+        <input id="chatInput" maxlength="200" placeholder="Say something..." aria-label="Chat message">
+        <button id="chatSend" type="submit">SEND</button>
+      </form>
+    </div>
+    <div class="box" id="soundBox">
+      <h2>SOUND</h2>
+      <div class="row">
+        <button id="musicToggle" class="toggle" role="switch" aria-checked="true"><span class="track"><span class="knob"></span></span><span>MUSIC</span></button>
+        <button id="sfxToggle" class="toggle" role="switch" aria-checked="true"><span class="track"><span class="knob"></span></span><span>EFFECTS</span></button>
+      </div>
+      <label class="field" for="volume"><span class="label">VOLUME <span id="volLabel"></span></span>
+        <input id="volume" type="range" min="0" max="100" step="5"></label>
+      <div class="muted" id="soundHint">Press M to mute.</div>
+    </div>
+  </div>
+  <div class="side right">
+    <div class="box rules">
+      <h2>HOW TO PLAY</h2>
+      <p>Everyone starts with <b>5 dice</b>, rolled in secret under a cup. You see only your own.</p>
+      <p>Take turns <b>bidding</b> on how many dice of one face are on the <b>whole table</b>, counting everyone's dice. <b>Ones are wild</b>: they count as every face.</p>
+      <p>Each bid must go up: <b>more dice</b>, or the <b>same number of a higher face</b>.</p>
+      <p>Don't believe the last bid? Call <b>LIAR!</b> The cups come up and everyone counts. Fewer than bid: the bidder loses a die. Otherwise the caller does.</p>
+      <p>Think the bid is exactly right? Call <b>SPOT ON</b>. Right: you win back a die (up to 5). Wrong: you lose one.</p>
+      <p>Whoever loses a die starts the next round. Lose them all and you're out. The <b>last player with dice wins</b>.</p>
+      <p><b>Loaded die:</b> once a game, you can secretly turn one of your dice to any face you like.</p>
+    </div>
+    <div class="box" id="log"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+  // ---------- Settings (sound is shared with the other games) ----------
+  const settings = { music: true, sfx: true, volume: 70, muted: false };
+  const prefs = { opp: "bot", bots: 3, name: "" };
+  try { const s = JSON.parse(localStorage.getItem("dc-settings")) || {}; for (const k of Object.keys(settings)) if (k in s) settings[k] = s[k]; } catch (_) {}
+  try { Object.assign(prefs, JSON.parse(localStorage.getItem("dc-dice")) || {}); } catch (_) {}
+  function saveSettings() {
+    try { const cur = JSON.parse(localStorage.getItem("dc-settings")) || {}; localStorage.setItem("dc-settings", JSON.stringify({ ...cur, ...settings })); } catch (_) {}
+  }
+  function savePrefs() { try { localStorage.setItem("dc-dice", JSON.stringify(prefs)); } catch (_) {} }
+  const myName = () => (prefs.name || "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim().slice(0, 8) || "YOU";
+
+  // ---------- Rules ----------
+  const START_DICE = 5, TURN_TIME = 30000, MIN_PLAYERS = 2, MAX_SEATS = 6;
+  const PLURAL = { 1: "ONES", 2: "TWOS", 3: "THREES", 4: "FOURS", 5: "FIVES", 6: "SIXES" };
+  const SINGLE = { 1: "ONE", 2: "TWO", 3: "THREE", 4: "FOUR", 5: "FIVE", 6: "SIX" };
+  const bidText = (b) => `${b.q} ${b.q === 1 ? SINGLE[b.f] : PLURAL[b.f]}`;
+  const roll = () => 1 + Math.floor(Math.random() * 6);
+  // A raise is more dice, or the same number of a higher face. Faces 2 to 6 (ones are wild).
+  const beats = (b, prev) => !prev || b.q > prev.q || (b.q === prev.q && b.f > prev.f);
+  const minRaise = (prev, f) => !prev ? 1 : f > prev.f ? prev.q : prev.q + 1;
+  const matches = (d, f) => d === f || d === 1;
+
+  // ---------- The table (run by the host's browser, or locally against bots) ----------
+  const BOTS = [ // style: 0 careful, 1 steady, 2 bluffer
+    { name: "PIP", style: 0 }, { name: "MOSS", style: 1 }, { name: "JUNIPER", style: 2 }, { name: "TOFFEE", style: 1 }, { name: "BRAMBLE", style: 2 },
+  ];
+  const SEAT_COLORS = ["#ff7a59", "#3fd0a0", "#59c1ff", "#ffe066", "#c98bff", "#ff5e7a"];
+  let T = null, timers = [];
+  const later = (ms, fn) => { const id = setTimeout(() => { timers = timers.filter(x => x !== id); fn(); }, ms); timers.push(id); };
+  function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+  function makeSeat(id, name, bot, style) {
+    const used = T ? T.seats.map(s => s.color) : [];
+    const color = SEAT_COLORS.find(c => !used.includes(c)) || SEAT_COLORS[0];
+    return { id, name, bot, style: style || 0, color, dice: [], count: 0, loaded: false, lastBid: null, waiting: true, gone: false, token: null };
+  }
+  const seatOf = (id) => T.seats.find(s => s.id === id);
+  const active = () => T.seats.filter(s => s.count > 0);
+  const totalDice = () => active().reduce((n, s) => n + s.count, 0);
+  function tlog(text) { T.log.unshift(text); T.log = T.log.slice(0, 60); }
+  function nextActive(id) {
+    const i = T.seats.findIndex(s => s.id === id), n = T.seats.length;
+    for (let k = 1; k <= n; k++) { const s = T.seats[(i + k) % n]; if (s.count > 0) return s.id; }
+    return null;
+  }
+
+  function newLocalTable(nBots) {
+    clearTimers();
+    T = { kind: "local", phase: "lobby", round: 0, game: 0, seats: [], turn: null, bid: null, starter: null, log: [], deadline: 0, turnSeq: 0, lastAct: null, reveal: null, winner: null, rollNo: 0 };
+    const bots = BOTS.slice(0, nBots), half = Math.ceil(nBots / 2);
+    const order = [...bots.slice(0, half), "me", ...bots.slice(half)];
+    for (const o of order) T.seats.push(o === "me" ? makeSeat("me", myName(), false) : makeSeat("bot-" + o.name, o.name, true, o.style));
+    T.seats.forEach((st, i) => { st.color = SEAT_COLORS[i]; });
+    newGame();
+  }
+  function newGame() {
+    clearTimers();
+    if (T.kind === "online") T.seats = T.seats.filter(s => !s.gone);
+    if (T.seats.length < MIN_PLAYERS) { T.phase = "lobby"; T.turn = null; T.bid = null; T.reveal = null; commit(); return; }
+    for (const s of T.seats) { s.count = START_DICE; s.dice = []; s.loaded = false; s.lastBid = null; s.waiting = false; }
+    T.winner = null; T.game++; T.round = 0;
+    T.starter = T.seats[Math.floor(Math.random() * T.seats.length)].id;
+    tlog(`New game: ${T.seats.length} players, ${START_DICE} dice each.`);
+    startRound();
+  }
+  function startRound() {
+    T.round++; T.bid = null; T.reveal = null; T.turn = null; T.deadline = 0; T.rollNo++;
+    for (const s of T.seats) { s.lastBid = null; s.dice = s.count > 0 ? Array.from({ length: s.count }, roll) : []; }
+    // Tests can fix the dice; normal play never sets this.
+    if (window.DEVOUR_TEST_DICE) for (const s of T.seats) if (window.DEVOUR_TEST_DICE[s.id] && s.count) s.dice = window.DEVOUR_TEST_DICE[s.id].slice(0, s.count);
+    T.phase = "rolling"; commit();
+    later(1300, () => { T.phase = "bidding"; tlog(`Round ${T.round}: ${totalDice()} dice on the table.`); setTurn(seatOf(T.starter) && seatOf(T.starter).count ? T.starter : nextActive(T.starter)); });
+  }
+  function setTurn(id) { T.turn = id; armTurn(seatOf(id)); commit(); }
+  function armTurn(s) {
+    const seq = ++T.turnSeq;
+    T.deadline = T.kind === "online" && !s.bot && !s.gone ? Date.now() + TURN_TIME : 0;
+    if (s.bot) later(1100 + Math.random() * 1100, () => { if (T.turnSeq === seq) botTurn(s); });
+    else if (s.gone) later(1500, () => { if (T.turnSeq === seq) autoMove(s); });
+    else if (T.kind === "online") later(TURN_TIME, () => { if (T.turnSeq === seq) autoMove(s); });
+  }
+  // Out of time (or away): the smallest raise on the same face, or a modest opening bid.
+  function autoMove(s) {
+    const b = T.bid, total = totalDice();
+    let nb = !b ? { q: 1, f: 2 } : b.f < 6 ? { q: b.q, f: b.f + 1 } : { q: b.q + 1, f: 2 };
+    if (nb.q > total) return call(s.id, "liar", true);
+    placeBid(s.id, nb.q, nb.f, true);
+  }
+  function placeBid(id, q, f, auto) {
+    if (!T || T.phase !== "bidding" || T.turn !== id) return false;
+    q = Math.floor(+q); f = Math.floor(+f);
+    if (!(f >= 2 && f <= 6) || !(q >= 1 && q <= totalDice()) || !beats({ q, f }, T.bid)) return false;
+    const s = seatOf(id);
+    T.bid = { q, f, by: id }; s.lastBid = { q, f };
+    T.lastAct = { id, a: "bid", q, f, auto: !!auto, n: (T.lastAct ? T.lastAct.n : 0) + 1, say: s.say || null }; s.say = null;
+    tlog(`${s.name}${auto ? " (out of time)" : ""} bids ${bidText(T.bid).toLowerCase()}.`);
+    T.turnSeq++; setTurn(nextActive(id));
+    return true;
+  }
+  function call(id, kind, auto) {
+    if (!T || T.phase !== "bidding" || T.turn !== id || !T.bid || T.bid.by === id || !["liar", "spot"].includes(kind)) return false;
+    clearTimers();
+    const caller = seatOf(id), bidder = seatOf(T.bid.by), b = { q: T.bid.q, f: T.bid.f };
+    const dice = {}; let count = 0;
+    for (const s of active()) { dice[s.id] = [...s.dice]; count += s.dice.filter(d => matches(d, b.f)).length; }
+    let loser = null, gain = null;
+    if (kind === "liar") loser = count >= b.q ? caller : bidder;
+    else if (count === b.q) gain = caller; else loser = caller;
+    T.reveal = { kind, caller: id, bidder: bidder.id, bid: b, count, loser: loser ? loser.id : null, gain: gain ? gain.id : null, dice };
+    T.lastAct = { id, a: kind, auto: !!auto, n: (T.lastAct ? T.lastAct.n : 0) + 1, say: caller.say || null }; caller.say = null;
+    T.phase = "reveal"; T.turn = null; T.deadline = 0; T.turnSeq++;
+    const there = `There ${count === 1 ? "was" : "were"} ${count} ${count === 1 ? SINGLE[b.f].toLowerCase() : PLURAL[b.f].toLowerCase()}`;
+    if (kind === "liar") tlog(`${caller.name} calls LIAR on ${bidder.name}'s ${bidText(b).toLowerCase()}. ${there}: ${loser.name} loses a die.`);
+    else tlog(`${caller.name} calls SPOT ON: ${bidText(b).toLowerCase()}. ${there}: ${gain ? caller.name + " wins a die back!" : caller.name + " loses a die."}`);
+    if (loser) loser.count--;
+    if (gain) gain.count = Math.min(START_DICE, gain.count + 1);
+    if (loser && loser.count === 0) tlog(`${loser.name} is out of dice!`);
+    T.starter = gain ? gain.id : loser.count > 0 ? loser.id : nextActive(loser.id);
+    commit();
+    later(4600, afterReveal);
+    return true;
+  }
+  function afterReveal() {
+    const alive = active();
+    if (alive.length <= 1) {
+      T.phase = "over"; T.winner = alive[0] ? alive[0].id : null; T.turn = null; T.reveal = null;
+      tlog(alive[0] ? `${alive[0].name} wins the game!` : "Nobody's left."); commit(); return;
+    }
+    startRound();
+  }
+  // Loaded die: once a game, quietly set one of your own dice to any face.
+  function useLoaded(id, idx, face) {
+    const s = T && seatOf(id);
+    if (!s || s.loaded || s.count <= 0 || T.phase !== "bidding") return false;
+    idx = Math.floor(+idx); face = Math.floor(+face);
+    if (!(idx >= 0 && idx < s.dice.length) || !(face >= 1 && face <= 6)) return false;
+    s.dice[idx] = face; s.loaded = true; commit(); return true;
+  }
+
+  // ----- Bots: count what they can see, guess the rest (a third of unseen dice match any face) -----
+  const comb = (n, k) => { let r = 1; for (let i = 1; i <= k; i++) r = r * (n - k + i) / i; return r; };
+  function atLeast(n, k, p) { if (k <= 0) return 1; if (k > n) return 0; let t = 0; for (let i = k; i <= n; i++) t += comb(n, i) * Math.pow(p, i) * Math.pow(1 - p, n - i); return t; }
+  const exactly = (n, k, p) => k < 0 || k > n ? 0 : comb(n, k) * Math.pow(p, k) * Math.pow(1 - p, n - k);
+  function botTurn(s) {
+    const total = totalDice(), unknown = total - s.count, b = T.bid;
+    const mine = (f) => s.dice.filter(d => matches(d, f)).length;
+    // Now and then a bot nudges its loaded die toward its best face.
+    if (!s.loaded && Math.random() < 0.3) {
+      let bf = 2; for (let f = 3; f <= 6; f++) if (mine(f) > mine(bf)) bf = f;
+      const idx = s.dice.findIndex(d => !matches(d, bf));
+      if (idx >= 0) { s.dice[idx] = bf; s.loaded = true; }
+    }
+    const truth = (q, f) => atLeast(unknown, q - mine(f), 1 / 3);
+    if (b) {
+      const need = b.q - mine(b.f), pEx = exactly(unknown, need, 1 / 3);
+      if (s.count < START_DICE && pEx > 0.32 && Math.random() < 0.35) { s.say = Math.random() < 0.5 ? "EXACTLY." : null; return call(s.id, "spot"); }
+      if (truth(b.q, b.f) < [0.42, 0.36, 0.3][s.style]) { s.say = ["LIAR!", "NO WAY.", "PROVE IT.", "HAH!"][Math.floor(Math.random() * 4)]; return call(s.id, "liar"); }
+    }
+    let best = null;
+    for (let f = 2; f <= 6; f++) {
+      let q = b ? minRaise(b, f) : Math.max(1, Math.floor(mine(f) + unknown / 3 * 0.7));
+      if (q > total) continue;
+      const p = truth(q, f), score = p + (Math.random() - 0.5) * [0.1, 0.2, 0.4][s.style] + (b && f === b.f ? 0.03 : 0);
+      if (!best || score > best.score) best = { q, f, p, score };
+    }
+    if (b && (!best || best.p < 0.25)) return call(s.id, "liar");
+    if (!best) best = { q: 1, f: 2 };
+    if (Math.random() < 0.15) s.say = ["EASY.", "TRUST ME.", "HMM...", "OF COURSE."][Math.floor(Math.random() * 4)];
+    placeBid(s.id, best.q, best.f);
+  }
+
+  // What each screen may see: its own dice, and everyone's only when the cups come up.
+  function sanitize(forId) {
+    const me = forId && seatOf(forId);
+    return {
+      v: 1, kind: T.kind, phase: T.phase, round: T.round, game: T.game, rollNo: T.rollNo, turn: T.turn, bid: T.bid, starter: T.starter, winner: T.winner,
+      total: totalDice(), reveal: T.reveal, lastAct: T.lastAct, log: T.log.slice(0, 30), left: T.deadline ? Math.max(0, T.deadline - Date.now()) : 0,
+      myDice: me && me.count > 0 && T.phase !== "lobby" ? [...me.dice] : null, myLoaded: !!(me && me.loaded),
+      seats: T.seats.map(s => ({ id: s.id, name: s.name, bot: s.bot, color: s.color, count: s.count, lastBid: s.lastBid, waiting: s.waiting, gone: s.gone })),
+    };
+  }
+  function commit() {
+    if (T.kind === "online") {
+      store.set("dc-dice-host-" + online.code, T);
+      for (const c of online.conns) if (c.open) { try { c.send({ type: "state", state: sanitize(c.seatId) }); } catch (_) {} }
+    }
+    applyView(sanitize(mySeat));
+  }
+
+  // ---------- Player actions from this screen ----------
+  let mySeat = "me", draftQ = 1, draftF = 2, loadPick = null;
+  const remote = () => mode === "online" && online.seat !== "host";
+  function doBid() {
+    if (!view || view.phase !== "bidding" || view.turn !== mySeat || !beats({ q: draftQ, f: draftF }, view.bid)) return;
+    if (remote()) sendToHost({ type: "bid", q: draftQ, f: draftF }); else placeBid(mySeat, draftQ, draftF);
+  }
+  function doCall(kind) {
+    if (!view || view.phase !== "bidding" || view.turn !== mySeat || !view.bid) return;
+    if (remote()) sendToHost({ type: "call", kind }); else call(mySeat, kind);
+  }
+  function doLoad(idx, face) {
+    if (remote()) sendToHost({ type: "load", idx, face }); else useLoaded(mySeat, idx, face);
+    loadPick = null; sfxSafe(SFX.load);
+  }
+
+  // ---------- Drawing ----------
+  const cv = $("table"), ctx = cv.getContext("2d");
+  const LW = 240, LH = 190, K = 4, F = 8, CX = 120, CY = 92;
+  const WOOD = { base: "#4a2c18", grainA: "#3f2513", grainB: "#55331d", hi: "#7a4f2e", lo: "#24140a", groove: "#1a0e06", lip: "#8f6038" };
+  const GLYPHS = {
+    A: [" # ", "# #", "###", "# #", "# #"], B: ["## ", "# #", "## ", "# #", "## "], C: [" ##", "#  ", "#  ", "#  ", " ##"], D: ["## ", "# #", "# #", "# #", "## "],
+    E: ["###", "#  ", "## ", "#  ", "###"], J: ["  #", "  #", "  #", "# #", " # "], K: ["# #", "# #", "## ", "# #", "# #"], L: ["#  ", "#  ", "#  ", "#  ", "###"],
+    N: ["# #", "###", "###", "# #", "# #"], O: [" # ", "# #", "# #", "# #", " # "], P: ["## ", "# #", "## ", "#  ", "#  "], Q: [" # ", "# #", "# #", "## ", " ##"],
+    R: ["## ", "# #", "## ", "# #", "# #"], S: [" ##", "#  ", " # ", "  #", "## "], T: ["###", " # ", " # ", " # ", " # "], Y: ["# #", "# #", " # ", " # ", " # "],
+    1: [" # ", "## ", " # ", " # ", "###"], 2: ["## ", "  #", " # ", "#  ", "###"], 3: ["## ", "  #", " # ", "  #", "## "], 4: ["# #", "# #", "###", "  #", "  #"],
+    5: ["###", "#  ", "## ", "  #", "## "], 6: [" ##", "#  ", "## ", "# #", " # "], 7: ["###", "  #", " # ", " # ", " # "], 8: [" # ", "# #", " # ", "# #", " # "],
+    9: [" # ", "# #", " ##", "  #", "## "], 0: [" # ", "# #", "# #", "# #", " # "], " ": ["   ", "   ", "   ", "   ", "   "],
+    TEN: ["# ###", "# # #", "# # #", "# # #", "# ###"],
+  };
+  const mask = (g, rows, x, y, col, scale = 1) => { g.fillStyle = col; rows.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === "#") g.fillRect(x + i * scale, y + j * scale, scale, scale); }); };
+  function grain(g, x, y, w, h, wd, vertical, rand) {
+    g.fillStyle = wd.base; g.fillRect(x, y, w, h);
+    const len = vertical ? h : w, across = vertical ? w : h;
+    for (let k = 0; k < across; k++) {
+      if (rand() < 0.45) continue;
+      const col = rand() < 0.5 ? wd.grainA : wd.grainB; let pos = 0, wob = 0;
+      while (pos < len) {
+        const run = 2 + Math.floor(rand() * 7); g.fillStyle = col;
+        const kk = clamp(k + wob, 0, across - 1);
+        if (vertical) g.fillRect(x + kk, y + pos, 1, Math.min(run, len - pos)); else g.fillRect(x + pos, y + kk, Math.min(run, len - pos), 1);
+        pos += run + (rand() < 0.3 ? 2 : 0); if (rand() < 0.15) wob += rand() < 0.5 ? -1 : 1;
+      }
+    }
+  }
+  // Dice: 9 x 9, cream with dark pips; the wild one has a red pip.
+  const PIPS = { 1: [[4, 4]], 2: [[2, 2], [6, 6]], 3: [[2, 2], [4, 4], [6, 6]], 4: [[2, 2], [6, 2], [2, 6], [6, 6]], 5: [[2, 2], [6, 2], [4, 4], [2, 6], [6, 6]], 6: [[2, 2], [6, 2], [2, 4], [6, 4], [2, 6], [6, 6]] };
+  const dieCache = {};
+  function dieSprite(face, glow) {
+    const key = face + (glow ? "g" : "");
+    if (dieCache[key]) return dieCache[key];
+    const c = document.createElement("canvas"); c.width = 9; c.height = 9; const g = c.getContext("2d");
+    g.fillStyle = glow ? "#ffe066" : "#1a1626"; g.fillRect(1, 0, 7, 9); g.fillRect(0, 1, 9, 7);
+    g.fillStyle = "#f4ecd6"; g.fillRect(1, 1, 7, 7);
+    g.fillStyle = "#d8ccab"; g.fillRect(1, 7, 7, 1); g.fillRect(7, 1, 1, 7);
+    g.fillStyle = "#fffdf6"; g.fillRect(1, 1, 6, 1);
+    g.fillStyle = face === 1 ? "#d8344a" : "#1a1626";
+    for (const [x, y] of PIPS[face]) g.fillRect(x, y, 1, 1);
+    return dieCache[key] = c;
+  }
+  // The cup: dark leather, a gold band near the mouth, open end down.
+  let cupImg = null;
+  function cupSprite() {
+    if (cupImg) return cupImg;
+    const c = document.createElement("canvas"); c.width = 26; c.height = 22; const g = c.getContext("2d");
+    for (let y = 0; y < 22; y++) {
+      const half = Math.round(8 + (y / 21) * 5), x0 = 13 - half, x1 = 13 + half;
+      g.fillStyle = "#000"; g.fillRect(x0, y, x1 - x0, 1);
+      if (y === 0 || y === 21) continue;
+      for (let x = x0 + 1; x < x1 - 1; x++) {
+        const u = (x - x0) / (x1 - x0);
+        g.fillStyle = y >= 15 && y <= 16 ? (u < 0.3 ? "#ffe066" : u > 0.75 ? "#a07a2e" : "#c8963e") : y >= 19 ? "#3d2010" : u < 0.18 ? "#9a5a33" : u < 0.32 ? "#7a4527" : u > 0.78 ? "#40210f" : "#5e331b";
+        g.fillRect(x, y, 1, 1);
+      }
+    }
+    g.fillStyle = "#2e180b"; g.fillRect(6, 1, 14, 1);
+    return cupImg = c;
+  }
+  // Seats sit round an oval table, with this screen's player at the bottom.
+  function seatPos(i, n, meIdx) {
+    const rel = ((i - meIdx) % n + n) % n, a = Math.PI / 2 + rel * 2 * Math.PI / n;
+    return { x: CX + Math.cos(a) * 84, y: CY + Math.sin(a) * 54, up: Math.sin(a) < -0.2 };
+  }
+  const SLOTS = [[-14, -9], [-4, -9], [6, -9], [-9, 1], [1, 1]];
+  const meIndex = (v) => Math.max(0, v.seats.findIndex(s => s.id === mySeat));
+
+  let bgImg = null;
+  function tableBg() {
+    if (bgImg) return bgImg;
+    const c = document.createElement("canvas"); c.width = LW; c.height = LH;
+    const g = c.getContext("2d"), rand = rng(31);
+    grain(g, 0, 0, LW, F, WOOD, false, rand); grain(g, 0, LH - F, LW, F, WOOD, false, rand);
+    grain(g, 0, F, F, LH - 2 * F, WOOD, true, rand); grain(g, LW - F, F, F, LH - 2 * F, WOOD, true, rand);
+    g.fillStyle = WOOD.hi; g.fillRect(0, 0, LW, 1); g.fillRect(0, 0, 1, LH);
+    g.fillStyle = WOOD.lo; g.fillRect(0, LH - 1, LW, 1); g.fillRect(LW - 1, 0, 1, LH);
+    g.fillStyle = WOOD.groove; g.fillRect(3, 3, LW - 6, 1); g.fillRect(3, 3, 1, LH - 6); g.fillRect(3, LH - 4, LW - 6, 1); g.fillRect(LW - 4, 3, 1, LH - 6);
+    g.fillStyle = WOOD.lip; g.fillRect(4, 4, LW - 8, 1); g.fillRect(4, 4, 1, LH - 8);
+    // a deep red baize, darker toward the rail
+    const fr = rng(8);
+    for (let y = F; y < LH - F; y++) for (let x = F; x < LW - F; x++) {
+      const dx = (x - CX) / 120, dy = (y - CY) / 95, v = dx * dx + dy * dy, n2 = fr();
+      g.fillStyle = v > 0.8 && n2 < (v - 0.8) * 2 ? "#4a1820" : n2 < 0.1 ? "#561d26" : n2 < 0.18 ? "#6e2a33" : "#62222c";
+      g.fillRect(x, y, 1, 1);
+    }
+    g.fillStyle = WOOD.groove; g.fillRect(F - 2, F - 2, LW - 2 * F + 4, 2); g.fillRect(F - 2, F - 2, 2, LH - 2 * F + 4); g.fillRect(F - 2, LH - F, LW - 2 * F + 4, 2); g.fillRect(LW - F, F - 2, 2, LH - 2 * F + 4);
+    g.fillStyle = "#c8963e"; g.fillRect(F - 1, F - 1, LW - 2 * F + 2, 1); g.fillRect(F - 1, F - 1, 1, LH - 2 * F + 2);
+    // a gold ring in the middle where the bid sits
+    for (let t = 0; t < 360; t += 2) { const a = t * Math.PI / 180; if (t % 12 < 8) { g.fillStyle = "rgba(224,176,64,0.55)"; g.fillRect(Math.round(CX + Math.cos(a) * 30), Math.round(CY + Math.sin(a) * 19), 1, 1); } }
+    return bgImg = c;
+  }
+
+  let view = null, rafId = 0, lastFrame = 0, rollStart = 0, revealStart = 0;
+  const particles = [];
+  function render() { if (!rafId) rafId = requestAnimationFrame(frame); }
+  function frame(now) {
+    rafId = 0;
+    const dt = Math.min(0.05, (now - (lastFrame || now)) / 1000); lastFrame = now;
+    draw(now, dt);
+    const busy = particles.length || (view && (view.phase === "rolling" || (view.phase === "reveal" && now - revealStart < 2500) || view.turn));
+    if (busy && !(REDUCED && !particles.length)) rafId = requestAnimationFrame(frame); else lastFrame = 0;
+  }
+  function drawNumber(str, x, y, col, scale) { for (const ch of String(str)) { if (GLYPHS[ch]) mask(ctx, GLYPHS[ch], x, y, col, scale); x += 4 * scale; } }
+  function draw(now, dt) {
+    ctx.setTransform(K, 0, 0, K, 0, 0); ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tableBg(), 0, 0);
+    if (!view) return;
+    const n = view.seats.length, mi = meIndex(view), rev = view.phase === "reveal" ? view.reveal : null;
+    const lift = rev ? clamp((now - revealStart) / 450, 0, 1) : 0;
+    view.seats.forEach((s, i) => {
+      const p = seatPos(i, n, mi), mine = s.id === mySeat;
+      if (s.count <= 0 && !(rev && rev.dice[s.id])) { // out: an empty cup lying on its side
+        ctx.globalAlpha = 0.45; ctx.drawImage(cupSprite(), Math.round(p.x - 13), Math.round(p.y - 11)); ctx.globalAlpha = 1; return;
+      }
+      const shake = view.phase === "rolling" && !REDUCED ? Math.round(Math.sin(now / 28 + i * 2) * 1.5) : 0;
+      // the dice under (or beside) the cup
+      let dice = null, glowF = 0;
+      if (rev && rev.dice[s.id]) { dice = rev.dice[s.id]; glowF = rev.bid.f; }
+      else if (mine && view.myDice) dice = view.phase === "rolling" && !REDUCED ? view.myDice.map((_, k) => 1 + (Math.floor(now / 90) + k * 7) % 6) : view.myDice;
+      const showDice = dice && (mine || lift > 0.35);
+      if (showDice) dice.forEach((d, k) => {
+        const [ox, oy] = SLOTS[k], hit = glowF && matches(d, glowF);
+        ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(Math.round(p.x + ox) + 1, Math.round(p.y + oy) + 9, 8, 1);
+        if (glowF && !hit) ctx.globalAlpha = 0.4;
+        ctx.drawImage(dieSprite(d, hit && lift >= 1), Math.round(p.x + ox), Math.round(p.y + oy));
+        ctx.globalAlpha = 1;
+      });
+      // the cup: down over the dice, lifted to one side for your own, or rising on a reveal
+      let cx = p.x, cy = p.y + 11, up = 0;
+      if (mine && !rev) { cx = p.x + 25; up = view.phase === "rolling" ? 0 : 2; }
+      if (mine && view.phase === "rolling") cx = p.x;
+      if (rev) { up = 18 * lift; if (mine) cx = p.x; }
+      ctx.fillStyle = `rgba(0,0,0,${0.35 - up / 70})`; ctx.fillRect(Math.round(cx - 12 + up / 4), Math.round(cy - 1), Math.round(24 - up / 2), 2);
+      if (rev && lift >= 1) ctx.globalAlpha = 0.55;
+      ctx.drawImage(cupSprite(), Math.round(cx - 13 + shake), Math.round(cy - 22 - up));
+      ctx.globalAlpha = 1;
+    });
+    // the bid in the middle: "4 x [five]"
+    const b = rev ? rev.bid : view.bid;
+    if (b) {
+      const qs = String(b.q), w = qs.length * 8 + 8 + 18, x0 = Math.round(CX - w / 2), y0 = CY - 9;
+      drawNumber(qs, x0 + 2, y0 + 6, "#000", 2); drawNumber(qs, x0, y0 + 4, "#ffe066", 2);
+      ctx.fillStyle = "#f4ecd6"; const xx = x0 + qs.length * 8 + 1; for (let k = 0; k < 5; k++) { ctx.fillRect(xx + k, y0 + 7 + k, 1, 1); ctx.fillRect(xx + 4 - k, y0 + 7 + k, 1, 1); }
+      ctx.drawImage(dieSprite(b.f), x0 + qs.length * 8 + 8, y0, 18, 18);
+    }
+    // dice popping when lost
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const q = particles[i];
+      q.vy += 90 * dt; q.x += q.vx * dt; q.y += q.vy * dt;
+      if (now - q.born > q.life) { particles.splice(i, 1); continue; }
+      ctx.fillStyle = q.col; ctx.fillRect(Math.round(q.x), Math.round(q.y), 2, 2);
+    }
+  }
+  function sparkle(x, y, cols, n = 18) {
+    const now = performance.now();
+    for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, v = 20 + Math.random() * 45; particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 35, col: cols[i % cols.length], born: now, life: 600 + Math.random() * 400 }); }
+    render();
+  }
+
+  // ----- Labels over the table -----
+  const pct = (x, y) => ({ left: (x / LW * 100) + "%", top: (y / LH * 100) + "%" });
+  function tagEl(key, cls) {
+    let el = document.querySelector(`[data-tag="${key}"]`);
+    if (!el) { el = document.createElement("div"); el.dataset.tag = key; $("tags").append(el); }
+    el.className = "tagEl " + cls;
+    return el;
+  }
+  function renderTags(v) {
+    const keep = new Set();
+    const place = (el, x, y) => { const p = pct(x, y); el.style.left = p.left; el.style.top = p.top; keep.add(el.dataset.tag); };
+    const n = v.seats.length, mi = meIndex(v), rev = v.phase === "reveal" ? v.reveal : null;
+    v.seats.forEach((s, i) => {
+      const p = seatPos(i, n, mi);
+      const el = tagEl("seat-" + s.id, "seatTag" + (s.id === mySeat ? " me" : "") + (v.turn === s.id ? " turn" : "") + (s.gone ? " gone" : "") + (s.count <= 0 ? " out" : ""));
+      el.replaceChildren();
+      const nm = document.createElement("div"); nm.className = "nm";
+      const dot = document.createElement("i"); dot.style.background = s.color;
+      const label = document.createElement("span"); label.textContent = s.name + (s.id === mySeat ? " (YOU)" : "") + (s.gone ? " (AWAY)" : "");
+      nm.append(dot, label); el.append(nm);
+      const ct = document.createElement("div"); ct.className = "ct";
+      ct.textContent = s.waiting ? "NEXT GAME" : v.phase === "lobby" ? "READY" : s.count <= 0 ? (v.winner === s.id ? "WINNER" : "OUT") : `${s.count} ${s.count === 1 ? "DIE" : "DICE"}`;
+      el.append(ct);
+      if (s.lastBid && v.phase === "bidding") { const lb = document.createElement("div"); lb.className = "lb"; lb.textContent = bidText(s.lastBid); el.append(lb); }
+      place(el, p.x, p.up ? p.y - 24 : p.y + 22);
+      if (rev && (rev.loser === s.id || rev.gain === s.id)) {
+        const r = tagEl("res-" + s.id, "resultTag " + (rev.gain === s.id ? "win" : "lose"));
+        r.textContent = rev.gain === s.id ? "+1 DIE" : "-1 DIE";
+        place(r, p.x + 22, p.y - 14);
+      }
+    });
+    if (v.winner && v.phase === "over") {
+      const w = v.seats.find(s => s.id === v.winner), r = tagEl("mid", "resultTag win");
+      r.textContent = w ? `${w.name} WINS!` : "GAME OVER"; place(r, CX, CY);
+    } else if (rev) {
+      const r = tagEl("mid", "resultTag " + (rev.loser === rev.bidder ? "lose" : "win"));
+      r.textContent = `THERE ${rev.count === 1 ? "WAS" : "WERE"} ${rev.count}`; place(r, CX, CY + 18);
+    } else if (v.phase !== "lobby") {
+      const by = v.bid && v.seats.find(s => s.id === v.bid.by), m = tagEl("mid", "midTag");
+      m.textContent = by ? `${by.name}${by.id === mySeat ? " (YOU)" : ""} BIDS` : `${v.total} DICE IN PLAY`;
+      place(m, CX, v.bid ? CY + 18 : CY);
+    }
+    for (const el of [...$("tags").children]) if (!keep.has(el.dataset.tag)) el.remove();
+  }
+  function bubble(seatId, text) {
+    if (!view) return;
+    const i = view.seats.findIndex(s => s.id === seatId); if (i < 0) return;
+    const p = seatPos(i, view.seats.length, meIndex(view)), pp = pct(p.x, p.y - 16);
+    const el = document.createElement("div"); el.className = "bubble"; el.textContent = text;
+    el.style.left = pp.left; el.style.top = pp.top;
+    $("bubbles").append(el); setTimeout(() => el.remove(), 1600);
+  }
+  function toast(text, cls = "") {
+    const t = $("toast"); t.textContent = text; t.className = "toast " + cls; t.hidden = false; void t.offsetWidth; t.classList.add("show");
+    clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.hidden = true; }, 2000);
+  }
+
+  // ----- A new view arrives: work out what changed and animate it -----
+  let deadlineAt = 0;
+  function applyView(v) {
+    const prev = view, now = performance.now();
+    view = v;
+    deadlineAt = v.left ? Date.now() + v.left : 0;
+    if (v.phase === "rolling" && (!prev || prev.rollNo !== v.rollNo || prev.phase !== "rolling")) { rollStart = now; sfxSafe(SFX.rattle); $("bubbles").replaceChildren(); }
+    if (v.phase === "reveal" && (!prev || prev.phase !== "reveal")) { revealStart = now; revealFx(v); }
+    if (prev) {
+      if (v.lastAct && (!prev.lastAct || v.lastAct.n !== prev.lastAct.n) && v.lastAct.a === "bid") {
+        if (v.lastAct.id !== mySeat) bubble(v.lastAct.id, v.lastAct.say || bidText(v.lastAct));
+        sfxSafe(SFX.bid);
+      }
+      if (v.lastAct && (!prev.lastAct || v.lastAct.n !== prev.lastAct.n) && v.lastAct.a !== "bid") bubble(v.lastAct.id, v.lastAct.a === "liar" ? (v.lastAct.say || "LIAR!") : "SPOT ON!");
+      if (v.turn === mySeat && prev.turn !== mySeat) {
+        sfxSafe(SFX.turn);
+        // start the draft at the smallest raise on the face you bid last (or your best face)
+        const best = bestFace(v);
+        draftF = v.bid ? (v.bid.f) : best; draftQ = clamp(minRaise(v.bid, draftF), 1, Math.max(1, v.total));
+        if (v.bid && !beats({ q: draftQ, f: draftF }, v.bid)) draftQ = v.bid.q + 1;
+      }
+      if (v.phase === "over" && prev.phase !== "over") {
+        const w = v.seats.find(s => s.id === v.winner);
+        if (v.winner === mySeat) { toast("YOU WIN!"); sfxSafe(SFX.win); } else { toast(`${w ? w.name : "NOBODY"} WINS`, "lose"); sfxSafe(SFX.lose); }
+      }
+      if (v.phase === "bidding" && prev.phase === "rolling") sfxSafe(SFX.slam);
+    }
+    renderTags(v); renderLog(v); updateUI(); render();
+  }
+  function bestFace(v) {
+    if (!v.myDice) return 2;
+    let bf = 2, bc = -1; for (let f = 2; f <= 6; f++) { const c = v.myDice.filter(d => matches(d, f)).length; if (c > bc) { bc = c; bf = f; } }
+    return bf;
+  }
+  function revealFx(v) {
+    const r = v.reveal, n = v.seats.length, mi = meIndex(v);
+    sfxSafe(SFX.lift);
+    const hits = Object.values(r.dice).reduce((t, d) => t + d.filter(x => matches(x, r.bid.f)).length, 0);
+    for (let k = 0; k < Math.min(hits, 12); k++) setTimeout(() => sfxSafe(SFX.tick), 600 + k * 90);
+    setTimeout(() => {
+      const who = v.seats.findIndex(s => s.id === (r.loser || r.gain)); if (who < 0) return;
+      const p = seatPos(who, n, mi);
+      if (r.gain) { sparkle(p.x, p.y, ["#ffe066", "#3fd0a0", "#ffffff"], 22); if (r.gain === mySeat) { toast("SPOT ON! +1 DIE"); sfxSafe(SFX.win); } else sfxSafe(SFX.gain); }
+      else { sparkle(p.x, p.y, ["#f4ecd6", "#ff5e7a", "#1a1626"], 16); sfxSafe(SFX.loseDie); if (r.loser === mySeat) toast("YOU LOSE A DIE", "lose"); }
+    }, 1500);
+  }
+  function renderLog(v) {
+    const box = $("log"); box.textContent = "";
+    (v.log.length ? v.log : ["Waiting for the game to start."]).forEach((l, i) => { if (i) box.append(document.createElement("br")); box.append(l); });
+  }
+
+  // ----- Side panels -----
+  function setStatus(main, sub, dots) {
+    const box = $("status"); box.replaceChildren();
+    const m = document.createElement("div"); m.className = "main"; m.textContent = main;
+    if (dots) { const d = document.createElement("span"); d.className = "dots"; d.innerHTML = "<i></i><i></i><i></i>"; m.append(d); }
+    box.append(m);
+    if (sub) { const s = document.createElement("div"); s.className = "muted"; s.textContent = sub; box.append(s); }
+  }
+  const secsLeft = () => deadlineAt ? Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1000)) : 0;
+  function dieCanvas(face) { const c = document.createElement("canvas"); c.width = 9; c.height = 9; c.className = "die"; c.getContext("2d").drawImage(dieSprite(face), 0, 0); return c; }
+  const faceBtns = [];
+  for (let f = 2; f <= 6; f++) {
+    const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-label", PLURAL[f].toLowerCase());
+    b.append(dieCanvas(f)); b.onclick = () => { draftF = f; if (view && view.bid && !beats({ q: draftQ, f }, view.bid)) draftQ = minRaise(view.bid, f); updateUI(); };
+    $("faces").append(b); faceBtns.push([f, b]);
+  }
+  function updateUI() {
+    syncAudio();
+    const isOnline = mode === "online", v = view;
+    $("setup").hidden = isOnline;
+    $("onlineBox").hidden = !isOnline;
+    $("chatBox").hidden = !isOnline || !online.connectedOnce;
+    document.body.classList.toggle("focus", isOnline && !!v && online.connectedOnce && v.seats.length > 1);
+    $("botField").hidden = prefs.opp !== "bot";
+    for (const b of document.querySelectorAll("[data-opp]")) b.setAttribute("aria-pressed", String(b.dataset.opp === prefs.opp));
+    for (const b of document.querySelectorAll("[data-bots]")) b.setAttribute("aria-pressed", String(+b.dataset.bots === prefs.bots));
+    $("setupHint").textContent = prefs.opp === "online" ? "You'll get a link for up to 5 friends (2 to 6 players)." : `You and ${prefs.bots} bot${prefs.bots > 1 ? "s" : ""}, 5 dice each.`;
+    if (isOnline) renderOnline();
+    for (const id of ["playUI", "waitUI", "again", "startGame"]) $(id).hidden = true;
+    $("actBox").classList.remove("myturn");
+    renderLoad(v);
+    if (!v) { setStatus(isOnline ? "Connecting" : "Setting up", "", true); $("actTitle").textContent = "WAITING"; return; }
+    const me = v.seats.find(s => s.id === mySeat), turnSeat = v.seats.find(s => s.id === v.turn), canRestart = mode === "local" || online.seat === "host";
+    if (v.phase === "lobby") {
+      $("actTitle").textContent = "WAITING FOR PLAYERS"; $("waitUI").hidden = false;
+      $("waitUI").textContent = !me ? "The table is full (6 players). You can watch." : `Liar's dice needs 2 to 6 players. ${v.seats.length} at the table.` + (online.seat === "host" ? " Press START GAME when everyone's here." : " The host will start the game.");
+      if (online.seat === "host") { $("startGame").hidden = false; $("startGame").disabled = v.seats.length < MIN_PLAYERS; $("startGame").textContent = v.seats.length < MIN_PLAYERS ? "NEED 2 PLAYERS" : `START GAME (${v.seats.length} PLAYERS)`; }
+      setStatus("Waiting for players", `${v.seats.length} / 6 seated`, true); return;
+    }
+    if (v.phase === "over") {
+      const w = v.seats.find(s => s.id === v.winner);
+      $("actTitle").textContent = "GAME OVER"; $("waitUI").hidden = false;
+      $("waitUI").textContent = (w ? (w.id === mySeat ? "You win! Last one holding dice." : `${w.name} wins.`) : "Game over.") + (canRestart ? "" : " Waiting for the host to start a new game.");
+      $("again").hidden = !canRestart;
+      setStatus(w && w.id === mySeat ? "You win!" : "Game over", w ? `${w.name} is the last one with dice.` : ""); return;
+    }
+    const t = secsLeft(), bidStr = v.bid ? `Bid: ${bidText(v.bid).toLowerCase()} (${v.total} dice in play).` : `${v.total} dice in play. No bid yet.`;
+    if (!me || me.waiting) {
+      $("actTitle").textContent = "WATCHING"; $("waitUI").hidden = false;
+      $("waitUI").textContent = !me ? "The table is full (6 players). You can watch." : "You'll be dealt in when the next game starts.";
+    } else if (me.count <= 0) {
+      $("actTitle").textContent = "OUT OF DICE"; $("waitUI").hidden = false; $("waitUI").textContent = "You're out. Watch who bluffs best.";
+    } else if (v.phase === "bidding" && v.turn === mySeat) {
+      $("actTitle").textContent = "YOUR TURN"; $("playUI").hidden = false; $("actBox").classList.add("myturn");
+      draftQ = clamp(draftQ, 1, v.total);
+      $("bidAmt").textContent = draftQ;
+      $("qDown").disabled = draftQ <= 1; $("qUp").disabled = draftQ >= v.total;
+      for (const [f, b] of faceBtns) b.setAttribute("aria-pressed", String(f === draftF));
+      const ok = beats({ q: draftQ, f: draftF }, v.bid);
+      $("bidBtn").disabled = !ok; $("bidBtn").textContent = `BID ${bidText({ q: draftQ, f: draftF })}`;
+      $("liarBtn").disabled = $("spotBtn").disabled = !v.bid;
+      const mineN = v.myDice ? v.myDice.filter(d => matches(d, draftF)).length : 0;
+      $("playHint").textContent = `${bidStr} You hold ${mineN} that count as ${PLURAL[draftF].toLowerCase()} (ones included).` + (ok ? "" : " Raise the count or pick a higher face.");
+    } else {
+      $("actTitle").textContent = "YOUR DICE"; $("waitUI").hidden = false;
+      $("waitUI").textContent = v.phase === "rolling" ? "Shaking the cups..." : v.phase === "reveal" ? "Cups up! Counting..." : bidStr;
+    }
+    if (v.phase === "rolling") setStatus("Rolling", `Round ${v.round}`, true);
+    else if (v.phase === "reveal") {
+      const r = v.reveal, c = v.seats.find(s => s.id === r.caller), lo = v.seats.find(s => s.id === (r.loser || r.gain));
+      setStatus(r.kind === "liar" ? `${c ? c.name : "?"} calls LIAR!` : `${c ? c.name : "?"} calls SPOT ON!`, `The bid was ${bidText(r.bid).toLowerCase()}. There ${r.count === 1 ? "was" : "were"} ${r.count}. ${lo ? (r.gain ? lo.name + " wins a die back." : lo.name + " loses a die.") : ""}`);
+    } else if (v.phase === "bidding") setStatus(v.turn === mySeat ? "Your turn" : `${turnSeat ? turnSeat.name : "?"}'s turn`, t ? `${t}s left` : (turnSeat && turnSeat.bot ? "Thinking..." : bidStr), v.turn !== mySeat);
+  }
+  function renderLoad(v) {
+    const box = $("loadBox"), dice = $("loadDice"), faces = $("loadFaces");
+    const me = v && v.seats.find(s => s.id === mySeat);
+    box.hidden = !(v && me && me.count > 0 && v.myDice && ["rolling", "bidding", "reveal"].includes(v.phase));
+    if (box.hidden) return;
+    dice.replaceChildren(); faces.replaceChildren();
+    if (v.myLoaded) { $("loadHint").textContent = "Used this game. Nobody saw a thing."; return; }
+    if (v.phase !== "bidding") { $("loadHint").textContent = "Once a game, you can turn one die to any face. Wait for the cups to settle."; return; }
+    $("loadHint").textContent = loadPick === null ? "Once a game: pick one of your dice to fix..." : "...then the face it should show.";
+    v.myDice.forEach((d, k) => { const b = document.createElement("button"); b.type = "button"; b.append(dieCanvas(d)); b.setAttribute("aria-pressed", String(loadPick === k)); b.onclick = () => { loadPick = loadPick === k ? null : k; updateUI(); }; dice.append(b); });
+    if (loadPick !== null && loadPick < v.myDice.length) for (let f = 1; f <= 6; f++) { const b = document.createElement("button"); b.type = "button"; b.append(dieCanvas(f)); b.setAttribute("aria-label", "Make it a " + SINGLE[f].toLowerCase()); b.onclick = () => doLoad(loadPick, f); faces.append(b); }
+  }
+  setInterval(() => { if (view && deadlineAt) updateUI(); }, 1000);
+  $("qDown").onclick = () => { draftQ = Math.max(1, draftQ - 1); updateUI(); };
+  $("qUp").onclick = () => { draftQ = Math.min(view ? view.total : 1, draftQ + 1); updateUI(); };
+  $("bidBtn").onclick = doBid; $("liarBtn").onclick = () => doCall("liar"); $("spotBtn").onclick = () => doCall("spot");
+  $("again").onclick = () => { if (T && (mode === "local" || online.seat === "host")) newGame(); };
+  $("startGame").onclick = () => { if (T && online.seat === "host") newGame(); };
+  document.addEventListener("keydown", (e) => {
+    if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!view || view.phase !== "bidding" || view.turn !== mySeat) return;
+    const k = e.key.toLowerCase();
+    if (k >= "2" && k <= "6") { draftF = +k; if (view.bid && !beats({ q: draftQ, f: draftF }, view.bid)) draftQ = minRaise(view.bid, draftF); updateUI(); }
+    else if (k === "+" || k === "=" || k === "arrowup" || k === "arrowright") { e.preventDefault(); $("qUp").click(); }
+    else if (k === "-" || k === "arrowdown" || k === "arrowleft") { e.preventDefault(); $("qDown").click(); }
+    else if (k === "enter" || k === " ") { e.preventDefault(); doBid(); }
+    else if (k === "l") doCall("liar");
+    else if (k === "o") doCall("spot");
+  });
+
+  // setup
+  let mode = "local";
+  for (const b of document.querySelectorAll("[data-opp]")) b.onclick = () => { prefs.opp = b.dataset.opp; savePrefs(); updateUI(); };
+  for (const b of document.querySelectorAll("[data-bots]")) b.onclick = () => { prefs.bots = +b.dataset.bots; savePrefs(); updateUI(); };
+  $("nameInput").value = prefs.name;
+  $("nameInput").addEventListener("input", () => {
+    prefs.name = $("nameInput").value; savePrefs();
+    if (mode === "local" && T) { const s = seatOf("me"); if (s) { s.name = myName(); commit(); } }
+  });
+  function resetScreen() { view = null; particles.length = 0; loadPick = null; $("tags").replaceChildren(); $("bubbles").replaceChildren(); }
+  function startLocal() {
+    leaveOnline(false);
+    mode = "local"; mySeat = "me"; resetScreen();
+    newLocalTable(prefs.bots);
+  }
+  $("start").onclick = () => { if (prefs.opp === "online") { if (typeof Peer !== "undefined") hostTable(newCode(), true); } else startLocal(); };
+
+  // ---------- Online (peer-to-peer; the host's browser runs the table) ----------
+  const PREFIX = "devour-dice-v1-";
+  const PEER_OPTS = window.DEVOUR_PEER_OPTS || {};
+  const online = { code: null, seat: null, peer: null, conns: [], hostConn: null, connected: false, connectedOnce: false, chat: [], retries: 0 };
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (_) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} },
+  };
+  function newCode() { const abc = "abcdefghjkmnpqrstuvwxyz23456789"; let s = ""; for (let i = 0; i < 6; i++) s += abc[Math.floor(Math.random() * abc.length)]; return s; }
+  const tableLink = (code) => location.origin + location.pathname + "#d-" + code;
+  function setHash(code) { try { const h = code ? "#d-" + code : ""; if (location.hash !== h) window.history.replaceState(null, "", h || location.pathname); } catch (_) {} }
+  function setMsg(id, text, isErr) { const el = $(id); el.textContent = text || ""; el.classList.toggle("err", !!isErr); }
+  function myToken() {
+    let t = null; try { t = sessionStorage.getItem("dc-dice-token"); } catch (_) {}
+    if (!t) { t = Math.random().toString(36).slice(2, 12); try { sessionStorage.setItem("dc-dice-token", t); } catch (_) {} }
+    return t;
+  }
+  function hostTable(code, fresh) {
+    leaveOnline(false); clearTimers(); resetScreen();
+    mode = "online"; online.code = code; online.seat = "host"; mySeat = "h"; online.connectedOnce = true;
+    setHash(code);
+    const saved = !fresh && store.get("dc-dice-host-" + code);
+    if (saved && saved.kind === "online" && Array.isArray(saved.seats)) {
+      T = saved;
+      for (const s of T.seats) if (s.id !== "h") s.gone = true;
+      T.lastAct = null; T.turnSeq = T.turnSeq || 0;
+      tlog("The table was reopened. The round is rolled again.");
+      if (["rolling", "bidding", "reveal"].includes(T.phase)) { if (T.phase === "reveal") afterReveal(); else startRound(); } else commit();
+    } else {
+      T = { kind: "online", phase: "lobby", round: 0, game: 0, seats: [], turn: null, bid: null, starter: null, log: [], deadline: 0, turnSeq: 0, lastAct: null, reveal: null, winner: null, rollNo: 0 };
+      T.seats.push(makeSeat("h", myName(), false));
+      tlog(`${myName()} opened the table.`);
+      commit();
+    }
+    startHostPeer();
+    updateUI();
+  }
+  function startHostPeer() {
+    const code = online.code;
+    setMsg("gameMsg", "Connecting to the match server...");
+    const peer = new Peer(PREFIX + code, PEER_OPTS); online.peer = peer;
+    peer.on("open", () => { online.retries = 0; setMsg("gameMsg", ""); updateUI(); });
+    peer.on("connection", (conn) => {
+      conn.on("open", () => { if (online.peer !== peer) { conn.close(); return; } online.conns.push(conn); try { conn.send({ type: "chat-history", list: online.chat.slice(-60) }); } catch (_) {} });
+      conn.on("data", (msg) => onHostMessage(conn, msg));
+      conn.on("close", () => {
+        online.conns = online.conns.filter(c => c !== conn);
+        const id = conn.seatId; if (!id || !T) return;
+        const s = seatOf(id); if (!s) return;
+        sysChat(`${s.name} left the table.`); tlog(`${s.name} stepped away.`);
+        if (T.phase === "lobby" || T.phase === "over" || s.waiting) T.seats = T.seats.filter(x => x !== s);
+        else { s.gone = true; if (T.turn === id) armTurn(s); }
+        commit();
+      });
+    });
+    peer.on("disconnected", () => { if (online.peer === peer && !peer.destroyed) { try { peer.reconnect(); } catch (_) {} } });
+    peer.on("error", (e) => {
+      if (online.peer !== peer) return;
+      if (e.type === "unavailable-id") {
+        if (online.retries++ < 5) { peer.destroy(); setTimeout(() => { if (online.code === code && online.seat === "host") startHostPeer(); }, 3000); setMsg("gameMsg", "Reconnecting your table..."); }
+        else setMsg("gameMsg", "This table is already open in another tab.", true);
+      } else if (["network", "server-error", "socket-error", "socket-closed"].includes(e.type)) setMsg("gameMsg", "Can't reach the match server. Check your internet connection.", true);
+    });
+  }
+  const cleanName = (n) => (typeof n === "string" ? n : "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim().slice(0, 8);
+  function onHostMessage(conn, msg) {
+    if (!msg || typeof msg !== "object" || !T) return;
+    if (msg.type === "hello") {
+      const token = typeof msg.token === "string" ? msg.token.slice(0, 20) : "";
+      let s = token && T.seats.find(x => x.token === token);
+      if (s) { s.gone = false; s.name = cleanName(msg.name) || s.name; if (T.turn === s.id) armTurn(s); }
+      else if (T.seats.length < MAX_SEATS) {
+        s = makeSeat("p" + Math.random().toString(36).slice(2, 8), cleanName(msg.name) || "GUEST", false); s.token = token;
+        s.waiting = T.phase !== "lobby"; // joins in when the next game starts
+        T.seats.push(s);
+      }
+      if (s) {
+        conn.seatId = s.id;
+        for (const c of online.conns) if (c !== conn && c.seatId === s.id) { c.seatId = null; try { c.close(); } catch (_) {} }
+        try { conn.send({ type: "welcome", seat: s.id }); } catch (_) {}
+        sysChat(`${s.name} joined the table.`); sfxSafe(SFX.join); tlog(`${s.name} sits down.`);
+      } else try { conn.send({ type: "welcome", seat: null }); } catch (_) {}
+      commit();
+      return;
+    }
+    const id = conn.seatId; if (!id) return;
+    if (msg.type === "bid") placeBid(id, msg.q, msg.f);
+    else if (msg.type === "call") call(id, msg.kind);
+    else if (msg.type === "load") useLoaded(id, msg.idx, msg.face);
+    else if (msg.type === "chat") hostReceiveChat(id, msg.text);
+  }
+  function joinTable(code) {
+    leaveOnline(false); clearTimers(); resetScreen(); T = null;
+    mode = "online"; online.code = code; online.seat = "guest"; mySeat = null;
+    setHash(code); setMsg("gameMsg", "Connecting to the table...");
+    updateUI(); render();
+    const peer = new Peer(PEER_OPTS); online.peer = peer;
+    peer.on("open", () => connectToHost());
+    peer.on("error", (e) => {
+      if (online.peer !== peer) return;
+      if (e.type === "peer-unavailable") { setMsg("gameMsg", "Can't find that table. Check the code, and make sure the person who opened it still has the page open.", true); $("reconnect").hidden = false; }
+      else if (["network", "server-error", "socket-error", "socket-closed"].includes(e.type)) { setMsg("gameMsg", "Can't reach the match server. Check your internet connection.", true); $("reconnect").hidden = false; }
+    });
+  }
+  function connectToHost() {
+    const peer = online.peer; if (!peer || peer.destroyed) return;
+    $("reconnect").hidden = true;
+    if (peer.disconnected) { try { peer.reconnect(); } catch (_) {} }
+    const conn = peer.connect(PREFIX + online.code, { reliable: true });
+    online.hostConn = conn;
+    const t = setTimeout(() => { if (!conn.open && online.hostConn === conn) { setMsg("gameMsg", "Still trying to reach the table. Some school or work networks block direct connections.", true); $("reconnect").hidden = false; } }, 15000);
+    conn.on("open", () => { clearTimeout(t); online.connected = true; online.connectedOnce = true; setMsg("gameMsg", ""); try { conn.send({ type: "hello", token: myToken(), name: myName() }); } catch (_) {} updateUI(); });
+    conn.on("data", (msg) => {
+      if (!msg || typeof msg !== "object" || online.hostConn !== conn) return;
+      if (msg.type === "welcome") { mySeat = msg.seat || null; if (!mySeat) setMsg("gameMsg", "The table is full. You're watching."); if (view) applyView(view); }
+      else if (msg.type === "state" && msg.state && Array.isArray(msg.state.seats)) applyView(msg.state);
+      else if (msg.type === "chat-history" && Array.isArray(msg.list)) { online.chat = msg.list.filter(okChat).slice(-120); renderChat(); }
+      else if (msg.type === "chat" && okChat(msg.msg)) addChat(msg.msg);
+    });
+    conn.on("close", () => {
+      clearTimeout(t); if (online.hostConn !== conn) return;
+      online.connected = false; setMsg("gameMsg", "Lost the connection to the table. Press RECONNECT once the host is back.", true);
+      sysChat("Connection lost."); $("reconnect").hidden = false; updateUI();
+    });
+  }
+  function sendToHost(msg) {
+    const c = online.hostConn;
+    if (!c || !c.open) { setMsg("gameMsg", "Not connected to the table.", true); return false; }
+    try { c.send(msg); return true; } catch (_) { return false; }
+  }
+  function leaveOnline(toLocal = true) {
+    if (online.peer) { try { online.peer.destroy(); } catch (_) {} }
+    Object.assign(online, { code: null, seat: null, peer: null, conns: [], hostConn: null, connected: false, connectedOnce: false, chat: [], retries: 0 });
+    renderChat(); $("reconnect").hidden = true; document.body.classList.remove("focus");
+    if (toLocal) { setHash(null); setMsg("gameMsg", ""); prefs.opp = "bot"; startLocal(); }
+  }
+  function renderOnline() {
+    $("tableCode").textContent = (online.code || "").toUpperCase();
+    $("shareLink").value = online.code ? tableLink(online.code) : "";
+    $("shareBox").hidden = online.seat !== "host";
+    const box = $("players"); box.replaceChildren();
+    for (const s of (view ? view.seats : [])) {
+      const c = document.createElement("span"); c.className = "chip"; c.style.background = s.color;
+      const n = document.createElement("span"); n.textContent = s.name + (s.id === mySeat ? " (you)" : "") + (s.id === "h" ? " - host" : "") + (s.gone ? " - away" : "");
+      const ch = document.createElement("span"); ch.className = "muted"; ch.textContent = s.waiting ? "next" : s.count;
+      box.append(c, n, ch);
+    }
+    const canChat = !!mySeat && (online.seat === "host" || online.connected);
+    $("chatInput").disabled = $("chatSend").disabled = !canChat;
+    for (const b of document.querySelectorAll("#quickChat button")) b.disabled = !canChat;
+  }
+  $("leave").onclick = () => leaveOnline(true);
+  $("reconnect").onclick = () => { if (online.code && online.seat === "guest") { setMsg("gameMsg", "Reconnecting..."); if (online.peer && !online.peer.destroyed) connectToHost(); else joinTable(online.code); } };
+  $("copyLink").onclick = () => {
+    const input = $("shareLink"), done = () => { $("copyLink").textContent = "COPIED!"; setTimeout(() => { $("copyLink").textContent = "COPY LINK"; }, 1500); };
+    if (navigator.clipboard) navigator.clipboard.writeText(input.value).then(done, () => { input.select(); try { document.execCommand("copy"); done(); } catch (_) {} });
+    else { input.select(); try { document.execCommand("copy"); done(); } catch (_) {} }
+  };
+  function openTable(raw) {
+    const code = (raw || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (code.length !== 6) { setMsg("onlineMsg", "Codes are 6 letters and numbers.", true); return; }
+    if (typeof Peer === "undefined") return;
+    if (store.get("dc-dice-host-" + code)) hostTable(code, false); else joinTable(code);
+  }
+  $("join").onclick = () => openTable($("joinCode").value);
+  $("joinCode").addEventListener("keydown", (e) => { if (e.key === "Enter") openTable($("joinCode").value); });
+
+  // ----- Chat -----
+  const okChat = (m) => m && typeof m === "object" && typeof m.text === "string" && typeof m.name === "string";
+  const cleanText = (t) => typeof t === "string" ? t.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 200) : "";
+  function addChat(entry, quiet) {
+    online.chat.push(entry); if (online.chat.length > 120) online.chat.shift();
+    renderChat();
+    if (!quiet && entry.from !== "sys" && entry.from !== mySeat) { sfxSafe(SFX.chat); const b = $("chatBox"); b.classList.remove("ping"); void b.offsetWidth; b.classList.add("ping"); }
+  }
+  function sysChat(text) { const e = { from: "sys", name: "", text }; addChat(e, true); broadcastChat(e); }
+  function broadcastChat(entry, except) { if (online.seat !== "host") return; for (const c of online.conns) if (c.open && c !== except) { try { c.send({ type: "chat", msg: entry }); } catch (_) {} } }
+  const chatTimes = [];
+  function hostReceiveChat(id, text) {
+    const now = Date.now(); while (chatTimes.length && now - chatTimes[0] > 3000) chatTimes.shift();
+    if (chatTimes.length >= 8) return;
+    const s = seatOf(id), t = cleanText(text); if (!s || !t) return;
+    chatTimes.push(now);
+    const e = { from: id, name: s.name, color: s.color, text: t }; addChat(e); broadcastChat(e);
+  }
+  function sendChat(text) {
+    const t = cleanText(text); if (!t || !mySeat) return false;
+    if (online.seat === "host") { const s = seatOf(mySeat); const e = { from: mySeat, name: s.name, color: s.color, text: t }; addChat(e, true); broadcastChat(e); return true; }
+    return sendToHost({ type: "chat", text: t });
+  }
+  function renderChat() {
+    const log = $("chatLog"), atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30;
+    log.replaceChildren();
+    if (!online.chat.length) { const e = document.createElement("div"); e.className = "chatMsg sys"; e.textContent = "No messages yet. Say hi!"; log.append(e); }
+    for (const m of online.chat) {
+      const row = document.createElement("div");
+      if (m.from === "sys") { row.className = "chatMsg sys"; row.textContent = m.text; log.append(row); continue; }
+      row.className = "chatMsg" + (m.from === mySeat ? " mine" : "");
+      const chip = document.createElement("span"); chip.className = "chip"; chip.style.background = /^#[0-9a-f]{6}$/i.test(m.color || "") ? m.color : "#888";
+      const who = document.createElement("span"); who.className = "who"; who.textContent = (m.from === mySeat ? "You" : m.name) + ":";
+      const text = document.createElement("span"); text.textContent = m.text;
+      row.append(chip, who, text); log.append(row);
+    }
+    if (atBottom) log.scrollTop = log.scrollHeight;
+  }
+  $("chatForm").addEventListener("submit", (e) => { e.preventDefault(); if (sendChat($("chatInput").value)) $("chatInput").value = ""; });
+  for (const b of document.querySelectorAll("#quickChat button")) b.onclick = () => sendChat(b.dataset.say);
+  // ---------- Sound: synthesised with Web Audio ----------
+  const audio = { ctx: null, master: null, sfx: null, music: null, noise: null };
+  function ac() {
+    if (audio.ctx) return audio.ctx;
+    try {
+      const C = window.AudioContext || window.webkitAudioContext, c = new C();
+      audio.ctx = c; audio.master = c.createGain(); audio.master.connect(c.destination);
+      audio.sfx = c.createGain(); audio.sfx.connect(audio.master); audio.music = c.createGain(); audio.music.connect(audio.master);
+      const buf = c.createBuffer(1, c.sampleRate, c.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      audio.noise = buf; applyVolumes();
+    } catch (_) { audio.ctx = null; }
+    return audio.ctx;
+  }
+  function applyVolumes() {
+    const c = audio.ctx; if (!c) return; const now = c.currentTime;
+    audio.master.gain.setTargetAtTime(settings.muted ? 0 : (settings.volume / 100) * 0.9, now, 0.03);
+    audio.sfx.gain.setTargetAtTime(settings.sfx ? 1 : 0, now, 0.03);
+    audio.music.gain.setTargetAtTime(settings.music ? 0.5 : 0, now, 0.25);
+  }
+  const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+  function tone({ type = "square", f, f2, at = 0, abs = false, dur = 0.1, vol = 0.1, attack = 0.004, bus = "sfx", vib = 0 }) {
+    const c = ac(); if (!c) return;
+    const t0 = abs ? at : c.currentTime + at, o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    if (vib) { const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = 5; lg.gain.value = vib; l.connect(lg); lg.connect(o.frequency); l.start(t0); l.stop(t0 + dur + 0.05); }
+    g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(vol, t0 + attack); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(audio[bus]); o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  function noise({ at = 0, abs = false, dur = 0.1, vol = 0.1, type = "bandpass", freq = 1000, f2, q = 1, bus = "sfx" }) {
+    const c = ac(); if (!c) return;
+    const t0 = abs ? at : c.currentTime + at, src = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain();
+    src.buffer = audio.noise; src.loop = true; fl.type = type; fl.frequency.setValueAtTime(freq, t0); fl.Q.value = q;
+    if (f2) fl.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(vol, t0 + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(fl); fl.connect(g); g.connect(audio[bus]); src.start(t0, Math.random() * 0.5); src.stop(t0 + dur + 0.02);
+  }
+  const SFX = {
+    click() { tone({ f: 1400, dur: 0.025, vol: 0.03 }); },
+    rattle() { for (let i = 0; i < 14; i++) { noise({ at: i * 0.07 + Math.random() * 0.03, type: "bandpass", freq: 1800 + Math.random() * 1600, q: 3, dur: 0.03, vol: 0.18 }); if (i % 3 === 0) tone({ type: "square", f: 900 + Math.random() * 500, at: i * 0.07, dur: 0.015, vol: 0.02 }); } },
+    slam() { tone({ type: "sine", f: 140, f2: 60, dur: 0.18, vol: 0.3 }); noise({ type: "lowpass", freq: 600, dur: 0.1, vol: 0.25 }); for (let i = 0; i < 3; i++) noise({ at: 0.04 + i * 0.05, type: "bandpass", freq: 2200, q: 3, dur: 0.025, vol: 0.08 / (i + 1) }); },
+    bid() { tone({ type: "sine", f: 2200, dur: 0.05, vol: 0.05 }); tone({ type: "sine", f: 2900, at: 0.04, dur: 0.06, vol: 0.04 }); noise({ type: "highpass", freq: 5000, dur: 0.03, vol: 0.06 }); },
+    turn() { tone({ type: "triangle", f: 784, dur: 0.1, vol: 0.09 }); tone({ type: "triangle", f: 1175, at: 0.1, dur: 0.16, vol: 0.09 }); },
+    lift() { tone({ type: "square", f: 196, dur: 0.12, vol: 0.06 }); tone({ type: "square", f: 185, at: 0.12, dur: 0.12, vol: 0.06 }); noise({ at: 0.25, type: "highpass", freq: 1200, f2: 4000, dur: 0.3, vol: 0.12 }); },
+    tick() { tone({ type: "triangle", f: 1320, dur: 0.05, vol: 0.07 }); },
+    loseDie() { tone({ type: "sine", f: 330, f2: 110, dur: 0.35, vol: 0.18 }); noise({ type: "lowpass", freq: 900, dur: 0.15, vol: 0.15 }); },
+    gain() { [659, 880].forEach((f, i) => tone({ type: "triangle", f, at: i * 0.09, dur: 0.18, vol: 0.09 })); },
+    load() { tone({ type: "sine", f: 600, f2: 1200, dur: 0.08, vol: 0.03 }); },
+    win() { [523, 659, 784, 1046, 1318].forEach((f, i) => tone({ type: "triangle", f, at: i * 0.08, dur: 0.25, vol: 0.1 })); },
+    lose() { [440, 370, 311].forEach((f, i) => tone({ type: "triangle", f, at: i * 0.15, dur: 0.25, vol: 0.09, vib: 4 })); },
+    join() { tone({ type: "triangle", f: 660, dur: 0.1, vol: 0.08 }); tone({ type: "triangle", f: 990, at: 0.1, dur: 0.15, vol: 0.08 }); },
+    chat() { tone({ type: "triangle", f: 988, dur: 0.08, vol: 0.08 }); tone({ type: "triangle", f: 1319, at: 0.08, dur: 0.12, vol: 0.08 }); },
+  };
+  const sfxSafe = (fn) => { try { if (settings.sfx && !settings.muted) fn(); } catch (_) {} };
+
+  // ----- Music: an original, slow lounge loop in F major -----
+  // Walking triangle bass, soft chord stabs, brushed drums and a sine "vibraphone" tune, swung.
+  const LOUNGE = [ // [bass root, chord, walk]
+    [41, [57, 60, 64, 69], [41, 45, 48, 50]], [38, [57, 60, 62, 65], [38, 41, 45, 42]], [43, [58, 62, 65, 67], [43, 46, 50, 47]], [36, [58, 60, 64, 67], [36, 40, 43, 40]],
+    [45, [55, 60, 64, 67], [45, 48, 52, 49]], [38, [57, 60, 62, 66], [38, 42, 45, 42]], [43, [58, 62, 65, 67], [43, 46, 50, 48]], [36, [58, 60, 64, 67], [36, 40, 43, 40]],
+  ];
+  const TUNE = [
+    [[0, 76, 2], [2, 77, 1], [3, 79, 3], [6, 76, 2]], [[0, 77, 3], [4, 74, 2], [6, 72, 2]], [[0, 74, 2], [2, 77, 2], [4, 81, 3]], [[0, 79, 4], [5, 76, 1], [6, 72, 2]],
+    [[0, 72, 2], [2, 76, 2], [4, 79, 4]], [[0, 78, 3], [3, 77, 1], [4, 74, 4]], [[0, 74, 2], [2, 70, 2], [4, 72, 2], [6, 74, 2]], [[0, 76, 6]],
+  ];
+  const music = { playing: false, step: 0, next: 0, timer: null };
+  const QUARTER = 60 / 84;
+  function playStep(s, at) {
+    const bar = (s >> 3) % 8, st = s & 7, [root, chord, walk] = LOUNGE[bar], n = (o) => ({ abs: true, bus: "music", ...o });
+    const eighth = st % 2 === 0 ? QUARTER * 0.62 : QUARTER * 0.38;
+    if (st % 2 === 0) tone(n({ type: "triangle", f: midi(walk[st >> 1]), at, dur: QUARTER * 0.9, vol: 0.15, attack: 0.01 }));
+    if (st === 2 || st === 5) for (const note of chord) tone(n({ type: "sine", f: midi(note), at, dur: 0.35, vol: 0.022, attack: 0.01 }));
+    for (const [p, note, len] of TUNE[bar]) if (p === st && (s >> 6) % 2 === 1) { tone(n({ type: "sine", f: midi(note), at, dur: len * QUARTER * 0.5, vol: 0.05, vib: 3 })); tone(n({ type: "triangle", f: midi(note - 12), at, dur: len * QUARTER * 0.4, vol: 0.015 })); }
+    if (st === 2 || st === 6) noise(n({ type: "highpass", freq: 3500, at, dur: 0.18, vol: 0.05 }));
+    noise(n({ type: "highpass", freq: 8000, at, dur: 0.03, vol: st % 2 ? 0.015 : 0.025 }));
+    if (st === 0 && bar % 2 === 0) tone(n({ type: "sine", f: 90, f2: 45, at, dur: 0.18, vol: 0.12 }));
+    return eighth;
+  }
+  function startMusic() {
+    const c = ac(); if (!c || music.playing) return;
+    music.playing = true; music.next = c.currentTime + 0.1;
+    music.timer = setInterval(() => { while (music.next < c.currentTime + 0.2) { music.next += playStep(music.step, music.next); music.step = (music.step + 1) % 128; } }, 30);
+  }
+  function syncAudio() { if (audio.ctx && settings.music && !music.playing) startMusic(); }
+  function unlockAudio() { const c = ac(); if (!c) return; if (c.state === "suspended") c.resume(); syncAudio(); }
+  document.addEventListener("pointerdown", unlockAudio);
+  document.addEventListener("keydown", (e) => {
+    unlockAudio();
+    if ((e.key === "m" || e.key === "M") && !(e.target instanceof HTMLInputElement)) { settings.muted = !settings.muted; saveSettings(); renderSound(); applyVolumes(); }
+  });
+  document.addEventListener("visibilitychange", () => { const c = audio.ctx; if (!c) return; if (document.hidden) c.suspend(); else c.resume(); });
+  document.addEventListener("click", (e) => { if (e.target.closest("button") && !e.target.closest(".bidLine")) sfxSafe(SFX.click); });
+  function renderSound() {
+    $("musicToggle").setAttribute("aria-checked", String(settings.music));
+    $("sfxToggle").setAttribute("aria-checked", String(settings.sfx));
+    $("volume").value = settings.volume;
+    $("volLabel").textContent = settings.muted ? "(MUTED)" : settings.volume + "%";
+    $("soundHint").textContent = settings.muted ? "Muted. Press M to unmute." : "Press M to mute.";
+  }
+  $("musicToggle").onclick = () => { settings.music = !settings.music; saveSettings(); renderSound(); applyVolumes(); syncAudio(); };
+  $("sfxToggle").onclick = () => { settings.sfx = !settings.sfx; saveSettings(); renderSound(); applyVolumes(); };
+  $("volume").oninput = () => { settings.volume = +$("volume").value; settings.muted = false; saveSettings(); renderSound(); applyVolumes(); };
+  // ---------- Boot ----------
+  renderSound(); renderChat();
+  const hashCode = () => { const m = /^#d-([a-z0-9]{6})$/i.exec(location.hash); return m ? m[1].toLowerCase() : null; };
+  if (typeof Peer === "undefined") {
+    $("oppOnline").disabled = true; $("join").disabled = true;
+    if (prefs.opp === "online") prefs.opp = "bot";
+    setMsg("onlineMsg", "Online play works in the GitHub Pages version. Here you can play the bots.", true);
+    startLocal();
+  } else {
+    const code = hashCode();
+    if (code) openTable(code); else startLocal();
+  }
+  window.addEventListener("hashchange", () => { const code = hashCode(); if (code && code !== online.code && typeof Peer !== "undefined") openTable(code); });
+})();
+</script>
+</body>
+</html>
