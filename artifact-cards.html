@@ -359,7 +359,7 @@
       <p><b>HIT</b> takes a card. <b>STAND</b> keeps your hand. <b>DOUBLE</b> doubles your bet on your first two cards and takes exactly one more card.</p>
       <p><b>SPLIT</b> turns two cards of the same value into two hands, each with its own bet (up to 4 hands). Split aces get one card each, and a split hand of 21 isn't blackjack.</p>
       <p>An ace plus a 10-value card is <b>blackjack</b> and pays 3 to 2. A win pays 1 to 1 and a tie (<b>push</b>) gives your bet back.</p>
-      <p id="cheatRules" hidden><b>Cheater mode:</b> one player is the <b>dealer</b> and holds a pistol. Secretly, one player is the <b>cheater</b> (once the hands are dealt, sees the next 3 cards and the dealer's hidden card; wins at $1,000), one is the <b>jester</b> (on their turn, sees the card they'd get; wins if shot), one is the <b>gambler</b> (one ace in their pocket to swap into their hand once a game), and anyone else is an honest <b>regular</b>. You only see your own hand total, and your secrets stay hidden until you <b>hold B</b>, so nobody can read your role off your screen. Once a game, any player can <b>call out the gambler</b>: guess right and you take half their money; guess wrong and they take half of yours. The dealer plays the house hand themselves: hit, stand, <b>double</b> (one card, and every bet counts twice) or <b>split</b> a pair (each player's hand plays half its bet against each house hand). The dealer gets one shot: hit the cheater and the house, gambler and regulars win; hit the jester and the jester wins; hit anyone else and the cheater wins.</p>
+      <p id="cheatRules" hidden><b>Cheater mode</b> (3 to 6 players): one player is the <b>dealer</b> and holds a pistol. Secretly, one player is the <b>cheater</b> (once the hands are dealt, sees the next 3 cards and the dealer's hidden card; wins at $1,000), and anyone else is an honest <b>regular</b>. With 4 or more, one is also the <b>jester</b> (on their turn, sees the card they'd get; wins if shot) and one the <b>gambler</b> (one ace in their pocket to swap into their hand once a game). You only see your own hand total, and your secrets stay hidden until you <b>hold B</b>, so nobody can read your role off your screen. Once a game, any player can <b>call out the gambler</b>: guess right and you take half their money; guess wrong and they take half of yours. The dealer plays the house hand themselves: hit, stand, <b>double</b> (one card, and every bet counts twice) or <b>split</b> a pair (each player's hand plays half its bet against each house hand). The dealer gets one shot: hit the cheater and the house, gambler and regulars win; hit the jester and the jester wins; hit anyone else and the cheater wins.</p>
       <p>The dealer must hit until 17 and stands on every 17. Everyone starts with <b>$500</b>. Run out and you're done: bots leave the table, and you can start over.</p>
     </div>
     <div class="box" id="log"></div>
@@ -423,7 +423,7 @@
   function newLocalTable(nBots, cheater) {
     clearTimers();
     T = { kind: "local", mode: cheater ? "cheater" : "classic", phase: "betting", round: 0, shoe: newShoe(), shuffled: 0, dealer: { cards: [], hidden: true }, seats: [], turn: null, log: [], deadline: 0, lastAct: null, turnSeq: 0 };
-    if (cheater) nBots = Math.max(3, nBots);
+    if (cheater) nBots = Math.max(2, nBots);
     const bots = BOTS.slice(0, nBots);
     const me = makeSeat("me", myName(), false);
     const order = [...bots.slice(0, Math.ceil(nBots / 2)).map(b => b), "me", ...bots.slice(Math.ceil(nBots / 2))];
@@ -438,15 +438,16 @@
   // (wants to be shot), one is the gambler (an ace up their sleeve), any others
   // are honest regulars, and one player is the dealer, who holds a pistol and
   // gets a single shot to catch the cheater.
-  const CHEAT_GOAL = 1000, CHEAT_MIN = 4;
+  const CHEAT_GOAL = 1000, CHEAT_MIN = 3;
   const ROLE_INFO = {
     dealer: { name: "THE DEALER", color: "#ffe066", text: "You run the table and hold the pistol. One player is a cheater who can see the cards coming. Shoot them before they reach $1,000. Shoot anyone else and the cheater wins. Careful: the jester WANTS to be shot. When it's your turn you play the house hand yourself: hit, stand, double or split." },
     cheater: { name: "THE CHEATER", color: "#ff5e7a", text: "Once the hands are dealt, you can see the next 3 cards in the shoe and the dealer's face-down card. Reach $1,000 to win, without the dealer working out that it's you." },
     jester: { name: "THE JESTER", color: "#c98bff", text: "You win if the dealer shoots you. On your turn you can see the card you'd get if you hit, so use it to look suspiciously lucky: bet big, play boldly, act like the cheater." },
     gambler: { name: "THE GAMBLER", color: "#3fd0a0", text: "You have one ace up your sleeve. Once a game, on your turn, slip it into your hand in place of one of your cards. Careful: any player can call out the gambler. If they pick you, they take half your money and your ace. If the dealer shoots the cheater, you win with the house." },
-    regular: { name: "A REGULAR", color: "#59c1ff", text: "You're a regular: an honest player with no tricks. If the dealer shoots the cheater, you win with the house. Somebody has an ace up their sleeve, though. Call out the gambler: guess right and you take half their money; guess wrong and they take half of yours. One call a game." },
+    regular: { name: "A REGULAR", color: "#59c1ff", text: "You're a regular: an honest player with no tricks. If the dealer shoots the cheater, you win with the house. At a table of 4 or more, somebody also has an ace up their sleeve: call out the gambler and, if you're right, you take half their money (wrong, and they take half of yours). One call a game." },
   };
   const isCheat = () => T && T.mode === "cheater";
+  const hasGambler = () => !!T.roles && Object.values(T.roles).includes("gambler");
   const roleOf = (id) => (T.roles || {})[id];
   const participants = () => T.order.filter(s => !s.gone || T.kind === "local");
   function newCheaterGame() {
@@ -460,11 +461,13 @@
     const mix = [...all];
     for (let i = mix.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [mix[i], mix[j]] = [mix[j], mix[i]]; }
     // Tests can choose this screen's role; normal play never sets this.
-    const want = ["dealer", "cheater", "jester", "gambler", "regular"].indexOf(window.DEVOUR_TEST_ROLE), mi = mix.findIndex(x => x.id === mySeat);
-    if (want >= 0 && want < mix.length && mi >= 0) [mix[want], mix[mi]] = [mix[mi], mix[want]];
-    T.roles = {}; T.roles[mix[0].id] = "dealer"; T.roles[mix[1].id] = "cheater"; T.roles[mix[2].id] = "jester";
-    T.roles[mix[3].id] = "gambler";
-    for (const x of mix.slice(4)) T.roles[x.id] = "regular";
+    // 3 players: a dealer, a cheater and a regular. From 4: a jester and a gambler join; anyone else is a regular.
+    const cast = (mix.length >= 4 ? ["dealer", "cheater", "jester", "gambler"] : ["dealer", "cheater"]).concat(Array(Math.max(0, mix.length - 4)).fill("regular"));
+    while (cast.length < mix.length) cast.push("regular");
+    // Tests can choose this screen's role; normal play never sets this.
+    const want = cast.indexOf(window.DEVOUR_TEST_ROLE), mi = mix.findIndex(x => x.id === mySeat);
+    if (want >= 0 && mi >= 0) [mix[want], mix[mi]] = [mix[mi], mix[want]];
+    T.roles = {}; mix.forEach((x, i) => { T.roles[x.id] = cast[i]; });
     T.dealerSeat = mix[0];
     T.seats = all.filter(x => x !== mix[0]);
     for (const x of all) { x.pocket = T.roles[x.id] === "gambler" ? "A" + SUITS[Math.floor(Math.random() * 4)] : null; x.pocketUsed = false; }
@@ -503,7 +506,7 @@
       if (c && c.chips >= CHEAT_GOAL) return endCheaterGame("cheater", `${c.name} reached $${c.chips}. ${c.name} was the CHEATER, and got away with it!`);
       if (c && c.chips < BET_MIN) return endCheaterGame("dealer", `${c.name} went broke. ${c.name} was the cheater, so the house wins!`);
       if (T.dealerSeat && T.dealerSeat.gone) return endCheaterGame("none", `The dealer left the table. Nobody wins this one.`);
-      if (!T.exposed && Math.random() < 0.08) {
+      if (!T.exposed && hasGambler() && Math.random() < 0.08) {
         const bots = T.seats.filter(x => x.bot && !(T.accused || {})[x.id] && roleOf(x.id) !== "gambler");
         const b = bots[Math.floor(Math.random() * bots.length)], others = b ? T.seats.filter(x => x !== b) : [];
         if (b && others.length) accuse(b.id, others[Math.floor(Math.random() * others.length)].id);
@@ -872,7 +875,7 @@
       // hole card. The jester sees just the card they would get, on their own turn.
       peek: role === "cheater" && !T.over ? (T.phase === "playing" ? { next: T.shoe.slice(-3).reverse(), hole: d.hidden && d.cards[1] ? d.cards[1] : null } : { wait: true })
         : role === "jester" && !T.over ? (T.phase === "playing" && T.turn === forId ? { next: T.shoe.slice(-1), hole: null, jester: true } : { wait: true, jester: true }) : null,
-      myAccused: !!(T.accused || {})[forId], exposed: T.exposed || null, lastAccuse: T.lastAccuse || null,
+      hasGambler: cheat && hasGambler(), myAccused: !!(T.accused || {})[forId], exposed: T.exposed || null, lastAccuse: T.lastAccuse || null,
       pocket: role === "gambler" && !T.over && seatOf(forId) ? { card: seatOf(forId).pocket, used: !!seatOf(forId).pocketUsed } : null, round: T.round, shoeLeft: T.shoe.length, shuffled: T.shuffled,
       dealer: { hidden: d.hidden, cards: d.hidden ? d.cards.map((c, i) => i === 1 ? "??" : c) : [...d.cards], cards2: d.cards2 ? [...d.cards2] : null, cur: d.cur || 0, split: !!d.split, doubled: !!d.doubled },
       seats: T.seats.map(s => ({ id: s.id, name: s.name, bot: s.bot, color: s.color, chips: s.chips, bet: s.state === "in" ? sumBets(s) : s.bet,
@@ -1102,7 +1105,7 @@
   }
   function renderAccuse(v) {
     const box = $("accuseBox"), me = v && v.seats.find(x => x.id === mySeat);
-    box.hidden = !(v && v.mode === "cheater" && !v.over && me && v.myRole && v.myRole !== "dealer" && v.phase !== "lobby");
+    box.hidden = !(v && v.mode === "cheater" && v.hasGambler && !v.over && me && v.myRole && v.myRole !== "dealer" && v.phase !== "lobby");
     if (box.hidden) { accusing = false; return; }
     const list = $("accusees"); list.replaceChildren();
     const caught = v.exposed && v.seats.find(x => x.id === v.exposed);
@@ -1662,8 +1665,8 @@
     $("setupHint").textContent = prefs.opp === "online" ? "You'll get a link for up to 5 friends." : `You and ${prefs.bots} bot${prefs.bots > 1 ? "s" : ""} against the dealer.`;
     $("cheatToggle").setAttribute("aria-checked", String(!!prefs.cheater));
     $("cheatLabel").textContent = prefs.cheater ? "ON" : "OFF";
-    $("cheatHint").textContent = prefs.cheater ? (prefs.opp === "online" ? "4 to 6 people (you plus 3 to 5 friends): a dealer, a cheater, a jester, a gambler and up to 2 regulars." : "You plus at least 3 bots. Your role is secret and random each game.") : "Plain blackjack.";
-    for (const b of document.querySelectorAll("[data-bots]")) b.disabled = !!prefs.cheater && +b.dataset.bots < 3;
+    $("cheatHint").textContent = prefs.cheater ? (prefs.opp === "online" ? "3 to 6 people (you plus 2 to 5 friends). With 3: a dealer, a cheater and a regular. With 4 or more, a jester and a gambler join, then more regulars." : "You plus at least 2 bots. Your role is secret and random each game.") : "Plain blackjack.";
+    for (const b of document.querySelectorAll("[data-bots]")) b.disabled = !!prefs.cheater && +b.dataset.bots < 2;
     $("cheatRules").hidden = !(view && view.mode === "cheater") && !prefs.cheater;
     if (isOnline) renderOnline();
     const v = view;
@@ -1777,7 +1780,7 @@
   let mode = "local";
   for (const b of document.querySelectorAll("[data-opp]")) b.onclick = () => { prefs.opp = b.dataset.opp; savePrefs(); updateUI(); };
   for (const b of document.querySelectorAll("[data-bots]")) b.onclick = () => { prefs.bots = +b.dataset.bots; savePrefs(); updateUI(); };
-  $("cheatToggle").onclick = () => { prefs.cheater = !prefs.cheater; if (prefs.cheater && prefs.bots < 3) prefs.bots = 3; savePrefs(); updateUI(); };
+  $("cheatToggle").onclick = () => { prefs.cheater = !prefs.cheater; if (prefs.cheater && prefs.bots < 2) prefs.bots = 2; savePrefs(); updateUI(); };
   $("nameInput").value = prefs.name;
   $("nameInput").addEventListener("input", () => {
     prefs.name = $("nameInput").value; savePrefs();
