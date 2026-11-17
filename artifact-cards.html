@@ -214,6 +214,10 @@
   </div></div>
   <div class="side left">
     <div class="box" id="status"></div>
+    <div class="box" id="secretBar" hidden>
+      <button id="secretBtn" class="big" style="width:100%">HOLD B FOR SECRETS</button>
+      <div class="muted" id="secretHint">Your role and powers stay hidden so nobody can read them off your screen.</div>
+    </div>
     <div class="box" id="peekBox" hidden>
       <h2>YOUR PEEK (SECRET)</h2>
       <canvas id="peekCv" width="104" height="30"></canvas>
@@ -358,7 +362,7 @@
       <p><b>HIT</b> takes a card. <b>STAND</b> keeps your hand. <b>DOUBLE</b> doubles your bet on your first two cards and takes exactly one more card.</p>
       <p><b>SPLIT</b> turns two cards of the same value into two hands, each with its own bet (up to 4 hands). Split aces get one card each, and a split hand of 21 isn't blackjack.</p>
       <p>An ace plus a 10-value card is <b>blackjack</b> and pays 3 to 2. A win pays 1 to 1 and a tie (<b>push</b>) gives your bet back.</p>
-      <p id="cheatRules" hidden><b>Cheater mode:</b> one player is the <b>dealer</b> and holds a pistol. Secretly, one player is the <b>cheater</b> (sees the next 3 cards and the dealer's hidden card, wins at $1,000), one is the <b>jester</b> (sees the next card, wins if shot), one is the <b>gambler</b> (one ace in their pocket to swap into their hand once a game), and anyone else is an honest <b>regular</b>. You only see your own hand total. Once a game, any player can <b>call out the gambler</b>: guess right and you take half their money; guess wrong and they take half of yours. The dealer plays the house hand themselves: hit, stand, <b>double</b> (one card, and every bet counts twice) or <b>split</b> a pair (each player's hand plays half its bet against each house hand). The dealer gets one shot: hit the cheater and the house, gambler and regulars win; hit the jester and the jester wins; hit anyone else and the cheater wins.</p>
+      <p id="cheatRules" hidden><b>Cheater mode:</b> one player is the <b>dealer</b> and holds a pistol. Secretly, one player is the <b>cheater</b> (once the hands are dealt, sees the next 3 cards and the dealer's hidden card; wins at $1,000), one is the <b>jester</b> (on their turn, sees the card they'd get; wins if shot), one is the <b>gambler</b> (one ace in their pocket to swap into their hand once a game), and anyone else is an honest <b>regular</b>. You only see your own hand total, and your secrets stay hidden until you <b>hold B</b> (or the SECRETS button), so nobody can read your role off your screen. Once a game, any player can <b>call out the gambler</b>: guess right and you take half their money; guess wrong and they take half of yours. The dealer plays the house hand themselves: hit, stand, <b>double</b> (one card, and every bet counts twice) or <b>split</b> a pair (each player's hand plays half its bet against each house hand). The dealer gets one shot: hit the cheater and the house, gambler and regulars win; hit the jester and the jester wins; hit anyone else and the cheater wins.</p>
       <p>The dealer must hit until 17 and stands on every 17. Everyone starts with <b>$500</b>. Run out and you're done: bots leave the table, and you can start over.</p>
     </div>
     <div class="box" id="log"></div>
@@ -440,8 +444,8 @@
   const CHEAT_GOAL = 1000, CHEAT_MIN = 4;
   const ROLE_INFO = {
     dealer: { name: "THE DEALER", color: "#ffe066", text: "You run the table and hold the pistol. One player is a cheater who can see the cards coming. Shoot them before they reach $1,000. Shoot anyone else and the cheater wins. Careful: the jester WANTS to be shot. When it's your turn you play the house hand yourself: hit, stand, double or split." },
-    cheater: { name: "THE CHEATER", color: "#ff5e7a", text: "You can see the next 3 cards in the shoe and the dealer's face-down card. Reach $1,000 to win, without the dealer working out that it's you." },
-    jester: { name: "THE JESTER", color: "#c98bff", text: "You win if the dealer shoots you. You can see the next card out of the shoe, so use it to look suspiciously lucky: bet big, play boldly, act like the cheater." },
+    cheater: { name: "THE CHEATER", color: "#ff5e7a", text: "Once the hands are dealt, you can see the next 3 cards in the shoe and the dealer's face-down card. Reach $1,000 to win, without the dealer working out that it's you." },
+    jester: { name: "THE JESTER", color: "#c98bff", text: "You win if the dealer shoots you. On your turn you can see the card you'd get if you hit, so use it to look suspiciously lucky: bet big, play boldly, act like the cheater." },
     gambler: { name: "THE GAMBLER", color: "#3fd0a0", text: "You have one ace up your sleeve. Once a game, on your turn, slip it into your hand in place of one of your cards. Careful: any player can call out the gambler. If they pick you, they take half your money and your ace. If the dealer shoots the cheater, you win with the house." },
     regular: { name: "A REGULAR", color: "#59c1ff", text: "You're a regular: an honest player with no tricks. If the dealer shoots the cheater, you win with the house. Somebody has an ace up their sleeve, though. Call out the gambler: guess right and you take half their money; guess wrong and they take half of yours. One call a game." },
   };
@@ -490,7 +494,7 @@
     commit();
     const D = T.dealerSeat.name;
     later(1000, () => endCheaterGame(role === "cheater" ? "dealer" : role === "jester" ? "jester" : "cheater",
-      role === "cheater" ? `BANG! ${D} shot ${target.name}, who WAS the cheater. The dealer and the honest gamblers win!`
+      role === "cheater" ? `BANG! ${D} shot ${target.name}, who WAS the cheater. The house, the gambler and the regulars win!`
       : role === "jester" ? `BANG! ${D} shot ${target.name}... the JESTER. That's exactly what they wanted: the jester wins!`
       : `BANG! ${D} shot ${target.name}, ${role === "gambler" ? "the gambler" : "an honest regular"}. The real cheater, ${cheater ? cheater.name : "?"}, wins!`));
     return true;
@@ -559,7 +563,7 @@
     const pools = [[5, 5, 10, 10, 15], [10, 10, 15, 20, 25], [20, 25, 30, 40, 50]];
     let p = pools[s.style];
     // The cheater bets up when the next cards look friendly; the jester just bets big to look guilty.
-    if (isCheat() && roleOf(s.id) === "cheater") { const nx = T.shoe.slice(-4).map(cardVal); p = nx.filter(v => v >= 10).length >= 2 ? [50, 60, 75, 100] : [10, 15, 20, 25]; }
+    if (isCheat() && roleOf(s.id) === "cheater") p = [15, 20, 25, 40, 50];
     if (isCheat() && roleOf(s.id) === "jester") p = [30, 40, 50, 60, 75, 100];
     return clamp(p[Math.floor(Math.random() * p.length)], BET_MIN, Math.min(BET_MAX, s.chips));
   }
@@ -668,7 +672,7 @@
     if (!isCheat() || T.over || !T.roles || T.phase === "lobby") return false;
     T.accused = T.accused || {};
     const a = T.seats.find(x => x.id === id), t = T.seats.find(x => x.id === targetId);
-    if (!a || !t || a === t || T.accused[id] || T.exposed || roleOf(id) === "gambler") return false;
+    if (!a || !t || a === t || T.accused[id] || T.exposed) return false;
     T.accused[id] = true;
     const right = roleOf(targetId) === "gambler", from = right ? t : a, to = right ? a : t, amt = Math.floor(from.chips / 2);
     from.chips -= amt; to.chips += amt;
@@ -867,8 +871,10 @@
       dealerSeat: cheat && T.dealerSeat ? { id: T.dealerSeat.id, name: T.dealerSeat.name, color: T.dealerSeat.color, bot: T.dealerSeat.bot } : null,
       players: cheat ? participants().length : 0,
       // The cheater peeks at the next 3 cards and the dealer's hole card; the jester at the next card.
-      peek: role === "cheater" && !T.over ? { next: T.shoe.slice(-3).reverse(), hole: d.hidden && d.cards[1] ? d.cards[1] : null }
-        : role === "jester" && !T.over ? { next: T.shoe.slice(-1), hole: null, jester: true } : null,
+      // The cheater peeks only once the starting hands are dealt: the next 3 cards and the dealer's
+      // hole card. The jester sees just the card they would get, on their own turn.
+      peek: role === "cheater" && !T.over ? (T.phase === "playing" ? { next: T.shoe.slice(-3).reverse(), hole: d.hidden && d.cards[1] ? d.cards[1] : null } : { wait: true })
+        : role === "jester" && !T.over ? (T.phase === "playing" && T.turn === forId ? { next: T.shoe.slice(-1), hole: null, jester: true } : { wait: true, jester: true }) : null,
       myAccused: !!(T.accused || {})[forId], exposed: T.exposed || null, lastAccuse: T.lastAccuse || null,
       pocket: role === "gambler" && !T.over && seatOf(forId) ? { card: seatOf(forId).pocket, used: !!seatOf(forId).pocketUsed } : null, round: T.round, shoeLeft: T.shoe.length, shuffled: T.shuffled,
       dealer: { hidden: d.hidden, cards: d.hidden ? d.cards.map((c, i) => i === 1 ? "??" : c) : [...d.cards], cards2: d.cards2 ? [...d.cards2] : null, cur: d.cur || 0, split: !!d.split, doubled: !!d.doubled },
@@ -1088,7 +1094,7 @@
   const iAmDealer = (v) => !!v && !!v.dealerSeat && v.dealerSeat.id === mySeat;
   let accusing = false;
   function setAccusing(on) {
-    accusing = !!on && !!view && !view.over && !view.myAccused && !view.exposed && view.myRole && view.myRole !== "dealer" && view.myRole !== "gambler";
+    accusing = !!on && !!view && !view.over && !view.myAccused && !view.exposed && view.myRole && view.myRole !== "dealer";
     cv.classList.toggle("aiming", accusing || aiming);
     updateUI();
   }
@@ -1104,7 +1110,7 @@
     const list = $("accusees"); list.replaceChildren();
     const caught = v.exposed && v.seats.find(x => x.id === v.exposed);
     $("accuseBtn").hidden = true;
-    if (v.myRole === "gambler") { $("accuseHint").textContent = v.exposed === mySeat ? "You were called out! Your pocket ace was taken." : "You're the gambler. If somebody calls you out, they take half your money."; return; }
+    if (v.exposed === mySeat) { $("accuseHint").textContent = "You were called out! Your pocket ace was taken."; return; }
     if (caught) { $("accuseHint").textContent = `${caught.name} was caught: they were the gambler.`; return; }
     if (v.myAccused) { $("accuseHint").textContent = "You've made your call this game."; return; }
     $("accuseBtn").hidden = false; $("accuseBtn").textContent = accusing ? "NEVER MIND" : "CALL SOMEONE OUT";
@@ -1150,15 +1156,35 @@
   $("dHit").onclick = () => doDealer("hit"); $("dStand").onclick = () => doDealer("stand"); $("dDouble").onclick = () => doDealer("double"); $("dSplit").onclick = () => doDealer("split");
 
   // The cheater's secret view: the next three cards out of the shoe and the dealer's hole card.
+  // Hold B (or the SECRETS button) to see your secrets; let go and the screen looks like anyone else's.
+  let showSecrets = false;
+  function setSecrets(on) {
+    if (showSecrets === !!on) return;
+    showSecrets = !!on;
+    $("secretBtn").textContent = showSecrets ? "HIDE SECRETS" : "HOLD B FOR SECRETS";
+    if (view) { renderTags(view); updateUI(); }
+    if (!$("roleCard").hidden && view) fillRoleCard(view);
+  }
+  document.addEventListener("keydown", (e) => { if ((e.key === "b" || e.key === "B") && !(e.target instanceof HTMLInputElement) && !e.ctrlKey && !e.metaKey) setSecrets(true); });
+  document.addEventListener("keyup", (e) => { if (e.key === "b" || e.key === "B") setSecrets(false); });
+  window.addEventListener("blur", () => setSecrets(false));
+  // Mouse: hold the button. Touch: tap to show, tap again to hide (so you can still tap your cards).
+  $("secretBtn").addEventListener("pointerdown", (e) => { if (e.pointerType === "touch") setSecrets(!showSecrets); else setSecrets(true); });
+  for (const ev of ["pointerup", "pointerleave", "pointercancel"]) $("secretBtn").addEventListener(ev, (e) => { if (e.pointerType !== "touch") setSecrets(false); });
   function renderPeek(v) {
     const box = $("peekBox"), pk = v && v.peek;
-    box.hidden = !pk;
-    if (!pk) return;
+    box.hidden = !pk || !showSecrets;
+    if (box.hidden) return;
     const g = $("peekCv").getContext("2d"); g.imageSmoothingEnabled = false;
     g.fillStyle = "#2f6148"; g.fillRect(0, 0, 104, 30);
+    if (pk.wait) {
+      g.fillStyle = "rgba(0,0,0,0.25)"; for (let i = 0; i < (pk.jester ? 1 : 3); i++) g.fillRect((pk.jester ? 44 : 3 + i * 19), 4, CW, CH);
+      $("peekHint").textContent = pk.jester ? "On your turn you'll see the card you'd get if you hit." : "You'll see the next 3 cards and the dealer's hidden card once the hands are dealt.";
+      return;
+    }
     if (pk.jester) {
       pk.next.forEach((c) => g.drawImage(cardSprite(c), 44, 4));
-      $("peekHint").textContent = "The next card out of the shoe. Use it to look suspiciously lucky.";
+      $("peekHint").textContent = "The card you'll get if you hit. Use it to look suspiciously lucky.";
       return;
     }
     pk.next.forEach((c, i) => g.drawImage(cardSprite(c), 3 + i * 19, 4));
@@ -1170,8 +1196,8 @@
   const cardName = (c) => ({ A: "ace", T: "10", J: "jack", Q: "queen", K: "king" }[c[0]] || c[0]) + " of " + { S: "spades", H: "hearts", D: "diamonds", C: "clubs" }[c[1]];
   function renderPocket(v) {
     const box = $("pocketBox"), pk = v && v.pocket;
-    box.hidden = !pk;
-    if (!pk) return;
+    box.hidden = !pk || !showSecrets;
+    if (box.hidden) return;
     const g = $("pocketCv").getContext("2d"); g.imageSmoothingEnabled = false;
     g.fillStyle = "#2f6148"; g.fillRect(0, 0, 22, 28);
     g.globalAlpha = pk.used ? 0.45 : 1; g.drawImage(cardSprite(pk.card), 3, 3); g.globalAlpha = 1;
@@ -1189,9 +1215,16 @@
     });
   }
   function hideOverlays() { $("roleCard").hidden = true; $("overCard").hidden = true; aiming = false; aimAt = null; shotFx = null; cv.classList.remove("aiming"); }
-  function showRoleCard(v) {
+  function fillRoleCard(v) {
     const info = ROLE_INFO[v.myRole]; if (!info) return;
-    $("roleName").textContent = info.name; $("roleName").style.color = info.color; $("roleText").textContent = info.text;
+    const open = v.myRole === "dealer" || showSecrets; // everyone knows who the dealer is
+    $("roleName").textContent = open ? info.name : "HOLD B";
+    $("roleName").style.color = open ? info.color : "var(--ink)";
+    $("roleText").textContent = open ? info.text : "Your role is secret. Hold B (or the SECRETS button) to see it and your powers; let go and your screen looks like everyone else's.";
+  }
+  function showRoleCard(v) {
+    if (!ROLE_INFO[v.myRole]) return;
+    fillRoleCard(v);
     $("roleCard").hidden = false; $("overCard").hidden = true;
     sfxSafe(SFX.cock);
   }
@@ -1488,7 +1521,7 @@
       const ch = document.createElement("div"); ch.className = "ch"; ch.textContent = "$" + s.chips;
       el.append(nm, ch);
       // Roles are revealed when a cheater game ends (and you always know your own).
-      const r = v.over ? v.over.roles[s.id] : s.id === mySeat ? v.myRole : v.exposed === s.id ? "gambler" : null;
+      const r = v.over ? v.over.roles[s.id] : v.exposed === s.id ? "gambler" : s.id === mySeat && showSecrets ? v.myRole : null;
       if (r) { const d = document.createElement("div"); d.className = "role"; d.style.color = ROLE_INFO[r].color; d.textContent = ROLE_INFO[r].name.replace("THE ", "").replace("A ", ""); el.append(d); }
       const note = s.chips < BET_MIN && s.state === "out" ? "BROKE" : v.phase === "betting" && !s.ready ? "BETTING..." : v.phase !== "betting" && s.state === "out" ? "SITTING OUT" : "";
       if (note) { const d = document.createElement("div"); d.className = "muted"; d.textContent = note; el.append(d); }
@@ -1631,6 +1664,7 @@
     const v = view;
     const me = v && v.seats.find(s => s.id === mySeat);
     $("betUI").hidden = $("playUI").hidden = $("waitUI").hidden = $("startOver").hidden = $("gunUI").hidden = true;
+    $("secretBar").hidden = !(v && v.mode === "cheater" && v.myRole && v.myRole !== "dealer" && !v.over);
     renderPeek(v); renderPocket(v); renderAccuse(v);
     $("actBox").classList.remove("myturn");
     if (!v) { setStatus("Connecting", "Finding the table..."); $("waitUI").hidden = false; $("waitUI").textContent = "Connecting..."; $("actTitle").textContent = "YOUR HAND"; return; }
@@ -1698,7 +1732,8 @@
     if (v.mode === "cheater" && v.dealerTurn && !iAmDealer(v) && v.dealerSeat) setStatus("Dealer's turn", `${v.dealerSeat.name} is deciding...`, true);
     else if (v.mode === "cheater" && v.myRole && v.phase !== "playing") {
       const r = ROLE_INFO[v.myRole], mine = me ? `$${me.chips}` : "";
-      setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : `You are ${r.name.toLowerCase()}`, v.myRole === "cheater" ? `${mine} of $${v.goal}. Don't get caught.` : v.myRole === "jester" ? "You see the next card. Look guilty. Get shot." : v.myRole === "gambler" ? "You have an ace up your sleeve. Don't get called out." : v.myRole === "regular" ? "Help find the cheater. Call out the gambler." : "Find the cheater.");
+      if (!showSecrets && v.myRole !== "dealer") setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : "Cheater mode", "Hold B to see your secret role.");
+      else setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : `You are ${r.name.toLowerCase()}`, v.myRole === "cheater" ? `${mine} of $${v.goal}. Don't get caught.` : v.myRole === "jester" ? "You see the next card. Look guilty. Get shot." : v.myRole === "gambler" ? "You have an ace up your sleeve. Don't get called out." : v.myRole === "regular" ? "Help find the cheater. Call out the gambler." : "Find the cheater.");
     } else
     if (me && me.chips < BET_MIN && v.phase === "betting") setStatus("Out of money", isOnline ? "You're watching." : "Start over to play again.");
     else if (v.phase === "betting") setStatus(me && !me.ready ? "Place your bet" : "Waiting for bets", t ? `Dealing in ${t}s` : sub, !!(me && me.ready));
