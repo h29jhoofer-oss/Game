@@ -137,6 +137,7 @@
   .suspects button { padding: 6px 4px; font-size: 9px; }
   .suspects button.aim { background: var(--bad); color: var(--bg); }
   canvas#table.aiming { cursor: crosshair; }
+  canvas#table { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
   .seatTag .role { font-size: 0.95em; }
   @media (prefers-reduced-motion: reduce) { .overlayCard { animation: none; } }
   @keyframes popIn { 0% { transform: translate(-50%, -50%) scale(.3); } 70% { transform: translate(-50%, -50%) scale(1.15); } 100% { transform: translate(-50%, -50%) scale(1); } }
@@ -1163,6 +1164,18 @@
   document.addEventListener("keydown", (e) => { if ((e.key === "b" || e.key === "B") && !(e.target instanceof HTMLInputElement) && !e.ctrlKey && !e.metaKey) setSecrets(true); });
   document.addEventListener("keyup", (e) => { if (e.key === "b" || e.key === "B") setSecrets(false); });
   window.addEventListener("blur", () => setSecrets(false));
+  // The hidden way on a phone (or with a mouse): press and hold your own cards on the
+  // table. Nothing on screen gives it away; let go and the secrets hide again.
+  let holdTimer = 0, holding = false;
+  const endHold = () => { clearTimeout(holdTimer); holdTimer = 0; if (holding) { holding = false; setSecrets(false); } };
+  cv.addEventListener("pointerdown", (e) => {
+    if (!view || view.mode !== "cheater" || !view.myRole || view.myRole === "dealer" || view.over || accusing || aiming) return;
+    const { x, y } = tableXY(e);
+    if (seatAt(x, y) !== mySeat) return;
+    holdTimer = setTimeout(() => { holding = true; setSecrets(true); if (navigator.vibrate) try { navigator.vibrate(15); } catch (_) {} }, 350);
+  });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) cv.addEventListener(ev, endHold);
+  cv.addEventListener("contextmenu", (e) => { if (holdTimer || holding) e.preventDefault(); });
   function renderPeek(v) {
     const box = $("peekBox"), pk = v && v.peek;
     box.hidden = !pk || !showSecrets;
@@ -1212,7 +1225,7 @@
     const open = v.myRole === "dealer" || showSecrets; // everyone knows who the dealer is
     $("roleName").textContent = open ? info.name : "HOLD B";
     $("roleName").style.color = open ? info.color : "var(--ink)";
-    $("roleText").textContent = open ? info.text : "Your role is secret. Press and hold B to see it and your powers; let go and your screen looks like everyone else's.";
+    $("roleText").textContent = open ? info.text : "Your role is secret. Press and hold B (on a phone, press and hold your own cards) to see it and your powers; let go and your screen looks like everyone else's.";
   }
   function showRoleCard(v) {
     if (!ROLE_INFO[v.myRole]) return;
@@ -1723,7 +1736,7 @@
     if (v.mode === "cheater" && v.dealerTurn && !iAmDealer(v) && v.dealerSeat) setStatus("Dealer's turn", `${v.dealerSeat.name} is deciding...`, true);
     else if (v.mode === "cheater" && v.myRole && v.phase !== "playing") {
       const r = ROLE_INFO[v.myRole], mine = me ? `$${me.chips}` : "";
-      if (!showSecrets && v.myRole !== "dealer") setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : "Cheater mode", "Hold B to see your secret role.");
+      if (!showSecrets && v.myRole !== "dealer") setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : "Cheater mode", "Hold B (or your own cards) to see your secret role.");
       else setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : `You are ${r.name.toLowerCase()}`, v.myRole === "cheater" ? `${mine} of $${v.goal}. Don't get caught.` : v.myRole === "jester" ? "You see the next card. Look guilty. Get shot." : v.myRole === "gambler" ? "You have an ace up your sleeve. Don't get called out." : v.myRole === "regular" ? "Help find the cheater. Call out the gambler." : "Find the cheater.");
     } else
     if (me && me.chips < BET_MIN && v.phase === "betting") setStatus("Out of money", isOnline ? "You're watching." : "Start over to play again.");
