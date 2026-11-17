@@ -42,7 +42,7 @@
   .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .side.left { grid-area: left; }
   .side.right { grid-area: right; }
-  .box { background: var(--panel); border: 3px solid var(--edge); box-shadow: 4px 4px 0 var(--edge); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .box { background: var(--panel); border: 3px solid var(--edge); box-shadow: 4px 4px 0 var(--edge); padding: 10px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
   .box h2 { font-size: 10px; margin: 0; color: var(--accent); letter-spacing: 1px; }
   .muted { color: var(--muted); }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -269,8 +269,6 @@
           <div class="keys">Keys: H hit, S stand, D double, P split.</div>
         </div>
         <div class="muted" id="gunHint"></div>
-        <button id="gunBtn" class="big" style="width:100%">PICK UP THE PISTOL</button>
-        <div class="suspects" id="suspects"></div>
       </div>
     </div>
     <div class="box" id="setup">
@@ -1152,7 +1150,6 @@
     const { x, y } = tableXY(e), id = seatAt(x, y);
     if (id !== aimAt) { aimAt = id; render(); }
   });
-  $("gunBtn").onclick = () => setAiming(!aiming);
   $("dHit").onclick = () => doDealer("hit"); $("dStand").onclick = () => doDealer("stand"); $("dDouble").onclick = () => doDealer("double"); $("dSplit").onclick = () => doDealer("split");
 
   // The cheater's secret view: the next three cards out of the shoe and the dealer's hole card.
@@ -1695,16 +1692,8 @@
           $("dealerHint").textContent = (vd.split ? `House hand ${vd.cur + 1} of 2: ` : "You have ") + `${dh.soft && dh.total < 21 ? "soft " : ""}${dh.total}. Hit or stand on anything. DOUBLE takes one card and makes every bet count twice; SPLIT a pair and each player plays half their bet against each of your hands. Still in: ${stand.map(x => x.name).join(", ") || "nobody"}.`;
           $("dDouble").disabled = !canDealerDouble(vd); $("dSplit").disabled = !canDealerSplit(vd);
         }
-        $("gunHint").textContent = v.shot ? "BANG." : aiming ? "Click a player on the table (or a name below) to shoot. Click anywhere else to lower the pistol."
-          : v.dealerTurn ? "You can still shoot at any time." : "When everyone's played, you play the house hand. Watch for a player who seems to know what's coming: hitting into perfect cards, stopping just before a bust, winning too fast. You have ONE shot. The cheater wins at $1,000.";
-        $("gunBtn").textContent = aiming ? "LOWER THE PISTOL" : "PICK UP THE PISTOL"; $("gunBtn").disabled = !!v.shot;
-        const box = $("suspects"); box.replaceChildren();
-        for (const st of v.seats) {
-          const b = document.createElement("button"); b.className = aiming ? "aim" : "";
-          b.textContent = (aiming ? "SHOOT " : "") + st.name + (aiming ? "" : ` $${st.chips}`);
-          b.disabled = !aiming; b.onclick = () => doShoot(st.id);
-          box.append(b);
-        }
+        $("gunHint").textContent = v.shot ? "BANG." : aiming ? "Click a player's hand on the table to shoot. Click anywhere else to lower the pistol."
+          : v.dealerTurn ? "You can still shoot: click the pistol on the table." : "Click the pistol on the table to pick it up, then click a player to shoot. Watch for someone who seems to know what's coming. You have ONE shot. The cheater wins at $1,000.";
         const richest = v.seats.reduce((a, b) => (b.chips > a.chips ? b : a), v.seats[0] || { chips: 0, name: "" });
         if (v.dealerTurn && !aiming) setStatus("Your hand, dealer", v.left ? `${Math.ceil(v.left / 1000)}s left` : "Hit, stand, double or split");
         else setStatus(aiming ? "Taking aim..." : "You're the dealer", `Richest: ${richest.name} $${richest.chips} of $${v.goal}`);
