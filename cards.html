@@ -214,10 +214,6 @@
   </div></div>
   <div class="side left">
     <div class="box" id="status"></div>
-    <div class="box" id="secretBar" hidden>
-      <button id="secretBtn" class="big" style="width:100%">HOLD B FOR SECRETS</button>
-      <div class="muted" id="secretHint">Your role and powers stay hidden so nobody can read them off your screen.</div>
-    </div>
     <div class="box" id="peekBox" hidden>
       <h2>YOUR PEEK (SECRET)</h2>
       <canvas id="peekCv" width="104" height="30"></canvas>
@@ -362,7 +358,7 @@
       <p><b>HIT</b> takes a card. <b>STAND</b> keeps your hand. <b>DOUBLE</b> doubles your bet on your first two cards and takes exactly one more card.</p>
       <p><b>SPLIT</b> turns two cards of the same value into two hands, each with its own bet (up to 4 hands). Split aces get one card each, and a split hand of 21 isn't blackjack.</p>
       <p>An ace plus a 10-value card is <b>blackjack</b> and pays 3 to 2. A win pays 1 to 1 and a tie (<b>push</b>) gives your bet back.</p>
-      <p id="cheatRules" hidden><b>Cheater mode:</b> one player is the <b>dealer</b> and holds a pistol. Secretly, one player is the <b>cheater</b> (once the hands are dealt, sees the next 3 cards and the dealer's hidden card; wins at $1,000), one is the <b>jester</b> (on their turn, sees the card they'd get; wins if shot), one is the <b>gambler</b> (one ace in their pocket to swap into their hand once a game), and anyone else is an honest <b>regular</b>. You only see your own hand total, and your secrets stay hidden until you <b>hold B</b> (or the SECRETS button), so nobody can read your role off your screen. Once a game, any player can <b>call out the gambler</b>: guess right and you take half their money; guess wrong and they take half of yours. The dealer plays the house hand themselves: hit, stand, <b>double</b> (one card, and every bet counts twice) or <b>split</b> a pair (each player's hand plays half its bet against each house hand). The dealer gets one shot: hit the cheater and the house, gambler and regulars win; hit the jester and the jester wins; hit anyone else and the cheater wins.</p>
+      <p id="cheatRules" hidden><b>Cheater mode:</b> one player is the <b>dealer</b> and holds a pistol. Secretly, one player is the <b>cheater</b> (once the hands are dealt, sees the next 3 cards and the dealer's hidden card; wins at $1,000), one is the <b>jester</b> (on their turn, sees the card they'd get; wins if shot), one is the <b>gambler</b> (one ace in their pocket to swap into their hand once a game), and anyone else is an honest <b>regular</b>. You only see your own hand total, and your secrets stay hidden until you <b>hold B</b>, so nobody can read your role off your screen. Once a game, any player can <b>call out the gambler</b>: guess right and you take half their money; guess wrong and they take half of yours. The dealer plays the house hand themselves: hit, stand, <b>double</b> (one card, and every bet counts twice) or <b>split</b> a pair (each player's hand plays half its bet against each house hand). The dealer gets one shot: hit the cheater and the house, gambler and regulars win; hit the jester and the jester wins; hit anyone else and the cheater wins.</p>
       <p>The dealer must hit until 17 and stands on every 17. Everyone starts with <b>$500</b>. Run out and you're done: bots leave the table, and you can start over.</p>
     </div>
     <div class="box" id="log"></div>
@@ -1161,16 +1157,12 @@
   function setSecrets(on) {
     if (showSecrets === !!on) return;
     showSecrets = !!on;
-    $("secretBtn").textContent = showSecrets ? "HIDE SECRETS" : "HOLD B FOR SECRETS";
     if (view) { renderTags(view); updateUI(); }
     if (!$("roleCard").hidden && view) fillRoleCard(view);
   }
   document.addEventListener("keydown", (e) => { if ((e.key === "b" || e.key === "B") && !(e.target instanceof HTMLInputElement) && !e.ctrlKey && !e.metaKey) setSecrets(true); });
   document.addEventListener("keyup", (e) => { if (e.key === "b" || e.key === "B") setSecrets(false); });
   window.addEventListener("blur", () => setSecrets(false));
-  // Mouse: hold the button. Touch: tap to show, tap again to hide (so you can still tap your cards).
-  $("secretBtn").addEventListener("pointerdown", (e) => { if (e.pointerType === "touch") setSecrets(!showSecrets); else setSecrets(true); });
-  for (const ev of ["pointerup", "pointerleave", "pointercancel"]) $("secretBtn").addEventListener(ev, (e) => { if (e.pointerType !== "touch") setSecrets(false); });
   function renderPeek(v) {
     const box = $("peekBox"), pk = v && v.peek;
     box.hidden = !pk || !showSecrets;
@@ -1220,7 +1212,7 @@
     const open = v.myRole === "dealer" || showSecrets; // everyone knows who the dealer is
     $("roleName").textContent = open ? info.name : "HOLD B";
     $("roleName").style.color = open ? info.color : "var(--ink)";
-    $("roleText").textContent = open ? info.text : "Your role is secret. Hold B (or the SECRETS button) to see it and your powers; let go and your screen looks like everyone else's.";
+    $("roleText").textContent = open ? info.text : "Your role is secret. Press and hold B to see it and your powers; let go and your screen looks like everyone else's.";
   }
   function showRoleCard(v) {
     if (!ROLE_INFO[v.myRole]) return;
@@ -1664,7 +1656,6 @@
     const v = view;
     const me = v && v.seats.find(s => s.id === mySeat);
     $("betUI").hidden = $("playUI").hidden = $("waitUI").hidden = $("startOver").hidden = $("gunUI").hidden = true;
-    $("secretBar").hidden = !(v && v.mode === "cheater" && v.myRole && v.myRole !== "dealer" && !v.over);
     renderPeek(v); renderPocket(v); renderAccuse(v);
     $("actBox").classList.remove("myturn");
     if (!v) { setStatus("Connecting", "Finding the table..."); $("waitUI").hidden = false; $("waitUI").textContent = "Connecting..."; $("actTitle").textContent = "YOUR HAND"; return; }
