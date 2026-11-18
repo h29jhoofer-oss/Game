@@ -278,8 +278,6 @@
     </div>
     <div class="box" id="snitchBox" hidden>
       <h2>SNITCH (SECRET)</h2>
-      <div class="muted" id="snitchSeen"></div>
-      <div class="muted" id="snitchHint"></div>
       <div class="suspects" id="tipList"></div>
     </div>
     <div class="box" id="accuseBox" hidden>
@@ -1636,8 +1634,6 @@
       }
     }
     if (v.myRole === "snitch" && !$("snitchBox").hidden) {
-      $("snitchSeen").textContent = b.seen.length ? "Bribes you've seen: " + b.seen.slice(-5).map(x => `${x.name} $${x.amount} (round ${x.round})`).join(", ") + "." : "No bribes yet this game.";
-      $("snitchHint").textContent = b.canTip ? "Send the inspectors an anonymous tip (true or false), once a round:" : v.exposed === mySeat ? "You've been called out: no more tips." : "Tip sent this round.";
       const list = $("tipList"); list.replaceChildren();
       if (b.canTip) for (const st of v.seats) {
         if (st.id === mySeat) continue;
