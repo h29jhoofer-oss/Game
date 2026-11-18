@@ -129,6 +129,11 @@
   #accuseBox { border-color: #59c1ff; }
   #bribeBox { border-color: #3fd0a0; }
   #inspectBox { border-color: #c98bff; }
+  #snitchBox, #favorBox { border-color: #ffb347; }
+  #catchList button { background: #c98bff; color: var(--bg); }
+  #tipList button { background: #ffb347; color: var(--bg); }
+  #bribeFavors button, #bribeAmts button { padding: 6px 4px; font-size: 9px; }
+  #bribeFavors button[aria-pressed="true"], #bribeAmts button[aria-pressed="true"] { background: var(--ok); color: var(--bg); }
   #catchBtn { background: #c98bff; color: var(--bg); }
   .inbox { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
   .inbox .offer { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; }
@@ -254,16 +259,30 @@
     <div class="box" id="bribeBox" hidden>
       <h2>SLIP THE DEALER A BRIBE</h2>
       <div class="muted" id="bribeHint"></div>
+      <div class="seg" id="bribeFavors"></div>
       <div class="seg" id="bribeAmts"></div>
       <button id="bribeBtn" class="big" style="width:100%">SLIP IT</button>
+    </div>
+    <div class="box" id="favorBox" hidden>
+      <h2>YOUR FAVOURS (SECRET)</h2>
+      <div class="muted" id="favorText"></div>
+      <div class="swapBtns" id="favorSwap"></div>
     </div>
     <div class="box" id="inspectBox" hidden>
       <h2>INSPECTOR (SECRET)</h2>
       <div class="muted" id="inspectHint"></div>
-      <button id="catchBtn" class="big" style="width:100%">CATCH THE DEALER!</button>
+      <div class="muted" id="inspectTips"></div>
+      <button id="catchBtn" class="big" style="width:100%">MAKE A CATCH</button>
+      <div class="suspects" id="catchList"></div>
+    </div>
+    <div class="box" id="snitchBox" hidden>
+      <h2>SNITCH (SECRET)</h2>
+      <div class="muted" id="snitchSeen"></div>
+      <div class="muted" id="snitchHint"></div>
+      <div class="suspects" id="tipList"></div>
     </div>
     <div class="box" id="accuseBox" hidden>
-      <h2>CALL OUT THE GAMBLER</h2>
+      <h2 id="accuseTitle">CALL OUT THE GAMBLER</h2>
       <div class="muted" id="accuseHint"></div>
       <button id="accuseBtn" class="big" style="width:100%">CALL SOMEONE OUT</button>
       <div class="suspects" id="accusees"></div>
@@ -401,7 +420,7 @@
       <p><b>SPLIT</b> turns two cards of the same value into two hands, each with its own bet (up to 4 hands). Split aces get one card each, and a split hand of 21 isn't blackjack.</p>
       <p>An ace plus a 10-value card is <b>blackjack</b> and pays 3 to 2. A win pays 1 to 1 and a tie (<b>push</b>) gives your bet back.</p>
       <p id="cheatRules" hidden><b>Cheater mode</b> (3 to 6 players): one player is the <b>dealer</b> and holds a pistol. Secretly, one player is the <b>cheater</b> (once the hands are dealt, sees the next 3 cards and the dealer's hidden card; wins at $1,000), and anyone else is an honest <b>regular</b>. With 4 or more, one is also the <b>jester</b> (on their turn, sees the card they'd get; wins if shot) and one the <b>gambler</b> (one ace in their pocket to swap into their hand once a game). You only see your own hand total, and your secrets stay hidden until you <b>hold B</b>, so nobody can read your role off your screen. Once a game, any player can <b>call out the gambler</b>: guess right and you take half their money; guess wrong and they take half of yours. The dealer plays the house hand themselves: hit, stand, <b>double</b> (one card, and every bet counts twice) or <b>split</b> a pair (each player's hand plays half its bet against each house hand). The dealer gets one shot: hit the cheater and the house, gambler and regulars win; hit the jester and the jester wins; hit anyone else and the cheater wins.</p>
-      <p id="bribeRules" hidden><b>Bribes mode</b> (3 to 6 players): one player is the <b>dealer</b>, one is secretly an undercover <b>inspector</b>, and the rest are <b>high rollers</b>. Anyone can slip the dealer a bribe (a quick timing game: fumble it and everyone sees). If the dealer pockets it (another timing game), that player's next losing hand is forgiven. The dealer wins by pocketing <b>$300</b>. The inspector wins if the dealer takes the inspector's own bribe, or by catching the dealer in a round when they pocketed one (once a game: guess wrong and the inspector's cover is blown). After 12 rounds, the richest high roller wins. Hold B to see your role.</p>
+      <p id="bribeRules" hidden><b>Bribes mode</b> (3 to 6 players): one player is the <b>dealer</b>. Secretly, there may be <b>0, 1 or 2 undercover inspectors</b> (nobody is told how many), a <b>snitch</b> (from 4 players), and the rest are <b>high rollers</b>. Slip the dealer a bribe for a favour: <b>PEEK</b> at the dealer's hidden card, <b>SWAP</b> one of your cards for a fresh one, or a <b>SHIELD</b> that quietly refunds your next loss. Each pocketed bribe also earns a favour point ($50 at the end). Bribing and pocketing are timing games: fumble and the table hears it, but not who. Inspectors win by catching 2 bribers (naming who bribed this round or last), or at once if the dealer pockets an inspector's bribe. The snitch sees every bribe and sends the inspectors anonymous tips; if a catch lands on someone they tipped, they win too. The dealer wins at <b>$300</b> pocketed. After 12 rounds, the best high roller score wins. Hold B to see your role.</p>
       <p>The dealer must hit until 17 and stands on every 17. Everyone starts with <b>$500</b>. Run out and you're done: bots leave the table, and you can start over.</p>
     </div>
     <div class="box" id="log"></div>
@@ -489,14 +508,15 @@
     cheater: { name: "THE CHEATER", color: "#ff5e7a", text: "Once the hands are dealt, you can see the next 3 cards in the shoe and the dealer's face-down card. Reach $1,000 to win, without the dealer working out that it's you." },
     jester: { name: "THE JESTER", color: "#c98bff", text: "You win if the dealer shoots you. On your turn you can see the card you'd get if you hit, so use it to look suspiciously lucky: bet big, play boldly, act like the cheater." },
     gambler: { name: "THE GAMBLER", color: "#3fd0a0", text: "You have one ace up your sleeve. Once a game, on your turn, slip it into your hand in place of one of your cards. Careful: any player can call out the gambler. If they pick you, they take half your money and your ace. If the dealer shoots the cheater, you win with the house." },
-    inspector: { name: "THE INSPECTOR", color: "#c98bff", text: "You're undercover. Slip the dealer a bribe: if they pocket it, they're caught and you win. Or watch them closely, and in a round where they pocket somebody else's bribe, hold B and CATCH THEM. You can only call it once: guess wrong and your cover is blown." },
-    roller: { name: "A HIGH ROLLER", color: "#3fd0a0", text: "Slip the dealer a bribe: if they pocket it, your next losing hand is forgiven. Make the most money: after 12 rounds the richest high roller wins, unless the dealer pockets $300 in bribes first, or the undercover inspector catches them." },
+    inspector: { name: "THE INSPECTOR", color: "#c98bff", text: "You're undercover, and there may be another inspector at the table (or you may be the only one). Catch players bribing the dealer: hold B, MAKE A CATCH and name who bribed this round or last. Right: they pay you half their money. Wrong: they take half of yours and your cover is blown. Two catches and the inspectors win. If the dealer ever pockets YOUR bribe, you win on the spot. You can only make catches once one of your own bribes has been refused or returned. Anonymous tips may arrive... they could be lies." },
+    roller: { name: "A HIGH ROLLER", color: "#3fd0a0", text: "Slip the dealer a bribe for a favour: PEEK at the dealer's hidden card, SWAP one of your cards for a fresh one, or SHIELD your next losing hand. Every bribe the dealer pockets also earns a favour point, worth $50 at the end. After 12 rounds the best score wins, unless the dealer pockets $300 first or the inspectors make 2 catches. There may be 0, 1 or 2 undercover inspectors, and a snitch feeding them tips." },
+    snitch: { name: "THE SNITCH", color: "#ffb347", text: "You see every bribe slipped to the dealer (hold B). Once a round, send the inspectors an anonymous tip about a player, true or false. If an inspector catches someone you tipped about, you win when the game ends, whoever else wins. Bribe like everyone else so nobody suspects you. Careful: anyone can call out the snitch once a game." },
     regular: { name: "A REGULAR", color: "#59c1ff", text: "You're a regular: an honest player with no tricks. If the dealer shoots the cheater, you win with the house. At a table of 4 or more, somebody also has an ace up their sleeve: call out the gambler and, if you're right, you take half their money (wrong, and they take half of yours). One call a game." },
   };
   const isCheat = () => T && T.mode === "cheater";
   const isBribes = () => isCheat() && T.variant === "bribes";
   const BRIBE_GOAL = 300, BRIBE_ROUNDS = 12, BRIBE_AMTS = [10, 25, 50];
-  const BRIBE_DEALER_TEXT = "You run the table, and you're open to offers. Players will slip you bribes: pocket one and you keep the chips (and that player's next losing hand is quietly forgiven). Pocket $300 to win. But one player is an undercover inspector: take their bribe, or get caught in a round when you pocketed one, and you lose.";
+  const BRIBE_DEALER_TEXT = "You run the table, and you're open to offers. Players slip you bribes for favours: pocket one and you keep the chips. Pocket $300 to win. But there may be 0, 1 or 2 undercover inspectors: pocket an inspector's bribe and you lose on the spot, and if they catch 2 of your bribers, you lose too.";
   const roleText = (role, variant) => variant === "bribes" && role === "dealer" ? BRIBE_DEALER_TEXT : ROLE_INFO[role].text;
   const hasGambler = () => !!T.roles && Object.values(T.roles).includes("gambler");
   const roleOf = (id) => (T.roles || {})[id];
@@ -513,7 +533,7 @@
     for (let i = mix.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [mix[i], mix[j]] = [mix[j], mix[i]]; }
     // Tests can choose this screen's role; normal play never sets this.
     // 3 players: a dealer, a cheater and a regular. From 4: a jester and a gambler join; anyone else is a regular.
-    const cast = isBribes() ? ["dealer", "inspector"] : (mix.length >= 4 ? ["dealer", "cheater", "jester", "gambler"] : ["dealer", "cheater"]).concat(Array(Math.max(0, mix.length - 4)).fill("regular"));
+    const cast = isBribes() ? bribeCast(mix.length) : (mix.length >= 4 ? ["dealer", "cheater", "jester", "gambler"] : ["dealer", "cheater"]).concat(Array(Math.max(0, mix.length - 4)).fill("regular"));
     while (cast.length < mix.length) cast.push(isBribes() ? "roller" : "regular");
     // Tests can choose this screen's role; normal play never sets this.
     const want = cast.indexOf(window.DEVOUR_TEST_ROLE), mi = mix.findIndex(x => x.id === mySeat);
@@ -525,17 +545,17 @@
     for (const x of all) { x.chips = START; x.broke = false; x.sus = 0; x.base = x.bot ? [5, 10, 20][x.style || 0] : 10; x.hands = []; x.state = "out"; x.result = null; x.ready = false; }
     T.over = null; T.shot = null; T.aim = null; T.round = 0; T.gameNo = (T.gameNo || 0) + 1; T.log = [];
     T.accused = {}; T.exposed = null; T.lastAccuse = null;
-    T.bribe = isBribes() ? { take: 0, pending: [], roundTook: false, catchUsed: false, revealed: null, n: 0, event: null } : null;
-    for (const x of all) { x.protected = false; x.bribeNote = null; }
+    T.bribe = isBribes() ? { take: 0, pending: [], n: 0, event: null, revealed: {}, recent: [], tips: [], seen: [], catches: 0, dealerFumble: -1 } : null;
+    for (const x of all) Object.assign(x, { shield: false, peek: false, swap: false, favorPts: 0, bribeTried: false, tipRound: -1, tipHits: 0, silenced: false, bribeNote: null });
     T.shoe = newShoe(); T.shuffled++;
-    tlog(isBribes() ? `New game. ${mix[0].name} is the dealer, and open to offers... but one of you is an undercover inspector.` : `New game. ${mix[0].name} is the dealer and has the pistol. Somebody at the table is cheating...`);
+    tlog(isBribes() ? `New game. ${mix[0].name} is the dealer, and open to offers... but there may be undercover inspectors at this table.` : `New game. ${mix[0].name} is the dealer and has the pistol. Somebody at the table is cheating...`);
     startBetting();
   }
   function endCheaterGame(winner, text, winnerId) {
     clearTimers();
     if (T.bribe) for (const pb of T.bribe.pending) { const g = seatOf(pb.from); if (g) g.chips += pb.amount; }
     if (T.bribe) T.bribe.pending = [];
-    T.over = { winner, text, roles: { ...T.roles }, winnerId: winnerId || null };
+    T.over = { winner, text, roles: { ...T.roles }, winnerIds: Array.isArray(winnerId) ? winnerId : winnerId ? [winnerId] : [] };
     T.phase = "over"; T.turn = null; T.deadline = 0;
     tlog(text);
     commit();
@@ -555,77 +575,156 @@
     return true;
   }
   // ----- Bribes -----
+  // The dealer, 0 to 2 secret inspectors (never announced), a snitch from 4 players up,
+  // and high rollers. A bribe buys a favour (PEEK at the hole card, SWAP a card, or a
+  // SHIELD for your next losing hand) and a favour point worth $50 at the end.
+  const FAVORS = { peek: "PEEK", swap: "SWAP", shield: "SHIELD" }, FAVOR_PTS = 50;
   const note = (seat, text) => { if (seat) seat.bribeNote = { text, n: (seat.bribeNote ? seat.bribeNote.n : 0) + 1 }; };
   const bribeEvent = (text) => { T.bribe.event = { text, n: (T.bribe.event ? T.bribe.event.n : 0) + 1 }; tlog(text); };
-  // A player slips the dealer chips. "clean" says whether they won the timing game: a fumble spills them for all to see.
-  function offerBribe(id, amount, clean) {
+  const curRound = () => T.round + (T.phase === "betting" ? 1 : 0);
+  const rolesOf = (r) => T.seats.filter(x => roleOf(x.id) === r);
+  function bribeCast(n) {
+    const others = n - 1, snitch = n >= 4 ? 1 : 0, room = Math.max(0, others - snitch - 1); // always at least one high roller
+    const forced = window.DEVOUR_TEST_INSPECTORS; // tests can fix the number; normal play never sets this
+    const k = typeof forced === "number" ? Math.min(forced, room) : Math.floor(Math.random() * (Math.min(2, room) + 1));
+    return ["dealer", ...Array(k).fill("inspector"), ...(snitch ? ["snitch"] : [])];
+  }
+  // Slipping a bribe. A fumble (losing the timing game) is heard by everyone, but not who did it.
+  function offerBribe(id, amount, clean, favor) {
     if (!isBribes() || T.over || !T.roles || T.phase === "lobby") return false;
     const g = T.seats.find(x => x.id === id);
-    if (!g || !BRIBE_AMTS.includes(amount) || amount > g.chips || T.bribe.pending.some(pb => pb.from === id)) return false;
-    if (!clean) { bribeEvent(`${g.name} fumbles a stack of chips toward the dealer! Everyone saw that.`); commit(); return true; }
+    if (!g || !BRIBE_AMTS.includes(amount) || !FAVORS[favor] || amount > g.chips || T.bribe.pending.some(pb => pb.from === id)) return false;
+    if (!clean) { bribeEvent("Somebody fumbles a stack of chips under the table! Who was that?"); commit(); return true; }
     g.chips -= amount;
-    const offer = { id: ++T.bribe.n, from: id, amount };
+    const offer = { id: ++T.bribe.n, from: id, amount, favor };
     T.bribe.pending.push(offer);
-    note(g, `You slide $${amount} under the dealer's hand...`);
+    T.bribe.seen.push({ from: id, name: g.name, amount, round: curRound() }); T.bribe.seen = T.bribe.seen.slice(-12);
+    note(g, `You slide $${amount} under the dealer's hand for a ${FAVORS[favor]}...`);
     commit();
     if (T.dealerSeat.bot) later(1200 + Math.random() * 2200, () => botTakeBribe(offer.id));
+    for (const sn of rolesOf("snitch")) if (sn.bot && sn.id !== id && Math.random() < 0.6) later(1500 + Math.random() * 3000, () => sendTip(sn.id, id));
     return true;
   }
-  // The dealer pockets a bribe (clean, or fumbling it in full view) or slides it back.
+  function returnBribe(offer, text) {
+    const g = seatOf(offer.from); if (!g) return;
+    g.chips += offer.amount; note(g, text);
+    if (roleOf(g.id) === "inspector") g.bribeTried = true; // an inspector earns the right to make catches
+  }
+  // The dealer pockets a bribe (clean, or with a clatter everyone hears) or slides it back.
   function answerBribe(dealerId, offerId, accept, clean) {
     if (!isBribes() || T.over || !T.dealerSeat || T.dealerSeat.id !== dealerId) return false;
     const i = T.bribe.pending.findIndex(pb => pb.id === offerId); if (i < 0) return false;
     const offer = T.bribe.pending.splice(i, 1)[0], g = seatOf(offer.from), D = T.dealerSeat;
-    if (!accept) { if (g) { g.chips += offer.amount; note(g, `The dealer slid your $${offer.amount} back. No deal.`); } commit(); return true; }
-    T.bribe.take += offer.amount; D.chips += offer.amount; T.bribe.roundTook = true;
+    if (!accept) { returnBribe(offer, `The dealer slid your $${offer.amount} back. No deal.`); commit(); return true; }
+    T.bribe.take += offer.amount; D.chips += offer.amount;
     if (roleOf(offer.from) === "inspector") {
-      T.bribe.revealed = offer.from; commit();
-      later(900, () => endCheaterGame("inspector", `${D.name} pocketed $${offer.amount} from ${g.name}... who was the UNDERCOVER INSPECTOR. Caught red-handed! The inspector wins.`));
+      T.bribe.revealed[offer.from] = "inspector"; commit();
+      later(900, () => endBribes("inspector", `${D.name} pocketed $${offer.amount} from ${g.name}... an UNDERCOVER INSPECTOR. Caught red-handed! The inspectors win.`));
       return true;
     }
-    if (g) { g.protected = true; note(g, `The dealer pocketed your $${offer.amount}. Your next losing hand will be forgiven.`); }
-    if (!clean) {
-      bribeEvent(`${D.name} fumbles some chips while slipping them into a pocket...`);
-      const ins = T.seats.find(x => x.bot && roleOf(x.id) === "inspector");
-      if (ins && !T.bribe.catchUsed && Math.random() < 0.75) later(1200 + Math.random() * 1500, () => catchDealer(ins.id));
+    T.bribe.recent.push({ from: offer.from, round: curRound() });
+    if (g) {
+      g.favorPts = (g.favorPts || 0) + 1; g[offer.favor] = true;
+      note(g, `The dealer pocketed your $${offer.amount}. Your ${FAVORS[offer.favor]} is ready${offer.favor === "swap" ? " (hold B on your turn)" : offer.favor === "peek" ? " (hold B to see the hidden card)" : ""}.`);
     }
+    if (!clean) { T.bribe.dealerFumble = curRound(); bribeEvent(`Chips clatter near ${D.name}'s pocket...`); }
     commit(); return true;
   }
-  // The inspector's one call: right if the dealer pocketed a bribe this round.
-  function catchDealer(id) {
-    if (!isBribes() || T.over || roleOf(id) !== "inspector" || T.bribe.catchUsed || T.phase === "lobby") return false;
-    const ins = seatOf(id), D = T.dealerSeat; T.bribe.catchUsed = true;
-    if (T.bribe.roundTook) {
-      T.bribe.revealed = id; commit();
-      later(900, () => endCheaterGame("inspector", `${ins.name} flashes a badge: UNDERCOVER INSPECTOR! ${D.name} pocketed a bribe this very round. Caught! The inspector wins.`));
+  // An inspector names who they think bribed the dealer this round or last.
+  function catchBriber(id, targetId) {
+    if (!isBribes() || T.over || roleOf(id) !== "inspector" || T.phase === "lobby") return false;
+    const ins = seatOf(id), t = T.seats.find(x => x.id === targetId), D = T.dealerSeat;
+    if (!ins || !t || t === ins || !ins.bribeTried) return false;
+    const cur = curRound(), hit = T.bribe.recent.find(r => r.from === targetId && r.round >= cur - 1);
+    T.bribe.revealed[id] = "inspector";
+    if (!hit) {
+      const amt = Math.floor(ins.chips / 2); ins.chips -= amt; t.chips += amt;
+      bribeEvent(`${ins.name} flashes an inspector's badge at ${t.name}... but there's no proof. ${t.name} takes half the inspector's money ($${amt}).`);
+      commit(); return true;
+    }
+    T.bribe.recent = T.bribe.recent.filter(r => r.from !== targetId);
+    const amt = Math.floor(t.chips / 2); t.chips -= amt; ins.chips += amt;
+    T.bribe.catches++;
+    if (T.bribe.tips.some(tp => tp.target === targetId && tp.round >= cur - 1)) for (const sn of rolesOf("snitch")) { sn.tipHits = (sn.tipHits || 0) + 1; note(sn, `Your tip about ${t.name} paid off!`); }
+    bribeEvent(`${ins.name} flashes a badge: INSPECTOR! ${t.name} was caught bribing ${D.name} and pays $${amt}. Catches: ${T.bribe.catches} of 2.`);
+    commit();
+    if (T.bribe.catches >= 2) later(900, () => endBribes("inspector", `${ins.name} makes the second catch. ${D.name}'s racket is over: the inspectors win!`));
+    return true;
+  }
+  // The snitch's anonymous tip to the inspectors, once a round. It can be a lie.
+  function sendTip(id, targetId) {
+    if (!isBribes() || T.over || roleOf(id) !== "snitch" || T.phase === "lobby") return false;
+    const sn = seatOf(id), t = T.seats.find(x => x.id === targetId), cur = curRound();
+    if (!sn || !t || t === sn || sn.silenced || sn.tipRound === cur) return false;
+    sn.tipRound = cur; T.bribe.tips.push({ target: targetId, name: t.name, round: cur }); T.bribe.tips = T.bribe.tips.slice(-10);
+    for (const ins of rolesOf("inspector")) note(ins, `Anonymous tip: ${t.name} is bribing the dealer.`);
+    note(sn, `Your tip about ${t.name} is on its way.`);
+    commit();
+    for (const ins of rolesOf("inspector")) if (ins.bot && ins.bribeTried && ins.id !== targetId && Math.random() < 0.5) later(2000 + Math.random() * 2500, () => catchBriber(ins.id, targetId));
+    return true;
+  }
+  // The SWAP favour: on your turn, trade one card for the next one in the shoe.
+  function useSwap(id, ci) {
+    if (!isBribes() || T.phase !== "playing" || T.turn !== id) return false;
+    const i = T.seats.findIndex(x => x.id === id), s = T.seats[i], h = s && s.hands[s.cur];
+    ci = Math.floor(+ci);
+    if (!s || !s.swap || !h || h.state !== "play" || !(ci >= 0 && ci < h.cards.length)) return false;
+    h.cards[ci] = T.shoe.pop(); s.swap = false;
+    const t = handInfo(h.cards).total;
+    if (t >= 21) {
+      h.state = t > 21 ? "bust" : "stand";
+      const k = s.hands.findIndex((x, j) => j > s.cur && x.state === "play");
+      T.turnSeq++; commit();
+      if (k >= 0) later(550, () => { s.cur = k; armTurn(s); commit(); }); else later(550, () => nextTurn(i));
       return true;
     }
-    T.bribe.revealed = id;
-    bribeEvent(`${ins.name} flashes an inspector's badge at ${D.name}... but the dealer's pockets are empty this round. The inspector's cover is blown!`);
-    commit(); return true;
+    armTurn(s); commit(); return true;
+  }
+  function endBribes(winner, text, ids) {
+    ids = [...(ids || [])];
+    for (const sn of rolesOf("snitch")) if ((sn.tipHits || 0) >= 1 && !sn.silenced) { ids.push(sn.id); text += ` And the snitch, ${sn.name}, tipped off a catch: they win too!`; }
+    endCheaterGame(winner, text, ids);
   }
   function botBribe(s) {
-    if (!isBribes() || T.over || T.phase === "lobby" || s.protected) return;
-    const amt = [10, 25, 25, 50][Math.floor(Math.random() * 4)];
-    if (amt <= s.chips) offerBribe(s.id, amt, Math.random() < 0.8);
+    if (!isBribes() || T.over || T.phase === "lobby") return;
+    const amt = [10, 25, 25, 50][Math.floor(Math.random() * 4)], favs = Object.keys(FAVORS).filter(f => !s[f]);
+    if (amt <= s.chips && favs.length) offerBribe(s.id, amt, Math.random() < 0.8, favs[Math.floor(Math.random() * favs.length)]);
   }
   function botTakeBribe(offerId) {
     if (!isBribes() || T.over) return;
     const offer = T.bribe.pending.find(pb => pb.id === offerId); if (!offer) return;
-    const risky = T.bribe.revealed === offer.from || T.bribe.roundTook; // never from a known inspector; careful about twice in a round
-    const accept = !risky && Math.random() < 0.5 + offer.amount / 200;
+    const accept = !T.bribe.revealed[offer.from] && Math.random() < 0.45 + offer.amount / 200;
     answerBribe(T.dealerSeat.id, offerId, accept, Math.random() < 0.8);
+  }
+  // A bot with a SWAP uses it on a stiff hand: out goes the lowest card.
+  function botFavorSwap(s) {
+    const h = s.hands[s.cur], t = handInfo(h.cards).total;
+    if (t < 12 || t > 16) return -1;
+    let k = 0; h.cards.forEach((c, i) => { if (cardVal(c) < cardVal(h.cards[k])) k = i; });
+    return k;
   }
   // After each round: did the cheater make it, or go broke?
   function afterRound() {
     if (isBribes()) {
       const D = T.dealerSeat;
       if (D && D.gone) return endCheaterGame("none", `The dealer left the table. Nobody wins this one.`);
-      if (T.bribe.take >= BRIBE_GOAL) return endCheaterGame("dealer", `${D.name} pocketed $${T.bribe.take} in bribes and never got caught. The dealer wins!`);
+      if (T.bribe.take >= BRIBE_GOAL) return endBribes("dealer", `${D.name} pocketed $${T.bribe.take} in bribes and got away with it. The dealer wins!`);
       if (T.round >= BRIBE_ROUNDS) {
-        const rollers = T.seats.filter(x => roleOf(x.id) === "roller"), top = rollers.reduce((a, b) => (!a || b.chips > a.chips ? b : a), null);
-        return endCheaterGame("roller", top ? `Last call! ${D.name} only pocketed $${T.bribe.take}. ${top.name} walks away richest with $${top.chips} and wins.` : "Last call! Nobody wins this one.", top && top.id);
+        const score = (x) => x.chips + (x.favorPts || 0) * FAVOR_PTS, rollers = rolesOf("roller");
+        const top = rollers.reduce((a, b) => (!a || score(b) > score(a) ? b : a), null);
+        return endBribes("roller", top ? `Last call! ${D.name} only pocketed $${T.bribe.take}. ${top.name} wins with the best score: $${top.chips} plus ${top.favorPts || 0} favour${top.favorPts === 1 ? "" : "s"} ($${score(top)}).` : "Last call! Nobody wins this one.", top ? [top.id] : []);
       }
+      // Bot inspectors sometimes chase a clatter; anyone might take a stab at the snitch.
+      const cur = curRound();
+      for (const ins of rolesOf("inspector")) if (ins.bot && ins.bribeTried && Math.random() < (T.bribe.dealerFumble === cur ? 0.3 : 0.05)) {
+        const others = T.seats.filter(x => x !== ins); if (others.length) catchBriber(ins.id, others[Math.floor(Math.random() * others.length)].id);
+      }
+      if (!T.exposed && rolesOf("snitch").length && Math.random() < 0.06) {
+        const bots = T.seats.filter(x => x.bot && !(T.accused || {})[x.id] && roleOf(x.id) !== "snitch");
+        const b = bots[Math.floor(Math.random() * bots.length)], others = b ? T.seats.filter(x => x !== b) : [];
+        if (b && others.length) accuse(b.id, others[Math.floor(Math.random() * others.length)].id);
+      }
+      if (T.over) return;
       return startBetting();
     }
     if (isCheat()) {
@@ -667,9 +766,13 @@
     if (isCheat() && (T.over || !T.roles)) return;
     T.phase = "betting"; T.turn = null; T.dealerTurn = false; T.dealer = { cards: [], hidden: true }; T.deadline = 0; T.betTimer = false;
     if (isBribes()) {
-      for (const pb of T.bribe.pending) { const g = seatOf(pb.from); if (g) { g.chips += pb.amount; note(g, `The dealer never took your $${pb.amount}. It slides back to you.`); } }
-      T.bribe.pending = []; T.bribe.roundTook = false;
-      for (const b of T.seats.filter(x => x.bot && !x.gone)) if (Math.random() < (roleOf(b.id) === "inspector" ? (T.bribe.revealed === b.id ? 0 : 0.4) : 0.45)) later(800 + Math.random() * 5000, () => botBribe(b));
+      for (const pb of T.bribe.pending) returnBribe(pb, `The dealer never took your $${pb.amount}. It slides back to you.`);
+      T.bribe.pending = [];
+      for (const b of T.seats.filter(x => x.bot && !x.gone)) {
+        const r = roleOf(b.id), pr = r === "inspector" ? (T.bribe.revealed[b.id] ? 0 : b.bribeTried ? 0.15 : 0.35) : 0.4;
+        if (Math.random() < pr) later(800 + Math.random() * 5000, () => botBribe(b));
+      }
+      for (const sn of rolesOf("snitch")) if (sn.bot && Math.random() < 0.15) later(4000 + Math.random() * 4000, () => { const o = T.seats.filter(x => x !== sn); if (o.length) sendTip(sn.id, o[Math.floor(Math.random() * o.length)].id); });
     }
     for (const s of T.seats) if (s.gone) s.goneRounds++;
     T.seats = T.seats.filter(s => !s.gone || s.goneRounds < 3);
@@ -746,7 +849,7 @@
   function armTurn(s) {
     const seq = ++T.turnSeq;
     T.deadline = T.kind === "online" && !s.bot ? Date.now() + TURN_TIME : 0;
-    if (s.bot) later(700 + Math.random() * 700, () => { if (T.turnSeq !== seq) return; const k = botSwap(s); if (k >= 0 && swapAce(s.id, k)) return; act(s.id, botDecide(s)); });
+    if (s.bot) later(700 + Math.random() * 700, () => { if (T.turnSeq !== seq) return; const fs = isBribes() && s.swap ? botFavorSwap(s) : -1; if (fs >= 0 && useSwap(s.id, fs)) return; const k = botSwap(s); if (k >= 0 && swapAce(s.id, k)) return; act(s.id, botDecide(s)); });
     else if (s.gone) later(500, () => { if (T.turnSeq === seq) act(s.id, "stand", true); });
     else if (T.kind === "online") later(TURN_TIME, () => { if (T.turnSeq === seq) act(s.id, "stand", true); });
   }
@@ -806,10 +909,10 @@
     const a = T.seats.find(x => x.id === id), t = T.seats.find(x => x.id === targetId);
     if (!a || !t || a === t || T.accused[id] || T.exposed) return false;
     T.accused[id] = true;
-    const right = roleOf(targetId) === "gambler", from = right ? t : a, to = right ? a : t, amt = Math.floor(from.chips / 2);
+    const want = isBribes() ? "snitch" : "gambler", right = roleOf(targetId) === want, from = right ? t : a, to = right ? a : t, amt = Math.floor(from.chips / 2);
     from.chips -= amt; to.chips += amt;
-    if (right) { T.exposed = t.id; t.pocketUsed = true; tlog(`${a.name} calls out ${t.name}... and ${t.name} IS the gambler! ${a.name} takes half their money ($${amt}).`); }
-    else tlog(`${a.name} calls out ${t.name} as the gambler... wrong! ${t.name} takes half of ${a.name}'s money ($${amt}).`);
+    if (right) { T.exposed = t.id; t.pocketUsed = true; t.silenced = true; tlog(`${a.name} calls out ${t.name}... and ${t.name} IS the ${want}! ${a.name} takes half their money ($${amt}).`); }
+    else tlog(`${a.name} calls out ${t.name} as the ${want}... wrong! ${t.name} takes half of ${a.name}'s money ($${amt}).`);
     T.lastAccuse = { by: id, target: targetId, right, amt, n: (T.lastAccuse ? T.lastAccuse.n : 0) + 1 };
     commit(); return true;
   }
@@ -984,13 +1087,11 @@
       // The stakes come back with the winnings. A doubled loss can cost more than the bet, but never more than you have.
       s.chips += staked + total;
       if (s.chips < 0) { total -= s.chips; s.chips = 0; }
-      if (isBribes() && s.protected && total < 0) { // the dealer looks the other way
-        s.chips -= total; total = 0; s.protected = false;
-        for (const hand of s.hands) hand.result = { kind: "push", delta: 0 };
-        note(s, "The dealer looked the other way: your losing hand was forgiven.");
-        const ins = T.seats.find(x => x.bot && roleOf(x.id) === "inspector");
-        if (ins && !T.bribe.catchUsed && Math.random() < 0.45) later(900 + Math.random() * 1500, () => catchDealer(ins.id));
+      if (isBribes() && s.shield && total < 0) {
+        s.chips -= total; s.shield = false;
+        note(s, `The dealer looked the other way: your $${-total} loss was quietly refunded.`);
       }
+      if (isBribes()) s.peek = false;
       const kinds = s.hands.map(h => h.result.kind);
       s.result = { kind: total > 0 ? (kinds.every(k => k === "bj") ? "bj" : "win") : total < 0 ? "lose" : "push", delta: total };
       parts.push(`${s.name} ${total === 0 ? "breaks even" : total > 0 ? "+$" + total : "-$" + -total}`);
@@ -1015,12 +1116,20 @@
       peek: role === "cheater" && !T.over ? (T.phase === "playing" ? { next: T.shoe.slice(-3).reverse(), hole: d.hidden && d.cards[1] ? d.cards[1] : null } : { wait: true })
         : role === "jester" && !T.over ? (T.phase === "playing" && T.turn === forId ? { next: T.shoe.slice(-1), hole: null, jester: true } : { wait: true, jester: true }) : null,
       variant: T.variant || null,
-      bribe: isBribes() && T.bribe ? (() => { const me = seatOf(forId), dl = T.dealerSeat && T.dealerSeat.id === forId;
-        return { goal: BRIBE_GOAL, roundsLeft: Math.max(0, BRIBE_ROUNDS - T.round), take: dl ? T.bribe.take : null,
-          inbox: dl ? T.bribe.pending.map(pb => ({ id: pb.id, name: (seatOf(pb.from) || {}).name || "?", amount: pb.amount })) : null,
-          mine: (T.bribe.pending.find(pb => pb.from === forId) || {}).amount || null, protected: !!(me && me.protected),
+      bribe: isBribes() && T.bribe ? (() => {
+        const me = seatOf(forId), dl = T.dealerSeat && T.dealerSeat.id === forId, cur = curRound(), mine = T.bribe.pending.find(pb => pb.from === forId);
+        return { goal: BRIBE_GOAL, roundsLeft: Math.max(0, BRIBE_ROUNDS - T.round), take: dl ? T.bribe.take : null, catches: T.bribe.catches,
+          inbox: dl ? T.bribe.pending.map(pb => ({ id: pb.id, name: (seatOf(pb.from) || {}).name || "?", amount: pb.amount, favor: pb.favor })) : null,
+          mine: mine ? { amount: mine.amount, favor: mine.favor } : null,
+          favors: me && !dl ? { shield: !!me.shield, peek: !!me.peek, swap: !!me.swap, pts: me.favorPts || 0 } : null,
+          hole: me && me.peek && me.state === "in" && d.hidden && d.cards[1] ? d.cards[1] : null,
           note: me && me.bribeNote || null, event: T.bribe.event, revealed: T.bribe.revealed,
-          catchUsed: role === "inspector" ? T.bribe.catchUsed : null }; })() : null,
+          seen: role === "snitch" ? T.bribe.seen.filter(x => x.from !== forId).map(x => ({ name: x.name, amount: x.amount, round: x.round })) : null,
+          canTip: role === "snitch" && me ? !me.silenced && me.tipRound !== cur : null,
+          tips: role === "inspector" ? T.bribe.tips.map(x => ({ name: x.name, round: x.round })) : null,
+          canCatch: role === "inspector" ? !!(me && me.bribeTried) : null, round: cur };
+      })() : null,
+      hasCallout: cheat && (hasGambler() || (isBribes() && !!T.roles && Object.values(T.roles).includes("snitch"))),
       hasGambler: cheat && hasGambler(), myAccused: !!(T.accused || {})[forId], exposed: T.exposed || null, lastAccuse: T.lastAccuse || null,
       pocket: role === "gambler" && !T.over && seatOf(forId) ? { card: seatOf(forId).pocket, used: !!seatOf(forId).pocketUsed } : null, round: T.round, shoeLeft: T.shoe.length, shuffled: T.shuffled,
       dealer: { hidden: d.hidden, cards: d.hidden ? d.cards.map((c, i) => i === 1 ? "??" : c) : [...d.cards], cards2: d.cards2 ? [...d.cards2] : null, cur: d.cur || 0, split: !!d.split, doubled: !!d.doubled },
@@ -1340,11 +1449,16 @@
   }
   const iAmDealer = (v) => !!v && !!v.dealerSeat && v.dealerSeat.id === mySeat;
   // ----- Bribes on this screen -----
-  let bribeAmt = 25;
+  let bribeAmt = 25, bribeFavor = "shield", catching = false;
   for (const a of BRIBE_AMTS) {
     const b = document.createElement("button"); b.textContent = "$" + a; b.dataset.amt = a;
     b.onclick = () => { bribeAmt = a; sfxSafe(SFX.chip); updateUI(); };
     $("bribeAmts").append(b);
+  }
+  for (const f of Object.keys(FAVORS)) {
+    const b = document.createElement("button"); b.textContent = FAVORS[f]; b.dataset.fav = f;
+    b.onclick = () => { bribeFavor = f; updateUI(); };
+    $("bribeFavors").append(b);
   }
   // The timing game: a marker sweeps back and forth; stop it in the gold zone.
   const mg = { open: false, raf: 0, pos: 0, dir: 1, zone: [0, 0], speed: 1, done: null, timer: 0 };
@@ -1382,30 +1496,69 @@
   document.addEventListener("keydown", (e) => { if (mg.open && (e.key === " " || e.key === "Enter")) { e.preventDefault(); e.stopImmediatePropagation(); stopMini(false); } }, true);
   const sendOrRun = (msg, local) => { if (mode === "online" && online.seat !== "host") sendToHost(msg); else local(); };
   $("bribeBtn").onclick = () => {
-    const amount = bribeAmt;
-    miniGame("SLIP IT UNDER THE TABLE", `Slide $${amount} to the dealer without anyone noticing.`, 0.26 - amount / 400, 1.6 + amount / 60, (clean) =>
-      sendOrRun({ type: "bribe", amount, clean }, () => offerBribe(mySeat, amount, clean)));
+    const amount = bribeAmt, favor = bribeFavor;
+    miniGame("SLIP IT UNDER THE TABLE", `Slide $${amount} to the dealer for a ${FAVORS[favor]}, without anyone noticing.`, 0.26 - amount / 400, 1.6 + amount / 60, (clean) =>
+      sendOrRun({ type: "bribe", amount, clean, favor }, () => offerBribe(mySeat, amount, clean, favor)));
   };
   function doAnswer(offer, accept) {
     if (!accept) { sendOrRun({ type: "bribeAnswer", offer: offer.id, accept: false, clean: true }, () => answerBribe(mySeat, offer.id, false, true)); return; }
-    miniGame("POCKET IT QUIETLY", `${offer.name}'s $${offer.amount} is under your hand. Slip it into your pocket.`, 0.2, 1.8, (clean) =>
+    miniGame("POCKET IT QUIETLY", `${offer.name}'s $${offer.amount} (for a ${FAVORS[offer.favor]}) is under your hand. Slip it into your pocket.`, 0.2, 1.8, (clean) =>
       sendOrRun({ type: "bribeAnswer", offer: offer.id, accept: true, clean }, () => answerBribe(mySeat, offer.id, true, clean)));
   }
-  $("catchBtn").onclick = () => sendOrRun({ type: "catch" }, () => catchDealer(mySeat));
+  $("catchBtn").onclick = () => { catching = !catching; updateUI(); };
+  const miniCard = (c) => { const m = document.createElement("canvas"); m.width = CW; m.height = CH; m.className = "mini"; m.getContext("2d").drawImage(cardSprite(c), 0, 0); return m; };
   function renderBribes(v) {
     const on = !!(v && v.variant === "bribes" && !v.over && v.phase !== "lobby"), me = v && v.seats.find(x => x.id === mySeat), b = v && v.bribe;
     $("bribeBox").hidden = !(on && me);
     $("inspectBox").hidden = !(on && me && v.myRole === "inspector" && showSecrets);
+    $("snitchBox").hidden = !(on && me && v.myRole === "snitch" && showSecrets);
+    const fv = b && b.favors;
+    $("favorBox").hidden = !(on && me && showSecrets && fv && (fv.peek || fv.swap || fv.shield || fv.pts));
     $("inboxUI").hidden = !(on && iAmDealer(v));
-    if (!on) return;
+    if (!on) { catching = false; return; }
     if (me) {
       for (const el of $("bribeAmts").children) { el.setAttribute("aria-pressed", String(+el.dataset.amt === bribeAmt)); el.disabled = +el.dataset.amt > me.chips; }
+      for (const el of $("bribeFavors").children) el.setAttribute("aria-pressed", String(el.dataset.fav === bribeFavor));
       $("bribeBtn").disabled = !!b.mine || bribeAmt > me.chips || mg.open;
-      $("bribeHint").textContent = b.mine ? `Your $${b.mine} is under the dealer's hand. Will they take it?` : b.protected ? "The dealer took your last bribe: your next losing hand is forgiven." : "Bribe the dealer and your next losing hand is forgiven, if they pocket it. Win the timing game or everyone sees.";
+      $("bribeHint").textContent = b.mine ? `Your $${b.mine.amount} for a ${FAVORS[b.mine.favor]} is under the dealer's hand. Will they take it?`
+        : "Pick a favour: PEEK at the dealer's hidden card, SWAP one of your cards for a fresh one, or SHIELD your next losing hand. Win the timing game or the table hears it.";
     }
-    if (v.myRole === "inspector") {
-      $("catchBtn").disabled = !!b.catchUsed;
-      $("inspectHint").textContent = b.catchUsed ? "You've made your call." : "Think the dealer pocketed a bribe THIS round? Call it. Once a game: wrong, and your cover is blown.";
+    if (fv && !$("favorBox").hidden) {
+      const lines = [], sw = $("favorSwap"); sw.replaceChildren();
+      if (fv.peek) lines.push(b.hole ? `PEEK: the dealer's hidden card is the ${cardName(b.hole)}.` : "PEEK ready: you'll see the dealer's hidden card once it's dealt.");
+      if (fv.shield) lines.push("SHIELD ready: your next losing hand is quietly refunded.");
+      const hand = me.hands[me.cur], myTurn = v.phase === "playing" && v.turn === mySeat && hand && hand.state === "play";
+      if (fv.swap) lines.push(myTurn ? "SWAP: pick a card to trade for the next one in the shoe." : "SWAP ready: use it on your turn.");
+      lines.push(`Favour points: ${fv.pts} (worth $${fv.pts * FAVOR_PTS} at the end).`);
+      $("favorText").textContent = lines.join(" ");
+      if (b.hole) sw.append(miniCard(b.hole));
+      if (fv.swap && myTurn) hand.cards.forEach((c, i) => {
+        const bt = document.createElement("button"); bt.append(miniCard(c), document.createTextNode("SWAP"));
+        bt.onclick = () => sendOrRun({ type: "fswap", ci: i }, () => useSwap(mySeat, i)); sw.append(bt);
+      });
+    }
+    if (v.myRole === "inspector" && !$("inspectBox").hidden) {
+      $("inspectHint").textContent = !b.canCatch ? "Before you can make a catch, slip the dealer a bribe yourself and have it refused or returned. (If they pocket it, you win on the spot!)"
+        : catching ? "Who bribed the dealer this round or last? Pick them." : `Catches so far: ${b.catches} of 2. Name a briber: right, they pay you half their money; wrong, they take half of yours.`;
+      $("inspectTips").textContent = b.tips.length ? "Anonymous tips: " + b.tips.slice(-4).map(t => `${t.name} (round ${t.round})`).join(", ") + "." : "No tips yet.";
+      $("catchBtn").disabled = !b.canCatch; $("catchBtn").textContent = catching ? "NEVER MIND" : "MAKE A CATCH";
+      const list = $("catchList"); list.replaceChildren();
+      if (catching && b.canCatch) for (const st of v.seats) {
+        if (st.id === mySeat) continue;
+        const bt = document.createElement("button"); bt.textContent = st.name;
+        bt.onclick = () => { catching = false; sendOrRun({ type: "catch", target: st.id }, () => catchBriber(mySeat, st.id)); };
+        list.append(bt);
+      }
+    }
+    if (v.myRole === "snitch" && !$("snitchBox").hidden) {
+      $("snitchSeen").textContent = b.seen.length ? "Bribes you've seen: " + b.seen.slice(-5).map(x => `${x.name} $${x.amount} (round ${x.round})`).join(", ") + "." : "No bribes yet this game.";
+      $("snitchHint").textContent = b.canTip ? "Send the inspectors an anonymous tip (true or false), once a round:" : v.exposed === mySeat ? "You've been called out: no more tips." : "Tip sent this round.";
+      const list = $("tipList"); list.replaceChildren();
+      if (b.canTip) for (const st of v.seats) {
+        if (st.id === mySeat) continue;
+        const bt = document.createElement("button"); bt.textContent = "TIP: " + st.name;
+        bt.onclick = () => sendOrRun({ type: "tip", target: st.id }, () => sendTip(mySeat, st.id)); list.append(bt);
+      }
     }
     if (iAmDealer(v)) {
       $("inboxTitle").textContent = `BRIBES: $${b.take} OF $${b.goal} POCKETED, ${b.roundsLeft} ROUNDS LEFT`;
@@ -1413,7 +1566,7 @@
       if (!b.inbox.length) { const e = document.createElement("div"); e.className = "muted"; e.textContent = "No offers right now."; box.append(e); }
       for (const offer of b.inbox) {
         const row = document.createElement("div"); row.className = "offer";
-        const t = document.createElement("span"); t.textContent = `${offer.name}: $${offer.amount}`;
+        const t = document.createElement("span"); t.textContent = `${offer.name}: $${offer.amount} for a ${FAVORS[offer.favor]}`;
         const yes = document.createElement("button"); yes.className = "take"; yes.textContent = "POCKET"; yes.onclick = () => doAnswer(offer, true);
         const no = document.createElement("button"); no.textContent = "REFUSE"; no.onclick = () => doAnswer(offer, false);
         yes.disabled = no.disabled = mg.open;
@@ -1434,16 +1587,18 @@
   }
   function renderAccuse(v) {
     const box = $("accuseBox"), me = v && v.seats.find(x => x.id === mySeat);
-    box.hidden = !(v && v.mode === "cheater" && v.hasGambler && !v.over && me && v.myRole && v.myRole !== "dealer" && v.phase !== "lobby");
+    box.hidden = !(v && v.mode === "cheater" && v.hasCallout && !v.over && me && v.myRole && v.myRole !== "dealer" && v.phase !== "lobby");
+    const word = v && v.variant === "bribes" ? "snitch" : "gambler";
+    if (!box.hidden) $("accuseTitle").textContent = `CALL OUT THE ${word.toUpperCase()}`;
     if (box.hidden) { accusing = false; return; }
     const list = $("accusees"); list.replaceChildren();
     const caught = v.exposed && v.seats.find(x => x.id === v.exposed);
     $("accuseBtn").hidden = true;
-    if (v.exposed === mySeat) { $("accuseHint").textContent = "You were called out! Your pocket ace was taken."; return; }
-    if (caught) { $("accuseHint").textContent = `${caught.name} was caught: they were the gambler.`; return; }
+    if (v.exposed === mySeat) { $("accuseHint").textContent = word === "snitch" ? "You were called out! No more tips for you." : "You were called out! Your pocket ace was taken."; return; }
+    if (caught) { $("accuseHint").textContent = `${caught.name} was caught: they were the ${word}.`; return; }
     if (v.myAccused) { $("accuseHint").textContent = "You've made your call this game."; return; }
     $("accuseBtn").hidden = false; $("accuseBtn").textContent = accusing ? "NEVER MIND" : "CALL SOMEONE OUT";
-    $("accuseHint").textContent = accusing ? "Click the gambler's hand on the table, or a name below." : "Someone has an ace up their sleeve. Call them out: right, you take half their money; wrong, they take half of yours. One call a game.";
+    $("accuseHint").textContent = accusing ? `Click the ${word}'s hand on the table, or a name below.` : word === "snitch" ? "Someone is feeding tips to the inspectors. Call out the snitch: right, you take half their money and silence them; wrong, they take half of yours. One call a game." : "Someone has an ace up their sleeve. Call them out: right, you take half their money; wrong, they take half of yours. One call a game.";
     if (accusing) for (const st of v.seats) {
       if (st.id === mySeat) continue;
       const b = document.createElement("button"); b.textContent = st.name; b.onclick = () => doAccuse(st.id); list.append(b);
@@ -1570,7 +1725,7 @@
     const bribes = v.variant === "bribes";
     const winners = bribes ? (o.winner === "dealer" ? ["dealer"] : o.winner === "inspector" ? ["inspector"] : [])
       : o.winner === "dealer" ? ["dealer", "gambler", "regular"] : o.winner === "jester" ? ["jester"] : o.winner === "cheater" ? ["cheater"] : [];
-    const youWin = winners.includes(mine) || (!!o.winnerId && o.winnerId === mySeat);
+    const youWin = winners.includes(mine) || (o.winnerIds || []).includes(mySeat);
     $("overTitle").textContent = bribes ? (o.winner === "dealer" ? "THE DEALER GOT RICH!" : o.winner === "inspector" ? "BUSTED!" : o.winner === "roller" ? "LAST CALL!" : "GAME OVER")
       : o.winner === "dealer" ? "CHEATER CAUGHT!" : o.winner === "jester" ? "THE JESTER WINS!" : o.winner === "cheater" ? "THE CHEATER WINS!" : "GAME OVER";
     $("overTitle").style.color = youWin ? "#ffe066" : "#ff5e7a";
@@ -1859,7 +2014,7 @@
       const ch = document.createElement("div"); ch.className = "ch"; ch.textContent = "$" + s.chips;
       el.append(nm, ch);
       // Roles are revealed when a cheater game ends (and you always know your own).
-      const r = v.over ? v.over.roles[s.id] : v.exposed === s.id ? "gambler" : v.bribe && v.bribe.revealed === s.id ? "inspector" : s.id === mySeat && showSecrets ? v.myRole : null;
+      const r = v.over ? v.over.roles[s.id] : v.exposed === s.id ? (v.variant === "bribes" ? "snitch" : "gambler") : v.bribe && v.bribe.revealed[s.id] ? v.bribe.revealed[s.id] : s.id === mySeat && showSecrets ? v.myRole : null;
       if (r) { const d = document.createElement("div"); d.className = "role"; d.style.color = ROLE_INFO[r].color; d.textContent = ROLE_INFO[r].name.replace("THE ", "").replace("A ", ""); el.append(d); }
       const note = s.chips < BET_MIN && s.state === "out" ? "BROKE" : v.phase === "betting" && !s.ready ? "BETTING..." : v.phase !== "betting" && s.state === "out" ? "SITTING OUT" : "";
       if (note) { const d = document.createElement("div"); d.className = "muted"; d.textContent = note; el.append(d); }
@@ -1916,13 +2071,14 @@
       if (v.bribe && prev && prev.bribe) {
         const b = v.bribe, pb = prev.bribe;
         if (b.note && (!pb.note || pb.note.n !== b.note.n)) toast(b.note.text.toUpperCase().slice(0, 40), b.note.text.includes("back") ? "push" : "");
-        if (b.event && (!pb.event || pb.event.n !== b.event.n)) { toast(b.event.text.includes("badge") ? "THE INSPECTOR!" : "FUMBLE!", "lose"); sfxSafe(SFX.chips); }
+        if (b.event && (!pb.event || pb.event.n !== b.event.n)) { toast(b.event.text.includes("badge") ? "AN INSPECTOR!" : b.event.text.includes("clatter") ? "*CLATTER*" : "FUMBLE!", "lose"); sfxSafe(SFX.chips); }
         if (b.inbox && pb.inbox && b.inbox.length > pb.inbox.length) sfxSafe(SFX.chip);
       }
       if (v.lastAccuse && prev && (!prev.lastAccuse || prev.lastAccuse.n !== v.lastAccuse.n)) {
         const la = v.lastAccuse, by = v.seats.find(x => x.id === la.by), tg = v.seats.find(x => x.id === la.target);
-        setTimeout(() => bubble(la.by, "GAMBLER!"), 0);
-        toast(la.right ? `${by ? by.name : "?"} CAUGHT THE GAMBLER!` : `WRONG CALL! ${tg ? tg.name : "?"} +$${la.amt}`, la.right ? "" : "lose");
+        const wd = v.variant === "bribes" ? "SNITCH" : "GAMBLER";
+        setTimeout(() => bubble(la.by, wd + "!"), 0);
+        toast(la.right ? `${by ? by.name : "?"} CAUGHT THE ${wd}!` : `WRONG CALL! ${tg ? tg.name : "?"} +$${la.amt}`, la.right ? "" : "lose");
         sfxSafe(SFX.chips); if (la.right) sfxSafe(SFX.win);
       }
       if (v.shot && (!prev || !prev.shot || prev.shot.n !== v.shot.n)) { aiming = false; cv.classList.remove("aiming"); startShotFx(v.shot.target); }
@@ -2035,7 +2191,7 @@
           : v.dealerTurn ? "You can still shoot: click the pistol on the table." : "Click the pistol on the table to pick it up, then click a player to shoot. Watch for someone who seems to know what's coming. You have ONE shot. The cheater wins at $1,000.";
         const richest = v.seats.reduce((a, b) => (b.chips > a.chips ? b : a), v.seats[0] || { chips: 0, name: "" });
         if (v.dealerTurn && !aiming) setStatus("Your hand, dealer", v.left ? `${Math.ceil(v.left / 1000)}s left` : "Hit, stand, double or split");
-        else if (v.variant === "bribes") setStatus("You're the dealer", `Pocketed $${v.bribe.take} of $${v.bribe.goal}. ${v.bribe.roundsLeft} rounds left.`);
+        else if (v.variant === "bribes") setStatus("You're the dealer", `Pocketed $${v.bribe.take} of $${v.bribe.goal}. Catches against you: ${v.bribe.catches} of 2. ${v.bribe.roundsLeft} rounds left.`);
         else setStatus(aiming ? "Taking aim..." : "You're the dealer", `Richest: ${richest.name} $${richest.chips} of $${v.goal}`);
         return;
       }
@@ -2069,7 +2225,7 @@
     else if (v.mode === "cheater" && v.myRole && v.phase !== "playing") {
       const r = ROLE_INFO[v.myRole], mine = me ? `$${me.chips}` : "";
       if (!showSecrets && v.myRole !== "dealer") setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : v.variant === "bribes" ? "Bribes mode" : "Cheater mode", "Hold B (or your own cards) to see your secret role.");
-      else if (v.variant === "bribes") setStatus(`You are ${r.name.toLowerCase()}`, v.myRole === "inspector" ? "Catch the dealer pocketing a bribe." : v.myRole === "roller" ? `$${me ? me.chips : 0}. Bribe the dealer, but mind the inspector.` : `Pocketed $${v.bribe.take} of $${v.bribe.goal}.`);
+      else if (v.variant === "bribes") setStatus(`You are ${r.name.toLowerCase()}`, v.myRole === "inspector" ? `Catch the bribers. Catches: ${v.bribe.catches} of 2.` : v.myRole === "snitch" ? "Watch the bribes. Tip off the inspectors." : v.myRole === "roller" ? `$${me ? me.chips : 0}. Bribe for favours, but mind the inspectors.` : `Pocketed $${v.bribe.take} of $${v.bribe.goal}.`);
       else setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : `You are ${r.name.toLowerCase()}`, v.myRole === "cheater" ? `${mine} of $${v.goal}. Don't get caught.` : v.myRole === "jester" ? "You see the next card. Look guilty. Get shot." : v.myRole === "gambler" ? "You have an ace up your sleeve. Don't get called out." : v.myRole === "regular" ? "Help find the cheater. Call out the gambler." : "Find the cheater.");
     } else
     if (me && me.chips < BET_MIN && v.phase === "betting") setStatus("Out of money", isOnline ? "You're watching." : "Start over to play again.");
@@ -2229,9 +2385,11 @@
     else if (msg.type === "swap") swapAce(id, +msg.ci);
     else if (msg.type === "dact") dealerAct(id, msg.a);
     else if (msg.type === "accuse") accuse(id, msg.target);
-    else if (msg.type === "bribe") offerBribe(id, +msg.amount, !!msg.clean);
+    else if (msg.type === "bribe") offerBribe(id, +msg.amount, !!msg.clean, String(msg.favor));
     else if (msg.type === "bribeAnswer") answerBribe(id, +msg.offer, !!msg.accept, !!msg.clean);
-    else if (msg.type === "catch") catchDealer(id);
+    else if (msg.type === "catch") catchBriber(id, msg.target);
+    else if (msg.type === "tip") sendTip(id, msg.target);
+    else if (msg.type === "fswap") useSwap(id, msg.ci);
     else if (msg.type === "act") act(id, msg.a);
     else if (msg.type === "chat") hostReceiveChat(id, msg.text);
   }

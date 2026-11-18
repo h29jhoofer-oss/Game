@@ -31,12 +31,14 @@ Old chess invite links (`index.html#g-CODE`) still open the chess game.
 - Its own synthesised lounge music, plus card, chip and win sounds. Sound settings are shared with chess.
 - Online: the host's browser runs the table and never sends anyone the shoe or the dealer's face-down card. Players have 15 seconds to bet once someone has bet, and 25 seconds per turn (then they stand). Anyone who drops out can reopen the link to get their seat and chips back. A 7th visitor watches. The table has a chat.
 
-- **Bribes mode** (3 to 6 players; against bots you need at least 2). One player is the dealer, one is secretly an undercover **inspector**, and the rest are **high rollers**. Everyone's screen looks the same; hold B (or press and hold your own cards) to see your role.
-  - Anyone can **slip the dealer a bribe** ($10, $25 or $50) through a timing game: stop the sweeping marker in the gold zone (bigger bribes have a smaller zone). Fumble it and everyone sees the chips spill; the bribe doesn't go through.
-  - Only the dealer sees offers. **POCKET** one (another timing game; fumble it and everyone sees the dealer fumbling with their pockets) or **REFUSE** it (the chips go back). Unanswered offers go back at the end of the round.
-  - A pocketed bribe forgives that player's next losing hand: it quietly turns into a push.
-  - The dealer wins by pocketing **$300**. The inspector wins if the dealer pockets the inspector's own bribe, or by holding B and pressing **CATCH THE DEALER!** in a round when the dealer pocketed one (once a game: wrong, and the inspector's cover is blown). After 12 rounds, the richest high roller wins.
-  - Bots slip bribes, sometimes fumble, and a bot dealer weighs each offer; a bot inspector pounces on a fumble or a suspiciously forgiven loss.
+- **Bribes mode** (3 to 6 players; against bots you need at least 2). Everyone's screen looks the same; hold B (or press and hold your own cards) to see your role and secrets.
+  - **Roles:** one public dealer; secretly **0, 1 or 2 undercover inspectors** (nobody is told how many, so you can't count your way to them); from 4 players a **snitch**; everyone else is a **high roller**.
+  - **Bribes buy favours.** Pick one when you bribe: **PEEK** (hold B to see the dealer's hidden card this round), **SWAP** (on your turn, hold B and trade one of your cards for the next one in the shoe) or **SHIELD** (your next losing hand is quietly refunded; everyone else still sees it as a loss). Every pocketed bribe also earns a **favour point** worth $50 in the final score.
+  - **Timing games:** slipping a bribe and pocketing one are both stop-the-marker games. A fumble is heard by everyone ("somebody fumbles chips under the table", "chips clatter near the dealer's pocket") but nobody is named. Only the dealer sees offers, with the favour asked for.
+  - **Inspectors** make catches by naming a player who bribed the dealer this round or last. Right: that player pays the inspector half their money. Wrong: they take half the inspector's. Either way the inspector's badge is out. An inspector can only make catches once one of their own bribes has been refused or returned. **Two catches** and the inspectors win; if the dealer ever pockets an inspector's bribe, the inspectors win on the spot.
+  - **The snitch** (hold B) sees every bribe slipped to the dealer and, once a round, sends the inspectors an anonymous tip about any player, true or false. If a catch lands on someone they tipped about, the snitch wins too when the game ends. Anyone can **call out the snitch** once a game: right, they take half the snitch's money and silence them; wrong, the accused takes half of theirs.
+  - **The dealer** wins by pocketing **$300**. After 12 rounds, the high roller with the best score (money plus $50 per favour point) wins.
+  - Bots bribe for favours (and use a SWAP on a stiff hand), fumble now and then, take bribes or refuse known inspectors, act on tips, and occasionally take a stab at the snitch.
 - **Chips** are drawn as round pixel chips (a face with an inlay and edge stripes, and a striped rim), stacked on the felt and on the bet buttons.
 
 ## Pixel Liar's Dice
