@@ -245,47 +245,6 @@
     </div>
   </div></div>
   <div class="side left">
-    <div class="box" id="status"></div>
-    <div class="box" id="peekBox" hidden>
-      <h2>YOUR PEEK (SECRET)</h2>
-      <canvas id="peekCv" width="104" height="30"></canvas>
-      <div class="muted" id="peekHint"></div>
-    </div>
-    <div class="box" id="pocketBox" hidden>
-      <h2>YOUR POCKET (SECRET)</h2>
-      <div class="pocketRow"><canvas id="pocketCv" width="22" height="28"></canvas><div class="muted" id="pocketHint"></div></div>
-      <div class="swapBtns" id="swapBtns"></div>
-    </div>
-    <div class="box" id="bribeBox" hidden>
-      <h2>SLIP THE DEALER A BRIBE</h2>
-      <div class="muted" id="bribeHint"></div>
-      <div class="seg" id="bribeFavors"></div>
-      <div class="suspects" id="bribeTargets" hidden></div>
-      <div class="seg" id="bribeAmts"></div>
-      <button id="bribeBtn" class="big" style="width:100%">SLIP IT</button>
-    </div>
-    <div class="box" id="favorBox" hidden>
-      <h2>YOUR FAVOURS (SECRET)</h2>
-      <div class="muted" id="favorText"></div>
-      <div class="swapBtns" id="favorSwap"></div>
-    </div>
-    <div class="box" id="inspectBox" hidden>
-      <h2>INSPECTOR (SECRET)</h2>
-      <div class="muted" id="inspectHint"></div>
-      <div class="muted" id="inspectTips"></div>
-      <button id="catchBtn" class="big" style="width:100%">MAKE A CATCH</button>
-      <div class="suspects" id="catchList"></div>
-    </div>
-    <div class="box" id="snitchBox" hidden>
-      <h2>SNITCH (SECRET)</h2>
-      <div class="suspects" id="tipList"></div>
-    </div>
-    <div class="box" id="accuseBox" hidden>
-      <h2 id="accuseTitle">CALL OUT THE GAMBLER</h2>
-      <div class="muted" id="accuseHint"></div>
-      <button id="accuseBtn" class="big" style="width:100%">CALL SOMEONE OUT</button>
-      <div class="suspects" id="accusees"></div>
-    </div>
     <div class="box" id="actBox">
       <h2 id="actTitle">YOUR BET</h2>
       <div id="betUI">
@@ -329,6 +288,47 @@
           <div id="inbox" class="inbox"></div>
         </div>
       </div>
+    </div>
+    <div class="box" id="peekBox" hidden>
+      <h2>YOUR PEEK (SECRET)</h2>
+      <canvas id="peekCv" width="104" height="30"></canvas>
+      <div class="muted" id="peekHint"></div>
+    </div>
+    <div class="box" id="pocketBox" hidden>
+      <h2>YOUR POCKET (SECRET)</h2>
+      <div class="pocketRow"><canvas id="pocketCv" width="22" height="28"></canvas><div class="muted" id="pocketHint"></div></div>
+      <div class="swapBtns" id="swapBtns"></div>
+    </div>
+    <div class="box" id="favorBox" hidden>
+      <h2>YOUR FAVOURS (SECRET)</h2>
+      <div class="muted" id="favorText"></div>
+      <div class="swapBtns" id="favorSwap"></div>
+    </div>
+    <div class="box" id="inspectBox" hidden>
+      <h2>INSPECTOR (SECRET)</h2>
+      <div class="muted" id="inspectHint"></div>
+      <div class="muted" id="inspectTips"></div>
+      <button id="catchBtn" class="big" style="width:100%">MAKE A CATCH</button>
+      <div class="suspects" id="catchList"></div>
+    </div>
+    <div class="box" id="snitchBox" hidden>
+      <h2>SNITCH (SECRET)</h2>
+      <div class="suspects" id="tipList"></div>
+    </div>
+    <div class="box" id="status"></div>
+    <div class="box" id="bribeBox" hidden>
+      <h2>SLIP THE DEALER A BRIBE</h2>
+      <div class="muted" id="bribeHint"></div>
+      <div class="seg" id="bribeFavors"></div>
+      <div class="suspects" id="bribeTargets" hidden></div>
+      <div class="seg" id="bribeAmts"></div>
+      <button id="bribeBtn" class="big" style="width:100%">SLIP IT</button>
+    </div>
+    <div class="box" id="accuseBox" hidden>
+      <h2 id="accuseTitle">CALL OUT THE GAMBLER</h2>
+      <div class="muted" id="accuseHint"></div>
+      <button id="accuseBtn" class="big" style="width:100%">CALL SOMEONE OUT</button>
+      <div class="suspects" id="accusees"></div>
     </div>
     <div class="box" id="setup">
       <h2>NEW TABLE</h2>
@@ -419,7 +419,7 @@
       <p><b>SPLIT</b> turns two cards of the same value into two hands, each with its own bet (up to 4 hands). Split aces get one card each, and a split hand of 21 isn't blackjack.</p>
       <p>An ace plus a 10-value card is <b>blackjack</b> and pays 3 to 2. A win pays 1 to 1 and a tie (<b>push</b>) gives your bet back.</p>
       <p id="cheatRules" hidden><b>Cheater mode</b> (3 to 6 players): one player is the <b>dealer</b> and holds a pistol. Secretly, one player is the <b>cheater</b> (once the hands are dealt, sees the next 3 cards and the dealer's hidden card; wins at $1,000), and anyone else is an honest <b>regular</b>. With 4 or more, one is also the <b>jester</b> (on their turn, sees the card they'd get; wins if shot) and one the <b>gambler</b> (one ace in their pocket to swap into their hand once a game). You only see your own hand total, and your secrets stay hidden until you <b>hold B</b>, so nobody can read your role off your screen. Once a game, any player can <b>call out the gambler</b>: guess right and you take half their money; guess wrong and they take half of yours. The dealer plays the house hand themselves: hit, stand, <b>double</b> (one card, and every bet counts twice) or <b>split</b> a pair (each player's hand plays half its bet against each house hand). The dealer gets one shot: hit the cheater and the house, gambler and regulars win; hit the jester and the jester wins; hit anyone else and the cheater wins.</p>
-      <p id="bribeRules" hidden><b>Bribes mode</b> (3 to 6 players): one player is the <b>dealer</b>. Secretly, there may be <b>0, 1 or 2 undercover inspectors</b> (nobody is told how many); everyone else is a <b>high roller</b> with a secret motive: <b>greedy</b> (best score after 12 rounds), <b>spiteful</b> (wants everyone else broke), the <b>jester</b> (wants to get caught), the <b>snitch</b> (sees every bribe and tips off the inspectors) or <b>undercover</b> (bribes with marked chips to get the dealer caught). Slip the dealer a bribe for a favour: <b>PEEK</b> at the hidden card, <b>SWAP</b> a card, a <b>SHIELD</b> for your next loss, or a <b>JINX</b> on someone else's next hand. Each pocketed bribe is also a favour point ($50 at the end). Bribing and pocketing are timing games: fumble and the table hears it, but not who. Inspectors win with 2 catches (naming who bribed this round or last), or at once if the dealer pockets an inspector's bribe; 3 marked bribes pocketed also busts the dealer. The dealer wins at <b>$300</b> pocketed. Hold B to see your role.</p>
+      <p id="bribeRules" hidden><b>Bribes mode</b> (3 to 6 players): one player is the <b>dealer</b>. Secretly, there may be <b>0, 1 or 2 undercover inspectors</b> (nobody is told how many); everyone else is a <b>high roller</b> with a secret motive: <b>greedy</b> (best score after 12 rounds), <b>spiteful</b> (wants everyone else broke), the <b>jester</b> (wants to get caught), the <b>snitch</b> (tips off the inspectors) or <b>undercover</b> (bribes with marked chips to get the dealer caught). Slip the dealer a bribe for a favour: <b>PEEK</b> at the hidden card, <b>SWAP</b> a card, a <b>SHIELD</b> for your next loss, or a <b>JINX</b> on someone else's next hand. Each pocketed bribe is also a favour point ($50 at the end). Bribing and pocketing are timing games: fumble and the table hears it, but not who. Inspectors win with 2 catches (naming who bribed this round or last), or at once if the dealer pockets an inspector's bribe; 3 marked bribes pocketed also busts the dealer. The dealer wins at <b>$300</b> pocketed. Hold B to see your role.</p>
       <p>The dealer must hit until 17 and stands on every 17. Everyone starts with <b>$500</b>. Run out and you're done: bots leave the table, and you can start over.</p>
     </div>
     <div class="box" id="log"></div>
@@ -512,7 +512,7 @@
     greedy: { name: "GREEDY", color: "#3fd0a0", text: "You're a high roller in it for the money. Bribe the dealer for favours: PEEK at the hidden card, SWAP one of your cards, SHIELD your next loss, or JINX another player's next hand. Every bribe the dealer pockets is also a favour point, worth $50 at the end. After 12 rounds, if your score (money plus favour points) beats every other high roller, you win. Unless the dealer pockets $300 first, or the racket gets busted." },
     spiteful: { name: "SPITEFUL", color: "#ff5e7a", text: "You don't care about winning. You want everyone else broke. When the game ends, if someone at the table has gone broke or the other players average under $400, you win, whoever else wins. Buy JINXes to wreck their hands (a jinxed player is dealt a stiff hand, and a 10 if they hit it). Bribe like everyone else so nobody suspects you." },
     fool: { name: "THE JESTER", color: "#c98bff", text: "You WANT to get caught. If an inspector makes a catch naming you, you win when the game ends, whoever else wins (and their catch doesn't count). Look guilty: bribe, fumble, act shifty. But there may be no inspectors at all..." },
-    snitch: { name: "THE SNITCH", color: "#ffb347", text: "You see every bribe slipped to the dealer (hold B). Once a round, send the inspectors an anonymous tip about a player, true or false. If an inspector catches someone you tipped about, you win when the game ends, whoever else wins. Bribe like everyone else so nobody suspects you. Careful: anyone can call out the snitch once a game." },
+    snitch: { name: "THE SNITCH", color: "#ffb347", text: "Keep your eyes open for bribes. Once a round (hold B), send the inspectors an anonymous tip about a player, true or false. If an inspector catches someone you tipped about, you win when the game ends, whoever else wins. Bribe like everyone else so nobody suspects you. Careful: anyone can call out the snitch once a game." },
     undercover: { name: "UNDERCOVER", color: "#59c1ff", text: "You're working with the inspectors (they don't know who you are). Your bribes are marked. If the dealer pockets 3 of your marked bribes, the dealer is caught: you and the inspectors win on the spot. You also win whenever the inspectors win. Bribe often, but don't look too keen, or a smart dealer will refuse you." },
     regular: { name: "A REGULAR", color: "#59c1ff", text: "You're a regular: an honest player with no tricks. If the dealer shoots the cheater, you win with the house. At a table of 4 or more, somebody also has an ace up their sleeve: call out the gambler and, if you're right, you take half their money (wrong, and they take half of yours). One call a game." },
   };
