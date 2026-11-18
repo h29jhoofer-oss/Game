@@ -595,6 +595,8 @@
     const k = typeof forced === "number" ? Math.min(forced, room) : Math.floor(Math.random() * (Math.min(2, room) + 1));
     const rollers = others - k, pool = [...MOTIVES], cap = rollers >= 2 ? rollers - 1 : 1;
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    // The snitch usually comes out first, so it turns up more often than the other motives.
+    if (Math.random() < 0.75) { pool.splice(pool.indexOf("snitch"), 1); pool.push("snitch"); }
     let motives = [];
     for (let i = 0; i < rollers; i++) motives.push(pool.length && motives.length - motives.filter(m => m === "greedy").length < cap && Math.random() < 0.45 ? pool.pop() : "greedy");
     // Tests can fix the motives, or ask for one; normal play never sets these.
