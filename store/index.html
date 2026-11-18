@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UMET Store</title>
+<meta name="description" content="UMET: a demo online store for handmade ceramics, textiles and home goods.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="demo-bar" role="note">Demo store: nothing here is for sale and no payment is taken.</div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="logo" href="#" data-nav="home">UME<span>T</span></a>
+    <nav class="main-nav" aria-label="Categories">
+      <button data-cat="All">Shop all</button>
+      <button data-cat="Ceramics">Ceramics</button>
+      <button data-cat="Textiles">Textiles</button>
+      <button data-cat="Home">Home</button>
+    </nav>
+    <button class="cart-btn" id="cartBtn" aria-label="Open cart">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 7h12l-1.2 12.2a2 2 0 0 1-2 1.8H9.2a2 2 0 0 1-2-1.8L6 7Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 9V6a3 3 0 0 1 6 0v3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+      <span class="cart-count" id="cartCount">0</span>
+    </button>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="wrap hero-inner">
+      <div>
+        <p class="eyebrow">Small batch · Made by hand</p>
+        <h1>Everyday things,<br>made slowly.</h1>
+        <p class="lede">Stoneware, linen and wool from small workshops. Shipping is free on orders over $75.</p>
+        <a href="#shop" class="btn btn-primary">Shop the collection</a>
+      </div>
+      <div class="hero-art" id="heroArt" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <section class="perks wrap" aria-label="Store perks">
+    <div><strong>Free shipping</strong><span>on orders over $75</span></div>
+    <div><strong>30-day returns</strong><span>no questions asked</span></div>
+    <div><strong>Made by hand</strong><span>in small workshops</span></div>
+  </section>
+
+  <section id="shop" class="wrap shop">
+    <div class="shop-head">
+      <h2 id="shopTitle">Shop all</h2>
+      <div class="controls">
+        <label class="search">
+          <span class="sr-only">Search products</span>
+          <input type="search" id="search" placeholder="Search products">
+        </label>
+        <label>
+          <span class="sr-only">Sort products</span>
+          <select id="sort">
+            <option value="featured">Featured</option>
+            <option value="price-asc">Price: low to high</option>
+            <option value="price-desc">Price: high to low</option>
+            <option value="rating">Top rated</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="chips" id="chips" role="tablist" aria-label="Filter by category"></div>
+    <div class="grid" id="grid"></div>
+    <p class="empty" id="empty" hidden>No products match that search.</p>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p class="logo">UME<span>T</span></p>
+    <p>This is a practice store. The products, prices and reviews are made up.</p>
+  </div>
+</footer>
+
+<!-- Product detail -->
+<dialog class="modal" id="productModal" aria-labelledby="pmTitle">
+  <button class="close" data-close aria-label="Close">×</button>
+  <div class="pm" id="pmBody"></div>
+</dialog>
+
+<!-- Cart drawer -->
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" aria-label="Shopping cart" aria-hidden="true">
+  <div class="drawer-head">
+    <h2>Your cart</h2>
+    <button class="close" id="closeCart" aria-label="Close cart">×</button>
+  </div>
+  <div class="ship-meter" id="shipMeter"></div>
+  <ul class="cart-list" id="cartList"></ul>
+  <div class="drawer-foot" id="drawerFoot"></div>
+</aside>
+
+<!-- Checkout -->
+<dialog class="modal checkout" id="checkoutModal" aria-labelledby="coTitle">
+  <button class="close" data-close aria-label="Close">×</button>
+  <div id="coBody"></div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="products.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

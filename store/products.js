@@ -1,0 +1,88 @@
+// Product catalog for the UMET demo store.
+// Prices are in cents to avoid floating-point rounding errors.
+window.PRODUCTS = [
+  {
+    id: "morning-mug", name: "Speckled Morning Mug", category: "Ceramics", price: 2800,
+    shape: "mug", rating: 4.8, reviews: 214, badge: "Bestseller", stock: 40,
+    colors: [["Oat", "#e8dcc4"], ["Sage", "#a9b89a"], ["Ink", "#3b4a5c"]],
+    blurb: "A 12 oz stoneware mug with a thumb rest and a speckled glaze.",
+    details: ["12 oz / 350 ml", "Dishwasher & microwave safe", "Each one is wheel-thrown, so no two are identical"],
+  },
+  {
+    id: "ridge-vase", name: "Tall Ridge Vase", category: "Ceramics", price: 6400,
+    shape: "vase", rating: 4.9, reviews: 88, stock: 12,
+    colors: [["Clay", "#c98b6b"], ["Chalk", "#efeae0"], ["Moss", "#6f7f5a"]],
+    blurb: "A ribbed vase made for dried stems and big branches.",
+    details: ["30 cm tall", "Glazed inside so it holds water", "Unglazed matte outside"],
+  },
+  {
+    id: "nesting-bowls", name: "Nesting Bowls, Set of 3", category: "Ceramics", price: 7200,
+    shape: "bowls", rating: 4.7, reviews: 131, stock: 18,
+    colors: [["Oat", "#e8dcc4"], ["Sea", "#7fa3a8"]],
+    blurb: "Three bowls that stack together, for cereal, salad and snacks.",
+    details: ["Diameters 12, 16 and 20 cm", "Dishwasher safe", "Lead-free glaze"],
+  },
+  {
+    id: "dinner-plate", name: "Stoneware Dinner Plate", category: "Ceramics", price: 3400,
+    shape: "plate", rating: 4.6, reviews: 97, stock: 60,
+    colors: [["Chalk", "#efeae0"], ["Ink", "#3b4a5c"], ["Clay", "#c98b6b"]],
+    blurb: "A wide plate with a raw clay rim.",
+    details: ["27 cm across", "Oven safe up to 200 °C", "Sold one at a time"],
+  },
+  {
+    id: "bud-vases", name: "Bud Vase Trio", category: "Ceramics", price: 4500,
+    shape: "budvase", rating: 4.8, reviews: 63, badge: "New", stock: 3,
+    colors: [["Mixed", "#c98b6b"]],
+    blurb: "Three small vases for single stems. They look good lined up on a windowsill.",
+    details: ["8 to 12 cm tall", "Each glazed in a different color", "Gift box included"],
+  },
+  {
+    id: "waffle-throw", name: "Waffle Weave Throw", category: "Textiles", price: 12000,
+    shape: "blanket", rating: 4.9, reviews: 302, badge: "Bestseller", stock: 25,
+    colors: [["Oat", "#e3d5bb"], ["Rust", "#b5653f"], ["Slate", "#6b7a86"]],
+    blurb: "A heavy cotton throw that gets softer every time you wash it.",
+    details: ["130 × 170 cm", "100% organic cotton", "Machine wash cold"],
+  },
+  {
+    id: "tea-towels", name: "Linen Tea Towels, Set of 2", category: "Textiles", price: 2400,
+    shape: "towel", rating: 4.5, reviews: 76, stock: 80,
+    colors: [["Stripe", "#b5653f"], ["Check", "#3b4a5c"]],
+    blurb: "Stonewashed linen that absorbs well and dries quickly.",
+    details: ["50 × 70 cm each", "100% European flax linen", "Hanging loop"],
+  },
+  {
+    id: "market-tote", name: "Market Tote", category: "Textiles", price: 3800,
+    shape: "tote", rating: 4.7, reviews: 149, stock: 0,
+    colors: [["Natural", "#e3d5bb"], ["Black", "#2a2a2a"]],
+    blurb: "A heavy canvas tote with an inside pocket for your keys.",
+    details: ["40 × 38 × 12 cm", "16 oz cotton canvas", "Holds up to 15 kg"],
+  },
+  {
+    id: "wool-scarf", name: "Lambswool Scarf", category: "Textiles", price: 5800,
+    shape: "scarf", rating: 4.8, reviews: 54, stock: 9,
+    colors: [["Moss", "#6f7f5a"], ["Rust", "#b5653f"], ["Fog", "#b9bcc0"]],
+    blurb: "A brushed lambswool scarf woven at a small mill.",
+    details: ["180 × 30 cm", "100% lambswool", "Fringed ends"],
+  },
+  {
+    id: "soy-candle", name: "Fig & Cedar Candle", category: "Home", price: 2200,
+    shape: "candle", rating: 4.6, reviews: 188, stock: 50,
+    colors: [["Fig & Cedar", "#7c5a4a"], ["Sea Salt", "#7fa3a8"]],
+    blurb: "A hand-poured soy candle in a ceramic cup you can reuse when it's done.",
+    details: ["Burns for about 45 hours", "Cotton wick", "Reusable ceramic vessel"],
+  },
+  {
+    id: "taper-candles", name: "Beeswax Tapers, Pair", category: "Home", price: 1800,
+    shape: "tapers", rating: 4.7, reviews: 92, stock: 70,
+    colors: [["Honey", "#e2b25a"], ["Ivory", "#f1e8d2"]],
+    blurb: "Hand-dipped beeswax candles that burn clean and don't drip.",
+    details: ["25 cm tall", "Burns for about 10 hours each", "Pure beeswax"],
+  },
+  {
+    id: "serving-board", name: "Cedar Serving Board", category: "Home", price: 5600,
+    shape: "board", rating: 4.9, reviews: 41, badge: "New", stock: 14,
+    colors: [["Cedar", "#a8714a"]],
+    blurb: "A board carved from one piece of cedar, for cheese, bread and fruit.",
+    details: ["45 × 20 cm", "Finished with food-safe oil", "Hand wash only"],
+  },
+];
