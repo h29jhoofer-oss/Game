@@ -172,17 +172,54 @@
     else ink(g, SB[c[1]], x + (c[0] === "A" ? 5 : 7), y + (c[0] === "A" ? 11 : 12), col);
   }
   const CHIP = ["#e0403a", "#4a7ae0", "#3fae5a", "#8a4fd0", "#1a1626"];
+
+  // Round pixel chips, seen from a little above: a face with a lighter inlay and
+  // six edge stripes, then a darker rim underneath with stripes running down it.
+  // Each colour and size is drawn once, pixel by pixel, and cached.
+  const chipCache = {};
+  function chipShade(hex, f) {
+    const n = parseInt(hex.slice(1), 16), ch = [n >> 16, (n >> 8) & 255, n & 255];
+    const m = (c) => Math.max(0, Math.min(255, Math.round(f > 1 ? c + (255 - c) * (f - 1) : c * f)));
+    return `rgb(${ch.map(m).join(",")})`;
+  }
+  function chipSprite(col, big) {
+    const key = col + (big ? "B" : "s");
+    if (chipCache[key]) return chipCache[key];
+    const rx = big ? 5.5 : 4.2, ry = big ? 2.6 : 2.1, th = 2;
+    const W = Math.ceil(rx * 2) + 2, H = Math.ceil(ry * 2) + th + 2, cx = W / 2, cy = ry + 1;
+    const c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d");
+    const dark = col === "#1a1626", stripe = dark ? "#ffe066" : "#f4ecd6";
+    const kind = (x, y) => {
+      if (x < 0 || y < 0 || x >= W || y >= H) return null;
+      const px = x + 0.5, py = y + 0.5, dx = (px - cx) / rx, dy = (py - cy) / ry;
+      if (dx * dx + dy * dy <= 1) return "top";
+      if (Math.abs(dx) <= 1 && py > cy && py <= cy + th + ry * Math.sqrt(Math.max(0, 1 - dx * dx))) return "side";
+      return null;
+    };
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const k = kind(x, y), px = x + 0.5, py = y + 0.5, dx = (px - cx) / rx, dy = (py - cy) / ry;
+      let fill = null;
+      if (!k) { if (kind(x + 1, y) || kind(x - 1, y) || kind(x, y + 1) || kind(x, y - 1)) fill = "#120c18"; }
+      else if (k === "top") {
+        const d = Math.sqrt(dx * dx + dy * dy), a = (Math.atan2(dy, dx) + Math.PI) / (Math.PI / 3);
+        if (d > 0.6 && a % 1 < 0.38) fill = stripe;
+        else if (d < 0.42) fill = dark ? "#3a3350" : chipShade(col, 1.28);
+        else if (d < 0.5) fill = dark ? "#e0b040" : chipShade(col, 0.82);   // a thin ring round the inlay
+        else fill = dx < -0.2 && dy < 0 ? chipShade(col, dark ? 1.6 : 1.12) : col;
+      } else {
+        const below = !kind(x, y + 1);
+        fill = Math.abs(dx) < 0.12 || Math.abs(Math.abs(dx) - 0.62) < 0.12 ? chipShade(stripe === "#ffe066" ? "#ffe066" : "#f4ecd6", below ? 0.75 : 0.9) : chipShade(col, below ? 0.45 : 0.65);
+      }
+      if (fill) { g.fillStyle = fill; g.fillRect(x, y, 1, 1); }
+    }
+    return chipCache[key] = { img: c, w: W, cy: Math.round(cy), th };
+  }
+  function drawChip(g, x, y, col, big) { const s = chipSprite(col, big); g.drawImage(s.img, Math.round(x - s.w / 2), Math.round(y - s.cy)); }
   function chipStack(g, x, y, cols, t, seed) {
-    g.fillStyle = "rgba(0,0,0,0.35)"; g.fillRect(x + 1, y + 3, 11, 3);
-    cols.forEach((c, i) => {
-      const cy = y - i * 2;
-      g.fillStyle = "#000"; g.fillRect(x, cy, 11, 4); g.fillRect(x + 1, cy - 1, 9, 6);
-      g.fillStyle = CHIP[c]; g.fillRect(x + 1, cy, 9, 4);
-      g.fillStyle = c === 4 ? "#ffe066" : "#f4ecd6"; g.fillRect(x + 3, cy, 1, 3); g.fillRect(x + 7, cy, 1, 3);
-      g.fillStyle = "rgba(0,0,0,0.3)"; g.fillRect(x + 1, cy + 3, 9, 1);
-    });
-    const top = y - (cols.length - 1) * 2, k = Math.floor(t / 110 + seed * 7) % 30;
-    if (!REDUCED && k < 3) { g.fillStyle = "#fff"; g.fillRect(x + 2 + k * 3, top, 1, 1); }
+    g.fillStyle = "rgba(0,0,0,0.35)"; g.fillRect(x, y + 4, 12, 2);
+    cols.forEach((c, i) => drawChip(g, x + 5.5, y + 1 - i * 2, CHIP[c], true));
+    const top = y + 1 - (cols.length - 1) * 2, k = Math.floor(t / 110 + seed * 7) % 30;
+    if (!REDUCED && k < 3) { g.fillStyle = "#fff"; g.fillRect(x + 2 + k * 3, top - 1, 1, 1); }
   }
   let feltImg = null;
   function felt(arc = true) {

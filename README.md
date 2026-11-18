@@ -14,7 +14,8 @@ Old chess invite links (`index.html#g-CODE`) still open the chess game.
 - Everyone plays against the dealer. Bet $5 to $100, then **HIT**, **STAND**, **DOUBLE** or **SPLIT** (keys H, S, D, P; Space deals). Blackjack pays 3 to 2, the dealer draws to 17 and stands on all 17s, and the dealer peeks for blackjack when showing an ace or a ten. Four decks, reshuffled when the shoe runs low. Split any two cards of the same value into separate hands (up to 4, double after split allowed); split aces get one card each, and 21 on a split hand is not blackjack. No insurance.
 - Everyone starts with **$500** and there are no loans. A bot that runs out of money leaves the table; if you run out, you're done (online you can stay and watch) and START OVER deals a fresh table. Each player's bankroll sits beside their bet as a pile of chips.
 - Cards fly out of the shoe and flip over, the dealer's hidden card flips when it's their turn, chips are paid out or swept away, and old cards slide into the discard tray. Bots say what they're doing in speech bubbles.
-- **Cheater mode** switch (needs at least 3 players: you plus 2+ bots, or 3+ people online). Roles are dealt in secret each game:
+- **Table mode:** CLASSIC, CHEATER or BRIBES.
+- **Cheater mode** (needs at least 3 players: you plus 2+ bots, or 3+ people online). Roles are dealt in secret each game:
   - **Dealer**: sits in the dealer's spot and has a pistol lying left of the dealer's cards. Click it, then click a player's hand to shoot. One shot ends the game.
   - **Cheater**: once the starting hands are dealt, a private panel shows the next 3 cards in the shoe and the dealer's face-down card. Wins by reaching $1,000.
   - **Dealer at the cards**: a human dealer plays the house hand themselves once the players are done, with HIT, STAND, DOUBLE and SPLIT (keys H, S, D and P), and isn't bound by the draw-to-17 rule. DOUBLE takes one card and makes every bet on the table count twice (a doubled loss can cost more than the bet, never more than a player has; blackjacks still pay 3 to 2). SPLIT turns a pair into two house hands, and each player's hand plays half its bet against each one. Online, if the dealer runs out of time the house rule finishes the hand. Bot dealers still draw to 17.
@@ -29,6 +30,14 @@ Old chess invite links (`index.html#g-CODE`) still open the chess game.
   - Online, 3 to 6 people can play (the dealer counts as one, so up to 5 at the cards). With 3 the roles are a dealer, a cheater and a regular; with 4 or more a jester and a gambler join, then regulars (and the call-out box only appears when there is a gambler). Against bots you need at least 2. The host presses DEAL ROLES once at least 3 are seated; latecomers join as regulars until all 6 seats are taken. Each player's browser is only ever sent its own role and its own secrets (the cheater's and jester's peeks, a gambler's pocket).
 - Its own synthesised lounge music, plus card, chip and win sounds. Sound settings are shared with chess.
 - Online: the host's browser runs the table and never sends anyone the shoe or the dealer's face-down card. Players have 15 seconds to bet once someone has bet, and 25 seconds per turn (then they stand). Anyone who drops out can reopen the link to get their seat and chips back. A 7th visitor watches. The table has a chat.
+
+- **Bribes mode** (3 to 6 players; against bots you need at least 2). One player is the dealer, one is secretly an undercover **inspector**, and the rest are **high rollers**. Everyone's screen looks the same; hold B (or press and hold your own cards) to see your role.
+  - Anyone can **slip the dealer a bribe** ($10, $25 or $50) through a timing game: stop the sweeping marker in the gold zone (bigger bribes have a smaller zone). Fumble it and everyone sees the chips spill; the bribe doesn't go through.
+  - Only the dealer sees offers. **POCKET** one (another timing game; fumble it and everyone sees the dealer fumbling with their pockets) or **REFUSE** it (the chips go back). Unanswered offers go back at the end of the round.
+  - A pocketed bribe forgives that player's next losing hand: it quietly turns into a push.
+  - The dealer wins by pocketing **$300**. The inspector wins if the dealer pockets the inspector's own bribe, or by holding B and pressing **CATCH THE DEALER!** in a round when the dealer pocketed one (once a game: wrong, and the inspector's cover is blown). After 12 rounds, the richest high roller wins.
+  - Bots slip bribes, sometimes fumble, and a bot dealer weighs each offer; a bot inspector pounces on a fumble or a suspiciously forgiven loss.
+- **Chips** are drawn as round pixel chips (a face with an inlay and edge stripes, and a striped rim), stacked on the felt and on the bet buttons.
 
 ## Pixel Liar's Dice
 
