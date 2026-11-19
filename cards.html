@@ -525,7 +525,7 @@
     cheater: { name: "THE CHEATER", color: "#ff5e7a", text: "Once the hands are dealt, you can see the next 3 cards in the shoe and the dealer's face-down card. Reach $1,000 to win, without the dealer working out that it's you." },
     jester: { name: "THE JESTER", color: "#c98bff", text: "You win if the dealer shoots you. On your turn you can see the card you'd get if you hit, so use it to look suspiciously lucky: bet big, play boldly, act like the cheater." },
     gambler: { name: "THE GAMBLER", color: "#3fd0a0", text: "You have one ace up your sleeve. Once a game, on your turn, slip it into your hand in place of one of your cards. Careful: any player can call out the gambler. If they pick you, they take half your money and your ace. If the dealer shoots the cheater, you win with the house." },
-    inspector: { name: "THE INSPECTOR", color: "#c98bff", text: "You're undercover, and there may be another inspector at the table (or you may be the only one). Catch players bribing the dealer: hold B, MAKE A CATCH and name who bribed this round or last. Right: they pay you half their money. Wrong: they take half of yours and your cover is blown. Two catches and the inspectors win. If the dealer ever pockets YOUR bribe, you win on the spot. You can only make catches once one of your own bribes has been refused or returned. Anonymous letters may arrive (hold B to see and open them)... they could be lies. Beware the jester, who WANTS to be caught: name them and the catch is wasted." },
+    inspector: { name: "THE INSPECTOR", color: "#c98bff", text: "You're undercover, and there may be another inspector at the table (or you may be the only one). Catch players bribing the dealer: hold B, MAKE A CATCH and name who bribed this round or last. Right: they pay you half their money. Wrong: they take half of yours and your cover is blown. Two catches and the inspectors win. If the dealer ever pockets YOUR bribe, you win on the spot. You can only make catches once one of your own bribes has been refused or returned. Anonymous letters may arrive (an envelope appears on your table; click it to open)... they could be lies. Beware the jester, who WANTS to be caught: name them and the catch is wasted." },
     roller: { name: "A HIGH ROLLER", color: "#3fd0a0", text: "You're a high roller." },
     greedy: { name: "GREEDY", color: "#3fd0a0", text: "You're a high roller in it for the money. Click your chips to bribe the dealer for favours: PEEK at the hidden card, SWAP one of your cards, SHIELD your next loss, or JINX another player's next hand. Every bribe the dealer pockets is also a favour point, worth $50 at the end. After 12 rounds, if your score (money plus favour points) beats every other high roller, you win. Unless the dealer pockets $300 first, or the racket gets busted." },
     spiteful: { name: "SPITEFUL", color: "#ff5e7a", text: "You don't care about winning. You want everyone else broke. When the game ends, if someone at the table has gone broke or the other players average under $400, you win, whoever else wins. Buy JINXes to wreck their hands (a jinxed player is dealt a stiff hand, and a 10 if they hit it). Bribe like everyone else so nobody suspects you." },
@@ -1677,7 +1677,7 @@
       }
     }
   }
-  // ----- The snitch's letters (only an inspector ever sees them, while holding B) -----
+  // ----- The snitch's letters (only an inspector ever sees them) -----
   const pxPoly = (g, pts, col) => {
     g.fillStyle = col;
     const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
@@ -1728,7 +1728,7 @@
   function renderLetters(v) {
     if (v && v.gameNo !== letterGame) { lettersRead.clear(); letterGame = v.gameNo; $("letterCard").hidden = true; }
     const tips = myLetters(v), unread = tips.filter(t => !lettersRead.has(t.id)).length;
-    $("letterBtn").hidden = !(tips.length && showSecrets);
+    $("letterBtn").hidden = !(tips.length);
     $("letterCount").textContent = unread ? String(unread) : "";
     $("letterBtn").classList.toggle("unread", unread > 0);
     if (!tips.length) $("letterCard").hidden = true;
