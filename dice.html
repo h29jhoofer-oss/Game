@@ -160,6 +160,10 @@
     body.focus .wrap { grid-template-columns: minmax(0, 1fr); grid-template-areas: "board" "left"; }
     body.focus .side.left { max-height: none; }
   }
+  #knockBox { border-color: #ffe066; }
+  .knock { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; margin-top: 6px; }
+  .knock button { padding: 6px 8px; font-size: 9px; }
+  .kick { padding: 2px 6px; font-size: 8px; margin-left: 6px; }
 </style>
 <script src="vendor/peerjs.min.js"></script>
 </head>
@@ -202,6 +206,11 @@
       <div id="waitUI" class="muted" hidden></div>
       <button id="again" class="primary big" hidden>PLAY AGAIN</button>
       <button id="startGame" class="primary big" hidden>START GAME</button>
+    </div>
+    <div class="box" id="knockBox" hidden>
+      <h2>KNOCK KNOCK</h2>
+      <div class="muted">Only you can let people into your table.</div>
+      <div id="knocks"></div>
     </div>
     <div class="box" id="setup">
       <h2>NEW TABLE</h2>
@@ -951,18 +960,68 @@
     startHostPeer();
     updateUI();
   }
+  // ----- Who gets in: the host lets each newcomer in, or turns them away -----
+  // Nobody joins (or even watches) until the host says so. People the host has let in
+  // before get straight back in after a dropped connection; people turned away stay out.
+  const gate = { waiting: [], known: new Set(), banned: new Set() };
+  function gateLoad() { const g = store.get('dc-dice-gate-' + online.code) || {}; gate.waiting = []; gate.known = new Set(g.known || []); gate.banned = new Set(g.banned || []); renderKnocks(); }
+  function gateSave() { if (online.code) store.set('dc-dice-gate-' + online.code, { known: [...gate.known].slice(-60), banned: [...gate.banned].slice(-120) }); }
+  function gateKnock(conn, name, token, admit) {
+    conn.token = token;
+    if (token && gate.banned.has(token)) return gateDeny(conn, "turned");
+    if (token && gate.known.has(token)) return admit();
+    if (gate.waiting.some(w => w.conn === conn)) return;
+    gate.waiting.push({ conn, name: name || "SOMEONE", token, admit });
+    try { conn.send({ type: "waiting" }); } catch (_) {}
+    sfxSafe(SFX.join); renderKnocks();
+  }
+  function gateAnswer(conn, yes) {
+    const i = gate.waiting.findIndex(w => w.conn === conn); if (i < 0) return;
+    const w = gate.waiting.splice(i, 1)[0];
+    if (w.token) (yes ? gate.known : gate.banned).add(w.token);
+    gateSave();
+    if (!yes) gateDeny(w.conn, "turned"); else if (w.conn.open) w.admit();
+    renderKnocks();
+  }
+  function gateDeny(conn, why) { try { conn.send({ type: "denied", why }); } catch (_) {} setTimeout(() => { try { conn.close(); } catch (_) {} }, 500); }
+  function gateDrop(conn) { const n = gate.waiting.length; gate.waiting = gate.waiting.filter(w => w.conn !== conn); if (gate.waiting.length !== n) renderKnocks(); }
+  function gateBan(token) { if (token) { gate.banned.add(token); gate.known.delete(token); gateSave(); } }
+  function renderKnocks() {
+    const box = $("knockBox"), list = $("knocks"); if (!box) return;
+    if (online.seat !== "host") gate.waiting = [];
+    box.hidden = !gate.waiting.length;
+    list.replaceChildren();
+    for (const w of gate.waiting) {
+      const row = document.createElement("div"); row.className = "knock";
+      const t = document.createElement("span"); t.textContent = `${w.name} wants to join`;
+      const yes = document.createElement("button"); yes.className = "primary"; yes.textContent = "LET IN"; yes.onclick = () => gateAnswer(w.conn, true);
+      const no = document.createElement("button"); no.textContent = "TURN AWAY"; no.onclick = () => gateAnswer(w.conn, false);
+      row.append(t, yes, no); list.append(row);
+    }
+  }
+  // On the screen of someone joining: waiting at the door, or turned away.
+  function guestGateMsg(msg) {
+    if (msg.type === "waiting") { setMsg("gameMsg", "Knock knock... waiting for the host to let you in."); return true; }
+    if (msg.type === "denied") {
+      online.denied = true; $("reconnect").hidden = true;
+      setMsg("gameMsg", msg.why === "kicked" ? "The host removed you from the table." : "The host didn't let you in.", true);
+      return true;
+    }
+    return false;
+  }
   function startHostPeer() {
     const code = online.code;
+    gateLoad();
     setMsg("gameMsg", "Connecting to the match server...");
     const peer = new Peer(PREFIX + code, PEER_OPTS); online.peer = peer;
     peer.on("open", () => { online.retries = 0; setMsg("gameMsg", ""); updateUI(); });
     peer.on("connection", (conn) => {
-      conn.on("open", () => { if (online.peer !== peer) { conn.close(); return; } online.conns.push(conn); try { conn.send({ type: "chat-history", list: online.chat.slice(-60) }); } catch (_) {} });
+      conn.on("open", () => { if (online.peer !== peer) conn.close(); }); // they wait at the door until the host lets them in
       conn.on("data", (msg) => onHostMessage(conn, msg));
       conn.on("close", () => {
-        online.conns = online.conns.filter(c => c !== conn);
+        online.conns = online.conns.filter(c => c !== conn); gateDrop(conn);
         const id = conn.seatId; if (!id || !T) return;
-        const s = seatOf(id); if (!s) return;
+        const s = seatOf(id); if (!s || s.kicked) return;
         sysChat(`${s.name} left the table.`); tlog(`${s.name} stepped away.`);
         if (T.phase === "lobby" || T.phase === "over" || s.waiting) T.seats = T.seats.filter(x => x !== s);
         else { s.gone = true; if (T.turn === id) armTurn(s); }
@@ -979,31 +1038,53 @@
     });
   }
   const cleanName = (n) => (typeof n === "string" ? n : "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim().slice(0, 8);
+  // Seat someone the host has let in (or who is coming back to their own seat).
+  function admitGuest(conn, msg) {
+    conn.admitted = true;
+    if (!online.conns.includes(conn)) online.conns.push(conn);
+    try { conn.send({ type: "chat-history", list: online.chat.slice(-60) }); } catch (_) {}
+    const token = typeof msg.token === "string" ? msg.token.slice(0, 20) : "";
+    let s = token && T.seats.find(x => x.token === token);
+    if (s) { s.gone = false; s.name = cleanName(msg.name) || s.name; if (T.turn === s.id) armTurn(s); }
+    else if (T.seats.length < MAX_SEATS) {
+      s = makeSeat("p" + Math.random().toString(36).slice(2, 8), cleanName(msg.name) || "GUEST", false); s.token = token;
+      s.waiting = T.phase !== "lobby"; // joins in when the next game starts
+      T.seats.push(s);
+    }
+    if (s) {
+      conn.seatId = s.id;
+      for (const c of online.conns) if (c !== conn && c.seatId === s.id) { c.seatId = null; try { c.close(); } catch (_) {} }
+      try { conn.send({ type: "welcome", seat: s.id }); } catch (_) {}
+      sysChat(`${s.name} joined the table.`); sfxSafe(SFX.join); tlog(`${s.name} sits down.`);
+    } else try { conn.send({ type: "welcome", seat: null }); } catch (_) {}
+    commit();
+  }
   function onHostMessage(conn, msg) {
     if (!msg || typeof msg !== "object" || !T) return;
     if (msg.type === "hello") {
+      if (conn.knocked) return;
+      conn.knocked = true;
       const token = typeof msg.token === "string" ? msg.token.slice(0, 20) : "";
-      let s = token && T.seats.find(x => x.token === token);
-      if (s) { s.gone = false; s.name = cleanName(msg.name) || s.name; if (T.turn === s.id) armTurn(s); }
-      else if (T.seats.length < MAX_SEATS) {
-        s = makeSeat("p" + Math.random().toString(36).slice(2, 8), cleanName(msg.name) || "GUEST", false); s.token = token;
-        s.waiting = T.phase !== "lobby"; // joins in when the next game starts
-        T.seats.push(s);
-      }
-      if (s) {
-        conn.seatId = s.id;
-        for (const c of online.conns) if (c !== conn && c.seatId === s.id) { c.seatId = null; try { c.close(); } catch (_) {} }
-        try { conn.send({ type: "welcome", seat: s.id }); } catch (_) {}
-        sysChat(`${s.name} joined the table.`); sfxSafe(SFX.join); tlog(`${s.name} sits down.`);
-      } else try { conn.send({ type: "welcome", seat: null }); } catch (_) {}
-      commit();
-      return;
+      const seated = token && T.seats.find(x => x.token === token && !x.kicked);
+      if (seated && !gate.banned.has(token)) { conn.token = token; return admitGuest(conn, msg); }
+      return gateKnock(conn, cleanName(msg.name), token, () => admitGuest(conn, msg));
     }
     const id = conn.seatId; if (!id) return;
     if (msg.type === "bid") placeBid(id, msg.q, msg.f);
     else if (msg.type === "call") call(id, msg.kind);
     else if (msg.type === "load") useLoaded(id, msg.idx, msg.face);
     else if (msg.type === "chat") hostReceiveChat(id, msg.text);
+  }
+  // The host can remove anyone from the table; they can't come back to it.
+  function kickSeat(id) {
+    if (online.seat !== "host" || !T || id === "h") return;
+    const s = seatOf(id); if (!s || s.kicked) return;
+    s.kicked = true; gateBan(s.token);
+    for (const c of online.conns) if (c.seatId === id) { c.seatId = null; gateDeny(c, "kicked"); }
+    sysChat(`${s.name} was removed from the table.`); tlog(`${s.name} was shown the door.`);
+    if (T.phase === "lobby" || T.phase === "over" || s.waiting) T.seats = T.seats.filter(x => x !== s);
+    else { s.gone = true; if (T.turn === id) armTurn(s); }
+    commit();
   }
   function joinTable(code) {
     leaveOnline(false); clearTimers(); resetScreen(); T = null;
@@ -1028,13 +1109,15 @@
     conn.on("open", () => { clearTimeout(t); online.connected = true; online.connectedOnce = true; setMsg("gameMsg", ""); try { conn.send({ type: "hello", token: myToken(), name: myName() }); } catch (_) {} updateUI(); });
     conn.on("data", (msg) => {
       if (!msg || typeof msg !== "object" || online.hostConn !== conn) return;
-      if (msg.type === "welcome") { mySeat = msg.seat || null; if (!mySeat) setMsg("gameMsg", "The table is full. You're watching."); if (view) applyView(view); }
+      if (guestGateMsg(msg)) { updateUI(); return; }
+      if (msg.type === "welcome") { mySeat = msg.seat || null; setMsg("gameMsg", mySeat ? "" : "The table is full. You're watching."); if (view) applyView(view); }
       else if (msg.type === "state" && msg.state && Array.isArray(msg.state.seats)) applyView(msg.state);
       else if (msg.type === "chat-history" && Array.isArray(msg.list)) { online.chat = msg.list.filter(okChat).slice(-120); renderChat(); }
       else if (msg.type === "chat" && okChat(msg.msg)) addChat(msg.msg);
     });
     conn.on("close", () => {
       clearTimeout(t); if (online.hostConn !== conn) return;
+      if (online.denied) { online.connected = false; updateUI(); return; }
       online.connected = false; setMsg("gameMsg", "Lost the connection to the table. Press RECONNECT once the host is back.", true);
       sysChat("Connection lost."); $("reconnect").hidden = false; updateUI();
     });
@@ -1046,11 +1129,13 @@
   }
   function leaveOnline(toLocal = true) {
     if (online.peer) { try { online.peer.destroy(); } catch (_) {} }
-    Object.assign(online, { code: null, seat: null, peer: null, conns: [], hostConn: null, connected: false, connectedOnce: false, chat: [], retries: 0 });
+    Object.assign(online, { code: null, seat: null, peer: null, conns: [], hostConn: null, connected: false, connectedOnce: false, chat: [], retries: 0, denied: false });
+    renderKnocks();
     renderChat(); $("reconnect").hidden = true; document.body.classList.remove("focus");
     if (toLocal) { setHash(null); setMsg("gameMsg", ""); prefs.opp = "bot"; startLocal(); }
   }
   function renderOnline() {
+    renderKnocks();
     $("tableCode").textContent = (online.code || "").toUpperCase();
     $("shareLink").value = online.code ? tableLink(online.code) : "";
     $("shareBox").hidden = online.seat !== "host";
@@ -1059,6 +1144,7 @@
       const c = document.createElement("span"); c.className = "chip"; c.style.background = s.color;
       const n = document.createElement("span"); n.textContent = s.name + (s.id === mySeat ? " (you)" : "") + (s.id === "h" ? " - host" : "") + (s.gone ? " - away" : "");
       const ch = document.createElement("span"); ch.className = "muted"; ch.textContent = s.waiting ? "next" : s.count;
+      if (online.seat === "host" && s.id !== "h" && !s.gone) { const k = document.createElement("button"); k.className = "kick"; k.textContent = "REMOVE"; k.onclick = () => kickSeat(s.id); ch.append(k); }
       box.append(c, n, ch);
     }
     const canChat = !!mySeat && (online.seat === "host" || online.connected);

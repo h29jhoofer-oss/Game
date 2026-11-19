@@ -88,6 +88,8 @@ Open `index.html` in a browser and pick CHESS, or host the folder on GitHub Page
 
 Players connect directly browser to browser with [PeerJS](https://peerjs.com) (bundled in `vendor/`, MIT licensed). PeerJS's free public server only introduces the two browsers; moves never pass through it. The game creator's browser is the referee: it checks every move and sends the board to everyone. If the creator reloads, the game is restored from their browser's storage and the friend can press RECONNECT.
 
+**The host decides who gets in.** Opening a game or table link only knocks on the door: the host sees "NAME wants to join" with **LET IN** and **TURN AWAY**, and nobody plays, watches or reads the chat until they're let in. Someone the host let in gets straight back in after a dropped connection or reload; someone turned away is turned away automatically if they try again from the same tab. The host can also **REMOVE** anyone already at the table (REMOVE FRIEND in chess); they're turned away if they come back. The host's browser runs the game, so nobody else can let people in.
+
 Some strict school or work networks block direct browser connections. If a friend can't connect, try another network (e.g. a phone hotspot).
 
 ## Files

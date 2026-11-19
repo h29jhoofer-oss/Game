@@ -195,6 +195,10 @@
     14% { transform: translate(-50%, 0) scale(1); } 85% { opacity: 1; } 100% { transform: translate(-50%, 15%); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .bubble, .bubble.below { animation: none; } }
   .games button { text-align: left; }
+  #knockBox { border-color: #ffe066; }
+  .knock { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; margin-top: 6px; }
+  .knock button { padding: 6px 8px; font-size: 9px; }
+  .kick { padding: 2px 6px; font-size: 8px; margin-left: 6px; }
 </style>
 
 </head>
@@ -233,6 +237,11 @@
   </div></div>
   <div class="side left">
     <div class="box" id="status"></div>
+    <div class="box" id="knockBox" hidden>
+      <h2>KNOCK KNOCK</h2>
+      <div class="muted">Only you can let people into your game.</div>
+      <div id="knocks"></div>
+    </div>
     <div class="box" id="localFocusBox" hidden>
       <div class="row">
         <button id="focusUndo">UNDO MOVE</button>
@@ -301,7 +310,7 @@
       <h2>ONLINE GAME</h2>
       <div class="codeLine">Code: <span class="code" id="gameCode"></span></div>
       <div id="shareBox">
-        <div class="muted">Send this link to a friend. Keep this page open while you play: your browser hosts the game.</div>
+        <div class="muted">Send this link to a friend. Keep this page open while you play: your browser hosts the game. Nobody gets in unless you LET THEM IN.</div>
         <div class="row" style="margin-top:6px">
           <input id="shareLink" readonly aria-label="Game link" style="flex:1 1 10em;min-width:0;text-transform:none">
           <button id="copyLink">COPY LINK</button>
@@ -312,6 +321,7 @@
         <button id="resign" hidden>RESIGN</button>
         <button id="rematch" hidden>REMATCH</button>
         <button id="reconnect" hidden>RECONNECT</button>
+        <button id="kickGuest" hidden>REMOVE FRIEND</button>
         <button id="leave">LEAVE</button>
       </div>
       <div id="gameMsg" class="muted"></div>
@@ -1108,28 +1118,66 @@
     store.set("dc-host-" + code, online.data);
     startHostPeer();
   }
+  // ----- Who gets in: the host lets each newcomer in, or turns them away -----
+  // Nobody joins (or even watches) until the host says so. People the host has let in
+  // before get straight back in after a dropped connection; people turned away stay out.
+  const gate = { waiting: [], known: new Set(), banned: new Set() };
+  function gateLoad() { const g = store.get('dc-gate-' + online.code) || {}; gate.waiting = []; gate.known = new Set(g.known || []); gate.banned = new Set(g.banned || []); renderKnocks(); }
+  function gateSave() { if (online.code) store.set('dc-gate-' + online.code, { known: [...gate.known].slice(-60), banned: [...gate.banned].slice(-120) }); }
+  function gateKnock(conn, name, token, admit) {
+    conn.token = token;
+    if (token && gate.banned.has(token)) return gateDeny(conn, "turned");
+    if (token && gate.known.has(token)) return admit();
+    if (gate.waiting.some(w => w.conn === conn)) return;
+    gate.waiting.push({ conn, name: name || "SOMEONE", token, admit });
+    try { conn.send({ type: "waiting" }); } catch (_) {}
+    sfxSafe(SFX.join); renderKnocks();
+  }
+  function gateAnswer(conn, yes) {
+    const i = gate.waiting.findIndex(w => w.conn === conn); if (i < 0) return;
+    const w = gate.waiting.splice(i, 1)[0];
+    if (w.token) (yes ? gate.known : gate.banned).add(w.token);
+    gateSave();
+    if (!yes) gateDeny(w.conn, "turned"); else if (w.conn.open) w.admit();
+    renderKnocks();
+  }
+  function gateDeny(conn, why) { try { conn.send({ type: "denied", why }); } catch (_) {} setTimeout(() => { try { conn.close(); } catch (_) {} }, 500); }
+  function gateDrop(conn) { const n = gate.waiting.length; gate.waiting = gate.waiting.filter(w => w.conn !== conn); if (gate.waiting.length !== n) renderKnocks(); }
+  function gateBan(token) { if (token) { gate.banned.add(token); gate.known.delete(token); gateSave(); } }
+  function renderKnocks() {
+    const box = $("knockBox"), list = $("knocks"); if (!box) return;
+    if (online.seat !== "host") gate.waiting = [];
+    box.hidden = !gate.waiting.length;
+    list.replaceChildren();
+    for (const w of gate.waiting) {
+      const row = document.createElement("div"); row.className = "knock";
+      const t = document.createElement("span"); t.textContent = `${w.name} wants to join`;
+      const yes = document.createElement("button"); yes.className = "primary"; yes.textContent = "LET IN"; yes.onclick = () => gateAnswer(w.conn, true);
+      const no = document.createElement("button"); no.textContent = "TURN AWAY"; no.onclick = () => gateAnswer(w.conn, false);
+      row.append(t, yes, no); list.append(row);
+    }
+  }
+  // On the screen of someone joining: waiting at the door, or turned away.
+  function guestGateMsg(msg) {
+    if (msg.type === "waiting") { setMsg("gameMsg", "Knock knock... waiting for the host to let you in."); return true; }
+    if (msg.type === "denied") {
+      online.denied = true; $("reconnect").hidden = true;
+      setMsg("gameMsg", msg.why === "kicked" ? "The host removed you from the table." : "The host didn't let you in.", true);
+      return true;
+    }
+    return false;
+  }
   function startHostPeer() {
     const code = online.code;
+    gateLoad();
     setMsg("gameMsg", "Connecting to the match server...");
     const peer = new Peer(PREFIX + code, PEER_OPTS); online.peer = peer;
     peer.on("open", () => { online.ready = true; online.retries = 0; setMsg("gameMsg", ""); updateUI(); });
     peer.on("connection", (conn) => {
-      conn.on("open", () => {
-        if (online.peer !== peer) { conn.close(); return; }
-        online.conns.push(conn);
-        let seat = "spectator";
-        if (!online.guestConn || !online.guestConn.open) {
-          online.guestConn = conn; seat = "guest"; online.connected = true;
-          if (online.data.status === "waiting") online.data = { ...online.data, status: "playing" };
-          setMsg("gameMsg", "Your friend joined."); sfxSafe(SFX.join);
-        }
-        try { conn.send({ type: "welcome", seat }); conn.send({ type: "chat-history", list: online.chat.filter(m => m.from !== "sys") }); } catch (_) {}
-        if (seat === "guest") sysChat("Your friend joined.");
-        hostCommit(online.data);
-      });
+      conn.on("open", () => { if (online.peer !== peer) conn.close(); }); // they knock, then wait for the host
       conn.on("data", (msg) => onHostMessage(conn, msg));
       conn.on("close", () => {
-        online.conns = online.conns.filter(c => c !== conn);
+        online.conns = online.conns.filter(c => c !== conn); gateDrop(conn);
         if (conn === online.guestConn) {
           online.guestConn = null; online.connected = false;
           setMsg("gameMsg", "Your friend disconnected. They can open the link again to rejoin.");
@@ -1152,7 +1200,28 @@
       }
     });
   }
+  // Let in someone the host said yes to: the first one plays, anyone else watches.
+  function admitGuest(conn) {
+    if (!conn.open || online.conns.includes(conn)) return;
+    online.conns.push(conn);
+    let seat = "spectator";
+    if (!online.guestConn || !online.guestConn.open) {
+      online.guestConn = conn; seat = "guest"; online.connected = true;
+      if (online.data.status === "waiting") online.data = { ...online.data, status: "playing" };
+      setMsg("gameMsg", "Your friend joined."); sfxSafe(SFX.join);
+    }
+    try { conn.send({ type: "welcome", seat }); conn.send({ type: "chat-history", list: online.chat.filter(m => m.from !== "sys") }); } catch (_) {}
+    if (seat === "guest") sysChat("Your friend joined.");
+    hostCommit(online.data);
+  }
   function onHostMessage(conn, msg) {
+    if (msg && msg.type === "knock") {
+      if (conn.knocked || online.conns.includes(conn)) return;
+      conn.knocked = true;
+      const token = typeof msg.token === "string" ? msg.token.slice(0, 20) : "";
+      const name = (typeof msg.name === "string" ? msg.name : "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim().slice(0, 8);
+      return gateKnock(conn, name, token, () => admitGuest(conn));
+    }
     if (!msg || typeof msg !== "object" || conn !== online.guestConn) return; // spectators can't act
     if (msg.type === "chat") return hostReceiveChat(conn, msg);
     const st = online.data, gc = other(st.hostColor);
@@ -1217,9 +1286,11 @@
         $("reconnect").hidden = false;
       }
     }, 15000);
-    conn.on("open", () => { clearTimeout(t); online.connected = true; setMsg("gameMsg", ""); updateUI(); });
+    conn.on("open", () => { clearTimeout(t); online.connected = true; setMsg("gameMsg", ""); try { conn.send({ type: "knock", token: myToken(), name: myName() }); } catch (_) {} updateUI(); });
     conn.on("data", (msg) => {
       if (!msg || typeof msg !== "object" || online.hostConn !== conn) return;
+      if (guestGateMsg(msg)) { updateUI(); return; }
+      if (msg.type === "welcome") { setMsg("gameMsg", ""); }
       if (msg.type === "welcome") { online.seat = msg.seat === "guest" ? "guest" : "spectator"; updateUI(); }
       if (msg.type === "chat-history" && Array.isArray(msg.list)) {
         online.chat = msg.list.filter(m => m && (m.from === "w" || m.from === "b" || m.from === "sys")).map(m => ({ from: m.from, text: cleanText(m.text) })).slice(-CHAT_MAX);
@@ -1238,6 +1309,7 @@
       clearTimeout(t);
       if (online.hostConn !== conn) return;
       online.connected = false;
+      if (online.denied) { updateUI(); return; }
       setMsg("gameMsg", "Lost the connection to the host. Press RECONNECT once they're back.", true);
       sysChat("Connection lost.");
       $("reconnect").hidden = false;
@@ -1334,7 +1406,8 @@
   function leaveGame(toLocal = true) {
     if (online.peer) { try { online.peer.destroy(); } catch (_) {} }
     premove = null; preSel = null; aim = null; clearBubbles();
-    Object.assign(online, { code: null, seat: null, data: null, peer: null, conns: [], guestConn: null, hostConn: null, connected: false, ready: false, retries: 0, chat: [] });
+    Object.assign(online, { code: null, seat: null, data: null, peer: null, conns: [], guestConn: null, hostConn: null, connected: false, ready: false, retries: 0, chat: [], denied: false });
+    renderKnocks();
     renderChat();
     $("reconnect").hidden = true;
     if (toLocal) { mode = "local"; setHash(null); setMsg("gameMsg", ""); newLocalGame(); }
@@ -2410,7 +2483,22 @@
     if (sub) { const b = document.createElement("div"); b.textContent = sub; b.style.color = subErr ? "var(--bad)" : "var(--muted)"; el.append(b); }
   }
 
+  // Who's knocking: a tab-scoped token (so the host remembers you), and your name from the other games if you have one.
+  function myToken() {
+    let t = null; try { t = sessionStorage.getItem("dc-chess-token"); } catch (_) {}
+    if (!t) { t = Math.random().toString(36).slice(2, 14); try { sessionStorage.setItem("dc-chess-token", t); } catch (_) {} }
+    return t;
+  }
+  function myName() { for (const k of ["dc-cards", "dc-dice"]) { const p = store.get(k); if (p && typeof p.name === "string" && p.name.trim()) return p.name; } return "A FRIEND"; }
+  function kickGuest() {
+    const c = online.guestConn; if (online.seat !== "host" || !c) return;
+    gateBan(c.token); gateDeny(c, "kicked");
+    setTimeout(() => { if (online.seat === "host") setMsg("gameMsg", "You removed your friend. They can't come back in."); }, 900);
+  }
+  $("kickGuest").onclick = kickGuest;
   function renderPlayers() {
+    renderKnocks();
+    $("kickGuest").hidden = !(online.seat === "host" && online.guestConn && online.guestConn.open);
     const d = online.data, el = $("players");
     el.replaceChildren();
     if (!d) return;
