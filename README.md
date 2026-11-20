@@ -1,10 +1,11 @@
 # Pixel Parlor
 
-A cozy pixel-art game room. `index.html` is the home page: pick **CHESS**, **CARDS** or **DICE**.
+A cozy pixel-art game room. `index.html` is the home page: pick **CHESS**, **CARDS**, **DICE** or **ROULETTE**.
 
 - `chess.html`: **Devour Chess** (below).
 - `cards.html`: **Pixel Blackjack**.
 - `dice.html`: **Pixel Liar's Dice**.
+- `roulette.html`: **Pixel Russian Roulette**.
 
 Old chess invite links (`index.html#g-CODE`) still open the chess game.
 
@@ -62,6 +63,14 @@ Old chess invite links (`index.html#g-CODE`) still open the chess game.
 - Bots (PIP, MOSS, JUNIPER, TOFFEE, BRAMBLE) work out the odds from their own dice; careful ones call liar sooner, bluffers push their bids, and they use their loaded die now and then.
 - Online: the host's browser runs the table and only ever sends each player their own dice; everyone's dice are sent only when the cups come up. 30 seconds per turn (then the smallest raise is made for you). Keys: + and - for the count, 2 to 6 for the face, Enter bids, L liar, O spot on.
 
+## Pixel Russian Roulette
+
+- 2 to 6 players: you and **1 to 5 bots**, or an **online table** with up to 5 friends (the host lets each person in, as for the other games).
+- Everyone starts with **$500**. Each round everyone still alive antes **$25** into the pot; anyone who can't pay the ante is shot (out), and their last chips go to the pot.
+- Then an open auction on an **8-chamber revolver**: a random player opens with at least 1 bullet, and in turn each player raises to a higher number (up to 7) or passes. Passing takes you out of that round's auction, and a bid of 7 ends it.
+- The high bidder's bullets float into the cylinder, it spins and clicks shut, and the gun turns to point at them and fires. Survive and take the whole pot; die and you're out for the rest of the game, with the pot carried over to the next round.
+- The last player alive takes the pot.
+
 ## Devour Chess
 
 A pixel-art chess game with a twist: **you are what you eat.** When a piece captures another, it absorbs all of the victim's movement powers. A pawn that eats a knight can hop like a knight; a knight that eats a queen can slide like one too.
@@ -101,4 +110,4 @@ Some strict school or work networks block direct browser connections. If a frien
 ## Files
 
 - `index.html`: the game, for GitHub Pages or any static host.
-- `artifact.html` (home), `artifact-chess.html`, `artifact-cards.html` and `artifact-dice.html`: the claude.ai copy, built by `tools/build_artifact.py`. It has everything except online play (claude.ai pages can't connect browsers directly).
+- `artifact.html` (home), `artifact-chess.html`, `artifact-cards.html`, `artifact-dice.html` and `artifact-roulette.html`: the claude.ai copy, built by `tools/build_artifact.py`. It has everything except online play (claude.ai pages can't connect browsers directly).

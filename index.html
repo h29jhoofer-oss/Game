@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="A cozy pixel-art game room: Devour Chess, Blackjack and Liar's Dice, against bots or friends online.">
+<meta name="description" content="A cozy pixel-art game room: Devour Chess, Blackjack, Liar's Dice and Russian Roulette, against bots or friends online.">
 <title>Pixel Parlor</title>
 <script>
   // Old chess invite links (index.html#g-CODE) still open the chess game.
@@ -29,8 +29,8 @@
   }
   h1 { font-size: 22px; margin: 0; color: var(--accent); text-shadow: 3px 3px 0 var(--edge); letter-spacing: 2px; text-align: center; }
   .tag { color: var(--muted); margin: 0 0 18px; text-align: center; }
-  .games { display: grid; grid-template-columns: repeat(3, minmax(0, 300px)); gap: 24px; width: 100%; justify-content: center; }
-  @media (max-width: 1020px) { .games { grid-template-columns: repeat(2, minmax(0, 300px)); } }
+  .games { display: grid; grid-template-columns: repeat(4, minmax(0, 290px)); gap: 24px; width: 100%; justify-content: center; }
+  @media (max-width: 1300px) { .games { grid-template-columns: repeat(2, minmax(0, 300px)); } }
   @media (max-width: 640px) { .games { grid-template-columns: minmax(0, 340px); } }
   a.game {
     display: flex; flex-direction: column; gap: 10px; padding: 12px; text-decoration: none; color: var(--ink);
@@ -69,6 +69,12 @@
     <div class="name">DICE</div>
     <div class="desc">Liar's Dice: bid on what's under everyone's cups, call bluffs, and be the last one holding dice.</div>
     <span class="play">PLAY DICE</span>
+  </a>
+  <a class="game" href="roulette.html" id="goRoulette">
+    <canvas id="artRoulette" width="96" height="72" aria-hidden="true"></canvas>
+    <div class="name">ROULETTE</div>
+    <div class="desc">Russian Roulette: bid bullets, spin, pray. Survive the shot and the whole pot is yours.</div>
+    <span class="play">PLAY ROULETTE</span>
   </a>
 </div>
 <p class="foot">Every game works against bots, or online with a link you send to friends.</p>
@@ -323,8 +329,82 @@
     const k = REDUCED ? 0 : Math.floor(t / 260) % 6, bob = REDUCED ? 0 : Math.round(Math.abs(Math.sin(t / 260 * Math.PI)) * 3);
     die(g, 78, 55 - bob, [6, 2, 4, 3, 5, 1][k]);
   }
-  const cvC = document.getElementById("artChess").getContext("2d"), cvK = document.getElementById("artCards").getContext("2d"), cvD = document.getElementById("artDice").getContext("2d");
-  function frame(t) { drawChess(cvC, t); drawCards(cvK, t); drawDice(cvD, t); if (!REDUCED) setTimeout(() => requestAnimationFrame(frame), 120); }
+  // ----- Roulette tile: a revolver lying on dark felt, a few brass bullets
+  // scattered in front of it and a small stack of chips at the right.
+  let gunImg = null, gunShadow = null, darkFeltImg = null;
+  function revolver() { // side view, muzzle to the right; 80 x 46, outlined like the chess pieces
+    const W = 80, H = 46, c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d");
+    const R = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x + 1, y + 1, w, h); };
+    const HI = "#b8c2d6", ST = "#6e7891", MD = "#545d74", DK = "#3a4054";
+    // barrel, underlug and front sight
+    R(36, 8, 39, 1, HI); R(36, 9, 39, 2, ST); R(36, 11, 39, 2, MD); R(74, 9, 1, 4, DK);
+    R(40, 13, 31, 2, DK); R(40, 13, 31, 1, MD); R(70, 6, 3, 2, ST);
+    // top strap, recoil shield and the frame under the cylinder
+    R(14, 7, 23, 1, HI); R(14, 8, 23, 1, ST); R(14, 9, 6, 13, ST); R(14, 9, 1, 13, HI); R(12, 20, 9, 4, MD);
+    // cylinder with its flutes
+    R(20, 10, 16, 1, HI); R(20, 11, 16, 10, ST); R(20, 20, 16, 1, DK);
+    for (const fy of [12, 15, 18]) { R(21, fy, 14, 1, DK); R(21, fy + 1, 14, 1, MD); }
+    R(20, 11, 1, 9, MD); R(35, 11, 1, 9, MD);
+    // hammer, cocked back
+    R(8, 3, 3, 1, ST); R(8, 4, 5, 1, ST); R(10, 5, 5, 1, ST); R(12, 6, 3, 3, MD); R(8, 3, 3, 1, HI);
+    // trigger guard and trigger
+    R(18, 21, 2, 5, DK); R(31, 21, 2, 4, DK); R(20, 26, 11, 2, DK); R(19, 25, 2, 2, DK); R(30, 25, 2, 2, DK);
+    R(24, 21, 2, 3, ST); R(23, 24, 2, 1, ST);
+    // wooden grip, raked back, with checkering and a brass medallion
+    for (let j = 0; j < 20; j++) {
+      const y = 22 + j, x0 = 13 - Math.floor(j * 0.55), w = 9 + (j > 4 ? 1 : 0) - (j === 19 ? 2 : 0);
+      for (let i = 0; i < w; i++) {
+        const edge = i === 0 ? "#b06a3c" : i === w - 1 ? "#4a2814" : (i + j) % 3 === 0 && j > 2 && j < 17 ? "#5e331b" : i < 3 ? "#9a5a33" : "#7a4527";
+        R(x0 + i + (j === 19 ? 1 : 0), y, 1, 1, edge);
+      }
+    }
+    R(4, 41, 9, 1, MD); R(9, 30, 2, 2, "#e0b040"); R(9, 30, 1, 1, "#ffe066");
+    // outline: any empty pixel touching the gun goes near-black
+    const d = g.getImageData(0, 0, W + 2, H + 2), on = (x, y) => x >= 0 && y >= 0 && x < W + 2 && y < H + 2 && d.data[(y * (W + 2) + x) * 4 + 3] > 0;
+    g.fillStyle = "#120c18";
+    for (let y = 0; y < H + 2; y++) for (let x = 0; x < W + 2; x++) if (!on(x, y) && (on(x + 1, y) || on(x - 1, y) || on(x, y + 1) || on(x, y - 1))) g.fillRect(x, y, 1, 1);
+    g.fillStyle = "#0b0712"; g.fillRect(75, 11, 1, 2); // the bore
+    return c;
+  }
+  function bullet(g, x, y, up) { // brass cartridge with a copper tip, lying (pointing right) or standing
+    g.fillStyle = "rgba(0,0,0,0.38)";
+    if (up) {
+      g.fillRect(x, y + 9, 5, 1);
+      g.fillStyle = "#120c18"; g.fillRect(x, y + 2, 5, 7); g.fillRect(x + 1, y, 3, 2);
+      g.fillStyle = "#c8763e"; g.fillRect(x + 1, y + 1, 3, 2); g.fillStyle = "#e8a060"; g.fillRect(x + 2, y + 1, 1, 1);
+      g.fillStyle = "#e0b040"; g.fillRect(x + 1, y + 3, 3, 5); g.fillStyle = "#ffe066"; g.fillRect(x + 1, y + 3, 1, 5); g.fillStyle = "#a07a2e"; g.fillRect(x + 3, y + 3, 1, 5); g.fillRect(x + 1, y + 6, 3, 1);
+      return;
+    }
+    g.fillRect(x + 1, y + 4, 9, 1);
+    g.fillStyle = "#120c18"; g.fillRect(x, y, 8, 5); g.fillRect(x + 8, y + 1, 2, 3);
+    g.fillStyle = "#e0b040"; g.fillRect(x + 1, y + 1, 6, 3); g.fillStyle = "#ffe066"; g.fillRect(x + 1, y + 1, 6, 1); g.fillStyle = "#a07a2e"; g.fillRect(x + 1, y + 3, 6, 1); g.fillRect(x + 2, y + 1, 1, 3);
+    g.fillStyle = "#c8763e"; g.fillRect(x + 7, y + 1, 2, 3); g.fillStyle = "#e8a060"; g.fillRect(x + 7, y + 1, 2, 1);
+  }
+  function drawRoulette(g, t) {
+    if (!darkFeltImg) {
+      darkFeltImg = felt(false); const f = darkFeltImg.getContext("2d");
+      f.fillStyle = "rgba(10,6,14,0.38)"; f.fillRect(4, 4, 88, 64); // a dim back-room table
+      const grd = f.createRadialGradient(46, 34, 2, 46, 34, 44);
+      grd.addColorStop(0, "rgba(255,210,140,0.18)"); grd.addColorStop(1, "rgba(255,210,140,0)");
+      f.fillStyle = grd; f.fillRect(4, 4, 88, 64);
+      gunImg = revolver(); gunShadow = silhouette(gunImg);
+    }
+    g.imageSmoothingEnabled = false;
+    g.drawImage(darkFeltImg, 0, 0);
+    g.save(); g.globalAlpha = 0.4; g.drawImage(gunShadow, 9, 12); g.restore();
+    g.drawImage(gunImg, 6, 9);
+    // a glint runs along the barrel now and then
+    const k = Math.floor(t / 90) % 40;
+    if (!REDUCED && k < 8) { g.fillStyle = "#fffbe0"; g.fillRect(45 + k * 4, 18, 3, 1); }
+    // brass in front of the gun: two lying, two standing, and one rocking gently
+    bullet(g, 30, 58); bullet(g, 46, 61); bullet(g, 50, 50, true); bullet(g, 57, 52, true);
+    const rock = REDUCED ? 0 : Math.round(Math.sin(t / 300));
+    bullet(g, 14 + rock, 60);
+    // the stakes: a small stack of chips at the right
+    chipStack(g, 76, 52, [0, 4, 1, 0, 3], t, 5); chipStack(g, 65, 61, [2, 0], t, 6);
+  }
+  const cvC = document.getElementById("artChess").getContext("2d"), cvK = document.getElementById("artCards").getContext("2d"), cvD = document.getElementById("artDice").getContext("2d"), cvR = document.getElementById("artRoulette").getContext("2d");
+  function frame(t) { drawChess(cvC, t); drawCards(cvK, t); drawDice(cvD, t); drawRoulette(cvR, t); if (!REDUCED) setTimeout(() => requestAnimationFrame(frame), 120); }
   requestAnimationFrame(frame);
 })();
 </script>
