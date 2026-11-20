@@ -375,7 +375,7 @@
       <div class="field">
         <div class="label">TABLE MODE</div>
         <div class="seg" role="group" aria-label="Table mode">
-          <button data-tmode="classic">CLASSIC</button><button data-tmode="cheater">CHEATER</button><button data-tmode="bribes">BRIBES</button>
+          <button data-tmode="classic">CLASSIC</button><button data-tmode="cheater">CHEATER</button><button data-tmode="bribes">BRIBES</button><button data-tmode="marked">MARKED DECK</button>
         </div>
         <div class="muted" id="cheatHint"></div>
       </div>
@@ -446,6 +446,7 @@
       <p><b>SPLIT</b> turns two cards of the same value into two hands, each with its own bet (up to 4 hands). Split aces get one card each, and a split hand of 21 isn't blackjack.</p>
       <p>An ace plus a 10-value card is <b>blackjack</b> and pays 3 to 2. A win pays 1 to 1 and a tie (<b>push</b>) gives your bet back.</p>
       <p id="cheatRules" hidden><b>Cheater mode</b> (3 to 6 players): one player is the <b>dealer</b> and holds a pistol. Secretly, one player is the <b>cheater</b> (once the hands are dealt, sees the next 3 cards and the dealer's hidden card; wins at $1,000), and anyone else is an honest <b>regular</b>. With 4 or more, one is also the <b>jester</b> (on their turn, sees the card they'd get; wins if shot) and one the <b>gambler</b> (one ace in their pocket to swap into their hand once a game). You only see your own hand total, and your secrets stay hidden until you <b>hold B</b>, so nobody can read your role off your screen. Once a game, any player can <b>call out the gambler</b>: guess right and you take half their money; guess wrong and they take half of yours. The dealer plays the house hand themselves: hit, stand, <b>double</b> (one card, and every bet counts twice) or <b>split</b> a pair (each player's hand plays half its bet against each house hand). The dealer gets one shot: hit the cheater and the house, gambler and regulars win; hit the jester and the jester wins; hit anyone else and the cheater wins.</p>
+      <p id="markedRules" hidden><b>Marked Deck</b> (3 to 6 players): nobody has a fixed role. One player deals and holds the pistol; the seat moves on every <b>3 rounds</b>, and everyone keeps their own money. Each round, one random player is secretly <b>marked</b>: on their own turn, holding B shows them the card they'd get if they hit. Once a round, from the deal until the hands are settled, the dealer can shoot one player. Shoot the marked player and the dealer takes <b>3/4 of their money</b> (and they're revealed); shoot anyone else and they take <b>1/4 of the dealer's</b>. If nobody is caught, the marked player stays a secret. The house's wins and losses never touch the dealer's own chips. After <b>12 rounds</b>, the richest player wins.</p>
       <p id="bribeRules" hidden><b>Bribes mode</b> (3 to 6 players): one player is the <b>dealer</b>. Secretly, there may be <b>0, 1 or 2 undercover inspectors</b> (nobody is told how many); everyone else is a <b>high roller</b> with a secret motive: <b>greedy</b> (best score after 12 rounds), <b>spiteful</b> (wants everyone else broke), the <b>jester</b> (wants to get caught), the <b>snitch</b> (sends the inspectors anonymous letters) or <b>undercover</b> (bribes with marked chips to get the dealer caught). Click your own chips to slip the dealer a bribe for a favour: <b>PEEK</b> at the hidden card, <b>SWAP</b> a card, a <b>SHIELD</b> for your next loss, or a <b>JINX</b> on someone else's next hand. Each pocketed bribe is also a favour point ($50 at the end). Bribing and pocketing are timing games: fumble and the table hears it, but not who. Inspectors win with 2 catches (naming who bribed this round or last), or at once if the dealer pockets an inspector's bribe; 3 marked bribes pocketed also busts the dealer. The dealer wins at <b>$300</b> pocketed. Hold B to see your role.</p>
       <p>The dealer must hit until 17 and stands on every 17. Everyone starts with <b>$500</b>. Run out and you're done: bots leave the table, and you can start over.</p>
     </div>
@@ -541,13 +542,18 @@
     fool: { name: "THE JESTER", color: "#c98bff", text: "You WANT to get caught. If an inspector makes a catch naming you, you win when the game ends, whoever else wins (and their catch doesn't count). Look guilty: bribe, fumble, act shifty. But there may be no inspectors at all..." },
     snitch: { name: "THE SNITCH", color: "#ffb347", text: "Keep your eyes open for bribes. Once a round (hold B), send the inspectors an anonymous letter about a player, true or false. If an inspector catches someone you tipped about, you win when the game ends, whoever else wins. Bribe like everyone else so nobody suspects you. Careful: anyone can call out the snitch once a game." },
     undercover: { name: "UNDERCOVER", color: "#59c1ff", text: "You're working with the inspectors (they don't know who you are). Your bribes are marked. If the dealer pockets 3 of your marked bribes, the dealer is caught: you and the inspectors win on the spot. You also win whenever the inspectors win. Bribe often, but don't look too keen, or a smart dealer will refuse you." },
+    player: { name: "A PLAYER", color: "#59c1ff", text: "Marked Deck: nobody has a fixed role. Each round one random player is secretly marked: on their own turn, holding B shows them the card they'd get if they hit. Hold B at the start of each round to see if it's you. The dealer can shoot one player a round: catch the marked player and the dealer takes 3/4 of their money; shoot anyone else and they take 1/4 of the dealer's. The dealer seat moves every 3 rounds, and after 12 rounds the richest player wins." },
+    marked: { name: "MARKED", color: "#ff5e7a", text: "The deck is marked for you this round: on your turn, hold B to see the card you'd get if you hit. Use it, but don't look too lucky. If the dealer shoots you, they take 3/4 of your money." },
     regular: { name: "A REGULAR", color: "#59c1ff", text: "You're a regular: an honest player with no tricks. If the dealer shoots the cheater, you win with the house. At a table of 4 or more, somebody also has an ace up their sleeve: call out the gambler and, if you're right, you take half their money (wrong, and they take half of yours). One call a game." },
   };
   const isCheat = () => T && T.mode === "cheater";
   const isBribes = () => isCheat() && T.variant === "bribes";
+  const isMarked = () => isCheat() && T.variant === "marked";
+  const MARKED_ROUNDS = 12, MARKED_STINT = 3;
   const BRIBE_GOAL = 300, BRIBE_ROUNDS = 12, BRIBE_AMTS = [10, 25, 50];
   const BRIBE_DEALER_TEXT = "You run the table, and you're open to offers. Players slip you bribes for favours: pocket one and you keep the chips. Pocket $300 to win. But there may be 0, 1 or 2 undercover inspectors: pocket an inspector's bribe and you lose on the spot, and if they catch 2 of your bribers, you lose too. And one of the high rollers may be working undercover with marked chips: pocket 3 of their bribes and you're caught.";
-  const roleText = (role, variant) => variant === "bribes" && role === "dealer" ? BRIBE_DEALER_TEXT : ROLE_INFO[role].text;
+  const MARKED_DEALER_TEXT = "You deal for 3 rounds, then the seat moves on (your money goes with you). Each round one player is secretly marked and can see the card they'd get if they hit. You get ONE shot a round, from the deal until the hands are settled: shoot the marked player and you take 3/4 of their money; shoot anyone else and they take 1/4 of yours. You play the house hand yourself, but the house's wins and losses aren't your money. Richest after 12 rounds wins.";
+  const roleText = (role, variant) => variant === "bribes" && role === "dealer" ? BRIBE_DEALER_TEXT : variant === "marked" && role === "dealer" ? MARKED_DEALER_TEXT : ROLE_INFO[role].text;
   const hasGambler = () => !!T.roles && Object.values(T.roles).includes("gambler");
   const roleOf = (id) => (T.roles || {})[id];
   const participants = () => T.order.filter(s => !s.gone || T.kind === "local");
@@ -563,7 +569,7 @@
     for (let i = mix.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [mix[i], mix[j]] = [mix[j], mix[i]]; }
     // Tests can choose this screen's role; normal play never sets this.
     // 3 players: a dealer, a cheater and a regular. From 4: a jester and a gambler join; anyone else is a regular.
-    const cast = isBribes() ? bribeCast(mix.length) : (mix.length >= 4 ? ["dealer", "cheater", "jester", "gambler"] : ["dealer", "cheater"]).concat(Array(Math.max(0, mix.length - 4)).fill("regular"));
+    const cast = isMarked() ? ["dealer", ...Array(mix.length - 1).fill("player")] : isBribes() ? bribeCast(mix.length) : (mix.length >= 4 ? ["dealer", "cheater", "jester", "gambler"] : ["dealer", "cheater"]).concat(Array(Math.max(0, mix.length - 4)).fill("regular"));
     while (cast.length < mix.length) cast.push(isBribes() ? "greedy" : "regular");
     // Tests can choose this screen's role; normal play never sets this.
     const want = cast.indexOf(window.DEVOUR_TEST_ROLE), mi = mix.findIndex(x => x.id === mySeat);
@@ -575,10 +581,12 @@
     for (const x of all) { x.chips = START; x.broke = false; x.sus = 0; x.base = x.bot ? [5, 10, 20][x.style || 0] : 10; x.hands = []; x.state = "out"; x.result = null; x.ready = false; }
     T.over = null; T.shot = null; T.aim = null; T.round = 0; T.gameNo = (T.gameNo || 0) + 1; T.log = [];
     T.accused = {}; T.exposed = null; T.lastAccuse = null;
+    // Marked Deck: the dealer seat goes round the table in this order, starting with the first dealer.
+    T.rot = isMarked() ? mix.map(x => x.id) : null; T.marked = null; T.markedOut = null; T.shotRound = -1; T.lastShot = null;
     T.bribe = isBribes() ? { take: 0, pending: [], n: 0, event: null, revealed: {}, recent: [], tips: [], seen: [], catches: 0, dealerFumble: -1, marked: 0, foolCaught: [], tipN: 0 } : null;
     for (const x of all) Object.assign(x, { shield: false, peek: false, swap: false, favorPts: 0, bribeTried: false, tipRound: -1, tipHits: 0, silenced: false, bribeNote: null, jinxed: false });
     T.shoe = newShoe(); T.shuffled++;
-    tlog(isBribes() ? `New game. ${mix[0].name} is the dealer, and open to offers... but there may be undercover inspectors at this table.` : `New game. ${mix[0].name} is the dealer and has the pistol. Somebody at the table is cheating...`);
+    tlog(isMarked() ? `New game of Marked Deck. ${mix[0].name} deals first and holds the pistol. Every round, someone is marked...` : isBribes() ? `New game. ${mix[0].name} is the dealer, and open to offers... but there may be undercover inspectors at this table.` : `New game. ${mix[0].name} is the dealer and has the pistol. Somebody at the table is cheating...`);
     startBetting();
   }
   function endCheaterGame(winner, text, winnerId) {
@@ -590,7 +598,50 @@
     tlog(text);
     commit();
   }
+  // Marked Deck: one shot a round, from the deal until the hands are settled. The game carries on.
+  const markedCanShoot = () => isMarked() && !T.over && ["dealing", "playing", "dealer"].includes(T.phase) && T.shotRound !== T.round;
+  function markedShoot(shooterId, targetId) {
+    if (!markedCanShoot() || !T.dealerSeat || T.dealerSeat.id !== shooterId) return false;
+    const target = T.seats.find(x => x.id === targetId), D = T.dealerSeat; if (!target) return false;
+    T.shotRound = T.round; T.aim = null;
+    T.shot = { target: targetId, n: (T.shot ? T.shot.n : 0) + 1 };
+    const right = T.marked === targetId;
+    let amt;
+    if (right) { amt = Math.floor(target.chips * 0.75); target.chips -= amt; D.chips += amt; T.marked = null; T.markedOut = targetId; }
+    else { amt = Math.floor(D.chips * 0.25); D.chips -= amt; target.chips += amt; }
+    T.lastShot = { target: targetId, right, amt, n: (T.lastShot ? T.lastShot.n : 0) + 1 };
+    commit();
+    later(SHOT_HIT + 300, () => {
+      tlog(right ? `BANG! ${D.name} shot ${target.name}, who WAS marked. ${D.name} takes $${amt}.` : `BANG! ${D.name} shot ${target.name}... who wasn't marked. ${target.name} takes $${amt} of the dealer's money.`);
+      commit();
+    });
+    return true;
+  }
+  // Every 3 rounds the dealer seat moves to the next person round the table.
+  function rotateDealer() {
+    const all = participants(), rot = (T.rot || []).filter(id => all.some(x => x.id === id));
+    for (const x of all) if (!rot.includes(x.id)) rot.push(x.id);
+    T.rot = rot;
+    const cur = rot.indexOf(T.dealerSeat.id), next = all.find(x => x.id === rot[(cur + 1) % rot.length]);
+    if (!next || next === T.dealerSeat) return;
+    T.roles[T.dealerSeat.id] = "player"; T.roles[next.id] = "dealer";
+    T.dealerSeat = next;
+    T.seats = T.order.filter(x => all.includes(x) && x !== next);
+    for (const x of all) { x.hands = []; x.state = "out"; x.result = null; x.ready = false; }
+    T.dealerChange = { id: next.id, name: next.name, n: (T.dealerChange ? T.dealerChange.n : 0) + 1 };
+    tlog(`${next.name} takes over the deal, and the pistol.`);
+  }
+  // A bot dealer weighs up the round once everyone has played, and maybe fires.
+  function markedBotShot() {
+    if (!markedCanShoot() || !T.dealerSeat.bot) return false;
+    const ranked = T.seats.filter(x => x.state === "in").map(x => [(x.sus || 0) + Math.random() * 1.2, x]).sort((a, b) => b[0] - a[0]);
+    if (!ranked.length) return false;
+    const lastOfStint = T.round % MARKED_STINT === 0, [top] = ranked;
+    if (top[0] >= 1.9 || (lastOfStint && top[0] >= 1.0 && Math.random() < 0.5)) { T.aim = top[1].id; commit(); later(1100, () => markedShoot(T.dealerSeat.id, top[1].id)); return true; }
+    return false;
+  }
   function shoot(shooterId, targetId) {
+    if (isMarked()) return markedShoot(shooterId, targetId);
     if (!isCheat() || T.over || !T.dealerSeat || T.dealerSeat.id !== shooterId) return false;
     const target = T.seats.find(x => x.id === targetId); if (!target) return false;
     clearTimers();
@@ -786,6 +837,18 @@
   }
   // After each round: did the cheater make it, or go broke?
   function afterRound() {
+    if (isMarked()) {
+      const D = T.dealerSeat;
+      if (D && D.gone && T.kind !== "local") {
+        if (participants().length < CHEAT_MIN) return endCheaterGame("none", "Not enough players left. Nobody wins this one.");
+      }
+      if (T.round >= MARKED_ROUNDS) {
+        const all = participants(), best = Math.max(...all.map(x => x.chips)), top = all.filter(x => x.chips === best);
+        return endCheaterGame("marked", `Last call after ${MARKED_ROUNDS} rounds! ${top.map(x => x.name).join(" and ")} ${top.length > 1 ? "tie" : "wins"} with $${best}.`, top.map(x => x.id));
+      }
+      if (T.round % MARKED_STINT === 0 || (D && D.gone)) rotateDealer();
+      return startBetting();
+    }
     if (isBribes()) {
       const D = T.dealerSeat;
       if (D && D.gone) return endCheaterGame("none", `The dealer left the table. Nobody wins this one.`);
@@ -849,6 +912,7 @@
   function startBetting() {
     if (isCheat() && (T.over || !T.roles)) return;
     T.phase = "betting"; T.turn = null; T.dealerTurn = false; T.dealer = { cards: [], hidden: true }; T.deadline = 0; T.betTimer = false;
+    if (isMarked()) { T.marked = null; T.markedOut = null; T.shot = null; T.aim = null; }
     if (isBribes()) {
       for (const pb of T.bribe.pending) returnBribe(pb, `The dealer never took your $${pb.amount}. It slides back to you.`);
       T.bribe.pending = [];
@@ -876,7 +940,7 @@
       if (T.phase !== "betting") return;
       s.bet = botBet(s); s.ready = true; noteSus(s, s.bet >= 40 ? 0.35 : 0); commit(); maybeDeal();
     }));
-    if (isCheat() && T.dealerSeat && T.dealerSeat.bot) later(700, botDealerThink);
+    if (isCheat() && !isMarked() && T.dealerSeat && T.dealerSeat.bot) later(700, botDealerThink);
   }
   function botBet(s) {
     const pools = [[5, 5, 10, 10, 15], [10, 10, 15, 20, 25], [20, 25, 30, 40, 50]];
@@ -909,6 +973,7 @@
     const players = T.seats.filter(s => s.ready && !s.gone && s.bet >= BET_MIN && s.chips >= s.bet);
     if (!players.length) { T.betTimer = false; T.deadline = 0; commit(); return; }
     T.phase = "dealing"; T.round++; T.deadline = 0;
+    if (isMarked()) { T.marked = players[Math.floor(Math.random() * players.length)].id; T.markedOut = null; for (const x of T.seats) x.sus = 0; }
     for (const s of T.seats) s.state = players.includes(s) ? "in" : "out";
     for (const s of players) { s.chips -= s.bet; s.base = s.bet; s.cur = 0; s.hands = [{ cards: [], bet: s.bet, state: "play" }]; }
     if (T.shoe.length < 20 * (players.length + 1)) { T.shoe = newShoe(); T.shuffled++; tlog("The dealer shuffles a fresh shoe."); }
@@ -1039,6 +1104,12 @@
   // Bots play close to basic strategy; bold bots sometimes push their luck.
   function botDecide(s) {
     const hand = s.hands[s.cur], h = handInfo(hand.cards), up = cardVal(T.dealer.cards[0]), two = canDouble(s, hand);
+    if (isMarked() && T.marked === s.id && Math.random() < 0.45) {
+      const next = handInfo([...hand.cards, T.shoe[T.shoe.length - 1]]).total;
+      if (next > 21) return "stand";
+      if (two && next >= 19 && Math.random() < 0.5) return "double";
+      if (next > h.total && h.total < 20 && (h.total >= 12 || next >= 17)) return "hit";
+    }
     if (isCheat() && roleOf(s.id) === "cheater" && Math.random() < 0.8) {
       // Peeks at the next card... but not every time, or it would be too obvious.
       const next = handInfo([...hand.cards, T.shoe[T.shoe.length - 1]]).total;
@@ -1131,6 +1202,10 @@
     step();
   }
   function dealerPlay() {
+    if (isMarked() && T.dealerSeat && T.dealerSeat.bot && markedBotShot()) { later(SHOT_MS - 600, dealerPlayGo); return; }
+    dealerPlayGo();
+  }
+  function dealerPlayGo() {
     T.phase = "dealer"; T.dealer.hidden = false; commit();
     const live = T.seats.some(s => s.state === "in" && s.hands.some(h => h.state === "stand"));
     if (live && humanDealer() && handInfo(T.dealer.cards).total < 21) {
@@ -1205,17 +1280,19 @@
   }
   // What players are allowed to see: never the shoe or the dealer's face-down card.
   function sanitize(forId) {
-    const d = T.dealer, cheat = isCheat(), role = cheat ? roleOf(forId) : null;
+    const d = T.dealer, cheat = isCheat(), role = cheat ? (isMarked() && T.marked === forId ? "marked" : roleOf(forId)) : null;
     return {
       v: 2, kind: T.kind, mode: T.mode || "classic", phase: T.phase,
       myRole: role || null, gameNo: T.gameNo || 0, over: T.over || null, shot: T.shot || null, aim: T.aim || null, goal: CHEAT_GOAL,
-      dealerSeat: cheat && T.dealerSeat ? { id: T.dealerSeat.id, name: T.dealerSeat.name, color: T.dealerSeat.color, bot: T.dealerSeat.bot } : null,
+      dealerSeat: cheat && T.dealerSeat ? { id: T.dealerSeat.id, name: T.dealerSeat.name, color: T.dealerSeat.color, bot: T.dealerSeat.bot, chips: T.dealerSeat.chips } : null,
+      marked: isMarked() ? { canShoot: markedCanShoot(), out: T.markedOut || null, lastShot: T.lastShot || null, roundsLeft: Math.max(0, MARKED_ROUNDS - T.round + (T.phase === "betting" ? 0 : 1)),
+        stintLeft: MARKED_STINT - ((Math.max(1, T.round + (T.phase === "betting" ? 1 : 0)) - 1) % MARKED_STINT), dealerChange: T.dealerChange || null } : null,
       players: cheat ? participants().length : 0,
       // The cheater peeks at the next 3 cards and the dealer's hole card; the jester at the next card.
       // The cheater peeks only once the starting hands are dealt: the next 3 cards and the dealer's
       // hole card. The jester sees just the card they would get, on their own turn.
       peek: role === "cheater" && !T.over ? (T.phase === "playing" ? { next: T.shoe.slice(-3).reverse(), hole: d.hidden && d.cards[1] ? d.cards[1] : null } : { wait: true })
-        : role === "jester" && !T.over ? (T.phase === "playing" && T.turn === forId ? { next: T.shoe.slice(-1), hole: null, jester: true } : { wait: true, jester: true }) : null,
+        : (role === "jester" || role === "marked") && !T.over ? (T.phase === "playing" && T.turn === forId ? { next: T.shoe.slice(-1), hole: null, jester: true } : { wait: true, jester: true }) : null,
       variant: T.variant || null,
       bribe: isBribes() && T.bribe ? (() => {
         const me = seatOf(forId), dl = T.dealerSeat && T.dealerSeat.id === forId, cur = curRound(), mine = T.bribe.pending.find(pb => pb.from === forId);
@@ -1781,8 +1858,9 @@
     }
   }
   $("accuseBtn").onclick = () => setAccusing(!accusing);
+  const gunReady = (v) => !!v && iAmDealer(v) && !v.over && (v.variant === "marked" ? !!(v.marked && v.marked.canShoot) : !v.shot);
   function setAiming(on) {
-    aiming = on && iAmDealer(view) && !view.over && !view.shot; if (!aiming) aimAt = null;
+    aiming = on && gunReady(view); if (!aiming) aimAt = null;
     cv.classList.toggle("aiming", aiming);
     if (aiming) sfxSafe(SFX.cock);
     updateUI(); render();
@@ -1810,7 +1888,7 @@
   cv.addEventListener("click", (e) => {
     if (accusing && view) { const { x, y } = tableXY(e), id = seatAt(x, y); if (id && id !== mySeat) doAccuse(id); else setAccusing(false); return; }
     if (canBribeHere(view) && !heldFired) { const { x, y } = tableXY(e); if (onMyChips(x, y)) { bribeOpen = true; sfxSafe(SFX.chip); updateUI(); return; } }
-    if (!view || view.mode !== "cheater" || view.variant === "bribes" || !iAmDealer(view) || view.over || view.shot) return;
+    if (!view || view.mode !== "cheater" || view.variant === "bribes" || !gunReady(view)) return;
     const { x, y } = tableXY(e);
     if (!aiming) { if (Math.abs(x - GUN.x) <= 12 && Math.abs(y - GUN.y) <= 17) setAiming(true); return; }
     const id = seatAt(x, y);
@@ -1856,12 +1934,12 @@
     g.fillStyle = "#2f6148"; g.fillRect(0, 0, 104, 30);
     if (pk.wait) {
       g.fillStyle = "rgba(0,0,0,0.25)"; for (let i = 0; i < (pk.jester ? 1 : 3); i++) g.fillRect((pk.jester ? 44 : 3 + i * 19), 4, CW, CH);
-      $("peekHint").textContent = pk.jester ? "On your turn you'll see the card you'd get if you hit." : "You'll see the next 3 cards and the dealer's hidden card once the hands are dealt.";
+      $("peekHint").textContent = pk.jester ? (v.variant === "marked" ? "You're MARKED this round. " : "") + "On your turn you'll see the card you'd get if you hit." : "You'll see the next 3 cards and the dealer's hidden card once the hands are dealt.";
       return;
     }
     if (pk.jester) {
       pk.next.forEach((c) => g.drawImage(cardSprite(c), 44, 4));
-      $("peekHint").textContent = "The card you'll get if you hit. Use it to look suspiciously lucky.";
+      $("peekHint").textContent = v.variant === "marked" ? "The card you'll get if you hit. Don't look too lucky: the dealer has a pistol." : "The card you'll get if you hit. Use it to look suspiciously lucky.";
       return;
     }
     pk.next.forEach((c, i) => g.drawImage(cardSprite(c), 3 + i * 19, 4));
@@ -1909,10 +1987,10 @@
   function showOverCard(v) {
     const o = v.over, mine = v.myRole;
     const bribes = v.variant === "bribes";
-    const winners = bribes ? (o.winner === "dealer" ? ["dealer"] : o.winner === "inspector" ? ["inspector", "undercover"] : [])
+    const winners = v.variant === "marked" ? [] : bribes ? (o.winner === "dealer" ? ["dealer"] : o.winner === "inspector" ? ["inspector", "undercover"] : [])
       : o.winner === "dealer" ? ["dealer", "gambler", "regular"] : o.winner === "jester" ? ["jester"] : o.winner === "cheater" ? ["cheater"] : [];
     const youWin = winners.includes(mine) || (o.winnerIds || []).includes(mySeat);
-    $("overTitle").textContent = bribes ? (o.winner === "dealer" ? "THE DEALER GOT RICH!" : o.winner === "inspector" ? "BUSTED!" : o.winner === "roller" ? "LAST CALL!" : "GAME OVER")
+    $("overTitle").textContent = v.variant === "marked" ? "LAST CALL!" : bribes ? (o.winner === "dealer" ? "THE DEALER GOT RICH!" : o.winner === "inspector" ? "BUSTED!" : o.winner === "roller" ? "LAST CALL!" : "GAME OVER")
       : o.winner === "dealer" ? "CHEATER CAUGHT!" : o.winner === "jester" ? "THE JESTER WINS!" : o.winner === "cheater" ? "THE CHEATER WINS!" : "GAME OVER";
     $("overTitle").style.color = youWin ? "#ffe066" : "#ff5e7a";
     $("overText").textContent = o.text + (mine ? ` You were ${ROLE_INFO[mine].name.toLowerCase()}: ${youWin ? "you win!" : "you lose."}` : "");
@@ -1925,7 +2003,7 @@
       list.append(a, b);
     }
     const canRestart = mode === "local" || online.seat === "host";
-    $("overNew").hidden = !canRestart; $("overWait").hidden = canRestart;
+    $("overNew").hidden = !canRestart; $("overNew").textContent = v.variant === "marked" ? "NEW GAME" : "NEW GAME, NEW ROLES"; $("overWait").hidden = canRestart;
     $("roleCard").hidden = true; $("overCard").hidden = false;
     if (mine) sfxSafe(youWin ? SFX.blackjack : SFX.lose);
   }
@@ -2200,7 +2278,7 @@
       const ch = document.createElement("div"); ch.className = "ch"; ch.textContent = "$" + s.chips;
       el.append(nm, ch);
       // Roles are revealed when a cheater game ends (and you always know your own).
-      const r = v.over ? v.over.roles[s.id] : v.exposed === s.id ? (v.variant === "bribes" ? "snitch" : "gambler") : v.bribe && v.bribe.revealed[s.id] ? v.bribe.revealed[s.id] : s.id === mySeat && showSecrets ? v.myRole : null;
+      const r = v.over ? v.over.roles[s.id] : v.marked && v.marked.out === s.id ? "marked" : v.exposed === s.id ? (v.variant === "bribes" ? "snitch" : "gambler") : v.bribe && v.bribe.revealed[s.id] ? v.bribe.revealed[s.id] : s.id === mySeat && showSecrets ? v.myRole : null;
       if (r) { const d = document.createElement("div"); d.className = "role"; d.style.color = ROLE_INFO[r].color; d.textContent = ROLE_INFO[r].name.replace("THE ", "").replace("A ", ""); el.append(d); }
       const note = s.chips < BET_MIN && s.state === "out" ? "BROKE" : v.phase === "betting" && !s.ready ? "BETTING..." : v.phase !== "betting" && s.state === "out" ? "SITTING OUT" : "";
       if (note) { const d = document.createElement("div"); d.className = "muted"; d.textContent = note; el.append(d); }
@@ -2222,12 +2300,12 @@
       });
     });
     if (!v.dealer.cards.length && v.dealerSeat) {
-      const d = tagEl("dealer", "totalTag"); d.textContent = "DEALER: " + v.dealerSeat.name + (v.dealerSeat.id === mySeat ? " (YOU)" : "");
+      const d = tagEl("dealer", "totalTag"); d.textContent = "DEALER: " + v.dealerSeat.name + (v.dealerSeat.id === mySeat ? " (YOU)" : "") + (v.marked ? " $" + v.dealerSeat.chips : "");
       place(d, DEALER.x, DEALER.y + 2);
     }
     if (v.dealer.cards.length) {
       const d = tagEl("dealer", "totalTag" + (handInfo(v.dealer.cards).total > 21 ? " bust" : ""));
-      d.textContent = (v.dealerSeat ? v.dealerSeat.name + (v.dealerSeat.id === mySeat ? " (YOU)" : "") + ": " : "DEALER ") + (v.dealer.hidden ? handInfo([v.dealer.cards[0]]).total + " + ?" : v.dealer.cards2 ? `${handLabel(v.dealer.cards, true)} / ${handLabel(v.dealer.cards2, true)}` : handLabel(v.dealer.cards)) + (v.dealer.doubled ? " X2" : "");
+      d.textContent = (v.dealerSeat ? v.dealerSeat.name + (v.dealerSeat.id === mySeat ? " (YOU)" : "") + (v.marked ? " $" + v.dealerSeat.chips : "") + ": " : "DEALER ") + (v.dealer.hidden ? handInfo([v.dealer.cards[0]]).total + " + ?" : v.dealer.cards2 ? `${handLabel(v.dealer.cards, true)} / ${handLabel(v.dealer.cards2, true)}` : handLabel(v.dealer.cards)) + (v.dealer.doubled ? " X2" : "");
       place(d, DEALER.x, DEALER.y + 19);
     }
     for (const el of [...$("tags").children]) if (!keep.has(el.dataset.tag)) el.remove();
@@ -2268,6 +2346,13 @@
         sfxSafe(SFX.chips); if (la.right) sfxSafe(SFX.win);
       }
       if (v.shot && (!prev || !prev.shot || prev.shot.n !== v.shot.n)) { aiming = false; cv.classList.remove("aiming"); startShotFx(v.shot.target); }
+      const ms = v.marked && v.marked.lastShot, pms = prev && prev.marked && prev.marked.lastShot;
+      if (ms && prev && (!pms || pms.n !== ms.n)) {
+        const tg = v.seats.find(x => x.id === ms.target);
+        setTimeout(() => { toast(ms.right ? `${tg ? tg.name : "?"} WAS MARKED! -$${ms.amt}` : `WRONG! ${tg ? tg.name : "?"} +$${ms.amt}`, ms.right ? "" : "lose"); sfxSafe(SFX.chips); }, SHOT_HIT + 300);
+      }
+      const dc = v.marked && v.marked.dealerChange, pdc = prev && prev.marked && prev.marked.dealerChange;
+      if (dc && prev && (!pdc || pdc.n !== dc.n)) { toast(dc.id === mySeat ? "YOU'RE THE DEALER NOW" : `${dc.name} DEALS NOW`); if (dc.id === mySeat || (pdc ? false : prev.dealerSeat && prev.dealerSeat.id === mySeat)) sfxSafe(SFX.cock); }
       if (v.aim && (!prev || prev.aim !== v.aim)) sfxSafe(SFX.cock);
       if (v.over && (!prev || !prev.over)) setTimeout(() => { if (view && view.over) showOverCard(view); }, v.shot ? 400 : 300);
       if (!v.over) $("overCard").hidden = true;
@@ -2342,10 +2427,11 @@
     $("start").textContent = prefs.opp === "online" ? "CREATE ONLINE TABLE" : "START";
     $("setupHint").textContent = prefs.opp === "online" ? "You'll get a link for up to 5 friends." : `You and ${prefs.bots} bot${prefs.bots > 1 ? "s" : ""} against the dealer.`;
     for (const b of document.querySelectorAll("[data-tmode]")) b.setAttribute("aria-pressed", String(b.dataset.tmode === tmode()));
-    $("cheatHint").textContent = tmode() === "bribes" ? (prefs.opp === "online" ? "3 to 6 people (you plus 2 to 5 friends): a dealer who takes bribes, maybe some undercover inspectors, and high rollers with secret motives." : "You plus at least 2 bots. Your role is secret and random each game.") : prefs.cheater ? (prefs.opp === "online" ? "3 to 6 people (you plus 2 to 5 friends). With 3: a dealer, a cheater and a regular. With 4 or more, a jester and a gambler join, then more regulars." : "You plus at least 2 bots. Your role is secret and random each game.") : "Plain blackjack.";
+    $("cheatHint").textContent = tmode() === "marked" ? (prefs.opp === "online" ? "3 to 6 people (you plus 2 to 5 friends). Everyone takes a turn as the dealer, and anyone can be marked." : "You plus at least 2 bots. The dealer seat moves every 3 rounds.") : tmode() === "bribes" ? (prefs.opp === "online" ? "3 to 6 people (you plus 2 to 5 friends): a dealer who takes bribes, maybe some undercover inspectors, and high rollers with secret motives." : "You plus at least 2 bots. Your role is secret and random each game.") : prefs.cheater ? (prefs.opp === "online" ? "3 to 6 people (you plus 2 to 5 friends). With 3: a dealer, a cheater and a regular. With 4 or more, a jester and a gambler join, then more regulars." : "You plus at least 2 bots. Your role is secret and random each game.") : "Plain blackjack.";
     for (const b of document.querySelectorAll("[data-bots]")) b.disabled = !!prefs.cheater && +b.dataset.bots < 2;
-    $("cheatRules").hidden = view && view.mode === "cheater" ? view.variant === "bribes" : tmode() !== "cheater";
+    $("cheatRules").hidden = view && view.mode === "cheater" ? !!view.variant : tmode() !== "cheater";
     $("bribeRules").hidden = view && view.mode === "cheater" ? view.variant !== "bribes" : tmode() !== "bribes";
+    $("markedRules").hidden = view && view.mode === "cheater" ? view.variant !== "marked" : tmode() !== "marked";
     if (isOnline) renderOnline();
     const v = view;
     const me = v && v.seats.find(s => s.id === mySeat);
@@ -2373,10 +2459,13 @@
           $("dealerHint").textContent = (vd.split ? `House hand ${vd.cur + 1} of 2: ` : "You have ") + `${dh.soft && dh.total < 21 ? "soft " : ""}${dh.total}. Hit or stand on anything. DOUBLE takes one card and makes every bet count twice; SPLIT a pair and each player plays half their bet against each of your hands. Still in: ${stand.map(x => x.name).join(", ") || "nobody"}.`;
           $("dDouble").disabled = !canDealerDouble(vd); $("dSplit").disabled = !canDealerSplit(vd);
         }
-        $("gunHint").textContent = v.variant === "bribes" ? "" : v.shot ? "BANG." : aiming ? "Click a player's hand on the table to shoot. Click anywhere else to lower the pistol."
+        $("gunHint").textContent = v.variant === "bribes" ? "" : v.variant === "marked" ? (aiming ? "Click a player's hand on the table to shoot. Click anywhere else to lower the pistol."
+            : v.marked.canShoot ? "Someone is marked this round. Click the pistol on the table, then a player: right, you take 3/4 of their money; wrong, they take 1/4 of yours. One shot a round."
+            : v.shot ? "BANG. One shot a round." : "You can shoot once the cards are dealt.") : v.shot ? "BANG." : aiming ? "Click a player's hand on the table to shoot. Click anywhere else to lower the pistol."
           : v.dealerTurn ? "You can still shoot: click the pistol on the table." : "Click the pistol on the table to pick it up, then click a player to shoot. Watch for someone who seems to know what's coming. You have ONE shot. The cheater wins at $1,000.";
         const richest = v.seats.reduce((a, b) => (b.chips > a.chips ? b : a), v.seats[0] || { chips: 0, name: "" });
         if (v.dealerTurn && !aiming) setStatus("Your hand, dealer", v.left ? `${Math.ceil(v.left / 1000)}s left` : "Hit, stand, double or split");
+        else if (v.variant === "marked") setStatus(aiming ? "Taking aim..." : "You're the dealer", `$${v.dealerSeat.chips}. You deal ${v.marked.stintLeft} more round${v.marked.stintLeft === 1 ? "" : "s"} (this one included); ${v.marked.roundsLeft} left in the game.`);
         else if (v.variant === "bribes") setStatus("You're the dealer", `Pocketed $${v.bribe.take} of $${v.bribe.goal}. Catches against you: ${v.bribe.catches} of 2. ${v.bribe.roundsLeft} rounds left.`);
         else setStatus(aiming ? "Taking aim..." : "You're the dealer", `Richest: ${richest.name} $${richest.chips} of $${v.goal}`);
         return;
@@ -2410,7 +2499,9 @@
     if (v.mode === "cheater" && v.dealerTurn && !iAmDealer(v) && v.dealerSeat) setStatus("Dealer's turn", `${v.dealerSeat.name} is deciding...`, true);
     else if (v.mode === "cheater" && v.myRole && v.phase !== "playing") {
       const r = ROLE_INFO[v.myRole], mine = me ? `$${me.chips}` : "";
-      if (!showSecrets && v.myRole !== "dealer") setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : v.variant === "bribes" ? "Bribes mode" : "Cheater mode", v.variant === "bribes" ? "Click your chips to slip the dealer a bribe. Hold B (or your own cards) to see your secret role." : "Hold B (or your own cards) to see your secret role.");
+      if (v.variant === "marked" && v.myRole !== "dealer") setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : !showSecrets ? "Marked Deck" : v.myRole === "marked" ? "You're MARKED this round" : "You're clean this round",
+        !showSecrets ? `Round ${Math.min(MARKED_ROUNDS, v.round + (v.phase === "betting" ? 1 : 0))} of ${MARKED_ROUNDS}. Hold B (or your own cards) to see if you're marked.` : v.myRole === "marked" ? "On your turn, hold B to see the card you'd get if you hit." : "Not you this round. Who's playing too well?");
+      else if (!showSecrets && v.myRole !== "dealer") setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : v.variant === "bribes" ? "Bribes mode" : "Cheater mode", v.variant === "bribes" ? "Click your chips to slip the dealer a bribe. Hold B (or your own cards) to see your secret role." : "Hold B (or your own cards) to see your secret role.");
       else if (v.variant === "bribes") setStatus(v.myRole === "dealer" || v.myRole === "inspector" ? `You are ${r.name.toLowerCase()}` : `High roller: ${r.name.replace("THE ", "")}`, v.bribe.motive || `Pocketed $${v.bribe.take} of $${v.bribe.goal}.`);
       else setStatus(v.aim && v.aim === mySeat ? "The dealer is aiming at YOU" : `You are ${r.name.toLowerCase()}`, v.myRole === "cheater" ? `${mine} of $${v.goal}. Don't get caught.` : v.myRole === "jester" ? "You see the next card. Look guilty. Get shot." : v.myRole === "gambler" ? "You have an ace up your sleeve. Don't get called out." : v.myRole === "regular" ? "Help find the cheater. Call out the gambler." : "Find the cheater.");
     } else
@@ -2463,7 +2554,7 @@
     mode = "local"; mySeat = "me"; view = null;
     for (const k of Object.keys(handsVis)) delete handsVis[k];
     sweep = []; chipFx.length = 0; discardCount = 0; $("tags").replaceChildren(); $("bubbles").replaceChildren();
-    hideOverlays(); newLocalTable(prefs.bots, !!prefs.cheater, tmode() === "bribes" ? "bribes" : null);
+    hideOverlays(); newLocalTable(prefs.bots, !!prefs.cheater, ["bribes", "marked"].includes(tmode()) ? tmode() : null);
   }
   $("start").onclick = () => { if (prefs.opp === "online") { if (typeof Peer !== "undefined") hostTable(newCode(), true); } else startLocal(); };
 
@@ -2503,7 +2594,7 @@
       tlog("The table was reopened. Bets in play were returned.");
       startBetting();
     } else {
-      T = { kind: "online", mode: prefs.cheater ? "cheater" : "classic", variant: tmode() === "bribes" ? "bribes" : null, phase: "betting", round: 0, shoe: newShoe(), shuffled: 0, dealer: { cards: [], hidden: true }, seats: [], turn: null, log: [], deadline: 0, lastAct: null, turnSeq: 0 };
+      T = { kind: "online", mode: prefs.cheater ? "cheater" : "classic", variant: ["bribes", "marked"].includes(tmode()) ? tmode() : null, phase: "betting", round: 0, shoe: newShoe(), shuffled: 0, dealer: { cards: [], hidden: true }, seats: [], turn: null, log: [], deadline: 0, lastAct: null, turnSeq: 0 };
       T.seats.push(makeSeat("h", myName(), false)); T.order = [...T.seats];
       tlog(`${myName()} opened the table.`);
       if (isCheat()) newCheaterGame(); else startBetting();
@@ -2604,7 +2695,7 @@
       s = makeSeat(id, cleanName(msg.name) || "GUEST", false); s.token = token;
       // Seat newcomers to the left of everyone already playing.
       T.seats.push(s); if (T.order) T.order.push(s);
-      if (isCheat() && T.roles && !T.over) T.roles[s.id] = "regular"; // late arrivals are honest regulars
+      if (isCheat() && T.roles && !T.over) T.roles[s.id] = isMarked() ? "player" : "regular"; // late arrivals are honest regulars
       if (T.phase === "betting") s.bet = clamp(s.base, BET_MIN, s.chips);
     }
     if (s) {

@@ -14,7 +14,7 @@ Old chess invite links (`index.html#g-CODE`) still open the chess game.
 - Everyone plays against the dealer. Bet $5 to $100, then **HIT**, **STAND**, **DOUBLE** or **SPLIT** (keys H, S, D, P; Space deals). Blackjack pays 3 to 2, the dealer draws to 17 and stands on all 17s, and the dealer peeks for blackjack when showing an ace or a ten. Four decks, reshuffled when the shoe runs low. Split any two cards of the same value into separate hands (up to 4, double after split allowed); split aces get one card each, and 21 on a split hand is not blackjack. No insurance.
 - Everyone starts with **$500** and there are no loans. A bot that runs out of money leaves the table; if you run out, you're done (online you can stay and watch) and START OVER deals a fresh table. Each player's bankroll sits beside their bet as a pile of chips.
 - Cards fly out of the shoe and flip over, the dealer's hidden card flips when it's their turn, chips are paid out or swept away, and old cards slide into the discard tray. Bots say what they're doing in speech bubbles.
-- **Table mode:** CLASSIC, CHEATER or BRIBES.
+- **Table mode:** CLASSIC, CHEATER, BRIBES or MARKED DECK.
 - **Cheater mode** (needs at least 3 players: you plus 2+ bots, or 3+ people online). Roles are dealt in secret each game:
   - **Dealer**: sits in the dealer's spot and has a pistol lying left of the dealer's cards. Click it, then click a player's hand to shoot. One shot ends the game.
   - **Cheater**: once the starting hands are dealt, a private panel shows the next 3 cards in the shoe and the dealer's face-down card. Wins by reaching $1,000.
@@ -45,6 +45,12 @@ Old chess invite links (`index.html#g-CODE`) still open the chess game.
   - **The snitch** watches for bribes and, once a round (hold B), sends the inspectors an anonymous letter about any player, true or false. Only an inspector sees it: a pixel envelope appears on their table, and clicking it opens the letter. If a catch lands on someone they tipped about, the snitch wins too when the game ends. Anyone can **call out the snitch** once a game: right, they take half the snitch's money and silence them; wrong, the accused takes half of theirs.
   - **The dealer** wins by pocketing **$300**, but loses if they pocket an inspector's bribe, 3 marked bribes, or the inspectors make 2 catches.
   - Bots bribe for favours (and use a SWAP on a stiff hand), fumble now and then, take bribes or refuse known inspectors, act on tips, and occasionally take a stab at the snitch. A spiteful bot mostly buys JINXes on the richest player; a jester bot bribes often and fumbles on purpose; an undercover bot bribes often.
+- **Marked Deck mode** (3 to 6 players; against bots you need at least 2). Nobody has a fixed role.
+  - **The dealer seat rotates:** one player deals and holds the pistol for **3 rounds**, then the seat moves round the table. Everyone, the dealer included, starts with $500 and keeps their own money. The house's wins and losses never touch the dealer's chips; the dealer plays the house hand (hit, stand, double or split) but sits out of the betting.
+  - **One player is marked each round**, chosen at random as the cards are dealt. On their own turn, holding B (or pressing and holding their cards) shows them the card they'd get if they hit, the same peek the jester gets in Cheater mode. Everyone else holding B sees "You're clean this round".
+  - **One shot a round:** from the deal until the hands are settled, the dealer can pick up the pistol and shoot a player. Shoot the marked player and the dealer takes **3/4 of their money** and they're revealed; shoot anyone else and they take **1/4 of the dealer's money**. Either way the shot player keeps playing. If nobody is caught, the marked player is never revealed.
+  - After **12 rounds** the richest player wins (ties share the win).
+  - Bots: a marked bot uses its peek now and then, and a bot dealer fires when someone's play looks too lucky, more readily on the last round of its turn.
 - **Chips** are drawn as round pixel chips (a face with an inlay and edge stripes, and a striped rim), stacked on the felt and on the bet buttons.
 
 ## Pixel Liar's Dice
