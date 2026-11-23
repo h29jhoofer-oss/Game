@@ -70,6 +70,12 @@ Old chess invite links (`index.html#g-CODE`) still open the chess game.
 - Then an open auction on an **8-chamber revolver**: a random player opens with at least 1 bullet, and in turn each player raises to a higher number (up to 7) or passes. Passing takes you out of that round's auction, and a bid of 7 ends it.
 - The high bidder's bullets float into the cylinder, it spins and clicks shut, and the gun turns to point at them and fires. Survive and take the whole pot; die and you're out for the rest of the game, with the pot carried over to the next round.
 - The last player alive takes the pot.
+- **Table mode:** CLASSIC or CHEATER.
+- **Cheater mode** (3 to 6 players; against bots you need at least 2). One player is secretly **the cheater**; everyone's screen looks the same, and holding B (or pressing and holding your own seat) shows your role.
+  - The cheater has **3 blanks** a game. Before every shot there's a short pause while "the gun is being loaded", and during it the cheater (holding B) can slip blanks in place of real bullets, into anyone's shot. Blanks look exactly like bullets, and a blank under the hammer just goes *click*.
+  - **Call out the cheater:** once a game, during the ante or the auction, any player can accuse someone. Right: they take all the cheater's chips and the cheater faces a fully loaded gun. Wrong: they pay half their chips to the person they accused.
+  - If the cheater is the last one standing, they win; the game-over screen reveals who it was.
+  - A bot cheater rigs its own shots and bids more boldly while it has blanks; bots sometimes call out a suspiciously lucky survivor.
 
 ## Devour Chess
 

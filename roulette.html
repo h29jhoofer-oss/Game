@@ -180,6 +180,19 @@
   .seatTag.out { filter: grayscale(1); }
   .midTag.gold { color: var(--gold); }
   .toast { top: 18%; }
+  .overlayCard { position: absolute; left: 50%; top: 5%; transform: translateX(-50%); max-height: 92%; overflow-y: auto; width: min(88%, 400px); z-index: 4;
+    background: var(--panel); border: 3px solid var(--edge); box-shadow: 5px 5px 0 var(--edge); padding: 14px;
+    display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center; animation: cardDrop .5s steps(6) both; }
+  @keyframes cardDrop { 0% { transform: translate(-50%, -60%) scale(.7); } 70% { transform: translate(-50%, 4%) scale(1.04); } 100% { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) { .overlayCard { animation: none; } }
+  .roleName { font-size: 18px; letter-spacing: 1px; text-shadow: 3px 3px 0 var(--edge); }
+  .seatTag .role { font-size: 0.95em; }
+  #cheatBox { border-color: #ff5e7a; }
+  #accuseBox { border-color: #59c1ff; }
+  .suspects { display: flex; flex-wrap: wrap; gap: 6px; }
+  .suspects button { padding: 6px 8px; font-size: 9px; }
+  #rigBtns button { background: #ff5e7a; color: var(--bg); }
+  canvas#table.aiming { cursor: crosshair; }
 </style>
 <script src="vendor/peerjs.min.js"></script>
 </head>
@@ -193,6 +206,12 @@
     <div id="tags"></div>
     <div id="bubbles"></div>
     <div id="toast" class="toast" hidden role="status"></div>
+    <div id="roleCard" class="overlayCard" hidden role="dialog" aria-live="polite">
+      <div class="label">YOUR SECRET ROLE</div>
+      <div id="roleName" class="roleName"></div>
+      <div id="roleText" class="muted"></div>
+      <button id="roleOk" class="primary">GOT IT</button>
+    </div>
   </div></div>
   <div class="side left">
     <div class="box" id="actBox">
@@ -215,7 +234,18 @@
       <button id="again" class="primary big" hidden>PLAY AGAIN</button>
       <button id="startGame" class="primary big" hidden>START GAME</button>
     </div>
+    <div class="box" id="cheatBox" hidden>
+      <h2>THE CHEATER (SECRET)</h2>
+      <div class="muted" id="cheatHint"></div>
+      <div class="suspects" id="rigBtns"></div>
+    </div>
     <div class="box" id="status"></div>
+    <div class="box" id="accuseBox" hidden>
+      <h2>CALL OUT THE CHEATER</h2>
+      <div class="muted" id="accuseHint"></div>
+      <button id="accuseBtn" class="big" style="width:100%">CALL SOMEONE OUT</button>
+      <div class="suspects" id="accusees"></div>
+    </div>
     <div class="box" id="knockBox" hidden>
       <h2>KNOCK KNOCK</h2>
       <div class="muted">Only you can let people into your table.</div>
@@ -234,6 +264,12 @@
         <div class="label">HOW MANY BOTS</div>
         <div class="seg" role="group" aria-label="Number of bots">
           <button data-bots="1">1</button><button data-bots="2">2</button><button data-bots="3">3</button><button data-bots="4">4</button><button data-bots="5">5</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="label">TABLE MODE</div>
+        <div class="seg" role="group" aria-label="Table mode">
+          <button data-tmode="classic">CLASSIC</button><button data-tmode="cheater">CHEATER</button>
         </div>
       </div>
       <div class="field">
@@ -301,6 +337,7 @@
       <p><b>*Click*</b>: they survive and take the whole pot. <b>BANG</b>: they're out of the game, and the pot stays on the table for the next round.</p>
       <p>Can't pay the ante? You face a fully loaded gun.</p>
       <p>The <b>last one standing</b> takes the pot and wins.</p>
+      <p id="cheatRules" hidden><b>Cheater mode</b> (3 to 6 players): one player is secretly <b>the cheater</b>, with <b>3 blanks</b> a game. Before every shot there's a moment while the gun is loaded: the cheater can slip blanks in place of real bullets, into anyone's shot. Blanks look exactly like bullets, and a blank under the hammer just goes *click*. Hold <b>B</b> (or press and hold your own seat) to see your role. Once a game, anyone can <b>call out</b> the cheater between shots: right, and the cheater faces a fully loaded gun and you take all their chips; wrong, and you pay half your chips to the player you accused.</p>
     </div>
     <div class="box" id="log"></div>
   </div>
@@ -315,7 +352,7 @@
 
   // ---------- Settings (sound is shared with the other games) ----------
   const settings = { music: true, sfx: true, volume: 70, muted: false };
-  const prefs = { opp: "bot", bots: 3, name: "" };
+  const prefs = { opp: "bot", bots: 3, name: "", tmode: "classic" };
   try { const s = JSON.parse(localStorage.getItem("dc-settings")) || {}; for (const k of Object.keys(settings)) if (k in s) settings[k] = s[k]; } catch (_) {}
   try { Object.assign(prefs, JSON.parse(localStorage.getItem("dc-roul")) || {}); } catch (_) {}
   function saveSettings() {
@@ -328,6 +365,7 @@
   const START_CHIPS = 500, ANTE = 25, CHAMBERS = 8, MAX_BULLETS = 7, TURN_TIME = 30000, MIN_PLAYERS = 2, MAX_SEATS = 6;
   const LOAD_LEAD = 500, LOAD_EACH = 380, FLY_MS = 450, SPIN_MS = 1900, SHUT_MS = 450, AIM_MS = 2000, TURN_MS = 750, RESULT_MS = 3200;
   const loadMs = (b) => LOAD_LEAD + b * LOAD_EACH + FLY_MS + 150;
+  const RIG_MS = 3500, BLANKS = 3, CHEAT_MIN = 3;
   const bulletWord = (n) => `${n} bullet${n === 1 ? "" : "s"}`;
 
   // ---------- The table (run by the host's browser, or locally against bots) ----------
@@ -346,12 +384,15 @@
   const seatOf = (id) => T.seats.find(s => s.id === id);
   const alive = () => T.seats.filter(s => s.alive);
   function tlog(text) { T.log.unshift(text); T.log = T.log.slice(0, 60); }
-  const freshTable = (kind) => ({ kind, phase: "lobby", phaseN: 0, round: 0, game: 0, seats: [], pot: 0, turn: null, bid: null, starter: null, shot: null, broke: [], log: [], deadline: 0, turnSeq: 0, lastAct: null, winner: null, winPot: 0 });
+  const freshTable = (kind) => ({ kind, mode: prefs.tmode === "cheater" ? "cheater" : "classic", cheater: null, blanks: 0, accused: {}, exposed: null, lastAccuse: null, suspect: null, phase: "lobby", phaseN: 0, round: 0, game: 0, seats: [], pot: 0, turn: null, bid: null, starter: null, shot: null, broke: [], log: [], deadline: 0, turnSeq: 0, lastAct: null, winner: null, winPot: 0 });
   function setPhase(p) { T.phase = p; T.phaseN = (T.phaseN || 0) + 1; }
+  const isCheat = () => !!T && T.mode === "cheater";
+  const minPlayers = () => isCheat() ? CHEAT_MIN : MIN_PLAYERS;
 
   function newLocalTable(nBots) {
     clearTimers();
     T = freshTable("local");
+    if (isCheat()) nBots = Math.max(2, nBots);
     const bots = BOTS.slice(0, nBots), half = Math.ceil(nBots / 2);
     const order = [...bots.slice(0, half), "me", ...bots.slice(half)];
     for (const o of order) T.seats.push(o === "me" ? makeSeat("me", myName(), false) : makeSeat("bot-" + o.name, o.name, true, o.style));
@@ -361,12 +402,22 @@
   function newGame() {
     clearTimers();
     if (T.kind === "online") T.seats = T.seats.filter(s => !s.gone);
-    if (T.seats.length < MIN_PLAYERS) { setPhase("lobby"); T.turn = null; T.bid = null; T.shot = null; commit(); return; }
+    if (T.seats.length < minPlayers()) { setPhase("lobby"); T.turn = null; T.bid = null; T.shot = null; commit(); return; }
     for (const s of T.seats) Object.assign(s, { chips: START_CHIPS, alive: true, waiting: false, bid: null, passed: false });
     // Tests can set starting money; normal play never sets this.
     if (window.DEVOUR_TEST_CHIPS) for (const s of T.seats) if (window.DEVOUR_TEST_CHIPS[s.id] != null) s.chips = window.DEVOUR_TEST_CHIPS[s.id];
     T.pot = 0; T.winner = null; T.winPot = 0; T.game++; T.round = 0; T.shot = null; T.bid = null;
-    tlog(`New game: ${T.seats.length} players, $${START_CHIPS} each. The revolver holds ${CHAMBERS}.`);
+    // Cheater mode: one player, picked in secret, gets three blanks for the game.
+    T.cheater = null; T.blanks = 0; T.accused = {}; T.exposed = null; T.lastAccuse = null; T.suspect = null;
+    if (isCheat()) {
+      let pick = T.seats[Math.floor(Math.random() * T.seats.length)];
+      // Tests can choose this screen's role; normal play never sets this.
+      const want = window.DEVOUR_TEST_ROLE, me = T.seats.find(x => x.id === mySeat);
+      if (want === "cheater" && me) pick = me;
+      else if (want === "player" && me && pick === me) pick = T.seats.find(x => x !== me);
+      T.cheater = pick.id; T.blanks = BLANKS;
+    }
+    tlog(`New game: ${T.seats.length} players, $${START_CHIPS} each. The revolver holds ${CHAMBERS}.${isCheat() ? " Somebody at this table is cheating..." : ""}`);
     startRound();
   }
   function startRound() {
@@ -391,10 +442,19 @@
   }
   function startAuction() {
     const live = alive();
+    for (const s of T.seats) { s.bid = null; s.passed = false; }
     T.starter = live[Math.floor(Math.random() * live.length)].id;
     setPhase("auction"); T.bid = null;
     tlog(`${seatOf(T.starter).name} opens the bidding.`);
     setTurn(T.starter);
+    // Bots get suspicious of anyone who just survived a big bid.
+    if (isCheat() && T.suspect && !T.exposed) {
+      const sus = seatOf(T.suspect.id), p = 0.2 + 0.08 * (T.suspect.bullets - 4);
+      const bots = alive().filter(b => b.bot && b !== sus && !T.accused[b.id]);
+      const b = bots[Math.floor(Math.random() * bots.length)];
+      if (sus && sus.alive && b && Math.random() < p) later(1500 + Math.random() * 2500, () => accuse(b.id, sus.id));
+    }
+    T.suspect = null;
   }
   function setTurn(id) { T.turn = id; armTurn(seatOf(id)); commit(); }
   function armTurn(s) {
@@ -442,33 +502,90 @@
     startShot(s.id, T.bid.n, false);
     return true;
   }
-  // Load, spin, shut, aim, fire. Whether the chamber under the hammer is live is decided
-  // now, but nobody else's screen learns it until the gun goes off.
-  function startShot(id, bullets, broke) {
+  // Rig (cheater mode), load, spin, shut, aim, fire. Whether the chamber under the hammer is
+  // live is decided when loading starts, but nobody else's screen learns it until the gun goes off.
+  // exec: the cheater was caught and faces a fully loaded gun, no blanks allowed.
+  function startShot(id, bullets, broke, exec) {
     const ch = [...Array(CHAMBERS).keys()];
     for (let i = ch.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ch[i], ch[j]] = [ch[j], ch[i]]; }
-    let live = Math.random() < bullets / CHAMBERS;
-    if (typeof window.DEVOUR_TEST_LIVE === "boolean" && !broke) live = window.DEVOUR_TEST_LIVE; // tests only
-    T.shot = { id, bullets, broke: !!broke, loaded: ch.slice(0, bullets), spin: Math.random(), live, won: 0, n: (T.shot ? T.shot.n : 0) + 1 };
+    T.shot = { id, bullets, broke: !!broke, exec: !!exec, loaded: ch.slice(0, bullets), blanks: 0, rigged: false, spin: Math.random(), live: false, won: 0, n: (T.shot ? T.shot.n : 0) + 1 };
     T.turn = null; T.deadline = 0;
+    // In cheater mode every shot (but an execution) has the same pause while the gun is
+    // loaded, so its length gives nothing away. That's when the cheater can slip in blanks.
+    if (isCheat() && !exec) { setPhase("rig"); commit(); botRig(); later(RIG_MS, loadShot); }
+    else loadShot();
+  }
+  function loadShot() {
+    const sh = T.shot;
+    // The chamber under the hammer is uniform over all eight. The first `blanks` loaded
+    // chambers hold blanks: a dud just goes *click*, like an empty chamber.
+    let hit = Math.floor(Math.random() * CHAMBERS);
+    if (typeof window.DEVOUR_TEST_LIVE === "boolean" && !sh.broke && !sh.exec) { // tests only
+      const empty = [...Array(CHAMBERS).keys()].find(c => !sh.loaded.includes(c));
+      hit = window.DEVOUR_TEST_LIVE || empty == null ? sh.loaded[0] : empty;
+    }
+    const k = sh.loaded.indexOf(hit);
+    sh.live = sh.exec ? true : k >= sh.blanks;
     setPhase("load"); commit();
-    later(loadMs(bullets), () => {
+    later(loadMs(sh.bullets), () => {
       setPhase("spin"); commit();
       later(SPIN_MS, () => { setPhase("aim"); commit(); later(AIM_MS, fire); });
     });
+  }
+  // The cheater slips k blanks into this shot (anyone's), from their three a game.
+  function rig(id, k) {
+    const sh = T && T.shot, c = T && seatOf(id);
+    if (!isCheat() || T.phase !== "rig" || !sh || sh.rigged || sh.exec || id !== T.cheater || !c || !c.alive) return false;
+    k = Math.floor(+k);
+    if (!(k >= 1 && k <= Math.min(T.blanks, sh.bullets))) return false;
+    sh.blanks = k; sh.rigged = true; T.blanks -= k;
+    commit(); return true;
+  }
+  // A bot cheater rigs its own shots: all its blanks on a big one, about half the bullets otherwise.
+  function botRig() {
+    const c = T.cheater && seatOf(T.cheater), sh = T.shot;
+    if (!c || !c.bot || !c.alive || !T.blanks || !sh || sh.id !== c.id) return;
+    const k = sh.broke || sh.bullets >= 5 ? Math.min(T.blanks, sh.bullets) : Math.min(T.blanks, Math.max(1, Math.ceil(sh.bullets / 2)));
+    later(500 + Math.random() * 1800, () => rig(c.id, k));
+  }
+  // Calling out the cheater: once a game each, between shots. Right: the cheater's chips are
+  // yours and they face a fully loaded gun. Wrong: half your chips go to the one you accused.
+  function accuse(id, targetId) {
+    if (!isCheat() || !["ante", "auction"].includes(T.phase) || T.exposed) return false;
+    const a = seatOf(id), t = seatOf(targetId);
+    if (!a || !t || a === t || !a.alive || !t.alive || T.accused[id]) return false;
+    T.accused[id] = true;
+    const right = targetId === T.cheater, k = (T.lastAccuse ? T.lastAccuse.k : 0) + 1;
+    if (right) {
+      const amt = t.chips; a.chips += amt; t.chips = 0;
+      T.exposed = targetId; T.lastAccuse = { by: id, target: targetId, right, amt, k };
+      tlog(`${a.name} calls out ${t.name}... and ${t.name} IS the cheater! ${a.name} takes their $${amt}, and ${t.name} faces a fully loaded gun.`);
+      clearTimers(); T.turn = null; T.deadline = 0; T.turnSeq++;
+      for (const s of T.seats) { s.bid = null; s.passed = false; }
+      T.bid = null;
+      startShot(targetId, CHAMBERS, false, true);
+      return true;
+    }
+    const amt = Math.floor(a.chips / 2); a.chips -= amt; t.chips += amt;
+    T.lastAccuse = { by: id, target: targetId, right, amt, k };
+    tlog(`${a.name} calls out ${t.name} as the cheater... wrong! ${t.name} takes half of ${a.name}'s money ($${amt}).`);
+    commit(); return true;
   }
   function fire() {
     const sh = T.shot, s = seatOf(sh.id);
     setPhase("result");
     if (!s) { commit(); later(RESULT_MS, afterShot); return; }
     if (sh.live) { s.alive = false; tlog(`BANG! ${s.name} is out.${T.pot ? ` The $${T.pot} pot stays on the table.` : ""}`); }
-    else { sh.won = T.pot; s.chips += T.pot; tlog(`*click* ${s.name} survives ${bulletWord(sh.bullets)} and takes the $${T.pot} pot!`); T.pot = 0; }
+    else {
+      sh.won = T.pot; s.chips += T.pot; tlog(`*click* ${s.name} survives ${bulletWord(sh.bullets)} and takes the $${T.pot} pot!`); T.pot = 0;
+      if (isCheat() && !sh.broke && sh.bullets >= 4) T.suspect = { id: s.id, bullets: sh.bullets };
+    }
     commit();
     later(RESULT_MS, afterShot);
   }
   function afterShot() {
     if (alive().length <= 1) return endGame();
-    if (T.shot && T.shot.broke) return nextBroke();
+    if (T.shot && (T.shot.broke || T.shot.exec)) return nextBroke();
     startRound();
   }
   function endGame() {
@@ -477,12 +594,14 @@
     setPhase("over"); T.turn = null; T.shot = null; T.bid = null; T.deadline = 0; T.winner = w ? w.id : null; T.winPot = T.pot;
     if (w) { w.chips += T.pot; tlog(`${w.name} is the last one standing and takes the $${T.pot} pot!`); }
     else tlog("Nobody's left standing.");
+    if (isCheat() && seatOf(T.cheater)) tlog(w && w.id === T.cheater ? `${w.name} was the CHEATER, and got away with it!` : `${seatOf(T.cheater).name} was the cheater.`);
     T.pot = 0;
     commit();
   }
   // After the host's page reloads: pick up where the table left off.
   function resumeTable() {
-    if (["load", "spin", "aim"].includes(T.phase) && T.shot) { setPhase("aim"); commit(); later(AIM_MS, fire); }
+    if (T.phase === "rig" && T.shot) loadShot();
+    else if (["load", "spin", "aim"].includes(T.phase) && T.shot) { setPhase("aim"); commit(); later(AIM_MS, fire); }
     else if (T.phase === "result") { commit(); later(1200, afterShot); }
     else if (T.phase === "ante") { commit(); later(1200, nextBroke); }
     else if (T.phase === "auction" && T.turn && seatOf(T.turn)) setTurn(T.turn);
@@ -494,7 +613,8 @@
   function botTurn(s) {
     const b = T.bid ? T.bid.n : 0;
     const poor = s.chips < ANTE * 2 ? 2 : s.chips < ANTE * 5 ? 1 : 0, greed = T.pot >= 150 ? 1 : 0;
-    const max = clamp([2, 3, 4][s.style] + poor + greed + (Math.random() < 0.3 ? 1 : 0) - (Math.random() < 0.25 ? 1 : 0), 1, MAX_BULLETS);
+    const nerve = isCheat() && s.id === T.cheater && T.blanks > 0 ? 2 : 0; // blanks in the pocket make you brave
+    const max = clamp([2, 3, 4][s.style] + poor + greed + nerve + (Math.random() < 0.3 ? 1 : 0) - (Math.random() < 0.25 ? 1 : 0), 1, MAX_BULLETS);
     const talk = (list, p) => { s.say = Math.random() < p ? list[Math.floor(Math.random() * list.length)] : null; };
     if (!b) { talk(["JUST ONE.", "EASY.", "LET'S GO."], 0.4); return raise(s.id, s.style === 2 && max >= 2 && Math.random() < 0.4 ? 2 : 1); }
     if (b + 1 <= max) {
@@ -512,7 +632,13 @@
     return {
       v: 1, kind: T.kind, phase: T.phase, phaseN: T.phaseN, round: T.round, game: T.game, turn: T.turn, bid: T.bid, starter: T.starter, winner: T.winner, winPot: T.winPot || 0,
       pot: T.pot, lastAct: T.lastAct, log: T.log.slice(0, 30), left: T.deadline ? Math.max(0, T.deadline - Date.now()) : 0,
-      shot: sh ? { id: sh.id, bullets: sh.bullets, broke: sh.broke, loaded: [...sh.loaded], spin: sh.spin, n: sh.n, live: T.phase === "result" ? sh.live : null, won: T.phase === "result" ? sh.won : 0 } : null,
+      shot: sh ? { id: sh.id, bullets: sh.bullets, broke: sh.broke, exec: !!sh.exec, loaded: [...sh.loaded], spin: sh.spin, n: sh.n, live: T.phase === "result" ? sh.live : null, won: T.phase === "result" ? sh.won : 0 } : null,
+      mode: T.mode || "classic", minPlayers: minPlayers(),
+      myRole: isCheat() && T.cheater && forId && seatOf(forId) && T.phase !== "lobby" ? (forId === T.cheater ? "cheater" : "player") : null,
+      // Only the cheater's own screen sees the blanks.
+      cheat: isCheat() && forId && forId === T.cheater && T.phase !== "lobby" ? { blanks: T.blanks, canRig: T.phase === "rig" && !!sh && !sh.rigged && !sh.exec && !!seatOf(forId) && seatOf(forId).alive, rigged: sh && sh.rigged ? sh.blanks : 0, max: sh ? Math.min(T.blanks, sh.bullets) : 0, shooter: sh ? sh.id : null } : null,
+      myAccused: !!(T.accused || {})[forId], exposed: T.exposed || null, lastAccuse: T.lastAccuse || null,
+      cheaterId: isCheat() && T.phase === "over" ? T.cheater : null,
       seats: T.seats.map(s => ({ id: s.id, name: s.name, bot: s.bot, color: s.color, chips: s.chips, alive: s.alive, bid: s.bid, passed: s.passed, waiting: s.waiting, gone: s.gone })),
     };
   }
@@ -536,10 +662,18 @@
     if (!view || view.phase !== "auction" || view.turn !== mySeat || !view.bid) return;
     if (remote()) sendToHost({ type: "pass" }); else pass(mySeat);
   }
+  function doRig(k) { sfxSafe(SFX.clink); if (remote()) sendToHost({ type: "rig", k }); else rig(mySeat, k); }
+  let accusing = false;
+  function doAccuse(id) {
+    if (!accusing || id === mySeat) return;
+    accusing = false; cv.classList.remove("aiming");
+    if (remote()) sendToHost({ type: "accuse", target: id }); else accuse(mySeat, id);
+  }
 
   // ---------- Drawing ----------
   const cv = $("table"), ctx = cv.getContext("2d");
-  const LW = 240, LH = 190, K = 4, F = 8, CX = 120, CY = 92, POT = { x: 160, y: 98 };
+  const LW = 240, LH = 190, K = 4, F = 8, CX = 120, CY = 92, GY = 82, POT = { x: 120, y: 114 };
+  const STACK_MAX = 6; // chips drawn per stack, so stacks never reach the gun or the tags
   const WOOD = { base: "#4a2c18", grainA: "#3f2513", grainB: "#55331d", hi: "#7a4f2e", lo: "#24140a", groove: "#1a0e06", lip: "#8f6038" };
   const mask = (g, rows, x, y, col, scale = 1) => { g.fillStyle = col; rows.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === "#") g.fillRect(x + i * scale, y + j * scale, scale, scale); }); };
   function grain(g, x, y, w, h, wd, vertical, rand) {
@@ -557,7 +691,7 @@
     }
   }
   const CHIP_COLS = { 5: "#e0403a", 10: "#4a7ae0", 25: "#3fae5a", 50: "#8a4fd0", 100: "#1a1626" };
-  function chipsFor(n) { const out = []; for (const v of [100, 50, 25, 10, 5]) while (n >= v && out.length < 9) { out.push(v); n -= v; } return out; }
+  function chipsFor(n) { const out = []; for (const v of [100, 50, 25, 10, 5]) while (n >= v && out.length < STACK_MAX) { out.push(v); n -= v; } return out; }
 
   // Round pixel chips, seen from a little above: a face with a lighter inlay and
   // six edge stripes, then a darker rim underneath with stripes running down it.
@@ -663,24 +797,24 @@
     g.fillStyle = WOOD.lo; g.fillRect(0, LH - 1, LW, 1); g.fillRect(LW - 1, 0, 1, LH);
     g.fillStyle = WOOD.groove; g.fillRect(3, 3, LW - 6, 1); g.fillRect(3, 3, 1, LH - 6); g.fillRect(3, LH - 4, LW - 6, 1); g.fillRect(LW - 4, 3, 1, LH - 6);
     g.fillStyle = WOOD.lip; g.fillRect(4, 4, LW - 8, 1); g.fillRect(4, 4, 1, LH - 8);
-    // a dark green baize under a single hanging lamp: brighter in the middle
-    const fr = rng(12);
+    // a plain dark green baize, a touch brighter under the lamp and darker toward the rail
+    const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+    const SHADES = ["#24503f", "#1f4636", "#1a3d30", "#153328"];
     for (let y = F; y < LH - F; y++) for (let x = F; x < LW - F; x++) {
-      const dx = (x - CX) / 120, dy = (y - CY) / 95, v = dx * dx + dy * dy, n2 = fr();
-      g.fillStyle = v > 0.75 && n2 < (v - 0.75) * 2.2 ? "#112a22" : v < 0.18 && n2 < 0.5 ? "#2c5c48" : n2 < 0.1 ? "#183a2e" : n2 < 0.18 ? "#24503f" : "#1f4636";
+      const dx = (x - CX) / 120, dy = (y - CY) / 95, v = clamp((dx * dx + dy * dy) * 2.4, 0, 2.999);
+      const band = Math.floor(v), frac = v - band;
+      g.fillStyle = SHADES[band + (frac * 16 > BAYER[y & 3][x & 3] ? 1 : 0)];
       g.fillRect(x, y, 1, 1);
     }
     g.fillStyle = WOOD.groove; g.fillRect(F - 2, F - 2, LW - 2 * F + 4, 2); g.fillRect(F - 2, F - 2, 2, LH - 2 * F + 4); g.fillRect(F - 2, LH - F, LW - 2 * F + 4, 2); g.fillRect(LW - F, F - 2, 2, LH - 2 * F + 4);
     g.fillStyle = "#c8963e"; g.fillRect(F - 1, F - 1, LW - 2 * F + 2, 1); g.fillRect(F - 1, F - 1, 1, LH - 2 * F + 2);
-    // a red ring in the middle where the revolver lies
-    for (let t = 0; t < 360; t += 2) { const a = t * Math.PI / 180; if (t % 12 < 8) { g.fillStyle = "rgba(255,94,122,0.45)"; g.fillRect(Math.round(CX + Math.cos(a) * 34), Math.round(CY + Math.sin(a) * 22), 1, 1); } }
     return bgImg = c;
   }
   // A small pixel skull for players who are out.
   const SKULL = [" ##### ", "#######", "#  #  #", "#######", " ## ## ", " # # # "];
   function disc(g, x, y, r, col) { g.fillStyle = col; for (let dy = -Math.ceil(r); dy <= Math.ceil(r); dy++) for (let dx = -Math.ceil(r); dx <= Math.ceil(r); dx++) if (dx * dx + dy * dy <= r * r) g.fillRect(Math.round(x) + dx, Math.round(y) + dy, 1, 1); }
   // The cylinder face-on: eight chambers, brass where a bullet sits.
-  const CYL = { x: CX, y: CY - 6, r: 21, ch: 12.5 };
+  const CYL = { x: CX, y: GY - 2, r: 21, ch: 12.5 };
   function drawCylinder(angle, scale, loadedNow, cx = CYL.x, cy = CYL.y) {
     const R = CYL.r * scale;
     disc(ctx, cx + 1, cy + 2, R + 1, "rgba(0,0,0,0.35)");
@@ -707,7 +841,7 @@
     rafId = 0;
     const dt = Math.min(0.05, (now - (lastFrame || now)) / 1000); lastFrame = now;
     draw(now, dt);
-    const anim = view && ["load", "spin", "aim", "result", "ante"].includes(view.phase);
+    const anim = view && ["rig", "load", "spin", "aim", "result", "ante"].includes(view.phase);
     const busy = particles.length || chipFx.length || anim || (view && view.turn);
     if (busy && !(REDUCED && !particles.length && !anim)) rafId = requestAnimationFrame(frame); else lastFrame = 0;
   }
@@ -730,10 +864,10 @@
     if (v.pot > 0) drawChipStack(POT.x, POT.y, v.pot);
     // the gun, or the open cylinder while it's being loaded and spun
     const target = sh ? seatPoint(v, sh.id) : null;
-    if (sh && (v.phase === "load" || (v.phase === "spin" && t < SPIN_MS - SHUT_MS))) {
+    if (sh && (v.phase === "rig" || v.phase === "load" || (v.phase === "spin" && t < SPIN_MS - SHUT_MS))) {
       const loadedNow = new Set();
       const flying = [];
-      sh.loaded.forEach((ch, k) => {
+      if (v.phase !== "rig") sh.loaded.forEach((ch, k) => {
         const t0 = LOAD_LEAD + k * LOAD_EACH, u = v.phase === "load" ? (t - t0) / FLY_MS : 1;
         if (u >= 1 || REDUCED) loadedNow.add(ch);
         else if (u > 0) flying.push([ch, ease(u)]);
@@ -752,7 +886,7 @@
       drawGunAt(Math.PI / 2, true, u, 0);
       if (u < 1) { ctx.globalAlpha = 1 - u; drawCylinder(0, 1 - u * 0.8, new Set(sh.loaded), CYL.x, CYL.y + u * 6); ctx.globalAlpha = 1; }
     } else if (sh && (v.phase === "aim" || v.phase === "result") && target) {
-      const want = Math.atan2(target.y - CY, target.x - CX);
+      const want = Math.atan2(target.y - GY, target.x - CX);
       if (v.phase === "aim") { const u = REDUCED ? 1 : ease(t / TURN_MS); gunAngle = Math.PI / 2 + angDiff(want, Math.PI / 2) * u; }
       else gunAngle = want;
       const shake = v.phase === "aim" && t > TURN_MS && !REDUCED ? Math.sin(now / 35) * 0.04 : 0;
@@ -768,7 +902,7 @@
       }
     } else {
       // resting on the felt, barrel pointing at nobody in particular
-      drawGunAt(Math.PI / 2 + 0.35, false, 1, 0);
+      drawGunAt(0.25, false, 1, 0);
     }
     // chips sliding to a survivor, then smoke and sparks
     for (let i = chipFx.length - 1; i >= 0; i--) {
@@ -786,12 +920,12 @@
     }
   }
   const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; };
-  const muzzle = (a) => ({ x: CX + Math.cos(a) * 17, y: CY + Math.sin(a) * 17 });
+  const muzzle = (a) => ({ x: CX + Math.cos(a) * 17, y: GY + Math.sin(a) * 17 });
   // The revolver, turned round its middle. Pointing left, it's flipped so it never hangs upside down.
   function drawGunAt(angle, cocked, alpha, kick) {
     const flip = Math.cos(angle) < 0;
     const put = (img, dx, dy, a) => {
-      ctx.save(); ctx.globalAlpha = a; ctx.translate(CX + dx - Math.cos(angle) * 4 * kick, CY + dy - Math.sin(angle) * 4 * kick); ctx.rotate(angle); if (flip) ctx.scale(1, -1);
+      ctx.save(); ctx.globalAlpha = a; ctx.translate(CX + dx - Math.cos(angle) * 4 * kick, GY + dy - Math.sin(angle) * 4 * kick); ctx.rotate(angle); if (flip) ctx.scale(1, -1);
       ctx.drawImage(img, -15, -7); ctx.restore();
     };
     put(gunSprite(cocked, true), 2, 3, 0.3 * alpha);
@@ -828,26 +962,31 @@
       ct.textContent = s.waiting ? "NEXT GAME" : v.phase === "lobby" ? "READY" : dead ? "OUT" : v.winner === s.id && v.phase === "over" ? `WINNER $${s.chips}` : `$${s.chips}`;
       el.append(ct);
       if (v.phase === "auction" && s.alive && (s.bid || s.passed)) { const lb = document.createElement("div"); lb.className = s.passed ? "ps" : "lb"; lb.textContent = s.passed ? "PASSED" : `BID ${s.bid}`; el.append(lb); }
-      place(el, p.x, p.up ? p.y - 17 : p.y + 17);
+      // the secret role on your own tag while B is held; an exposed (or revealed) cheater for all to see
+      const role = (v.cheaterId && v.cheaterId === s.id) || v.exposed === s.id ? "cheater" : s.id === mySeat && showSecrets && v.myRole ? v.myRole : null;
+      if (role) { const r = document.createElement("div"); r.className = "role"; r.style.color = role === "cheater" ? "#ff5e7a" : "#59c1ff"; r.textContent = role === "cheater" ? "CHEATER" : "PLAYER"; el.append(r); }
+      // up top the chips stack upward, so the tag sits above them; below, it sits under them
+      place(el, p.x, p.up ? p.y - 22 : p.y + 13);
     });
-    // the middle: the pot, the bid, or who's holding the gun
-    const potTag = tagEl("pot", "midTag"); potTag.textContent = `POT $${v.pot}`; if (v.phase !== "lobby") place(potTag, POT.x, POT.y + 13);
-    let mid = null;
-    if (v.phase === "auction") mid = v.bid ? `${(v.seats.find(s => s.id === v.bid.by) || {}).name || "?"}: ${v.bid.n} OF ${CHAMBERS}` : "OPENING BID...";
-    else if (sh && ["load", "spin", "aim"].includes(v.phase)) mid = `${(v.seats.find(s => s.id === sh.id) || {}).name || "?"}: ${sh.bullets} OF ${CHAMBERS}`;
-    else if (v.phase === "ante") mid = `ANTE $${ANTE}`;
-    if (mid) { const m = tagEl("mid", "midTag gold"); m.textContent = mid; place(m, CX, CY - 37); }
+    // one line in the middle, under the pot
+    const nameOf = (id) => (v.seats.find(s => s.id === id) || {}).name || "?";
+    let mid = null, gold = true;
+    if (v.phase === "over") { const w = v.seats.find(s => s.id === v.winner); mid = w ? `${w.name} WINS $${v.winPot}!` : "NOBODY WINS"; }
+    else if (v.phase === "auction") mid = `POT $${v.pot} · ` + (v.bid ? `${nameOf(v.bid.by)} BIDS ${v.bid.n}` : "OPENING BID...");
+    else if (sh && ["rig", "load", "spin", "aim"].includes(v.phase)) mid = `POT $${v.pot} · ${nameOf(sh.id)}: ${sh.bullets} OF ${CHAMBERS}`;
+    else if (v.phase === "ante") mid = `ANTE $${ANTE} · POT $${v.pot}`;
+    else if (v.phase === "result") { mid = `POT $${v.pot}`; gold = false; }
+    if (mid) { const m = tagEl("mid", v.phase === "over" ? "resultTag win" : "midTag" + (gold ? " gold" : "")); m.textContent = mid; place(m, CX, POT.y + 13); }
     if (sh && v.phase === "result") {
       const p = seatPoint(v, sh.id);
-      if (p) { const r = tagEl("res", "resultTag " + (sh.live ? "lose" : "win")); r.textContent = sh.live ? "OUT!" : `*CLICK* +$${sh.won}`; place(r, p.x, p.up ? p.y + 12 : p.y - 16); }
+      if (p) { const r = tagEl("res", "resultTag " + (sh.live ? "lose" : "win")); r.textContent = sh.live ? "OUT!" : `*CLICK* +$${sh.won}`; place(r, p.x + (p.x < CX - 10 ? 26 : p.x > CX + 10 ? -26 : 0), p.up ? p.y + 10 : p.y - 22); }
     }
-    if (v.phase === "over") { const w = v.seats.find(s => s.id === v.winner), r = tagEl("win", "resultTag win"); r.textContent = w ? `${w.name} WINS!` : "NOBODY WINS"; place(r, CX, CY - 37); }
     for (const el of [...$("tags").children]) if (!keep.has(el.dataset.tag)) el.remove();
   }
   function bubble(seatId, text) {
     if (!view) return;
     const p = seatPoint(view, seatId); if (!p) return;
-    const pp = pct(p.x, p.up ? p.y + 4 : p.y - 8);
+    const pp = pct(p.x, p.up ? p.y + 8 : p.y - 14);
     const el = document.createElement("div"); el.className = "bubble"; el.textContent = text;
     el.style.left = pp.left; el.style.top = pp.top;
     $("bubbles").append(el); setTimeout(() => el.remove(), 1600);
@@ -870,6 +1009,14 @@
     deadlineAt = v.left ? Date.now() + v.left : 0;
     const newPhase = !prev || prev.phaseN !== v.phaseN;
     if (newPhase) { phaseStart = now; phaseFx(v, prev); }
+    if (v.mode === "cheater" && v.myRole && v.game && (!prev || prev.game !== v.game || !prev.myRole) && v.phase !== "over") showRoleCard(v);
+    if (v.lastAccuse && prev && (!prev.lastAccuse || prev.lastAccuse.k !== v.lastAccuse.k)) {
+      const la = v.lastAccuse, by = v.seats.find(x => x.id === la.by), tg = v.seats.find(x => x.id === la.target);
+      setTimeout(() => bubble(la.by, "CHEATER!"), 0);
+      toast(la.right ? `${tg ? tg.name : "?"} WAS THE CHEATER!` : `WRONG CALL! ${tg ? tg.name : "?"} +$${la.amt}`, la.right ? "" : "lose");
+      sfxSafe(SFX.chips);
+    }
+    if (v.phase === "over" || v.mode !== "cheater") $("roleCard").hidden = true;
     if (prev) {
       if (v.lastAct && (!prev.lastAct || v.lastAct.k !== prev.lastAct.k) && v.lastAct.id !== mySeat) {
         bubble(v.lastAct.id, v.lastAct.say || (v.lastAct.a === "raise" ? `${v.lastAct.n}!` : "PASS"));
@@ -895,7 +1042,7 @@
       if (sh.live) {
         sfxSafe(SFX.bang);
         if (p) { bangPop(p.x, p.y - 6); burst(p.x, p.y, ["#ffe066", "#ff5e7a", "#f4ecd6"], 20, { speed: 50 }); }
-        const m = muzzle(Math.atan2((p ? p.y : CY) - CY, (p ? p.x : CX) - CX)); burst(m.x, m.y, ["#c8c8d7", "#9a9aae"], 14, { speed: 12, g: -20, life: 1100, fade: true, size: 3 });
+        const m = muzzle(Math.atan2((p ? p.y : GY) - GY, (p ? p.x : CX) - CX)); burst(m.x, m.y, ["#c8c8d7", "#9a9aae"], 14, { speed: 12, g: -20, life: 1100, fade: true, size: 3 });
         toast(sh.id === mySeat ? "BANG! YOU'RE OUT" : `BANG! ${who} IS OUT`, "lose");
       } else {
         sfxSafe(SFX.dry);
@@ -942,23 +1089,31 @@
     $("botField").hidden = prefs.opp !== "bot";
     for (const b of document.querySelectorAll("[data-opp]")) b.setAttribute("aria-pressed", String(b.dataset.opp === prefs.opp));
     for (const b of document.querySelectorAll("[data-bots]")) b.setAttribute("aria-pressed", String(+b.dataset.bots === prefs.bots));
-    $("setupHint").textContent = prefs.opp === "online" ? "You'll get a link for up to 5 friends (2 to 6 players)." : `You and ${prefs.bots} bot${prefs.bots > 1 ? "s" : ""}, $${START_CHIPS} each.`;
+    const cheatPick = prefs.tmode === "cheater";
+    for (const b of document.querySelectorAll("[data-tmode]")) b.setAttribute("aria-pressed", String(b.dataset.tmode === (cheatPick ? "cheater" : "classic")));
+    for (const b of document.querySelectorAll("[data-bots]")) b.disabled = cheatPick && +b.dataset.bots < 2;
+    $("setupHint").textContent = prefs.opp === "online" ? `You'll get a link for up to 5 friends (${cheatPick ? 3 : 2} to 6 players).` : `You and ${cheatPick ? Math.max(2, prefs.bots) : prefs.bots} bot${(cheatPick ? Math.max(2, prefs.bots) : prefs.bots) > 1 ? "s" : ""}, $${START_CHIPS} each.` + (cheatPick ? " One of you is secretly the cheater." : "");
+    $("cheatRules").hidden = !(v ? v.mode === "cheater" : cheatPick);
     if (isOnline) renderOnline();
     for (const id of ["playUI", "waitUI", "again", "startGame"]) $(id).hidden = true;
     $("actBox").classList.remove("myturn");
+    renderCheat(v); renderAccuse(v);
     if (!v) { setStatus(isOnline ? "Connecting" : "Setting up", "", true); $("actTitle").textContent = "WAITING"; return; }
     const me = v.seats.find(s => s.id === mySeat), turnSeat = v.seats.find(s => s.id === v.turn), canRestart = mode === "local" || online.seat === "host";
     const shooter = v.shot && v.seats.find(s => s.id === v.shot.id);
     if (v.phase === "lobby") {
       $("actTitle").textContent = "WAITING FOR PLAYERS"; $("waitUI").hidden = false;
-      $("waitUI").textContent = !me ? "The table is full (6 players). You can watch." : `Russian roulette needs 2 to 6 players. ${v.seats.length} at the table.` + (online.seat === "host" ? " Press START GAME when everyone's here." : " The host will start the game.");
-      if (online.seat === "host") { $("startGame").hidden = false; $("startGame").disabled = v.seats.length < MIN_PLAYERS; $("startGame").textContent = v.seats.length < MIN_PLAYERS ? "NEED 2 PLAYERS" : `START GAME (${v.seats.length} PLAYERS)`; }
+      const need = v.minPlayers || MIN_PLAYERS;
+      $("waitUI").textContent = !me ? "The table is full (6 players). You can watch." : `${v.mode === "cheater" ? "Cheater mode" : "Russian roulette"} needs ${need} to 6 players. ${v.seats.length} at the table.` + (online.seat === "host" ? " Press START GAME when everyone's here." : " The host will start the game.");
+      if (online.seat === "host") { $("startGame").hidden = false; $("startGame").disabled = v.seats.length < need; $("startGame").textContent = v.seats.length < need ? `NEED ${need} PLAYERS` : `START GAME (${v.seats.length} PLAYERS)`; }
       setStatus("Waiting for players", `${v.seats.length} / 6 seated`, true); return;
     }
     if (v.phase === "over") {
       const w = v.seats.find(s => s.id === v.winner);
       $("actTitle").textContent = "GAME OVER"; $("waitUI").hidden = false;
-      $("waitUI").textContent = (w ? (w.id === mySeat ? `You're the last one standing! You take the $${v.winPot} pot.` : `${w.name} is the last one standing and takes the $${v.winPot} pot.`) : "Nobody's left standing.") + (canRestart ? "" : " Waiting for the host to start a new game.");
+      const ch = v.cheaterId && v.seats.find(s => s.id === v.cheaterId);
+      $("waitUI").textContent = (w ? (w.id === mySeat ? `You're the last one standing! You take the $${v.winPot} pot.` : `${w.name} is the last one standing and takes the $${v.winPot} pot.`) : "Nobody's left standing.")
+        + (ch ? (ch.id === mySeat ? " You were the cheater." : ` ${ch.name} was the cheater.`) : "") + (canRestart ? "" : " Waiting for the host to start a new game.");
       $("again").hidden = !canRestart;
       setStatus(w && w.id === mySeat ? "You win!" : "Game over", w ? `${w.name} is the last one standing.` : ""); return;
     }
@@ -979,15 +1134,91 @@
       $("passBtn").disabled = !v.bid;
       $("playHint").textContent = `${bidStr} ${v.bid ? `Raise to ${lo} or more, or pass. Pass and you're out of the bidding this round.` : "You open the bidding: pick at least 1 bullet."} Survive the shot with ${bulletWord(draftN)} (${CHAMBERS - draftN} in ${CHAMBERS} chance) and the pot is yours.`;
     } else {
+      // your own situation here; what's happening at the table goes in the status box below
       $("actTitle").textContent = "YOUR SEAT"; $("waitUI").hidden = false;
-      $("waitUI").textContent = v.phase === "ante" ? `Everyone antes $${ANTE}...` : v.phase === "auction" ? (me.passed ? `You passed. ${bidStr}` : bidStr)
-        : shooter ? (shooter.id === mySeat ? `It's you. ${bulletWord(v.shot.bullets)} in ${CHAMBERS} chambers...` : `${shooter.name} faces ${bulletWord(v.shot.bullets)}.`) : "";
+      $("waitUI").textContent = `You have $${me.chips}.` + (v.phase === "auction" ? (me.passed ? " You passed this round." : me.bid ? ` Your bid: ${bulletWord(me.bid)}.` : " Wait for your turn to bid.") : shooter && shooter.id === mySeat && ["rig", "load", "spin", "aim"].includes(v.phase) ? " The gun's for you..." : "");
     }
     if (v.phase === "ante") setStatus("Antes in", `Round ${v.round}. Pot $${v.pot}.`, true);
-    else if (v.phase === "auction") setStatus(v.turn === mySeat ? "Your bid" : `${turnSeat ? turnSeat.name : "?"}'s bid`, t ? `${t}s left` : (turnSeat && turnSeat.bot ? "Thinking..." : bidStr), v.turn !== mySeat);
+    else if (v.phase === "auction") setStatus(v.turn === mySeat ? "Your bid" : `${turnSeat ? turnSeat.name : "?"}'s bid`, t ? `${t}s left` : v.turn === mySeat ? "" : (turnSeat && turnSeat.bot ? "Thinking..." : bidStr), v.turn !== mySeat);
+    else if (v.phase === "rig" && v.shot && shooter) setStatus("The gun is being loaded", `${shooter.id === mySeat ? "You take" : shooter.name + " takes"} the gun with ${bulletWord(v.shot.bullets)}.${v.shot.broke ? " Can't pay the ante." : ""}`, true);
     else if (v.phase === "result" && v.shot) setStatus(v.shot.live ? "BANG!" : "*click*", shooter ? (v.shot.live ? `${shooter.name} is out. The pot stays.` : `${shooter.name} survives and takes $${v.shot.won}.`) : "");
-    else if (v.shot && shooter) setStatus(v.phase === "load" ? "Loading the gun" : v.phase === "spin" ? "Spinning..." : "Pointing it at " + (shooter.id === mySeat ? "YOU" : shooter.name), `${bulletWord(v.shot.bullets)} in ${CHAMBERS}.${v.shot.broke ? " Can't pay the ante." : ""}`, true);
+    else if (v.shot && shooter) setStatus(v.shot.exec && v.phase === "load" ? "Caught cheating" : v.phase === "load" ? "Loading the gun" : v.phase === "spin" ? "Spinning..." : "Pointing it at " + (shooter.id === mySeat ? "YOU" : shooter.name), `${bulletWord(v.shot.bullets)} in ${CHAMBERS}.${v.shot.broke ? " Can't pay the ante." : ""}`, true);
   }
+  const ROLE_INFO = {
+    cheater: { name: "THE CHEATER", color: "#ff5e7a", text: `You have ${BLANKS} blanks for the whole game. Before every shot there's a pause while the gun is loaded: hold B and slip blanks in place of real bullets, into anyone's shot. A blank under the hammer just goes *click*. Bid bold, but don't get caught: anyone can call you out once a game.` },
+    player: { name: "A PLAYER", color: "#59c1ff", text: `Somebody at this table is the cheater, with ${BLANKS} blanks to slip into the gun. Watch who survives too easily. Once a game you can call out the cheater: right, and they face a fully loaded gun and you take all their chips; wrong, and half your chips go to the one you accused.` },
+  };
+  function fillRoleCard(v) {
+    const info = ROLE_INFO[v.myRole]; if (!info) return;
+    $("roleName").textContent = showSecrets ? info.name : "HOLD B";
+    $("roleName").style.color = showSecrets ? info.color : "var(--ink)";
+    $("roleText").textContent = showSecrets ? info.text : "Your role is secret. Press and hold B (on a phone, press and hold your own seat on the table) to see it and your powers; let go and your screen looks like everyone else's.";
+  }
+  function showRoleCard(v) { fillRoleCard(v); $("roleCard").hidden = false; }
+  $("roleOk").onclick = () => { $("roleCard").hidden = true; };
+  // The cheater's secret panel: blanks left, and the rig buttons while the gun is loaded.
+  function renderCheat(v) {
+    const c = v && v.cheat, me = v && v.seats.find(s => s.id === mySeat);
+    $("cheatBox").hidden = !(c && showSecrets && me && me.alive && !["over", "lobby"].includes(v.phase));
+    if ($("cheatBox").hidden) return;
+    const btns = $("rigBtns"); btns.replaceChildren();
+    const who = c.shooter ? (c.shooter === mySeat ? "your" : `${(v.seats.find(s => s.id === c.shooter) || {}).name || "?"}'s`) : "";
+    if (v.phase === "rig" && c.canRig && c.max > 0) {
+      $("cheatHint").textContent = `Blanks left: ${c.blanks}. The gun is being loaded for ${who} shot (${bulletWord(v.shot.bullets)}). Slip in blanks?`;
+      for (let k = 1; k <= c.max; k++) { const b = document.createElement("button"); b.textContent = `${k} BLANK${k > 1 ? "S" : ""}`; b.onclick = () => doRig(k); btns.append(b); }
+    } else if (v.phase === "rig" && c.rigged) $("cheatHint").textContent = `Done: ${c.rigged} blank${c.rigged > 1 ? "s" : ""} in ${who} shot. Blanks left: ${c.blanks}.`;
+    else $("cheatHint").textContent = c.blanks ? `Blanks left: ${c.blanks}. Before each shot, while the gun is being loaded, hold B to slip blanks into it.` : "You're out of blanks. Play it cool.";
+  }
+  // Calling out the cheater: once a game, between shots.
+  function renderAccuse(v) {
+    const box = $("accuseBox"), me = v && v.seats.find(s => s.id === mySeat);
+    box.hidden = !(v && v.mode === "cheater" && me && me.alive && !["lobby", "over"].includes(v.phase));
+    if (box.hidden) { accusing = false; cv.classList.remove("aiming"); return; }
+    const list = $("accusees"); list.replaceChildren();
+    const between = ["ante", "auction"].includes(v.phase), ex = v.exposed && v.seats.find(s => s.id === v.exposed);
+    $("accuseBtn").hidden = true;
+    if (ex) { $("accuseHint").textContent = ex.id === mySeat ? "You were caught!" : `${ex.name} was caught cheating.`; accusing = false; return; }
+    if (v.myAccused) { $("accuseHint").textContent = "You've made your call this game."; accusing = false; return; }
+    if (!between) { accusing = false; cv.classList.remove("aiming"); $("accuseHint").textContent = "Wait until the shot is over to call someone out."; return; }
+    $("accuseBtn").hidden = false; $("accuseBtn").textContent = accusing ? "NEVER MIND" : "CALL SOMEONE OUT";
+    $("accuseHint").textContent = accusing ? "Click the cheater's seat on the table, or a name below." : "Someone is slipping blanks into the gun. Call them out once a game: right, they face a fully loaded gun and you take their chips; wrong, half your chips go to the one you accused.";
+    if (accusing) for (const st of v.seats) {
+      if (st.id === mySeat || !st.alive) continue;
+      const b = document.createElement("button"); b.textContent = st.name; b.onclick = () => doAccuse(st.id); list.append(b);
+    }
+  }
+  $("accuseBtn").onclick = () => { accusing = !accusing; cv.classList.toggle("aiming", accusing); updateUI(); };
+  // Hold B (or press and hold your own seat) to see your secrets.
+  let showSecrets = false;
+  function setSecrets(on) {
+    if (showSecrets === !!on) return;
+    showSecrets = !!on;
+    if (view) { renderTags(view); updateUI(); if (!$("roleCard").hidden) fillRoleCard(view); }
+  }
+  document.addEventListener("keydown", (e) => { if ((e.key === "b" || e.key === "B") && !(e.target instanceof HTMLInputElement) && !e.ctrlKey && !e.metaKey) setSecrets(true); });
+  document.addEventListener("keyup", (e) => { if (e.key === "b" || e.key === "B") setSecrets(false); });
+  window.addEventListener("blur", () => setSecrets(false));
+  const tableXY = (e) => ({ x: e.offsetX / cv.clientWidth * LW, y: e.offsetY / cv.clientHeight * LH });
+  function seatAt(x, y) {
+    if (!view) return null;
+    for (let i = 0; i < view.seats.length; i++) { const p = seatPos(i, view.seats.length, meIndex(view)); if (Math.abs(x - p.x) < 18 && y > p.y - 24 && y < p.y + 20) return view.seats[i].id; }
+    return null;
+  }
+  let holdTimer = 0, holding = false;
+  const endHold = () => { clearTimeout(holdTimer); holdTimer = 0; if (holding) { holding = false; setSecrets(false); } };
+  cv.addEventListener("pointerdown", (e) => {
+    if (!view || view.mode !== "cheater" || !view.myRole || accusing) return;
+    const { x, y } = tableXY(e);
+    if (seatAt(x, y) !== mySeat) return;
+    holdTimer = setTimeout(() => { holding = true; setSecrets(true); if (navigator.vibrate) try { navigator.vibrate(15); } catch (_) {} }, 350);
+  });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) cv.addEventListener(ev, endHold);
+  cv.addEventListener("contextmenu", (e) => { if (holdTimer || holding) e.preventDefault(); });
+  cv.addEventListener("click", (e) => {
+    if (!accusing) return;
+    const { x, y } = tableXY(e), id = seatAt(x, y);
+    if (id && id !== mySeat) doAccuse(id); else { accusing = false; cv.classList.remove("aiming"); updateUI(); }
+  });
   setInterval(() => { if (view && deadlineAt) updateUI(); }, 1000);
   $("nDown").onclick = () => { draftN = Math.max(minBid(view), draftN - 1); updateUI(); };
   $("nUp").onclick = () => { draftN = Math.min(MAX_BULLETS, draftN + 1); updateUI(); };
@@ -1008,12 +1239,13 @@
   let mode = "local";
   for (const b of document.querySelectorAll("[data-opp]")) b.onclick = () => { prefs.opp = b.dataset.opp; savePrefs(); updateUI(); };
   for (const b of document.querySelectorAll("[data-bots]")) b.onclick = () => { prefs.bots = +b.dataset.bots; savePrefs(); updateUI(); };
+  for (const b of document.querySelectorAll("[data-tmode]")) b.onclick = () => { prefs.tmode = b.dataset.tmode; if (prefs.tmode === "cheater" && prefs.bots < 2) prefs.bots = 2; savePrefs(); updateUI(); };
   $("nameInput").value = prefs.name;
   $("nameInput").addEventListener("input", () => {
     prefs.name = $("nameInput").value; savePrefs();
     if (mode === "local" && T) { const s = seatOf("me"); if (s) { s.name = myName(); commit(); } }
   });
-  function resetScreen() { view = null; particles.length = 0; chipFx.length = 0; $("tags").replaceChildren(); $("bubbles").replaceChildren(); }
+  function resetScreen() { view = null; particles.length = 0; chipFx.length = 0; $("tags").replaceChildren(); $("bubbles").replaceChildren(); $("roleCard").hidden = true; accusing = false; }
   function startLocal() {
     leaveOnline(false);
     mode = "local"; mySeat = "me"; resetScreen();
@@ -1170,6 +1402,8 @@
     const id = conn.seatId; if (!id) return;
     if (msg.type === "raise") raise(id, msg.n);
     else if (msg.type === "pass") pass(id);
+    else if (msg.type === "rig") rig(id, msg.k);
+    else if (msg.type === "accuse") accuse(id, msg.target);
     else if (msg.type === "chat") hostReceiveChat(id, msg.text);
   }
   // The host can remove anyone from the table; they can't come back to it.
